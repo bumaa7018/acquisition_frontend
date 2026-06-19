@@ -4,38 +4,66 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 220.9 39.3% 11%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 224 71.4% 4.1%;
-    --radius: 0.5rem;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* ── Able Pro–inspired token system ──────────────────── */
+    --background:           220 20% 94%;   /* #eef2f7 */
+    --foreground:           220 26% 22%;   /* #2d3748 */
+
+    --card:                 0 0% 100%;
+    --card-foreground:      220 26% 22%;
+
+    --popover:              0 0% 100%;
+    --popover-foreground:   220 26% 22%;
+
+    --primary:              225 100% 64%;  /* #4680ff */
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            220 14% 96%;
+    --secondary-foreground: 220 26% 22%;
+
+    --muted:                220 20% 94%;
+    --muted-foreground:     220 9% 55%;
+
+    --accent:               225 100% 64%;
+    --accent-foreground:    0 0% 100%;
+
+    --destructive:          0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:               220 13% 88%;
+    --input:                220 13% 88%;
+    --ring:                 225 100% 64%;
+    --radius:               0.75rem;
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    --sidebar-background:        220 40% 20%;  /* #1e2b4a */
+    --sidebar-foreground:        220 20% 82%;
+    --sidebar-primary:           225 100% 64%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent:            220 36% 26%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border:            220 35% 24%;
+    --sidebar-ring:              225 100% 64%;
+
+    /* ── Brand tokens (direct hex for non-Tailwind usage) ── */
+    --clr-ground:   #eef2f7;
+    --clr-text:     #2d3748;
+    --clr-accent:   #4680ff;
+    --clr-success:  #2ca87f;
+    --clr-warning:  #e58a00;
+    --clr-danger:   #dc2626;
+    --clr-sidebar:  #1e2b4a;
+    --clr-card:     #ffffff;
   }
 }
 
 @layer base {
   * { @apply border-border; }
   body { @apply bg-background text-foreground; }
+}
+
+/* ── Card shadow consistent with Able Pro ──────────────── */
+.ap-card {
+  background: var(--clr-card);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px 0 rgba(31, 45, 88, 0.08);
 }

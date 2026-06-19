@@ -1,6 +1,6 @@
 .PHONY: dev build start lint install \
         docker-build docker-up docker-down docker-run docker-restart docker-logs docker-clean \
-        docker-dev docker-dev-down docker-dev-logs \
+        docker-dev docker-dev-down docker-dev-logs docker-fg \
         deploy docker-rebuild
 
 COMPOSE     = docker compose
@@ -31,14 +31,18 @@ docker-check-network:
 		(echo "gov_network олдсонгүй. Эхлээд backend-г асаана уу:" && \
 		 echo "  cd ../government/deployments && docker compose up -d" && exit 1)
 
-docker-build:
+build:
 	$(COMPOSE) build
 	docker image prune -f
 
-docker-up: docker-check-network
+up: docker-check-network
 	$(COMPOSE) up -d
 
-docker-down:
+# build хийгээд foreground-д ажиллуулна (лог шууд харагдана, Ctrl+C-р зогсоно)
+docker-fg: docker-check-network
+	$(COMPOSE) up --build
+
+down:
 	$(COMPOSE) down
 
 # build → up → log (Ctrl+C дарахад зогсоно)

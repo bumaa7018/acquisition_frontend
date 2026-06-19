@@ -1,6 +1,6 @@
 'use client'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Area,
 } from 'recharts'
 import { TIMELINE } from './mock-data'

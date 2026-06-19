@@ -5,9 +5,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runner
       args:
-        NEXT_API_URL: http://api:8081
-        NEXT_GS_URL: http://geoserver:8080
+        NEXT_API_URL: ${NEXT_API_URL}
+        NEXT_GS_URL: ${NEXT_GS_URL}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:

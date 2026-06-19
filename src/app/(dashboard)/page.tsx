@@ -16,7 +16,6 @@ const MapView = dynamic(() => import('@/components/map/map-view'), {
   ),
 })
 
-/* ── Stat card — typographic hierarchy, no color fill ── */
 function StatCard({
   label, value, sub, icon: Icon, accent,
 }: {
@@ -40,7 +39,6 @@ function StatCard({
   )
 }
 
-/* ── Section card wrapper ── */
 function Card({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="ap-card flex flex-col">
@@ -53,7 +51,6 @@ function Card({ title, children, action }: { title: string; children: React.Reac
   )
 }
 
-/* ── Status dot + row ── */
 function StatusRow({ label, count, area, color }: { label: string; count: number; area: number; color: string }) {
   const pct = Math.round((count / STATS.totalParcels) * 100)
   return (
@@ -73,7 +70,6 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Page title */}
       <div>
         <h1 className="text-xl font-bold text-slate-800">Хяналтын самбар</h1>
         <p className="text-[12px] text-slate-500 mt-0.5">
@@ -81,7 +77,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* ── Row 1: Stat cards ── */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard label="Төлөвлөлтийн талбай"     value={`${STATS.planArea} га`}          icon={Map}        accent="#4680ff" />
         <StatCard label="Нэгж талбар"              value={STATS.totalParcels}               icon={Layers}     accent="#2ca87f" />
@@ -91,10 +87,8 @@ export default function DashboardPage() {
         <StatCard label="Нөхөх олговрын дүн"       value={`${STATS.totalCompensation}T`}    icon={Users}      accent="#a855f7" sub="тэрбум төгрөг" />
       </div>
 
-      {/* ── Row 2: Charts ── */}
+      {/* Charts row */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-
-        {/* Timeline chart */}
         <div className="xl:col-span-8">
           <Card title="Нөхөх олговортойгоор чөлөөлсөн нэгж талбар"
             action={
@@ -107,26 +101,20 @@ export default function DashboardPage() {
             <AcquisitionTimeline />
           </Card>
         </div>
-
-        {/* Progress gauge */}
-        <div className="xl:col-span-4 flex flex-col gap-4">
+        <div className="xl:col-span-4">
           <Card title="Газар чөлөөлтийн явц">
             <ProgressGauge value={STATS.progress} />
           </Card>
         </div>
       </div>
 
-      {/* ── Row 3: Bar charts + Map + Rejected ── */}
+      {/* Bottom row */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-
-        {/* Parcel count bar */}
         <div className="xl:col-span-3">
           <Card title="Нэгж талбарын мэдээлэл">
             <ParcelBarChart mode="count" />
           </Card>
         </div>
-
-        {/* Status breakdown table */}
         <div className="xl:col-span-3">
           <Card title="Талбайн хэмжээ /м²/">
             <div className="mt-1">
@@ -136,8 +124,6 @@ export default function DashboardPage() {
             </div>
           </Card>
         </div>
-
-        {/* Map */}
         <div className="xl:col-span-3">
           <Card title="Газрын зураг">
             <div style={{ height: 280 }}>
@@ -145,8 +131,6 @@ export default function DashboardPage() {
             </div>
           </Card>
         </div>
-
-        {/* Rejected list */}
         <div className="xl:col-span-3">
           <Card title="Татгалзсан нэгж талбарууд">
             <div className="overflow-y-auto" style={{ maxHeight: 280 }}>
