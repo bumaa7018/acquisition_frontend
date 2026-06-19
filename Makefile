@@ -31,7 +31,7 @@ docker-check-network:
 		(echo "gov_network олдсонгүй. Эхлээд backend-г асаана уу:" && \
 		 echo "  cd ../government/deployments && docker compose up -d" && exit 1)
 
-build:
+docker-build:
 	$(COMPOSE) build
 	docker image prune -f
 
