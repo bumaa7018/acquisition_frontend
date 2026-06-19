@@ -2,19 +2,28 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy to server
     runs-on: ubuntu-latest
+
     steps:
-      - name: Deploy via SSH
+      - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SSH_PORT }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER || 'deploy' }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
+            set -e
+            cd "${{ secrets.DEPLOY_PATH || '/home/deploy/acquisition_frontend' }}"
             make deploy
