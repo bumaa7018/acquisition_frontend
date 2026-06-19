@@ -3,12 +3,16 @@ set -Eeuo pipefail
 
 ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.yml}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 
 cd "$ROOT_DIR"
 
-# deploy user болон repo owner өөр байвал git "dubious ownership" гаргадаг.
-# git функцийг override хийж бүх дуудалтад -c safe.directory нэмнэ.
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "$ENV_FILE файл байхгүй байна" >&2
+  exit 1
+fi
+
 git() { command git -c "safe.directory=*" "$@"; }
 
 if ! command -v git >/dev/null 2>&1; then
@@ -22,7 +26,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 compose() {
-  docker compose -f "$COMPOSE_FILE" "$@"
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
 }
 
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
