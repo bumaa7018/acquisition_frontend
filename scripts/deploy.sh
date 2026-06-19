@@ -7,6 +7,9 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 
 cd "$ROOT_DIR"
 
+# deploy user болон repo owner өөр байвал git "dubious ownership" алдаа гаргадаг
+git config --global --add safe.directory "$ROOT_DIR" 2>/dev/null || true
+
 if ! command -v git >/dev/null 2>&1; then
   echo "git олдсонгүй" >&2
   exit 1
