@@ -7,11 +7,9 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 
 cd "$ROOT_DIR"
 
-# deploy user болон repo owner өөр user байвал git "dubious ownership" алдаа гаргадаг.
-# GIT_CONFIG_* env var-р тохируулахад файл бичих шаардлагагүй тул илүү найдвартай.
-export GIT_CONFIG_COUNT=1
-export GIT_CONFIG_KEY_0="safe.directory"
-export GIT_CONFIG_VALUE_0="$ROOT_DIR"
+# deploy user болон repo owner өөр байвал git "dubious ownership" гаргадаг.
+# git функцийг override хийж бүх дуудалтад -c safe.directory нэмнэ.
+git() { command git -c "safe.directory=*" "$@"; }
 
 if ! command -v git >/dev/null 2>&1; then
   echo "git олдсонгүй" >&2
