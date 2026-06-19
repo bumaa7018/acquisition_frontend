@@ -70,7 +70,7 @@ docker-dev-logs:
 	$(COMPOSE_DEV) logs -f --tail=200
 
 # ── Docker clean ──────────────────────────────────────
-# хуучин image, layer, build cache цэвэрлэх (500MB үлдээнэ)
+# хуучин image, layer, build cache цэвэрлэх(500MB үлдээнэ)
 docker-clean:
 	$(COMPOSE) down
 	docker image prune -f
