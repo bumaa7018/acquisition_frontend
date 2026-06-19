@@ -13,6 +13,8 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
       NODE_ENV: production
+      NEXT_API_URL: ${NEXT_API_URL}
+      NEXT_GS_URL: ${NEXT_GS_URL}
     restart: on-failure
     networks:
       - gov_network
