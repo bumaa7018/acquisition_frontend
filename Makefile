@@ -1,6 +1,7 @@
 .PHONY: dev build start lint install \
         docker-build docker-up docker-down docker-run docker-restart docker-logs docker-clean \
-        docker-dev docker-dev-down docker-dev-logs
+        docker-dev docker-dev-down docker-dev-logs \
+        deploy docker-rebuild
 
 COMPOSE     = docker compose
 COMPOSE_DEV = docker compose -f docker-compose.dev.yml
@@ -70,3 +71,12 @@ docker-clean:
 	$(COMPOSE) down
 	docker image prune -f
 	docker builder prune -f --keep-storage=500mb
+
+# ── Deploy (deploy user) ───────────────────────────────
+# git pull → build → recreate (server дээр deploy user ажиллуулна)
+deploy:
+	./scripts/deploy.sh
+
+# git pull алгасаад шууд build хийх (локал тест)
+docker-rebuild:
+	SKIP_GIT_PULL=1 ./scripts/deploy.sh
