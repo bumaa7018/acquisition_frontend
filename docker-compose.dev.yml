@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    volumes:
+      - ./src:/app/src
+      - ./next.config.mjs:/app/next.config.mjs
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./postcss.config.mjs:/app/postcss.config.mjs
+      - ./tsconfig.json:/app/tsconfig.json
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_API_URL: http://api:8081
+      NEXT_GS_URL: http://geoserver:8080
+      # macOS дээр Docker volume-ийн inotify ажилладаггүй тул polling ашиглана
+      WATCHPACK_POLLING: "true"
+    restart: unless-stopped
+    networks:
+      - gov_network
+
+networks:
+  gov_network:
+    external: true

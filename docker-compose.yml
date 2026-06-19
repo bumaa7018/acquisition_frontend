@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_API_URL: http://api:8081
+        NEXT_GS_URL: http://geoserver:8080
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+    restart: on-failure
+    networks:
+      - gov_network
+
+networks:
+  gov_network:
+    external: true
