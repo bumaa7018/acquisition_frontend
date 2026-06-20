@@ -5,6 +5,7 @@ const GS_URL  = process.env.NEXT_GS_URL  ?? 'http://localhost:8600'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  httpAgentOptions: { keepAlive: false },
   // standalone зөвхөн production-д хэрэгтэй, dev-д disc идэх тул хасав
   ...(process.env.NODE_ENV === 'production' && { output: 'standalone' }),
   async rewrites() {
