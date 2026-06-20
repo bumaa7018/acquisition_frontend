@@ -32,6 +32,15 @@ export interface Permission {
   description?: string
 }
 
+export interface Plan {
+  id: string
+  plan_code: string
+  name: string
+  area_m2: number
+  status: number
+  boundary_wkt: string
+}
+
 export interface LandAcquisition {
   id: string
   plan_code: string
@@ -40,6 +49,11 @@ export interface LandAcquisition {
   status: number
   start_date?: string
   end_date?: string
+  project_name: string
+  implementing_org: string
+  reason: string
+  responsible_org: string
+  funding_source: string
   created_at: string
   created_by: string
   aus: AU[]

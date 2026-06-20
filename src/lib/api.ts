@@ -3,7 +3,7 @@ import { authStorage } from './auth'
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
-  LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
+  Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -84,6 +84,10 @@ export const landApi = {
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', { params: filter }).then(r => r.data),
   getById: (id: string) =>
     api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
+  create: (data: FormData) =>
+    api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
@@ -91,6 +95,12 @@ export const landApi = {
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`),
+}
+
+// ── Plans ─────────────────────────────────────────────
+export const planApi = {
+  search: (code: string) =>
+    api.get<ApiResponse<Plan>>('/plans/search', { params: { code } }).then(r => r.data.data),
 }
 
 export default api
