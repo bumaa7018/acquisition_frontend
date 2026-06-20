@@ -29,6 +29,10 @@ compose() {
   docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
 }
 
+ensure_network() {
+  docker network inspect gov_network >/dev/null 2>&1 || docker network create gov_network >/dev/null
+}
+
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 GIT_BRANCH="${GIT_BRANCH:-$current_branch}"
 
@@ -51,6 +55,8 @@ if [[ "${SKIP_GIT_PULL:-0}" != "1" ]]; then
     exec env SKIP_GIT_PULL=1 DEPLOY_REEXECED=1 "$ROOT_DIR/scripts/deploy.sh"
   fi
 fi
+
+ensure_network
 
 echo "Docker image build хийж байна..."
 compose build --pull

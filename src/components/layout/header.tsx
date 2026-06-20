@@ -28,7 +28,8 @@ function resolveTitle(pathname: string) {
 export function Header() {
   const pathname = usePathname()
   const router = useRouter()
-  const user = authStorage.getUser()
+  const [user, setUser] = useState<ReturnType<typeof authStorage.getUser>>(null)
+  useEffect(() => { setUser(authStorage.getUser()) }, [])
   const { greeting, crumb } = resolveTitle(pathname)
   const { resolvedTheme, setTheme } = useTheme()
   const [profileOpen, setProfileOpen] = useState(false)

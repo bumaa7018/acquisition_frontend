@@ -5,7 +5,7 @@ import axios from 'axios'
 import { landApi, planApi } from '@/lib/api'
 import { authStorage } from '@/lib/auth'
 import { STATUS_LABELS } from '@/types'
-import type { Plan, User } from '@/types'
+import type { Plan } from '@/types'
 import { formatDate, formatArea } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
@@ -24,9 +24,15 @@ const STATUS_CFG: Record<number, { color: string; bg: string }> = {
 
 const PAGE_SIZE = 15
 
-function hasPermission(user: User | null, name: string): boolean {
-  if (!user) return false
-  return user.roles?.some(r => r.permissions?.some(p => p.name === name)) ?? false
+function hasPermission(name: string): boolean {
+  const token = authStorage.getAccessToken()
+  if (!token) return false
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return Array.isArray(payload.permissions) && payload.permissions.includes(name)
+  } catch {
+    return false
+  }
 }
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
@@ -330,8 +336,7 @@ export default function LandPage() {
   const [showCreate, setShowCreate] = useState(false)
   const queryClient = useQueryClient()
 
-  const user = authStorage.getUser() as User | null
-  const canCreate = hasPermission(user, 'acquisition.create')
+  const canCreate = hasPermission('acquisition.create')
 
   const { data, isLoading } = useQuery({
     queryKey: ['land', page, search],

@@ -31,6 +31,8 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(data.email, data.password)
       authStorage.setTokens(res.access_token, res.refresh_token)
+      const me = await authApi.me()
+      authStorage.setUser(me)
       toast.success('Амжилттай нэвтэрлээ')
       router.push('/')
     } catch (err: unknown) {

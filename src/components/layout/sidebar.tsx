@@ -1,4 +1,5 @@
 'use client'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -51,7 +52,8 @@ function NavItem({ href, label, icon: Icon, active }: {
 export function Sidebar() {
   const pathname = usePathname()
   const router   = useRouter()
-  const user     = authStorage.getUser()
+  const [user, setUser] = useState<ReturnType<typeof authStorage.getUser>>(null)
+  useEffect(() => { setUser(authStorage.getUser()) }, [])
 
   const handleLogout = async () => {
     try { await authApi.logout() } catch {}

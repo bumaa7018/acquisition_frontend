@@ -21,4 +21,5 @@ services:
 
 networks:
   gov_network:
+    name: gov_network
     external: true
