@@ -5,7 +5,7 @@ import View from 'ol/View'
 import TileLayer from 'ol/layer/Tile'
 import ImageLayer from 'ol/layer/Image'
 import ImageWMS from 'ol/source/ImageWMS'
-import OSM from 'ol/source/OSM'
+import XYZ from 'ol/source/XYZ'
 import { fromLonLat } from 'ol/proj'
 import type { Coordinate } from 'ol/coordinate'
 import 'ol/ol.css'
@@ -66,7 +66,18 @@ export default function MapView() {
     const map = new OLMap({
       target: mapRef.current,
       layers: [
-        new TileLayer({ source: new OSM() }),
+        new TileLayer({
+          source: new XYZ({
+            urls: [
+              'https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+              'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+              'https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+              'https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+            ],
+            maxZoom: 20,
+            crossOrigin: 'anonymous',
+          }),
+        }),
         ...Object.values(wmsRecord),
       ],
       view: new View({

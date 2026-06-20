@@ -14,8 +14,8 @@ export function AcquisitionTimeline() {
       <ComposedChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 36 }}>
         <defs>
           <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#4680ff" stopOpacity={0.15} />
-            <stop offset="95%" stopColor="#4680ff" stopOpacity={0} />
+            <stop offset="5%"  stopColor="#02c0ce" stopOpacity={0.15} />
+            <stop offset="95%" stopColor="#02c0ce" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke="#f1f5f9" />
@@ -31,8 +31,8 @@ export function AcquisitionTimeline() {
           labelStyle={{ color: '#64748b', fontWeight: 600 }}
           cursor={{ fill: '#f8fafc' }}
         />
-        <Bar yAxisId="l" dataKey="count" fill="#4680ff" radius={[4, 4, 0, 0]} barSize={12} name="Нэгж талбар" />
-        <Area yAxisId="r" type="monotone" dataKey="cumulative" stroke="#2ca87f" strokeWidth={2} fill="url(#areaGrad)" dot={false} name="Нийт" />
+        <Bar yAxisId="l" dataKey="count" fill="#02c0ce" radius={[4, 4, 0, 0]} barSize={12} name="Нэгж талбар" />
+        <Area yAxisId="r" type="monotone" dataKey="cumulative" stroke="#0acf97" strokeWidth={2} fill="url(#areaGrad)" dot={false} name="Нийт" />
       </ComposedChart>
     </ResponsiveContainer>
   )

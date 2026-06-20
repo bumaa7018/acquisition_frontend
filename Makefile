@@ -1,7 +1,7 @@
 .PHONY: dev build start lint install \
         docker-build docker-up docker-down docker-run docker-restart docker-logs docker-clean \
         docker-dev docker-dev-down docker-dev-logs docker-fg \
-        deploy docker-rebuild
+        deploy docker-rebuild reload
 
 COMPOSE     = docker compose
 COMPOSE_DEV = docker compose -f docker-compose.dev.yml
@@ -84,3 +84,7 @@ deploy:
 # git pull алгасаад шууд build хийх (локал тест)
 docker-rebuild:
 	SKIP_GIT_PULL=1 ./scripts/deploy.sh
+
+# .env өөрчлөгдсөний дараа image дахин build хийж container restart хийнэ
+reload:
+	$(COMPOSE) up -d --build --force-recreate

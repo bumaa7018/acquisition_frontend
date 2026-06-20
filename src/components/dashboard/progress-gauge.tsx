@@ -19,7 +19,7 @@ export function ProgressGauge({ value }: Props) {
     <path d={`M${s.x} ${s.y} A${r} ${r} 0 ${large ? 1 : 0} 1 ${e.x} ${e.y}`}
       stroke={stroke} strokeWidth={w} fill="none" strokeLinecap="round" />
 
-  const color = value >= 80 ? '#2ca87f' : value >= 50 ? '#e58a00' : '#dc2626'
+  const color = value >= 80 ? '#0acf97' : value >= 50 ? '#f9bc0b' : '#f1556c'
 
   return (
     <div className="flex flex-col items-center py-2">

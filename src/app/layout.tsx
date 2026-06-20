@@ -1,9 +1,13 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Nunito_Sans } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/layout/providers'
 
-const inter = Inter({ subsets: ['latin'] })
+const nunitoSans = Nunito_Sans({
+  subsets: ['latin'],
+  weight: ['300', '400', '600', '700', '800'],
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Газрын Мэдээллийн Систем',
@@ -13,7 +17,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="mn" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={nunitoSans.className}>
         <Providers>{children}</Providers>
       </body>
     </html>
