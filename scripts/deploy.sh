@@ -8,13 +8,6 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 
 cd "$ROOT_DIR"
 
-if [[ ! -f "$ENV_FILE" ]]; then
-  echo "$ENV_FILE файл байхгүй байна" >&2
-  exit 1
-fi
-
-git() { command git -c "safe.directory=*" "$@"; }
-
 if ! command -v git >/dev/null 2>&1; then
   echo "git олдсонгүй" >&2
   exit 1
@@ -25,6 +18,13 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "$ENV_FILE файл байхгүй байна" >&2
+  exit 1
+fi
+
+git() { command git -c "safe.directory=*" "$@"; }
+
 compose() {
   docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"
 }
@@ -34,41 +34,32 @@ GIT_BRANCH="${GIT_BRANCH:-$current_branch}"
 
 if [[ "${SKIP_GIT_PULL:-0}" != "1" ]]; then
   if [[ -n "$(git status --porcelain)" ]]; then
-    echo "Working tree dirty байна. Deploy хийхийн өмнө commit хийгдээгүй өөрчлөлт байна." >&2
+    echo "Working tree dirty байна. Deploy user дээр commit хийгдээгүй өөрчлөлт үлдсэн тул pull хийхгүй." >&2
     git status --short >&2
     exit 1
   fi
 
+  old_sha="$(git rev-parse HEAD)"
+
   echo "Git update шалгаж байна: $GIT_REMOTE/$GIT_BRANCH"
   git fetch --prune "$GIT_REMOTE"
   git pull --ff-only "$GIT_REMOTE" "$GIT_BRANCH"
+
+  new_sha="$(git rev-parse HEAD)"
+  if [[ "$old_sha" != "$new_sha" && "${DEPLOY_REEXECED:-0}" != "1" ]]; then
+    echo "Repo шинэчлэгдсэн тул deploy script-ийг шинэ хувилбараар дахин ажиллуулж байна..."
+    exec env SKIP_GIT_PULL=1 DEPLOY_REEXECED=1 "$ROOT_DIR/scripts/deploy.sh"
+  fi
 fi
 
-project_name="$(compose config --project-name)"
-
-echo "Docker container/image цэвэрлэж байна..."
-compose down --remove-orphans --rmi local
-
-echo "Compose project-ийн volume-уудыг устгаж байна..."
-while IFS= read -r volume; do
-  [[ -n "$volume" ]] || continue
-  docker volume rm "$volume" >/dev/null || true
-done < <(docker volume ls -q --filter "label=com.docker.compose.project=$project_name")
-
-echo "Unused Docker image/build cache цэвэрлэж байна..."
-docker image prune -af
-docker builder prune -af
-
-echo "Docker image шинээр build хийж байна..."
-compose build --pull --no-cache
-
-echo "gov_network сүлжээ шалгаж байна..."
-docker network inspect gov_network >/dev/null 2>&1 || {
-  echo "gov_network олдсонгүй. Backend-г эхлээд асаана уу." >&2
-  exit 1
-}
+echo "Docker image build хийж байна..."
+compose build --pull
 
 echo "Docker service-үүдийг шинээр асааж байна..."
-compose up -d --force-recreate --remove-orphans
+compose up -d --remove-orphans
+
+echo "Dangling image болон ашиглагдахгүй build cache цэвэрлэж байна..."
+docker image prune -f
+docker builder prune -f
 
 compose ps
