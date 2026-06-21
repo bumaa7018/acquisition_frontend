@@ -37,12 +37,12 @@ export interface Permission {
 }
 
 export interface Plan {
-  id: string
+  id?: string
   plan_code: string
   name: string
-  area_m2: number
-  status: number
-  boundary_wkt: string
+  area_m2?: number
+  status?: number
+  boundary_wkt?: string
 }
 
 export interface LandAcquisition {

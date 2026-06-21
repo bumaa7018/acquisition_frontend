@@ -17,7 +17,9 @@ type ParcelListParams = {
   right_type?: number
   landuse?: string
   au3_code?: string
+  acquisition_id?: string
   acquisition_name?: string
+  plan_code?: string
   status?: number
 }
 
@@ -62,7 +64,10 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
     .flatMap(r => r.data)
     .filter(acq => {
       const name = params?.acquisition_name?.trim().toLowerCase()
-      return !name || (acq.acquisition_name ?? '').toLowerCase().includes(name)
+      if (name && !(acq.acquisition_name ?? '').toLowerCase().includes(name)) return false
+      const plan = params?.plan_code?.trim().toLowerCase()
+      if (plan && !(acq.plan_code ?? '').toLowerCase().includes(plan)) return false
+      return true
     })
 
   const parcelPages = await Promise.all(acquisitions.map(async (acq) => {
@@ -251,6 +256,8 @@ export const parcelApi = {
 export const planApi = {
   search: (code: string) =>
     api.get<ApiResponse<Plan>>('/plans/search', { params: { code } }).then(r => r.data.data),
+  suggest: (q: string) =>
+    api.get<ApiResponse<Plan[]>>('/plans/suggest', { params: { q } }).then(r => r.data.data ?? []),
 }
 
 export default api

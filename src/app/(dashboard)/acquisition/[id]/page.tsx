@@ -68,7 +68,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       if (form.start_date) fd.append('start_date', form.start_date)
       if (form.end_date) fd.append('end_date', form.end_date)
       else if (acq?.end_date) fd.append('clear_end_date', 'true')
-      // Төслийн талбарууд — хоосон ч үргэлж илгээх (арилгах боломж)
+      // Төслийн талбарууд — хоосон ч үргэлж илгээх (Цэвэрлэх боломж)
       fd.append('acquisition_name',     form.acquisition_name)
       fd.append('implementing_org', form.implementing_org)
       fd.append('reason',           form.reason)
@@ -549,7 +549,7 @@ function ParcelsTab({ id }: { id: string }) {
                 <button
                   onClick={() => setFilter({ parcel_id: '', right_type: 0, landuse: '' })}
                   className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors">
-                  Арилгах
+                  Цэвэрлэх
                 </button>
               )}
             </div>

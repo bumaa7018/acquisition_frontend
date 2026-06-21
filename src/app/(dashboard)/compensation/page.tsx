@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   FileText, CheckCircle2, Clock, AlertCircle,
   Plus, Search, Download, Eye, Printer, Trash2,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -98,8 +98,16 @@ export default function InvoicesPage() {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Нэхэмжлэл, иргэн хайх..."
-              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-3 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-9 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setPage(1) }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] p-1">

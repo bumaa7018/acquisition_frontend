@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import { landApi, planApi } from '@/lib/api'
@@ -10,7 +10,7 @@ import { formatDate, formatArea } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import {
   Search, Trash2, Eye, MapPin, ChevronLeft, ChevronRight,
-  FileText, Plus, X, Upload, CheckCircle, ArrowLeft,
+  FileText, Plus, X, Upload, CheckCircle, ArrowLeft, ChevronDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -35,6 +35,72 @@ function hasPermission(name: string): boolean {
   }
 }
 
+// ── Plan combobox ─────────────────────────────────────────────────────────────
+function PlanCombobox({ onSelect }: { onSelect: (plan: Plan) => void }) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+
+  const { data: plans = [], isFetching } = useQuery({
+    queryKey: ['plan-suggest', query],
+    queryFn: () => planApi.suggest(query),
+    enabled: query.trim().length > 0,
+    staleTime: 30_000,
+  })
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [])
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div
+        className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
+        onClick={() => setOpen(true)}
+      >
+        <input
+          type="text"
+          placeholder="Дугаар эсвэл нэрээр хайх..."
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
+          autoFocus
+        />
+        {isFetching
+          ? <span className="h-3.5 w-3.5 rounded-full border-2 border-[#02c0ce] border-t-transparent animate-spin shrink-0" />
+          : query
+            ? <button onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false) }} className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"><X className="h-3.5 w-3.5" /></button>
+            : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        }
+      </div>
+
+      {open && query.trim().length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+          <div className="max-h-56 overflow-y-auto">
+            {plans.length === 0 && !isFetching ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">Олдсонгүй</div>
+            ) : plans.map(p => (
+              <button
+                key={p.plan_code}
+                onMouseDown={e => { e.preventDefault(); onSelect(p); setOpen(false) }}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
+              >
+                <span className="text-[12px] font-mono font-semibold text-[#02c0ce] shrink-0">{p.plan_code}</span>
+                <span className="text-[12px] text-slate-500 dark:text-slate-400 truncate text-right">{p.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
 interface CreateModalProps {
@@ -44,11 +110,8 @@ interface CreateModalProps {
 function CreateModal({ onClose }: CreateModalProps) {
   const queryClient = useQueryClient()
 
-  // Step 1: plan search
-  const [planCode, setPlanCode] = useState('')
+  // Step 1: plan select
   const [plan, setPlan] = useState<Plan | null>(null)
-  const [planLoading, setPlanLoading] = useState(false)
-  const [planError, setPlanError] = useState('')
   const [step, setStep] = useState<1 | 2>(1)
 
   // Step 2: form fields
@@ -78,25 +141,8 @@ function CreateModal({ onClose }: CreateModalProps) {
     },
   })
 
-  const handleSearchPlan = async () => {
-    const code = planCode.trim()
-    if (!code) return
-    setPlanLoading(true)
-    setPlanError('')
-    setPlan(null)
-    try {
-      const p = await planApi.search(code)
-      setPlan(p)
-      setStep(2)
-    } catch {
-      setPlanError('Тухайн дугаартай төлөвлөгөө олдсонгүй')
-    } finally {
-      setPlanLoading(false)
-    }
-  }
-
   const handleSubmit = () => {
-    if (!plan || !shpFile || !startDate) {
+    if (!plan || !shpFile || !startDate || !projectName.trim()) {
       toast.error('Бүх заавал талбаруудыг бөглөнө үү')
       return
     }
@@ -170,35 +216,13 @@ function CreateModal({ onClose }: CreateModalProps) {
           {step === 1 ? (
             <div className="space-y-4">
               <p className="text-[13px] text-slate-500 dark:text-slate-400">
-                Газар зохион байгуулалтын төлөвлөгөөний дугаарыг оруулан хайна уу.
+                Газар зохион байгуулалтын төлөвлөгөөний дугаар эсвэл нэрийг бичиж сонгоно уу.
               </p>
               <div>
-                <label className={labelCls}>Төлөвлөгөөний дугаар *</label>
-                <div className="flex gap-2">
-                  <input
-                    value={planCode}
-                    onChange={e => setPlanCode(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSearchPlan()}
-                    placeholder="жишээ: PLAN-2024-001"
-                    className={inputCls}
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleSearchPlan}
-                    disabled={planLoading || !planCode.trim()}
-                    className="shrink-0 flex items-center gap-1.5 px-4 h-9 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {planLoading ? (
-                      <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                    ) : (
-                      <Search className="h-3.5 w-3.5" />
-                    )}
-                    Хайх
-                  </button>
-                </div>
-                {planError && (
-                  <p className="mt-1.5 text-[12px] text-[#f1556c]">{planError}</p>
-                )}
+                <label className={labelCls}>Төлөвлөгөө *</label>
+                <PlanCombobox
+                  onSelect={p => { setPlan(p); setStep(2) }}
+                />
               </div>
             </div>
           ) : (
@@ -212,8 +236,8 @@ function CreateModal({ onClose }: CreateModalProps) {
                     {plan.name && (
                       <p className="text-[12px] text-slate-600 dark:text-slate-400 truncate mt-0.5">{plan.name}</p>
                     )}
-                    {plan.area_m2 > 0 && (
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{formatArea(plan.area_m2)}</p>
+                    {(plan.area_m2 ?? 0) > 0 && (
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{formatArea(plan.area_m2 ?? 0)}</p>
                     )}
                   </div>
                 </div>
@@ -221,8 +245,8 @@ function CreateModal({ onClose }: CreateModalProps) {
 
               {/* Form fields */}
               <div>
-                <label className={labelCls}>Төслийн нэр</label>
-                <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Төслийн нэр" className={inputCls} />
+                <label className={labelCls}>Чөлөөлөлтийн нэр *</label>
+                <input value={projectName} onChange={e => setProjectName(e.target.value)} placeholder="Чөлөөлөлтийн нэр оруулна уу" className={inputCls} autoFocus />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -302,18 +326,10 @@ function CreateModal({ onClose }: CreateModalProps) {
           >
             Цуцлах
           </button>
-          {step === 1 ? (
-            <button
-              onClick={handleSearchPlan}
-              disabled={planLoading || !planCode.trim()}
-              className="h-9 px-5 rounded-lg text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Хайх
-            </button>
-          ) : (
+          {step === 1 ? null : (
             <button
               onClick={handleSubmit}
-              disabled={createMutation.isPending || !shpFile || !startDate}
+              disabled={createMutation.isPending || !shpFile || !startDate || !projectName.trim()}
               className="h-9 px-5 rounded-lg text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             >
               {createMutation.isPending && (
@@ -387,8 +403,16 @@ export default function LandPage() {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Төлөвлөгөөний дугаараар хайх..."
-              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-3 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-9 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(''); setPage(1) }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
