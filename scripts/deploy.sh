@@ -59,13 +59,9 @@ fi
 ensure_network
 
 echo "Docker image build хийж байна..."
-compose build --pull
+compose build ${BUILD_FLAGS:---pull}
 
 echo "Docker service-үүдийг шинээр асааж байна..."
 compose up -d --remove-orphans
-
-echo "Dangling image болон ашиглагдахгүй build cache цэвэрлэж байна..."
-docker image prune -f
-docker builder prune -f
 
 compose ps

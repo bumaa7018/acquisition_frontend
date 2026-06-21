@@ -7,14 +7,15 @@ import { authStorage } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Map, FileText, Users, Shield,
-  LogOut, ChevronDown, Receipt, Layers, User,
+  LogOut, ChevronDown, Receipt, Layers, User, Grid2x2,
 } from 'lucide-react'
 
 const NAV_MAIN = [
-  { href: '/',         label: 'Хяналтын самбар', icon: LayoutDashboard },
-  { href: '/acquisition',     label: 'Газар чөлөөлөлт', icon: FileText },
-  { href: '/map',      label: 'Газрын зураг',     icon: Map },
-  { href: '/compensation', label: 'Нөхөх төлбөр',        icon: Receipt },
+  { href: '/',            label: 'Хяналтын самбар', icon: LayoutDashboard },
+  { href: '/acquisition', label: 'Газар чөлөөлөлт', icon: FileText },
+  { href: '/parcel',      label: 'Нэгж талбар',      icon: Grid2x2 },
+  { href: '/map',         label: 'Газрын зураг',      icon: Map },
+  { href: '/compensation',label: 'Нөхөх төлбөр',     icon: Receipt },
 ]
 
 const NAV_ADMIN = [

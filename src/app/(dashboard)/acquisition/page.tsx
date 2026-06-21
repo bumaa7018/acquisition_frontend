@@ -53,7 +53,7 @@ function CreateModal({ onClose }: CreateModalProps) {
 
   // Step 2: form fields
   const [projectName, setProjectName] = useState('')
-  const [startDate, setStartDate] = useState('')
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0])
   const [endDate, setEndDate] = useState('')
   const [implementingOrg, setImplementingOrg] = useState('')
   const [reason, setReason] = useState('')
@@ -96,7 +96,7 @@ function CreateModal({ onClose }: CreateModalProps) {
   }
 
   const handleSubmit = () => {
-    if (!plan || !shpFile || !startDate || !endDate) {
+    if (!plan || !shpFile || !startDate) {
       toast.error('Бүх заавал талбаруудыг бөглөнө үү')
       return
     }
@@ -104,7 +104,7 @@ function CreateModal({ onClose }: CreateModalProps) {
     fd.append('plan_code', plan.plan_code)
     fd.append('start_date', startDate)
     fd.append('end_date', endDate)
-    fd.append('project_name', projectName)
+    fd.append('acquisition_name', projectName)
     fd.append('implementing_org', implementingOrg)
     fd.append('reason', reason)
     fd.append('responsible_org', responsibleOrg)
@@ -231,7 +231,7 @@ function CreateModal({ onClose }: CreateModalProps) {
                   <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
                 </div>
                 <div>
-                  <label className={labelCls}>Дуусах огноо *</label>
+                  <label className={labelCls}>Дуусах огноо</label>
                   <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={inputCls} />
                 </div>
               </div>
@@ -313,7 +313,7 @@ function CreateModal({ onClose }: CreateModalProps) {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={createMutation.isPending || !shpFile || !startDate || !endDate}
+              disabled={createMutation.isPending || !shpFile || !startDate}
               className="h-9 px-5 rounded-lg text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
             >
               {createMutation.isPending && (
@@ -354,7 +354,7 @@ export default function LandPage() {
 
   const total = data?.total ?? 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const HEADERS = ['Төлөвлөгөөний дугаар', 'Статус', 'Талбай', 'Эхлэх', 'Дуусах', 'Нэгж талбар', '']
+  const HEADERS = ['Төлөвлөгөө', 'Чөлөөлөлтийн нэр', 'Статус', 'Талбай', 'Эхлэх', 'Нэгж талбар', '']
 
   return (
     <div className="flex flex-col gap-5">
@@ -424,9 +424,18 @@ export default function LandPage() {
                 const sc = STATUS_CFG[land.status] ?? STATUS_CFG[1]
                 return (
                   <tr key={land.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                    <td className="px-5 py-3.5">
-                      <p className="font-semibold text-[#02c0ce]">{land.plan_code}</p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">{land.id.slice(0, 8)}…</p>
+                    <td className="px-5 py-3.5 max-w-[200px]">
+                      <p className="font-semibold text-[#02c0ce] truncate">{land.plan_code}</p>
+                      {land.plan_name
+                        ? <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">{land.plan_name}</p>
+                        : <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">—</p>
+                      }
+                    </td>
+                    <td className="px-5 py-3.5 max-w-[200px]">
+                      {land.acquisition_name
+                        ? <p className="text-[13px] text-slate-700 dark:text-slate-200 truncate">{land.acquisition_name}</p>
+                        : <p className="text-[13px] text-slate-400 dark:text-slate-500">—</p>
+                      }
                     </td>
                     <td className="px-5 py-3.5">
                       <span
@@ -438,11 +447,10 @@ export default function LandPage() {
                     </td>
                     <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">{formatArea(land.area_m2)}</td>
                     <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">{formatDate(land.start_date)}</td>
-                    <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">{formatDate(land.end_date)}</td>
                     <td className="px-5 py-3.5">
                       <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                         <MapPin className="h-3.5 w-3.5" />
-                        {land.parcels?.length ?? 0}
+                        {land.parcel_count ?? 0}
                       </span>
                     </td>
                     <td className="px-5 py-3.5">

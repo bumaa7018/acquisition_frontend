@@ -32,10 +32,10 @@ docker-check-network:
 		 echo "  cd ../government/deployments && docker compose up -d" && exit 1)
 
 docker-build:
-	$(COMPOSE) build
-	docker image prune -f
+	$(COMPOSE) build --no-cache
 
 up: docker-check-network
+	$(COMPOSE) build --no-cache
 	$(COMPOSE) up -d
 
 # build хийгээд foreground-д ажиллуулна (лог шууд харагдана, Ctrl+C-р зогсоно)
