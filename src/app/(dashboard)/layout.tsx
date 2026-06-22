@@ -1,15 +1,19 @@
-'use client'
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { authStorage } from '@/lib/auth'
-import { Sidebar } from '@/components/layout/sidebar'
-import { Header } from '@/components/layout/header'
+"use client";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { authStorage } from "@/lib/auth";
+import { Sidebar } from "@/components/layout/sidebar";
+import { Header } from "@/components/layout/header";
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
   useEffect(() => {
-    if (!authStorage.getAccessToken()) router.replace('/login')
-  }, [router])
+    if (!authStorage.getAccessToken()) router.replace("/login");
+  }, [router]);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -21,5 +25,5 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
     </div>
-  )
+  );
 }
