@@ -6,7 +6,7 @@ import type {
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
-  ConstructionType,
+  ConstructionType, ReportParcelRow,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -22,6 +22,20 @@ type ParcelListParams = {
   acquisition_name?: string
   plan_code?: string
   status?: number
+  years?: number[]
+}
+
+type ReportListParams = {
+  page?: number
+  page_size?: number
+  acquisition_id?: string
+  acquisition_name?: string
+  plan_code?: string
+  au3_code?: string
+  right_type?: number
+  landuse?: string
+  years?: number[]
+  compensation_type?: string
 }
 
 type LegacyParcel = Omit<Parcel, 'right_type' | 'compensation_paid'> & {
@@ -44,10 +58,19 @@ function normalizeRightType(value: number | string): number {
   return LEGACY_RIGHT_TYPES[value.toUpperCase()] ?? 0
 }
 
+function yearFromDate(value?: string): string {
+  return value?.match(/\b\d{4}\b/)?.[0] ?? ''
+}
+
+function yearSet(values?: number[]): Set<string> {
+  return new Set((values ?? []).map(String).filter(Boolean))
+}
+
 async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<PaginatedResponse<GlobalParcel>> {
   const page = params?.page ?? 1
   const pageSize = params?.page_size ?? 20
   const acqPageSize = 100
+  const selectedYears = yearSet(params?.years)
 
   const fetchAcquisitions = async (pageNo: number) =>
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', {
@@ -64,10 +87,12 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
   const acquisitions = [firstAcqPage, ...otherAcqPages]
     .flatMap(r => r.data)
     .filter(acq => {
+      if (params?.acquisition_id && acq.id !== params.acquisition_id) return false
       const name = params?.acquisition_name?.trim().toLowerCase()
       if (name && !(acq.acquisition_name ?? '').toLowerCase().includes(name)) return false
       const plan = params?.plan_code?.trim().toLowerCase()
       if (plan && !(acq.plan_code ?? '').toLowerCase().includes(plan)) return false
+      if (selectedYears.size > 0 && !selectedYears.has(yearFromDate(acq.start_date))) return false
       return true
     })
 
@@ -263,6 +288,10 @@ export const landApi = {
 // ── Global Parcels ────────────────────────────────────
 export const parcelApi = {
   list: async (params?: ParcelListParams) => {
+    if (params?.years?.length) {
+      return listParcelsFromAcquisitions(params)
+    }
+
     try {
       return await api.get<PaginatedResponse<GlobalParcel>>('/parcels', { params }).then(r => r.data)
     } catch (error) {
@@ -286,6 +315,26 @@ export const parcelApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/parcels/${id}/documents/${docId}`),
+}
+
+// ── Report rows ───────────────────────────────────────
+export const reportApi = {
+  list: (params?: ReportListParams) => {
+    const q = new URLSearchParams()
+    if (params?.page) q.set('page', String(params.page))
+    if (params?.page_size) q.set('page_size', String(params.page_size))
+    if (params?.acquisition_id) q.set('acquisition_id', params.acquisition_id)
+    if (params?.acquisition_name) q.set('acquisition_name', params.acquisition_name)
+    if (params?.plan_code) q.set('plan_code', params.plan_code)
+    if (params?.au3_code) q.set('au3_code', params.au3_code)
+    if (params?.right_type) q.set('right_type', String(params.right_type))
+    if (params?.landuse) q.set('landuse', params.landuse)
+    params?.years?.forEach(year => q.append('year', String(year)))
+    if (params?.compensation_type) q.set('compensation_type', params.compensation_type)
+
+    const suffix = q.toString()
+    return api.get<PaginatedResponse<ReportParcelRow>>(`/report/download${suffix ? `?${suffix}` : ''}`).then(r => r.data)
+  },
 }
 
 // ── Plans ─────────────────────────────────────────────

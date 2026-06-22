@@ -32,9 +32,12 @@ export async function GET(request: NextRequest) {
     ?? (rawToken ? (rawToken.toLowerCase().startsWith('bearer ') ? rawToken : `Bearer ${rawToken}`) : '')
 
   const planCode  = searchParams.get('plan_code') ?? ''
+  const acqId     = searchParams.get('acquisition_id') ?? ''
   const acqName   = searchParams.get('acquisition_name') ?? ''
-  const year      = searchParams.get('year') ?? ''
+  const years     = searchParams.getAll('year').filter(Boolean)
   const au3Code   = searchParams.get('au3_code') ?? ''
+  const rightType = searchParams.get('right_type') ?? ''
+  const landuse   = searchParams.get('landuse') ?? ''
   const compType  = searchParams.get('compensation_type') ?? ''
 
   const encoder = new TextEncoder()
@@ -50,28 +53,37 @@ export async function GET(request: NextRequest) {
       const BATCH = 200
       let allRows: AnyRow[] = []
 
-      const buildUrl = (page: number) => {
+      const buildUrl = (page: number, yr?: string) => {
         const q = new URLSearchParams({ page: String(page), page_size: String(BATCH) })
         if (planCode) q.set('plan_code', planCode)
+        if (acqId)    q.set('acquisition_id', acqId)
         if (acqName)  q.set('acquisition_name', acqName)
         if (au3Code)  q.set('au3_code', au3Code)
-        if (year)     q.set('year', year)
+        if (rightType) q.set('right_type', rightType)
+        if (landuse)  q.set('landuse', landuse)
+        if (yr)       q.set('year', yr)
         if (compType) q.set('compensation_type', compType)
         return `/api/v1/report/download?${q.toString()}`
       }
 
-      const firstRes   = await backendFetch(buildUrl(1), token)
-      const totalPages = firstRes.total_pages ?? 1
-      const totalItems = firstRes.total ?? (firstRes.data?.length ?? 0)
+      // Он бүр тус тусад нь татаж нэгтгэнэ (backend нэг л он дэмждэг)
+      const yearsToFetch = years.length > 0 ? years : [undefined]
+      let totalItems = 0
 
-      allRows = [...(firstRes.data ?? [])]
-      await write({ type: 'total', total: totalItems })
-      await write({ type: 'progress', current: allRows.length })
+      for (const yr of yearsToFetch) {
+        const firstRes   = await backendFetch(buildUrl(1, yr), token)
+        const totalPages = firstRes.total_pages ?? 1
+        totalItems += firstRes.total ?? (firstRes.data?.length ?? 0)
 
-      for (let p = 2; p <= totalPages; p++) {
-        const res = await backendFetch(buildUrl(p), token)
-        allRows = [...allRows, ...(res.data ?? [])]
+        allRows = [...allRows, ...(firstRes.data ?? [])]
+        await write({ type: 'total', total: totalItems })
         await write({ type: 'progress', current: allRows.length })
+
+        for (let p = 2; p <= totalPages; p++) {
+          const res = await backendFetch(buildUrl(p, yr), token)
+          allRows = [...allRows, ...(res.data ?? [])]
+          await write({ type: 'progress', current: allRows.length })
+        }
       }
 
       if (allRows.length === 0) {

@@ -191,6 +191,29 @@ export interface GlobalParcel {
   end_date?: string;
 }
 
+export interface ReportParcelRow {
+  parcel_id: string;
+  area_m2: number;
+  acquisition_area_m2: number;
+  remaining_area_m2: number;
+  right_type: number;
+  db_changed: boolean;
+  changed_parcel_id: string;
+  acquisition_id: string;
+  acquisition_name: string;
+  plan_code: string;
+  construction_type_name: string;
+  decree_number: string;
+  decree_date?: string;
+  holder_last_name: string;
+  holder_name: string;
+  holder_register_no: string;
+  land_comp: number;
+  real_state_comp: number;
+  property_comp: number;
+  total_comp: number;
+}
+
 export interface Asset {
   id: string
   acquisition_id: string
