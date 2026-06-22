@@ -9,17 +9,19 @@ import XYZ from 'ol/source/XYZ'
 import { fromLonLat, transformExtent } from 'ol/proj'
 import 'ol/ol.css'
 import LayerPanel, { type LayerConfig } from './map/layer-panel'
+import { fitLayerToMap, layerDef, type MapLayerDef } from './map/layers'
 
 const GS_WMS = '/geoserver/land/wms'
 const GS_WFS = '/geoserver/land/ows'
 
-const LAYER_DEFS: { id: string; label: string; color: string; defaultVisible: boolean; filter?: 'parcel' | 'acquisition' }[] = [
-  { id: 'v_acquisition_plan',     label: 'Төлөвлөгөөний хил', color: '#ef4444', defaultVisible: true },
-  { id: 'v_acquisition_boundary', label: 'Чөлөөлөлтийн хил',  color: '#f59e0b', defaultVisible: true, filter: 'acquisition' },
-  { id: 'au1',                    label: 'Аймаг',             color: '#6366f1', defaultVisible: false },
-  { id: 'au2',                    label: 'Сум',               color: '#8b5cf6', defaultVisible: false },
-  { id: 'au3',                    label: 'Баг',               color: '#a78bfa', defaultVisible: true },
-  { id: 'parcel',                 label: 'Нэгж талбар',       color: '#22c55e', defaultVisible: true, filter: 'parcel' },
+const LAYER_DEFS: (MapLayerDef & { defaultVisible: boolean; filter?: 'parcel' | 'acquisition' })[] = [
+  { ...layerDef('au1'), defaultVisible: false },
+  { ...layerDef('au2'), defaultVisible: false },
+  { ...layerDef('au3'), defaultVisible: true },
+  { ...layerDef('v_acquisition_plan'), defaultVisible: true },
+  { ...layerDef('v_acquisition_boundary'), defaultVisible: true, filter: 'acquisition' },
+  { ...layerDef('parcel'), defaultVisible: true, filter: 'parcel' },
+  { ...layerDef('building'), defaultVisible: true, filter: 'parcel' },
 ]
 
 interface Props {
@@ -35,27 +37,39 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: d.defaultVisible }))
   )
+  const parcelFilter = `parcel_id='${parcelId}'`
+  const acquisitionFilter = acquisitionId ? `acquisition_id='${acquisitionId}'` : undefined
 
   const handleToggle = useCallback((id: string) => {
     setLayers(prev => prev.map(l => {
       if (l.id !== id) return l
       const next = { ...l, visible: !l.visible }
       wmsLayers.current[id]?.setVisible(next.visible)
+      const def = LAYER_DEFS.find(d => d.id === id)
+      if (next.visible && def && olMap.current) {
+        void fitLayerToMap({
+          map: olMap.current,
+          wfsUrl: GS_WFS,
+          layerId: def.id,
+          cqlFilter: def.filter === 'parcel' ? parcelFilter : def.filter === 'acquisition' ? acquisitionFilter : undefined,
+          padding: [60, 60, 60, 60],
+          maxZoom: 18,
+        })
+      }
       return next
     }))
-  }, [])
+  }, [acquisitionFilter, parcelFilter])
 
   useEffect(() => {
     if (!mapRef.current || olMap.current || !parcelId) return
 
-    const parcelFilter = `parcel_id='${parcelId}'`
-    const acquisitionFilter = acquisitionId ? `acquisition_id='${acquisitionId}'` : undefined
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {}
 
     LAYER_DEFS.forEach(d => {
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
         opacity: 0.85,
+        zIndex: d.zIndex,
         source: new ImageWMS({
           url: GS_WMS,
           params: {
@@ -107,7 +121,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
       typeName: 'land:parcel',
       CQL_FILTER: parcelFilter,
       outputFormat: 'application/json',
-      propertyName: 'geom',
+      propertyName: 'geometry',
       maxFeatures: '1',
     })
     fetch(`${GS_WFS}?${params}`)
@@ -117,7 +131,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
           json?.features?.[0]?.geometry?.bbox ?? json?.bbox
         if (bbox?.length === 4) {
           const ext = transformExtent(bbox, 'EPSG:4326', 'EPSG:3857')
-          map.getView().fit(ext, { padding: [60, 60, 60, 60], maxZoom: 18 })
+          map.getView().fit(ext, { padding: [60, 60, 60, 60], maxZoom: 18, duration: 1000 })
         }
       })
       .catch(() => {/* keep default view */})
@@ -126,7 +140,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
       map.setTarget(undefined)
       olMap.current = null
     }
-  }, [parcelId, acquisitionId])
+  }, [acquisitionFilter, acquisitionId, parcelFilter, parcelId])
 
   return (
     <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"

@@ -5,7 +5,7 @@ import type {
   User, Role, Permission,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
-  GlobalParcel, ParcelPayment,
+  GlobalParcel, ParcelPayment, Building, Compensation, CompensationGrant,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -200,12 +200,38 @@ export const landApi = {
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; right_type?: number; landuse?: string }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
+  getBuildings: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+    api.get<PaginatedResponse<Building>>(`/land-acquisitions/${id}/buildings`, { params }).then(r => r.data),
+  createBuilding: (acqId: string, body: Partial<Building>) =>
+    api.post<ApiResponse<Building>>(`/land-acquisitions/${acqId}/buildings`, body).then(r => r.data.data),
+  updateBuilding: (acqId: string, buildingId: string, body: Partial<Building>) =>
+    api.put<ApiResponse<Building>>(`/land-acquisitions/${acqId}/buildings/${buildingId}`, body).then(r => r.data.data),
+  deleteBuilding: (acqId: string, buildingId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/buildings/${buildingId}`),
+  listCompensations: (acqId: string, parcelId?: string) =>
+    api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
+      params: parcelId ? { parcel_id: parcelId } : undefined,
+    }).then(r => r.data.data ?? []),
+  createCompensation: (acqId: string, body: Partial<Compensation>) =>
+    api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations`, body).then(r => r.data.data),
+  updateCompensation: (acqId: string, compId: string, body: Partial<Compensation>) =>
+    api.put<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}`, body).then(r => r.data.data),
+  deleteCompensation: (acqId: string, compId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/compensations/${compId}`),
+  createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
+    api.post<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
+  updateCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
+    api.put<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
+  deleteCompensationGrant: (acqId: string, compId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/compensations/${compId}/grant`),
   setParcelCompensation: (acqId: string, parcelId: string, paid: boolean) =>
     api.put(`/land-acquisitions/${acqId}/parcels/${parcelId}/compensation`, { paid }).then(r => r.data),
   getParcel: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`),
+  updateParcelValuation: (acqId: string, parcelId: string, body: { valuation_zone: string; base_price_per_ha?: number | null; auction_coeff?: number | null; auction_price?: number | null }) =>
+    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation`, body),
   getProgress: (id: string) =>
     api.get<ApiResponse<AcquisitionProgress[]>>(`/land-acquisitions/${id}/progress`).then(r => r.data.data),
   getAvailableStatuses: (id: string) =>

@@ -18,6 +18,7 @@ const LAYER_LABELS: Record<string, string> = {
   v_acquisition_boundary: 'Чөлөөлөлтийн хил',
   v_acquisition_plan: 'Чөлөөлөлтийн төлөвлөгөө',
   parcel: 'Нэгж талбар',
+  building: 'Барилгын хил',
   v_parcel_acquisition: 'Давхцал',
 }
 

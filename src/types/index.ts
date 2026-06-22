@@ -148,6 +148,10 @@ export interface ParcelDetail {
   contract_date?: string
   certificate_no: string
   certificate_date?: string
+  valuation_zone: string
+  base_price_per_ha?: number
+  auction_coeff?: number
+  auction_price?: number
 }
 
 export interface GlobalParcel {
@@ -167,6 +171,55 @@ export interface GlobalParcel {
   acquisition_status: number
   start_date?: string
   end_date?: string
+}
+
+export interface Building {
+  id: string
+  acquisition_id: string
+  parcel_id: string
+  building_number: string
+  building_type: string
+  floor_count: number
+  area_m2: number
+  owner_name: string
+  address: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CompensationGrant {
+  id: string
+  acquisition_id: string
+  compensation_id: string
+  amount: number
+  grant_date?: string
+  note?: string
+  land_area_m2: number
+  land_price: number
+  land_location: string
+  land_purpose: string
+  land_use_type: string
+  parcel_number: string
+  decree_number: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Compensation {
+  id: string
+  acquisition_id: string
+  asset_type: 'parcel' | 'building' | 'property'
+  parcel_id: string
+  building_id?: string
+  compensation_type: 'cash' | 'land_grant'
+  coverage_percent: number
+  amount: number
+  compensation_date?: string
+  note?: string
+  grant?: CompensationGrant
+  created_at: string
+  updated_at: string
 }
 
 export interface ParcelPayment {
