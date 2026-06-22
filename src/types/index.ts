@@ -45,6 +45,13 @@ export interface Plan {
   boundary_wkt?: string;
 }
 
+export interface ConstructionType {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+}
+
 export interface LandAcquisition {
   id: string;
   plan_code: string;
@@ -59,6 +66,10 @@ export interface LandAcquisition {
   reason: string;
   responsible_org: string;
   funding_source: string;
+  construction_type_id?: number;
+  construction_type_name: string;
+  decree_number: string;
+  decree_date?: string;
   created_at: string;
   created_by: string;
   parcel_count: number;
@@ -91,7 +102,10 @@ export interface Parcel {
   landuse: string;
   area_m2: number;
   acquisition_area_m2: number;
+  remaining_area_m2?: number;
   compensation_paid: boolean;
+  db_changed: boolean;
+  changed_parcel_id: string;
   geometry_wkt?: string;
 }
 
@@ -130,6 +144,10 @@ export interface ParcelFull extends Parcel {
   created_at: string;
   created_by: string;
   detail?: ParcelDetail;
+  // computed parcel meta
+  remaining_area_m2?: number;
+  db_changed: boolean;
+  changed_parcel_id: string;
 }
 
 export interface ParcelDetail {
@@ -173,12 +191,13 @@ export interface GlobalParcel {
   end_date?: string;
 }
 
-export interface Building {
+export interface Asset {
   id: string
   acquisition_id: string
   parcel_id: string
-  building_number: string
-  building_type: string
+  asset_number: string
+  asset_type: 'real_state' | 'property'
+  asset_name: string
   floor_count: number
   area_m2: number
   owner_name: string
@@ -209,9 +228,9 @@ export interface CompensationGrant {
 export interface Compensation {
   id: string
   acquisition_id: string
-  asset_type: 'parcel' | 'building' | 'property'
+  target_type: 'parcel' | 'asset'
   parcel_id: string
-  building_id?: string
+  asset_id?: string
   compensation_type: 'cash' | 'land_grant'
   coverage_percent: number
   amount: number

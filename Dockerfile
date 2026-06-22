@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 # ── dev: hot-reload (volume mount хийгддэг, source copy хийхгүй) ──
 FROM node:22-alpine3.24 AS dev
 WORKDIR /app

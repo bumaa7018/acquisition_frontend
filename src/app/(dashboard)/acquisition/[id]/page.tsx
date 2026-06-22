@@ -9,7 +9,7 @@ import {
   ArrowLeft, MapPin, Info, RefreshCw, FileText, Upload,
   Trash2, Download, ChevronRight, Clock,
   Pencil, Save, X, LayoutList, Paperclip, Activity, Map,
-  Building2, ReceiptText, ChevronDown, ChevronUp, Plus,
+  Building2, ReceiptText, ChevronDown, ChevronUp, Plus, FileDown,
 } from 'lucide-react'
 import type { Compensation } from '@/types'
 import { toast } from 'sonner'
@@ -39,12 +39,15 @@ function hasPermission(name: string): boolean {
   } catch { return false }
 }
 
-type Tab = 'general' | 'attachments' | 'progress' | 'parcels' | 'buildings' | 'compensation' | 'map'
+type Tab = 'general' | 'attachments' | 'progress' | 'parcels' | 'assets' | 'compensation' | 'map'
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-  parcel: 'Нэгж талбар',
-  building: 'Барилга',
+  real_state: 'Үл хөдлөх хөрөнгө',
   property: 'Эд хөрөнгө',
+}
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  parcel: 'Нэгж талбарын нөхөн төлбөр',
+  asset: 'Хөрөнгийн нөхөн төлбөр',
 }
 const COMP_TYPE_LABELS: Record<string, string> = {
   cash: 'Мөнгөн дүн',
@@ -55,22 +58,27 @@ const COMP_TYPE_LABELS: Record<string, string> = {
 function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient()
   const { data: acq } = useQuery({ queryKey: ['land', id], queryFn: () => landApi.getById(id) })
+  const { data: constructionTypes = [] } = useQuery({ queryKey: ['construction-types'], queryFn: () => landApi.listConstructionTypes() })
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
     acquisition_name: '', implementing_org: '', reason: '',
     responsible_org: '', funding_source: '', start_date: '', end_date: '',
   })
+  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(null)
 
   useEffect(() => {
-    if (acq) setForm({
-      acquisition_name: acq.acquisition_name ?? '',
-      implementing_org: acq.implementing_org ?? '',
-      reason: acq.reason ?? '',
-      responsible_org: acq.responsible_org ?? '',
-      funding_source: acq.funding_source ?? '',
-      start_date: acq.start_date ?? '',
-      end_date: acq.end_date ?? '',
-    })
+    if (acq) {
+      setForm({
+        acquisition_name: acq.acquisition_name ?? '',
+        implementing_org: acq.implementing_org ?? '',
+        reason: acq.reason ?? '',
+        responsible_org: acq.responsible_org ?? '',
+        funding_source: acq.funding_source ?? '',
+        start_date: acq.start_date ?? '',
+        end_date: acq.end_date ?? '',
+      })
+      setConstructionTypeId(acq.construction_type_id ?? null)
+    }
   }, [acq])
 
   const saveMutation = useMutation({
@@ -86,6 +94,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       fd.append('reason',           form.reason)
       fd.append('responsible_org',  form.responsible_org)
       fd.append('funding_source',   form.funding_source)
+      if (constructionTypeId) fd.append('construction_type_id', String(constructionTypeId))
       return landApi.update(id, fd)
     },
     onSuccess: () => {
@@ -99,11 +108,14 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   if (!acq) return null
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1]
   const inp = 'h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all'
-  const resetForm = () => setForm({
-    acquisition_name: acq.acquisition_name ?? '', implementing_org: acq.implementing_org ?? '',
-    reason: acq.reason ?? '', responsible_org: acq.responsible_org ?? '',
-    funding_source: acq.funding_source ?? '', start_date: acq.start_date ?? '', end_date: acq.end_date ?? '',
-  })
+  const resetForm = () => {
+    setForm({
+      acquisition_name: acq.acquisition_name ?? '', implementing_org: acq.implementing_org ?? '',
+      reason: acq.reason ?? '', responsible_org: acq.responsible_org ?? '',
+      funding_source: acq.funding_source ?? '', start_date: acq.start_date ?? '', end_date: acq.end_date ?? '',
+    })
+    setConstructionTypeId(acq.construction_type_id ?? null)
+  }
 
   const row = (label: string, value: React.ReactNode, last = false) => (
     <div key={label} className={`flex items-center gap-3 py-2.5 ${last ? '' : 'border-b border-slate-100 dark:border-[#37394d]'}`}>
@@ -188,6 +200,36 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               }
             </div>
           ))}
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Бүтээн байгуулалтын төрөл</span>
+            {editing
+              ? (
+                <select
+                  value={constructionTypeId ?? ''}
+                  onChange={e => setConstructionTypeId(e.target.value ? Number(e.target.value) : null)}
+                  className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                >
+                  <option value="">— Сонгоно уу —</option>
+                  {constructionTypes.map(ct => (
+                    <option key={ct.id} value={ct.id}>{ct.name}</option>
+                  ))}
+                </select>
+              )
+              : <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{acq.construction_type_name || '—'}</span>
+            }
+          </div>
+          {acq.decree_number && (
+            <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">НЗД захирамжийн дугаар</span>
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{acq.decree_number}</span>
+            </div>
+          )}
+          {acq.decree_date && (
+            <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">НЗД захирамжийн огноо</span>
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{acq.decree_date}</span>
+            </div>
+          )}
           <div className="py-2.5">
             <div className="flex items-start gap-3">
               <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-1">Чөлөөлөх шалтгаан</span>
@@ -313,10 +355,13 @@ function AdvanceModal({
   const queryClient = useQueryClient()
   const [note, setNote] = useState('')
   const [selectedStatus, setSelectedStatus] = useState<number | ''>(availableStatuses[0]?.id ?? '')
+  const [decreeNumber, setDecreeNumber] = useState('')
+  const [decreeDate, setDecreeDate] = useState('')
   const sel = 'w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all'
+  const inp = 'w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all'
 
   const advanceMutation = useMutation({
-    mutationFn: () => landApi.advanceStatus(id, selectedStatus as number, note),
+    mutationFn: () => landApi.advanceStatus(id, selectedStatus as number, note, decreeNumber, decreeDate || undefined),
     onSuccess: () => {
       toast.success('Явц шинэчлэгдлээ')
       queryClient.invalidateQueries({ queryKey: ['land', id] })
@@ -324,8 +369,13 @@ function AdvanceModal({
       queryClient.invalidateQueries({ queryKey: ['available-statuses', id] })
       onClose()
     },
-    onError: () => toast.error('Явц шинэчлэхэд алдаа гарлаа'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Явц шинэчлэхэд алдаа гарлаа')
+    },
   })
+
+  const needsDecree = selectedStatus === 3
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -348,6 +398,33 @@ function AdvanceModal({
               ))}
             </select>
           </div>
+          {needsDecree && (
+            <>
+              <div>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+                  НЗД-ын захирамжийн дугаар <span className="text-red-400">*</span>
+                </p>
+                <input
+                  type="text"
+                  value={decreeNumber}
+                  onChange={e => setDecreeNumber(e.target.value)}
+                  placeholder="А/ХХХ-2024"
+                  className={inp}
+                />
+              </div>
+              <div>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+                  НЗД-ын захирамжийн огноо <span className="text-red-400">*</span>
+                </p>
+                <input
+                  type="date"
+                  value={decreeDate}
+                  onChange={e => setDecreeDate(e.target.value)}
+                  className={inp}
+                />
+              </div>
+            </>
+          )}
           <div>
             <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Тайлбар <span className="text-slate-300 dark:text-slate-600">(заавал биш)</span></p>
             <textarea
@@ -365,7 +442,7 @@ function AdvanceModal({
             </button>
             <button
               onClick={() => advanceMutation.mutate()}
-              disabled={!selectedStatus || advanceMutation.isPending}
+              disabled={!selectedStatus || (needsDecree && (!decreeNumber || !decreeDate)) || advanceMutation.isPending}
               className="flex items-center gap-2 h-9 px-5 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors">
               {advanceMutation.isPending
                 ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
@@ -680,7 +757,7 @@ function ParcelsTab({ id }: { id: string }) {
                                   <div className="flex items-center gap-3 px-8 py-2.5 border-b border-slate-100/60 dark:border-[#2a2c38] last:border-0">
                                     <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
                                       <span className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                                        {ASSET_TYPE_LABELS[comp.asset_type] ?? comp.asset_type}
+                                        {TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}
                                       </span>
                                       <span className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold ${comp.compensation_type === 'cash' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400'}`}>
                                         {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}
@@ -770,13 +847,13 @@ function ParcelsTab({ id }: { id: string }) {
   )
 }
 
-// ─── Buildings tab ────────────────────────────────────────────────────────────
-function BuildingsTab({ id }: { id: string }) {
+// ─── Assets tab ───────────────────────────────────────────────────────────────
+function AssetsTab({ id }: { id: string }) {
   const [filter, setFilter] = useState({ parcel_id: '' })
 
-  const { data: buildings, isLoading } = useQuery({
-    queryKey: ['land-buildings', id, filter],
-    queryFn: () => landApi.getBuildings(id, { page: 1, page_size: 100, ...filter }),
+  const { data: assets, isLoading } = useQuery({
+    queryKey: ['land-assets', id, filter],
+    queryFn: () => landApi.getAssets(id, { page: 1, page_size: 100, ...filter }),
   })
 
   const inp = 'h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all'
@@ -786,8 +863,8 @@ function BuildingsTab({ id }: { id: string }) {
       <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Барилгын мэдээлэл</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{buildings?.total ?? 0} барилга</p>
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөрөнгийн мэдээлэл</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{assets?.total ?? 0} хөрөнгө</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <input
@@ -811,27 +888,28 @@ function BuildingsTab({ id }: { id: string }) {
         <div className="p-5 space-y-3 animate-pulse">
           {[...Array(5)].map((_, i) => <div key={i} className="h-10 rounded bg-slate-100 dark:bg-[#252630]" />)}
         </div>
-      ) : !buildings?.data.length ? (
+      ) : !assets?.data.length ? (
         <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
           <Building2 className="h-8 w-8 mb-2 opacity-30" />
-          <p className="text-[13px]">Барилгын мэдээлэл байхгүй</p>
+          <p className="text-[13px]">Хөрөнгийн мэдээлэл байхгүй</p>
         </div>
       ) : (
         <div className="overflow-auto">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0">
               <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                {['Дугаар', 'Нэгж талбар', 'Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг', 'Огноо'].map(h => (
+                {['Дугаар', 'Нэгж талбар', 'Хөрөнгийн төрөл', 'Нэр/Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг', 'Огноо'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-              {buildings.data.map(b => (
+              {assets.data.map(b => (
                 <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                  <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">{b.building_number || '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">{b.asset_number || '—'}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">{b.parcel_id}</td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.building_type || '—'}</td>
+                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{ASSET_TYPE_LABELS[b.asset_type] ?? b.asset_type}</td>
+                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.asset_name || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums">{b.floor_count || '—'}</td>
                   <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">{formatArea(b.area_m2)}</td>
                   <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.owner_name || '—'}</td>
@@ -895,21 +973,21 @@ function CompensationTab({ id }: { id: string }) {
     queryFn: () => landApi.listCompensations(id),
     enabled: !!id,
   })
-  const { data: buildingsResult } = useQuery({
-    queryKey: ['land-buildings', id, { page: 1, page_size: 1000 }],
-    queryFn: () => landApi.getBuildings(id, { page: 1, page_size: 1000 }),
+  const { data: assetsResult } = useQuery({
+    queryKey: ['land-assets', id, { page: 1, page_size: 1000 }],
+    queryFn: () => landApi.getAssets(id, { page: 1, page_size: 1000 }),
     enabled: !!id,
   })
 
   const parcels = parcelsResult?.data ?? []
-  const allBuildings = buildingsResult?.data ?? []
+  const allAssets = assetsResult?.data ?? []
 
   const compsByParcel = allComps.reduce<Record<string, Compensation[]>>((acc, c) => {
     const k = c.parcel_id || ''
     ;(acc[k] ??= []).push(c)
     return acc
   }, {})
-  const buildingsByParcel = allBuildings.reduce<Record<string, typeof allBuildings>>((acc, b) => {
+  const assetsByParcel = allAssets.reduce<Record<string, typeof allAssets>>((acc, b) => {
     ;(acc[b.parcel_id] ??= []).push(b)
     return acc
   }, {})
@@ -931,7 +1009,7 @@ function CompensationTab({ id }: { id: string }) {
   })
 
   const activeParcels = parcels.filter(
-    p => (compsByParcel[p.parcel_id]?.length ?? 0) > 0 || (buildingsByParcel[p.parcel_id]?.length ?? 0) > 0,
+    p => (compsByParcel[p.parcel_id]?.length ?? 0) > 0 || (assetsByParcel[p.parcel_id]?.length ?? 0) > 0,
   )
   const cashTotal = allComps.filter(c => c.compensation_type === 'cash').reduce((s, c) => s + c.amount, 0)
   const landGrantTotal = allComps.filter(c => c.compensation_type === 'land_grant').reduce((s, c) => s + c.amount, 0)
@@ -945,7 +1023,7 @@ function CompensationTab({ id }: { id: string }) {
           ['Нийт бүртгэл', allComps.length, '#02c0ce'],
           ['Мөнгөн дүн', cashTotal > 0 ? `${cashTotal.toLocaleString()}₮` : '—', '#0acf97'],
           ['Газрын олговор', allComps.filter(c => c.compensation_type === 'land_grant').length, '#6366f1'],
-          ['Барилга', allComps.filter(c => c.asset_type === 'building').length, '#f59e0b'],
+          ['Хөрөнгийн нөхөн төлбөр', allComps.filter(c => c.target_type === 'asset').length, '#f59e0b'],
         ] as [string, string | number, string][]).map(([label, value, color]) => (
           <div key={label} className="ap-card px-5 py-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${color}18` }}>
@@ -974,7 +1052,7 @@ function CompensationTab({ id }: { id: string }) {
         <div className="flex flex-col gap-3">
           {activeParcels.map(parcel => {
             const comps = compsByParcel[parcel.parcel_id] ?? []
-            const buildings = buildingsByParcel[parcel.parcel_id] ?? []
+            const assets = assetsByParcel[parcel.parcel_id] ?? []
             const isOpen = expandedParcels.has(parcel.id)
             const parcelCash = comps.filter(c => c.compensation_type === 'cash').reduce((s, c) => s + c.amount, 0)
             const parcelGrant = comps.filter(c => c.compensation_type === 'land_grant').reduce((s, c) => s + c.amount, 0)
@@ -998,9 +1076,9 @@ function CompensationTab({ id }: { id: string }) {
                           <ReceiptText className="h-3 w-3" />{comps.length} нөхөн төлбөр
                         </span>
                       )}
-                      {buildings.length > 0 && (
+                      {assets.length > 0 && (
                         <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <Building2 className="h-3 w-3" />{buildings.length} барилга
+                          <Building2 className="h-3 w-3" />{assets.length} хөрөнгө
                         </span>
                       )}
                     </div>
@@ -1035,7 +1113,7 @@ function CompensationTab({ id }: { id: string }) {
                               <div className="flex items-center gap-3 px-5 py-3">
                                 <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
                                   <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                                    {ASSET_TYPE_LABELS[comp.asset_type] ?? comp.asset_type}
+                                    {TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}
                                   </span>
                                   <span className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${comp.compensation_type === 'cash' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400'}`}>
                                     {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}
@@ -1071,27 +1149,28 @@ function CompensationTab({ id }: { id: string }) {
                       </>
                     )}
 
-                    {/* ── Buildings ──────────────────────────────────── */}
-                    {buildings.length > 0 && (
+                    {/* ── Assets ─────────────────────────────────────── */}
+                    {assets.length > 0 && (
                       <div className="border-t border-slate-100 dark:border-[#37394d]">
                         <div className="px-5 py-2 bg-slate-50/80 dark:bg-[#1a1d20] flex items-center gap-2">
                           <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Барилга</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Хөрөнгө</p>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[12px]">
                             <thead>
                               <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                                {['Дугаар', 'Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг'].map(h => (
+                                {['Дугаар', 'Хөрөнгийн төрөл', 'Нэр/Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг'].map(h => (
                                   <th key={h} className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">{h}</th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                              {buildings.map(b => (
+                              {assets.map(b => (
                                 <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                                  <td className="px-4 py-2.5 font-mono font-medium text-slate-700 dark:text-slate-200">{b.building_number || '—'}</td>
-                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.building_type || '—'}</td>
+                                  <td className="px-4 py-2.5 font-mono font-medium text-slate-700 dark:text-slate-200">{b.asset_number || '—'}</td>
+                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{ASSET_TYPE_LABELS[b.asset_type] ?? b.asset_type}</td>
+                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.asset_name || '—'}</td>
                                   <td className="px-4 py-2.5 text-slate-500 tabular-nums">{b.floor_count || '—'}</td>
                                   <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatArea(b.area_m2)}</td>
                                   <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.owner_name || '—'}</td>
@@ -1133,11 +1212,35 @@ function CompensationTab({ id }: { id: string }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+async function generateReport(acqId: string) {
+  const { authStorage } = await import('@/lib/auth')
+  const token = authStorage.getAccessToken()
+
+  const res = await fetch(`/api/report/acquisition/${acqId}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new Error('Report generation failed')
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i)
+  const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : '2010_тайлан.xlsx'
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function AcquisitionDetailPage() {
   const { id } = useParams<{ id: string }>()
   const searchParams = useSearchParams()
-  const initialTab = (searchParams.get('tab') as Tab) ?? 'general'
+  const tabParam = searchParams.get('tab')
+  const initialTab = (tabParam === 'buildings' ? 'assets' : tabParam as Tab) ?? 'general'
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [reportLoading, setReportLoading] = useState(false)
   const canEdit = hasPermission('acquisition.create')
 
   const { data: acq, isLoading } = useQuery({
@@ -1162,7 +1265,7 @@ export default function AcquisitionDetailPage() {
     { key: 'attachments',  label: 'Хавсралт',          icon: <Paperclip className="h-4 w-4" /> },
     { key: 'progress',     label: 'Явц',               icon: <Activity className="h-4 w-4" /> },
     { key: 'parcels',      label: 'Нэгж талбарууд',   icon: <MapPin className="h-4 w-4" /> },
-    { key: 'buildings',    label: 'Барилга',           icon: <Building2 className="h-4 w-4" /> },
+    { key: 'assets',       label: 'Хөрөнгө',           icon: <Building2 className="h-4 w-4" /> },
     { key: 'compensation', label: 'Нөхөн төлбөр',     icon: <ReceiptText className="h-4 w-4" /> },
     { key: 'map',          label: 'Байршил',            icon: <Map className="h-4 w-4" /> },
   ]
@@ -1185,6 +1288,20 @@ export default function AcquisitionDetailPage() {
           </div>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">{acq.plan_code}{acq.plan_name ? ` · ${acq.plan_name}` : ''}</p>
         </div>
+        <button
+          disabled={reportLoading}
+          onClick={async () => {
+            setReportLoading(true)
+            try { await generateReport(id) }
+            catch { toast.error('Тайлан үүсгэхэд алдаа гарлаа') }
+            finally { setReportLoading(false) }
+          }}
+          className="flex shrink-0 items-center gap-2 h-9 px-4 rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-50 transition-colors">
+          {reportLoading
+            ? <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            : <FileDown className="h-4 w-4" />}
+          Тайлан татах
+        </button>
       </div>
 
       {/* Tab bar */}
@@ -1221,7 +1338,7 @@ export default function AcquisitionDetailPage() {
       {tab === 'attachments'  && <AttachmentsTab  id={id} canEdit={canEdit} />}
       {tab === 'progress'     && <ProgressTab     id={id} canEdit={canEdit} />}
       {tab === 'parcels'      && <ParcelsTab      id={id} />}
-      {tab === 'buildings'    && <BuildingsTab    id={id} />}
+      {tab === 'assets'       && <AssetsTab       id={id} />}
       {tab === 'compensation' && <CompensationTab id={id} />}
       {tab === 'map'          && (
         <div className="ap-card p-5">

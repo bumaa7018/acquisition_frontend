@@ -8,6 +8,7 @@ services:
       target: dev
     volumes:
       - ./src:/app/src
+      - ./public:/app/public
       - ./next.config.mjs:/app/next.config.mjs
       - ./tailwind.config.ts:/app/tailwind.config.ts
       - ./postcss.config.mjs:/app/postcss.config.mjs

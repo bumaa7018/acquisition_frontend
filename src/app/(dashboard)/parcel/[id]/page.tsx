@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { landApi, parcelApi } from '@/lib/api'
-import { STATUS_LABELS, RIGHT_TYPE_LABELS, type AU, type Compensation, type CompensationGrant } from '@/types'
+import { STATUS_LABELS, RIGHT_TYPE_LABELS, type AU, type Asset, type Compensation, type CompensationGrant } from '@/types'
 import { formatDate, formatArea } from '@/lib/utils'
 import {
   ArrowLeft, Info, FileText, Upload, Trash2, Download,
@@ -49,9 +49,13 @@ function highlightArea(value: string) {
 }
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
-  parcel: 'Нэгж талбар',
-  building: 'Барилга',
+  real_state: 'Үл хөдлөх хөрөнгө',
   property: 'Эд хөрөнгө',
+}
+
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  parcel: 'Нэгж талбарын нөхөн төлбөр',
+  asset: 'Хөрөнгийн нөхөн төлбөр',
 }
 
 const COMP_TYPE_LABELS: Record<string, string> = {
@@ -60,7 +64,7 @@ const COMP_TYPE_LABELS: Record<string, string> = {
 }
 
 const EMPTY_COMP = {
-  asset_type: 'parcel' as Compensation['asset_type'],
+  target_type: 'asset' as Compensation['target_type'],
   compensation_type: 'cash' as Compensation['compensation_type'],
   coverage_percent: '',
   amount: '',
@@ -97,9 +101,9 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
   const compensations = parcelCode
     ? allComps.filter(c => c.parcel_id === parcelCode)
     : allComps
-  const { data: buildingsResult } = useQuery({
-    queryKey: ['parcel-buildings', acqId, parcelCode],
-    queryFn: () => landApi.getBuildings(acqId, { page: 1, page_size: 100, parcel_id: parcelCode }),
+  const { data: assetsResult } = useQuery({
+    queryKey: ['parcel-assets', acqId, parcelCode],
+    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: parcelCode }),
     enabled: !!acqId && !!parcelCode,
   })
   const { data: payments = [] } = useQuery({
@@ -107,14 +111,14 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
     queryFn: () => parcelApi.listPayments(parcelId),
     enabled: !!parcelId,
   })
-  const buildings = buildingsResult?.data ?? []
+  const assets = assetsResult?.data ?? []
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
 
   const createMutation = useMutation({
     mutationFn: async () => {
       // Compensation эхлээд үүсгэнэ
       const comp = await landApi.createCompensation(acqId, {
-        asset_type: form.asset_type,
+        target_type: form.target_type,
         parcel_id: parcelCode,
         compensation_type: form.compensation_type,
         coverage_percent: Number(form.coverage_percent) || 0,
@@ -181,11 +185,10 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
-              <p className="text-[11px] text-slate-400 mb-1">Хөрөнгийн төрөл</p>
-              <select value={form.asset_type} onChange={e => setForm(f => ({ ...f, asset_type: e.target.value as Compensation['asset_type'] }))} className={inp}>
-                <option value="parcel">Нэгж талбар</option>
-                <option value="building">Барилга</option>
-                <option value="property">Эд хөрөнгө</option>
+              <p className="text-[11px] text-slate-400 mb-1">Нөхөн төлбөрийн төрөл</p>
+              <select value={form.target_type} onChange={e => setForm(f => ({ ...f, target_type: e.target.value as Compensation['target_type'] }))} className={inp}>
+                <option value="parcel">Нэгж талбарын нөхөн төлбөр</option>
+                <option value="asset">Хөрөнгийн нөхөн төлбөр</option>
               </select>
             </div>
             <div>
@@ -288,7 +291,7 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                {['Хөрөнгийн төрөл', 'Нөхөн олговрын хэлбэр', 'Хамрах хувь', 'Дүн', 'Огноо', ''].map(h => (
+                {['Нөхөн төлбөрийн төрөл', 'Нөхөн олговрын хэлбэр', 'Хамрах хувь', 'Дүн', 'Огноо', ''].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -298,7 +301,7 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
                 <React.Fragment key={comp.id}>
                   <tr className="border-b border-slate-100 dark:border-[#37394d] hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
                     <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">
-                      {ASSET_TYPE_LABELS[comp.asset_type] ?? comp.asset_type}
+                      {TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}
                     </td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${comp.compensation_type === 'cash' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400'}`}>
@@ -393,32 +396,33 @@ function CompensationSection({ acqId, parcelCode, parcelId }: { acqId: string; p
       )}
     </div>
 
-    {/* ── Buildings ───────────────────────────────────────────────────── */}
-    {buildings.length > 0 && (
+    {/* ── Assets ──────────────────────────────────────────────────────── */}
+    {assets.length > 0 && (
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d] flex items-center gap-2">
           <Building2 className="h-4 w-4 text-slate-400" />
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Барилга ({buildings.length})</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Хөрөнгө ({assets.length})</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                {['Дугаар', 'Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг', 'Нөхөн олговрын хэлбэр', 'Нөхөж төлөх дүн'].map(h => (
+                {['Дугаар', 'Хөрөнгийн төрөл', 'Нэр/Төрөл', 'Давхар', 'Талбай', 'Эзэмшигч', 'Хаяг', 'Нөхөн олговрын хэлбэр', 'Нөхөж төлөх дүн'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-              {buildings.map(b => {
-                const bComps = compensations.filter(c => c.building_id === b.id)
+              {assets.map(b => {
+                const bComps = compensations.filter(c => c.asset_id === b.id)
                 const cashComp = bComps.find(c => c.compensation_type === 'cash')
                 const grantComp = bComps.find(c => c.compensation_type === 'land_grant')
                 const totalAmt = bComps.reduce((s, c) => s + c.amount, 0)
                 return (
                   <tr key={b.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                    <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">{b.building_number || '—'}</td>
-                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.building_type || '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">{b.asset_number || '—'}</td>
+                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{ASSET_TYPE_LABELS[b.asset_type] ?? b.asset_type}</td>
+                    <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.asset_name || '—'}</td>
                     <td className="px-4 py-2.5 text-slate-500 tabular-nums">{b.floor_count || '—'}</td>
                     <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{formatArea(b.area_m2)}</td>
                     <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{b.owner_name || '—'}</td>
@@ -517,6 +521,37 @@ function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
     queryFn: () => landApi.getById(acqId),
     enabled: !!acqId,
   })
+  const { data: compensations = [] } = useQuery({
+    queryKey: ['compensations', acqId],
+    queryFn: () => landApi.listCompensations(acqId),
+    enabled: !!acqId,
+  })
+  const { data: assetsData } = useQuery({
+    queryKey: ['parcel-assets', acqId, data?.parcel_id],
+    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: data?.parcel_id }),
+    enabled: !!acqId && !!data?.parcel_id,
+  })
+
+  const [editingMeta, setEditingMeta] = useState(false)
+  const [dbChanged, setDbChanged] = useState(false)
+  const [changedParcelId, setChangedParcelId] = useState('')
+
+  React.useEffect(() => {
+    if (data) {
+      setDbChanged(data.db_changed ?? false)
+      setChangedParcelId(data.changed_parcel_id ?? '')
+    }
+  }, [data])
+
+  const metaMutation = useMutation({
+    mutationFn: () => landApi.updateParcelMeta(acqId, parcelId, dbChanged, changedParcelId),
+    onSuccess: () => {
+      toast.success('Мэдээлэл хадгалагдлаа')
+      queryClient.invalidateQueries({ queryKey: ['parcel-full', acqId, parcelId] })
+      setEditingMeta(false)
+    },
+    onError: () => toast.error('Хадгалахад алдаа гарлаа'),
+  })
 
   const syncMutation = useMutation({
     mutationFn: () => landApi.syncParcel(acqId, parcelId),
@@ -574,6 +609,7 @@ function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
         {row('Эрх дуусах', data.valid_till ? formatDate(data.valid_till) : undefined)}
         {row('Нийт талбай', formatArea(data.area_m2))}
         {row('Чөлөөлөгдөх талбай', highlightArea(formatArea(data.acquisition_area_m2)))}
+        {row('Үлдэх газрын хэмжээ', data.remaining_area_m2 != null ? formatArea(data.remaining_area_m2) : formatArea((data.area_m2 || 0) - (data.acquisition_area_m2 || 0)))}
       </div>
 
       {/* Эзэмшигч */}
@@ -640,6 +676,76 @@ function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
         </div>
       </div>
     )}
+
+    {/* Нөхөн төлбөрийн дүн */}
+    {(() => {
+      const parcelComps = compensations.filter(c => c.parcel_id === data.parcel_id)
+      const assets = assetsData?.data ?? []
+      const parcelLandValue = parcelComps.filter(c => c.target_type === 'parcel').reduce((s, c) => s + c.amount, 0)
+      const realStateAssetIds = new Set(assets.filter(a => a.asset_type === 'real_state').map(a => a.id))
+      const propertyAssetIds = new Set(assets.filter(a => a.asset_type === 'property').map(a => a.id))
+      const realStateComp = parcelComps.filter(c => c.target_type === 'asset' && c.asset_id && realStateAssetIds.has(c.asset_id)).reduce((s, c) => s + c.amount, 0)
+      const propertyComp = parcelComps.filter(c => c.target_type === 'asset' && c.asset_id && propertyAssetIds.has(c.asset_id)).reduce((s, c) => s + c.amount, 0)
+      const totalComp = parcelLandValue + realStateComp + propertyComp
+      if (parcelComps.length === 0) return null
+      return (
+        <div className="ap-card overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Нөхөн төлбөрийн дүн</p>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
+            {row('Нөлөөлөлд өртсөн газрын үнэ', parcelLandValue > 0 ? `${parcelLandValue.toLocaleString()} ₮` : '—')}
+            {row('Үл хөдлөх хөрөнгийн нөхөн төлбөр', realStateComp > 0 ? `${realStateComp.toLocaleString()} ₮` : '—')}
+            {row('Эд хөрөнгийн нөхөн төлбөр', propertyComp > 0 ? `${propertyComp.toLocaleString()} ₮` : '—')}
+            {row('Нийт нөхөн төлбөр', totalComp > 0 ? <span className="font-bold text-[#02c0ce]">{totalComp.toLocaleString()} ₮</span> : '—')}
+          </div>
+        </div>
+      )
+    })()}
+
+    {/* Мэдээллийн сангийн өөрчлөлт */}
+    <div className="ap-card overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Мэдээллийн сангийн өөрчлөлт</p>
+        {editingMeta ? (
+          <div className="flex gap-2">
+            <button onClick={() => { setEditingMeta(false); setDbChanged(data.db_changed ?? false); setChangedParcelId(data.changed_parcel_id ?? '') }}
+              className="h-7 px-3 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors">Болих</button>
+            <button onClick={() => metaMutation.mutate()} disabled={metaMutation.isPending}
+              className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors">Хадгалах</button>
+          </div>
+        ) : (
+          <button onClick={() => setEditingMeta(true)}
+            className="h-7 px-3 rounded-lg text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors">Засах</button>
+        )}
+      </div>
+      <div className="px-5 divide-y divide-slate-100 dark:divide-[#37394d]">
+        <div className="flex items-center gap-3 py-2.5">
+          <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Мэдээллийн санд өөрчлөлт орсон эсэх</span>
+          {editingMeta ? (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={dbChanged} onChange={e => setDbChanged(e.target.checked)}
+                className="w-4 h-4 accent-[#02c0ce]" />
+              <span className="text-[13px] text-slate-700 dark:text-slate-200">{dbChanged ? 'Тийм' : 'Үгүй'}</span>
+            </label>
+          ) : (
+            <span className={`text-[13px] font-medium ${data.db_changed ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-slate-200'}`}>
+              {data.db_changed ? 'Тийм' : 'Үгүй'}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3 py-2.5">
+          <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өөрчлөгдсөн нэгж талбарын дугаар</span>
+          {editingMeta ? (
+            <input type="text" value={changedParcelId} onChange={e => setChangedParcelId(e.target.value)}
+              placeholder="Нэгж талбарын дугаар..."
+              className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all" />
+          ) : (
+            <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{data.changed_parcel_id || '—'}</span>
+          )}
+        </div>
+      </div>
+    </div>
 
     </div>
   )
@@ -896,13 +1002,13 @@ function PaymentTab({ parcelId, acqId, parcelCode }: { parcelId: string; acqId: 
               <div key={comp.id} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-2">
                   <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-sky-100 dark:bg-sky-400/15">
-                    {comp.asset_type === 'parcel'
+                    {comp.target_type === 'parcel'
                       ? <MapPin className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                       : <Building2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
                   </span>
                   <div>
                     <span className="text-[13px] text-slate-600 dark:text-slate-300">
-                      {ASSET_TYPE_LABELS[comp.asset_type] ?? comp.asset_type}
+                      {TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}
                     </span>
                     <span className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${comp.compensation_type === 'cash' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400'}`}>
                       {COMP_TYPE_LABELS[comp.compensation_type]}
@@ -1027,12 +1133,21 @@ function PaymentTab({ parcelId, acqId, parcelCode }: { parcelId: string; acqId: 
 }
 
 // ─── Real estate tab ──────────────────────────────────────────────────────────
-const EMPTY_BUILDING = { building_number: '', building_type: '', floor_count: '', area_m2: '', owner_name: '', address: '', notes: '' }
+const EMPTY_ASSET = {
+  asset_number: '',
+  asset_type: 'real_state' as Asset['asset_type'],
+  asset_name: '',
+  floor_count: '',
+  area_m2: '',
+  owner_name: '',
+  address: '',
+  notes: '',
+}
 
 function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelId: string; parcelCode: string }) {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(EMPTY_BUILDING)
+  const [form, setForm] = useState(EMPTY_ASSET)
 
   const { data: parcelData } = useQuery({
     queryKey: ['parcel-full', acqId, parcelId],
@@ -1042,17 +1157,18 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
 
   const effectiveParcelCode = parcelData?.parcel_id ?? parcelCode
 
-  const { data: buildings, isLoading: buildingsLoading } = useQuery({
-    queryKey: ['parcel-buildings', acqId, effectiveParcelCode],
-    queryFn: () => landApi.getBuildings(acqId, { page: 1, page_size: 1000, parcel_id: effectiveParcelCode }),
+  const { data: assets, isLoading: assetsLoading } = useQuery({
+    queryKey: ['parcel-assets', acqId, effectiveParcelCode],
+    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 1000, parcel_id: effectiveParcelCode }),
     enabled: !!acqId && !!effectiveParcelCode,
   })
 
   const createMutation = useMutation({
-    mutationFn: () => landApi.createBuilding(acqId, {
+    mutationFn: () => landApi.createAsset(acqId, {
       parcel_id: parcelData?.parcel_id ?? parcelCode,
-      building_number: form.building_number,
-      building_type: form.building_type,
+      asset_number: form.asset_number,
+      asset_type: form.asset_type,
+      asset_name: form.asset_name,
       floor_count: Number(form.floor_count) || 0,
       area_m2: Number(form.area_m2) || 0,
       owner_name: form.owner_name,
@@ -1060,19 +1176,19 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
       notes: form.notes,
     }),
     onSuccess: () => {
-      toast.success('Барилга нэмэгдлээ')
-      setForm(EMPTY_BUILDING)
+      toast.success('Хөрөнгө нэмэгдлээ')
+      setForm(EMPTY_ASSET)
       setShowForm(false)
-      queryClient.invalidateQueries({ queryKey: ['parcel-buildings', acqId, effectiveParcelCode] })
+      queryClient.invalidateQueries({ queryKey: ['parcel-assets', acqId, effectiveParcelCode] })
     },
-    onError: () => toast.error('Барилга нэмэхэд алдаа гарлаа'),
+    onError: () => toast.error('Хөрөнгө нэмэхэд алдаа гарлаа'),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (buildingId: string) => landApi.deleteBuilding(acqId, buildingId),
+    mutationFn: (assetId: string) => landApi.deleteAsset(acqId, assetId),
     onSuccess: () => {
-      toast.success('Барилга устгагдлаа')
-      queryClient.invalidateQueries({ queryKey: ['parcel-buildings', acqId, effectiveParcelCode] })
+      toast.success('Хөрөнгө устгагдлаа')
+      queryClient.invalidateQueries({ queryKey: ['parcel-assets', acqId, effectiveParcelCode] })
     },
     onError: () => toast.error('Устгахад алдаа гарлаа'),
   })
@@ -1085,10 +1201,9 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
 
   const inp = 'h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all'
 
-  const parcelBuildings = buildings?.data ?? []
-  // building_id-аар бүлэглэсэн нөхөн төлбөр
-  const compsByBuilding = allComps.reduce<Record<string, typeof allComps>>((acc, c) => {
-    if (c.building_id) (acc[c.building_id] ??= []).push(c)
+  const parcelAssets = assets?.data ?? []
+  const compsByAsset = allComps.reduce<Record<string, typeof allComps>>((acc, c) => {
+    if (c.asset_id) (acc[c.asset_id] ??= []).push(c)
     return acc
   }, {})
 
@@ -1118,12 +1233,19 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
           <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
+                <p className="text-[11px] text-slate-400 mb-1">Хөрөнгийн төрөл</p>
+                <select value={form.asset_type} onChange={e => setForm(f => ({ ...f, asset_type: e.target.value as Asset['asset_type'] }))} className={inp}>
+                  <option value="real_state">Үл хөдлөх хөрөнгө</option>
+                  <option value="property">Эд хөрөнгө</option>
+                </select>
+              </div>
+              <div>
                 <p className="text-[11px] text-slate-400 mb-1">Дугаар</p>
-                <input value={form.building_number} onChange={e => setForm(f => ({ ...f, building_number: e.target.value }))} placeholder="1" className={inp} />
+                <input value={form.asset_number} onChange={e => setForm(f => ({ ...f, asset_number: e.target.value }))} placeholder="1" className={inp} />
               </div>
               <div>
                 <p className="text-[11px] text-slate-400 mb-1">Төрөл</p>
-                <input value={form.building_type} onChange={e => setForm(f => ({ ...f, building_type: e.target.value }))} placeholder="Амины орон сууц" className={inp} />
+                <input value={form.asset_name} onChange={e => setForm(f => ({ ...f, asset_name: e.target.value }))} placeholder="Амины орон сууц" className={inp} />
               </div>
               <div>
                 <p className="text-[11px] text-slate-400 mb-1">Давхар</p>
@@ -1163,22 +1285,22 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
 
       </div>
 
-      {/* Building cards */}
-      {buildingsLoading ? (
+      {/* Asset cards */}
+      {assetsLoading ? (
         <div className="space-y-3 animate-pulse">
           {[...Array(2)].map((_, i) => <div key={i} className="h-32 rounded-xl bg-slate-100 dark:bg-[#252630]" />)}
         </div>
-      ) : !parcelBuildings.length ? (
+      ) : !parcelAssets.length ? (
         <div className="ap-card flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
           <Building2 className="h-7 w-7 mb-2 opacity-30" />
-          <p className="text-[13px]">Барилгын мэдээлэл байхгүй</p>
+          <p className="text-[13px]">Хөрөнгийн мэдээлэл байхгүй</p>
         </div>
       ) : (
-        parcelBuildings.map(building => {
-          const bComps = compsByBuilding[building.id] ?? []
+        parcelAssets.map(asset => {
+          const assetComps = compsByAsset[asset.id] ?? []
           return (
-            <div key={building.id} className="ap-card overflow-hidden">
-              {/* Building header */}
+            <div key={asset.id} className="ap-card overflow-hidden">
+              {/* Asset header */}
               <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/60 dark:bg-[#1a1d20]">
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-50 dark:bg-cyan-500/10">
@@ -1186,26 +1308,27 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
                   </div>
                   <div>
                     <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                      {building.building_type || 'Барилга'}{building.building_number ? ` №${building.building_number}` : ''}
+                      {asset.asset_name || ASSET_TYPE_LABELS[asset.asset_type] || 'Хөрөнгө'}{asset.asset_number ? ` №${asset.asset_number}` : ''}
                     </p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">{building.address || '—'}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">{ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type} · {asset.address || '—'}</p>
                   </div>
                 </div>
                 <button
-                  onClick={() => { if (confirm('Барилга устгах уу?')) deleteMutation.mutate(building.id) }}
+                  onClick={() => { if (confirm('Хөрөнгө устгах уу?')) deleteMutation.mutate(asset.id) }}
                   className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* Building info grid */}
+              {/* Asset info grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-100 dark:bg-[#37394d]">
                 {[
-                  ['Давхар', building.floor_count || '—'],
-                  ['Талбай', formatArea(building.area_m2)],
-                  ['Эзэмшигч', building.owner_name || '—'],
-                  ['Тайлбар', building.notes || '—'],
+                  ['Хөрөнгийн төрөл', ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type],
+                  ['Давхар', asset.floor_count || '—'],
+                  ['Талбай', formatArea(asset.area_m2)],
+                  ['Эзэмшигч', asset.owner_name || '—'],
+                  ['Тайлбар', asset.notes || '—'],
                 ].map(([label, value]) => (
                   <div key={label} className="bg-white dark:bg-[#1e1f27] px-4 py-3">
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
@@ -1215,7 +1338,7 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
               </div>
 
               {/* Compensation sub-section */}
-              {bComps.length > 0 ? (
+              {assetComps.length > 0 ? (
                 <div>
                   <div className="flex items-center gap-2 px-5 py-2.5 border-t border-slate-100 dark:border-[#37394d] bg-slate-50/60 dark:bg-[#1a1d20]">
                     <ReceiptText className="h-3.5 w-3.5 text-slate-400" />
@@ -1225,16 +1348,16 @@ function RealEstateTab({ acqId, parcelId, parcelCode }: { acqId: string; parcelI
                     <table className="w-full text-[12px]">
                       <thead>
                         <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                          {['Хөрөнгийн төрөл', 'Хэлбэр', 'Хувь', 'Дүн', 'Огноо'].map(h => (
+                          {['Нөхөн төлбөрийн төрөл', 'Хэлбэр', 'Хувь', 'Дүн', 'Огноо'].map(h => (
                             <th key={h} className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                        {bComps.map(comp => (
+                        {assetComps.map(comp => (
                           <tr key={comp.id} className="hover:bg-slate-50/40 dark:hover:bg-[#252630]/50 transition-colors">
                             <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                              {ASSET_TYPE_LABELS[comp.asset_type] ?? comp.asset_type}
+                              {TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}
                             </td>
                             <td className="px-4 py-2.5">
                               <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${comp.compensation_type === 'cash' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400' : 'bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400'}`}>

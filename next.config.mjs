@@ -8,6 +8,9 @@ console.log({ API_URL, GS_URL });
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   httpAgentOptions: { keepAlive: false },
+  experimental: {
+    serverComponentsExternalPackages: ['exceljs'],
+  },
   // standalone зөвхөн production-д хэрэгтэй, dev-д disc идэх тул хасав
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),
   async rewrites() {

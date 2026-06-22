@@ -5,7 +5,8 @@ import type {
   User, Role, Permission,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
-  GlobalParcel, ParcelPayment, Building, Compensation, CompensationGrant,
+  GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
+  ConstructionType,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -185,6 +186,8 @@ export const permissionsApi = {
 
 // ── Land Acquisitions ─────────────────────────────────
 export const landApi = {
+  listConstructionTypes: () =>
+    api.get<ApiResponse<ConstructionType[]>>('/construction-types').then(r => r.data.data),
   list: (filter?: LandAcquisitionFilter) =>
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', { params: filter }).then(r => r.data),
   getById: (id: string) =>
@@ -200,14 +203,14 @@ export const landApi = {
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; right_type?: number; landuse?: string }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
-  getBuildings: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
-    api.get<PaginatedResponse<Building>>(`/land-acquisitions/${id}/buildings`, { params }).then(r => r.data),
-  createBuilding: (acqId: string, body: Partial<Building>) =>
-    api.post<ApiResponse<Building>>(`/land-acquisitions/${acqId}/buildings`, body).then(r => r.data.data),
-  updateBuilding: (acqId: string, buildingId: string, body: Partial<Building>) =>
-    api.put<ApiResponse<Building>>(`/land-acquisitions/${acqId}/buildings/${buildingId}`, body).then(r => r.data.data),
-  deleteBuilding: (acqId: string, buildingId: string) =>
-    api.delete(`/land-acquisitions/${acqId}/buildings/${buildingId}`),
+  getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+    api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
+  createAsset: (acqId: string, body: Partial<Asset>) =>
+    api.post<ApiResponse<Asset>>(`/land-acquisitions/${acqId}/assets`, body).then(r => r.data.data),
+  updateAsset: (acqId: string, assetId: string, body: Partial<Asset>) =>
+    api.put<ApiResponse<Asset>>(`/land-acquisitions/${acqId}/assets/${assetId}`, body).then(r => r.data.data),
+  deleteAsset: (acqId: string, assetId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/assets/${assetId}`),
   listCompensations: (acqId: string, parcelId?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
       params: parcelId ? { parcel_id: parcelId } : undefined,
@@ -236,8 +239,15 @@ export const landApi = {
     api.get<ApiResponse<AcquisitionProgress[]>>(`/land-acquisitions/${id}/progress`).then(r => r.data.data),
   getAvailableStatuses: (id: string) =>
     api.get<ApiResponse<StatusOption[]>>(`/land-acquisitions/${id}/available-statuses`).then(r => r.data.data),
-  advanceStatus: (id: string, toStatus: number, note?: string) =>
-    api.post<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}/advance`, { to_status: toStatus, note: note ?? '' }).then(r => r.data.data),
+  advanceStatus: (id: string, toStatus: number, note?: string, decreeNumber?: string, decreeDate?: string) =>
+    api.post<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}/advance`, {
+      to_status: toStatus,
+      note: note ?? '',
+      decree_number: decreeNumber ?? '',
+      decree_date: decreeDate ?? null,
+    }).then(r => r.data.data),
+  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string) =>
+    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/meta`, { db_changed: dbChanged, changed_parcel_id: changedParcelId }).then(r => r.data),
   listDocuments: (id: string) =>
     api.get<ApiResponse<Document[]>>(`/land-acquisitions/${id}/documents`).then(r => r.data.data ?? []),
   uploadDocument: (id: string, file: File) => {
