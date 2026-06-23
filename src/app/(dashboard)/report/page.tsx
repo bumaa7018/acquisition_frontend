@@ -693,37 +693,36 @@ export default function ReportPage() {
   ]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-[#37394d] shrink-0">
+    <div className="flex flex-col gap-5">
+      {/* Page header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[17px] font-bold text-slate-800 dark:text-white">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white">
             Тайлан
           </h1>
-          <p className="text-[12px] text-slate-400 mt-0.5">
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
             Бүх чөлөөлөлтийн нэгж талбаруудын мэдээлэл
           </p>
         </div>
         <button
           onClick={handleDownload}
-          className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-medium hover:bg-[#00a8b5] transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
         >
           <Download className="h-4 w-4" />
           Тайлан татах
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="px-6 py-3 border-b border-slate-200 dark:border-[#37394d] shrink-0">
-        <div className="flex flex-wrap gap-2">
-          {/* Plan search */}
+      {/* Table card */}
+      <div className="ap-card overflow-hidden">
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <PlanSelect
             value={inPlanCode}
             onChange={setInPlanCode}
             className="w-52"
           />
 
-          {/* Acquisition name */}
           <AcquisitionSelect
             selectedId={inAcqId}
             onSelect={(id, label) => {
@@ -737,10 +736,8 @@ export default function ReportPage() {
             className="w-56"
           />
 
-          {/* Year multi-select */}
           <YearMultiSelect value={inAcqYears} onChange={setInAcqYears} />
 
-          {/* Right type */}
           <select
             value={inRightType}
             onChange={(e) =>
@@ -754,7 +751,6 @@ export default function ReportPage() {
             <option value={3}>Өмчлөх</option>
           </select>
 
-          {/* Landuse */}
           <div className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all w-40">
             <input
               type="text"
@@ -771,7 +767,6 @@ export default function ReportPage() {
             )}
           </div>
 
-          {/* Compensation type */}
           <div className="relative">
             <select
               value={inCompType}
@@ -787,7 +782,6 @@ export default function ReportPage() {
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           </div>
 
-          {/* Хайх товч */}
           <button
             onClick={handleSearch}
             className={cn(
@@ -801,7 +795,6 @@ export default function ReportPage() {
             Хайх
           </button>
 
-          {/* Цэвэрлэх */}
           {(hasActiveFilter ||
             inPlanCode ||
             inAcqId ||
@@ -819,52 +812,39 @@ export default function ReportPage() {
             </button>
           )}
         </div>
-      </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="rounded-xl border border-slate-200 dark:border-[#37394d] overflow-hidden bg-white dark:bg-[#1e1f27] shadow-sm">
+        {/* Table */}
+        <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-slate-50 dark:bg-[#252630] border-b border-slate-200 dark:border-[#37394d]">
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1] w-10">
-                  №
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Нэгж талбарын дугаар
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Чөлөөлөлтийн нэр
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Төлөвлөгөө
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Өмчлөгч, эзэмшигч
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Регистр
-                </th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Талбай (м²)
-                </th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Чөлөөлөх (м²)
-                </th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Эрхийн төрөл
-                </th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
-                  Нөхөн төлбөрийн дүн
-                </th>
+              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
+                {[
+                  "№",
+                  "Нэгж талбарын дугаар",
+                  "Чөлөөлөлтийн нэр",
+                  "Төлөвлөгөө",
+                  "Өмчлөгч, эзэмшигч",
+                  "Регистр",
+                  "Талбай (м²)",
+                  "Чөлөөлөх (м²)",
+                  "Эрхийн төрөл",
+                  "Нөхөн төлбөрийн дүн",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+            <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 10 }).map((__, j) => (
-                      <td key={j} className="px-3 py-3">
+                      <td key={j} className="px-5 py-3.5">
                         <div className="h-4 bg-slate-100 dark:bg-white/[0.06] rounded w-3/4" />
                       </td>
                     ))}
@@ -874,7 +854,7 @@ export default function ReportPage() {
                 <tr>
                   <td
                     colSpan={10}
-                    className="px-4 py-12 text-center text-slate-400"
+                    className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     Мэдээлэл олдсонгүй
                   </td>
@@ -888,25 +868,25 @@ export default function ReportPage() {
                   return (
                     <tr
                       key={`${p.acquisition_id}-${p.parcel_id}-${idx}`}
-                      className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                      className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
-                      <td className="px-3 py-3 text-slate-400 tabular-nums">
+                      <td className="px-5 py-3.5 text-slate-400 tabular-nums">
                         {rowNum}
                       </td>
-                      <td className="px-3 py-3 font-mono text-[12px] text-slate-700 dark:text-slate-200">
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">
                         {p.parcel_id}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-5 py-3.5">
                         <p className="text-slate-700 dark:text-slate-200 truncate max-w-[200px]">
                           {p.acquisition_name}
                         </p>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-5 py-3.5">
                         <span className="font-mono text-[11px] text-[#02c0ce] bg-[#02c0ce]/10 px-2 py-0.5 rounded">
                           {p.plan_code}
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-5 py-3.5">
                         <p
                           className="text-slate-700 dark:text-slate-200 truncate max-w-[180px]"
                           title={holderName}
@@ -914,19 +894,19 @@ export default function ReportPage() {
                           {holderName || "—"}
                         </p>
                       </td>
-                      <td className="px-3 py-3 font-mono text-[12px] text-slate-600 dark:text-slate-300">
+                      <td className="px-5 py-3.5 font-mono text-[12px] text-slate-600 dark:text-slate-300">
                         {p.holder_register_no || "—"}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                      <td className="px-5 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
                         {p.area_m2?.toLocaleString()}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                      <td className="px-5 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
                         {p.acquisition_area_m2?.toLocaleString()}
                       </td>
-                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300">
                         {RIGHT_TYPE_LABELS[p.right_type] ?? "—"}
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200 font-medium">
+                      <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">
                         {formatMoney(p.total_comp)}
                       </td>
                     </tr>
@@ -936,35 +916,35 @@ export default function ReportPage() {
             </tbody>
           </table>
         </div>
-      </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 dark:border-[#37394d] shrink-0">
-        <p className="text-[12px] text-slate-400">
-          Нийт{" "}
-          <span className="font-semibold text-slate-600 dark:text-white">
-            {total}
-          </span>{" "}
-          нэгж талбар
-        </p>
-        <div className="flex items-center gap-1">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="px-3 text-[13px] text-slate-600 dark:text-slate-300">
-            {page} / {totalPages}
-          </span>
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
+        {/* Pagination */}
+        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
+          <p className="text-[12px] text-slate-400 dark:text-slate-500">
+            Нийт{" "}
+            <span className="font-semibold text-slate-600 dark:text-white">
+              {total}
+            </span>{" "}
+            нэгж талбар
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="px-3 text-[13px] text-slate-600 dark:text-slate-300">
+              {page} / {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
