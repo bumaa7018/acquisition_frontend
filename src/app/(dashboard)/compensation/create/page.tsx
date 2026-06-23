@@ -62,7 +62,7 @@ export default function CreateInvoicePage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    toast.success("Нэхэмжлэл амжилттай үүслээ");
+    toast.success("Нөхөн төлбөрийн нэхэмжлэл амжилттай үүслээ");
     router.push("/compensation");
   }
 

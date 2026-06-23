@@ -125,7 +125,7 @@ export default function InvoiceDetailPage({
             {/* Document metadata */}
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
-                Нэхэмжлэлийн мэдээлэл
+                Нөхөн төлбөрийн нэхэмжлэлийн мэдээлэл
               </p>
               <div className="grid grid-cols-2 gap-4">
                 {[

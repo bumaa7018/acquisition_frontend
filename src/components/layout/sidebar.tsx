@@ -25,7 +25,7 @@ const NAV_MAIN = [
   { href: "/acquisition", label: "Газар чөлөөлөлт", icon: FileText },
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   { href: "/map", label: "Газрын зураг", icon: Map },
-  { href: "/compensation", label: "Нөхөх төлбөр", icon: Receipt },
+  { href: "/compensation", label: "Нөхөн төлбөр", icon: Receipt },
   { href: "/report", label: "Тайлан", icon: BarChart3 },
 ];
 

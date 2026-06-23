@@ -73,7 +73,7 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Нэхэмжлэл
+            Нөхөн төлбөрийн нэхэмжлэл
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
             Газар чөлөөлтийн нэхэмжлэлийн бүртгэл
@@ -84,7 +84,7 @@ export default function InvoicesPage() {
           className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
         >
           <Plus className="h-4 w-4" />
-          Нэхэмжлэл нэмэх
+          Шинээр нэмэх
         </Link>
       </div>
 
