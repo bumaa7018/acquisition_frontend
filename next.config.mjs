@@ -3,11 +3,12 @@
 const API_URL = process.env.NEXT_API_URL ?? "http://localhost:8080";
 const GS_URL = process.env.NEXT_GS_URL ?? "http://localhost:8600";
 
-console.log({ API_URL, GS_URL });
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   httpAgentOptions: { keepAlive: false },
+  experimental: {
+    serverComponentsExternalPackages: ['exceljs'],
+  },
   // standalone зөвхөн production-д хэрэгтэй, dev-д disc идэх тул хасав
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),
   async rewrites() {

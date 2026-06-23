@@ -8,7 +8,7 @@ COMPOSE_DEV = docker compose -f docker-compose.dev.yml
 
 # ── Local dev ─────────────────────────────────────────
 dev:
-	npm run dev -- --turbo
+	npm run dev
 
 build:
 	npm run build

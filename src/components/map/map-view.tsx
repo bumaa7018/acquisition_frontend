@@ -8,25 +8,24 @@ import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
 import type { Coordinate } from "ol/coordinate";
-// import "ol/ol.css";
+import "ol/ol.css";
 
 import LayerPanel, { LayerConfig } from "./layer-panel";
 import FeaturePopup from "./feature-popup";
+import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
 
 const GS_BASE = "/geoserver/land/wms";
+const GS_WFS = "/geoserver/land/ows";
 
-const LAYER_DEFS: { id: string; label: string; color: string }[] = [
-  { id: "au1", label: "Аймаг/Нийслэл", color: "#6366f1" },
-  { id: "au2", label: "Сум/Дүүрэг", color: "#8b5cf6" },
-  { id: "au3", label: "Баг/Хороо", color: "#a78bfa" },
-  { id: "v_acquisition_boundary", label: "Чөлөөлөлтийн хил", color: "#f59e0b" },
-  {
-    id: "v_acquisition_plan",
-    label: "Чөлөөлөлтийн төлөвлөгөө",
-    color: "#ef4444",
-  },
-  { id: "parcel", label: "Нэгж талбар", color: "#22c55e" },
-  { id: "v_parcel_acquisition", label: "Давхцал", color: "#f97316" },
+const LAYER_DEFS: MapLayerDef[] = [
+  layerDef("au1"),
+  layerDef("au2"),
+  layerDef("au3"),
+  layerDef("v_acquisition_plan"),
+  layerDef("v_acquisition_boundary"),
+  layerDef("parcel"),
+  layerDef("v_parcel_acquisition"),
+  layerDef("building"),
 ];
 
 interface PopupState {
@@ -54,6 +53,7 @@ export default function MapView() {
       new ImageLayer({
         visible,
         opacity: 0.75,
+        zIndex: LAYER_DEFS.find((layer) => layer.id === id)?.zIndex ?? 0,
         source: new ImageWMS({
           url: GS_BASE,
           params: {
@@ -112,8 +112,8 @@ export default function MapView() {
       const pixel = evt.pixel as [number, number];
 
       const visibleIds = LAYER_DEFS.filter((d) => wmsRecord[d.id]?.getVisible())
-        .map((d) => d.id)
-        .reverse();
+        .sort((a, b) => b.zIndex - a.zIndex)
+        .map((d) => d.id);
 
       if (!visibleIds.length) return;
 
@@ -163,6 +163,16 @@ export default function MapView() {
         if (l.id !== id) return l;
         const next = { ...l, visible: !l.visible };
         wmsLayers.current[id]?.setVisible(next.visible);
+        const def = LAYER_DEFS.find((d) => d.id === id);
+        if (next.visible && def && olMap.current) {
+          void fitLayerToMap({
+            map: olMap.current,
+            wfsUrl: GS_WFS,
+            layerId: def.id,
+            padding: [64, 64, 64, 64],
+            maxZoom: 17,
+          });
+        }
         return next;
       }),
     );

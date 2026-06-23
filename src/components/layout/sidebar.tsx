@@ -17,6 +17,7 @@ import {
   Layers,
   User,
   Grid2x2,
+  BarChart3,
 } from "lucide-react";
 
 const NAV_MAIN = [
@@ -25,6 +26,7 @@ const NAV_MAIN = [
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   { href: "/map", label: "Газрын зураг", icon: Map },
   { href: "/compensation", label: "Нөхөх төлбөр", icon: Receipt },
+  { href: "/report", label: "Тайлан", icon: BarChart3 },
 ];
 
 const NAV_ADMIN = [

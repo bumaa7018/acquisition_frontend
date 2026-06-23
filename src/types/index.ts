@@ -45,6 +45,13 @@ export interface Plan {
   boundary_wkt?: string;
 }
 
+export interface ConstructionType {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+}
+
 export interface LandAcquisition {
   id: string;
   plan_code: string;
@@ -59,6 +66,10 @@ export interface LandAcquisition {
   reason: string;
   responsible_org: string;
   funding_source: string;
+  construction_type_id?: number;
+  construction_type_name: string;
+  decree_number: string;
+  decree_date?: string;
   created_at: string;
   created_by: string;
   parcel_count: number;
@@ -91,7 +102,10 @@ export interface Parcel {
   landuse: string;
   area_m2: number;
   acquisition_area_m2: number;
+  remaining_area_m2?: number;
   compensation_paid: boolean;
+  db_changed: boolean;
+  changed_parcel_id: string;
   geometry_wkt?: string;
 }
 
@@ -130,6 +144,10 @@ export interface ParcelFull extends Parcel {
   created_at: string;
   created_by: string;
   detail?: ParcelDetail;
+  // computed parcel meta
+  remaining_area_m2?: number;
+  db_changed: boolean;
+  changed_parcel_id: string;
 }
 
 export interface ParcelDetail {
@@ -148,6 +166,10 @@ export interface ParcelDetail {
   contract_date?: string;
   certificate_no: string;
   certificate_date?: string;
+  valuation_zone: string;
+  base_price_per_ha?: number;
+  auction_coeff?: number;
+  auction_price?: number;
 }
 
 export interface GlobalParcel {
@@ -167,6 +189,79 @@ export interface GlobalParcel {
   acquisition_status: number;
   start_date?: string;
   end_date?: string;
+}
+
+export interface ReportParcelRow {
+  parcel_id: string;
+  area_m2: number;
+  acquisition_area_m2: number;
+  remaining_area_m2: number;
+  right_type: number;
+  db_changed: boolean;
+  changed_parcel_id: string;
+  acquisition_id: string;
+  acquisition_name: string;
+  plan_code: string;
+  construction_type_name: string;
+  decree_number: string;
+  decree_date?: string;
+  holder_last_name: string;
+  holder_name: string;
+  holder_register_no: string;
+  land_comp: number;
+  real_state_comp: number;
+  property_comp: number;
+  total_comp: number;
+}
+
+export interface Asset {
+  id: string
+  acquisition_id: string
+  parcel_id: string
+  asset_number: string
+  asset_type: 'real_state' | 'property'
+  asset_name: string
+  floor_count: number
+  area_m2: number
+  owner_name: string
+  address: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CompensationGrant {
+  id: string
+  acquisition_id: string
+  compensation_id: string
+  amount: number
+  grant_date?: string
+  note?: string
+  land_area_m2: number
+  land_price: number
+  land_location: string
+  land_purpose: string
+  land_use_type: string
+  parcel_number: string
+  decree_number: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Compensation {
+  id: string
+  acquisition_id: string
+  target_type: 'parcel' | 'asset'
+  parcel_id: string
+  asset_id?: string
+  compensation_type: 'cash' | 'land_grant'
+  coverage_percent: number
+  amount: number
+  compensation_date?: string
+  note?: string
+  grant?: CompensationGrant
+  created_at: string
+  updated_at: string
 }
 
 export interface ParcelPayment {
