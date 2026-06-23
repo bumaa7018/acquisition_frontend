@@ -78,24 +78,24 @@ export function Sidebar() {
     setUser(authStorage.getUser());
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await authApi.logout();
-    } catch {}
-    authStorage.clear();
-    router.push("/login");
-  };
+  // const handleLogout = async () => {
+  //   try {
+  //     await authApi.logout();
+  //   } catch {}
+  //   authStorage.clear();
+  //   router.push("/login");
+  // };
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const initials = user?.first_name
-    ? `${user.first_name[0]}${user.last_name?.[0] ?? ""}`.toUpperCase()
-    : null;
+  // const initials = user?.first_name
+  //   ? `${user.first_name[0]}${user.last_name?.[0] ?? ""}`.toUpperCase()
+  //   : null;
 
-  const fullName = user
-    ? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()
-    : "Хэрэглэгч";
+  // const fullName = user
+  //   ? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()
+  //   : "Хэрэглэгч";
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col bg-white dark:bg-[#1e1f27] border-r border-slate-200/80 dark:border-[#37394d]">

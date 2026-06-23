@@ -1,36 +1,45 @@
-'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { reportApi, landApi } from '@/lib/api'
-import { authStorage } from '@/lib/auth'
-import { RIGHT_TYPE_LABELS } from '@/types'
-import type { ReportParcelRow } from '@/types'
+"use client";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { reportApi, landApi } from "@/lib/api";
+import { authStorage } from "@/lib/auth";
+import { RIGHT_TYPE_LABELS } from "@/types";
+import type { ReportParcelRow } from "@/types";
 import {
-  Search, Download, X, ChevronLeft, ChevronRight,
-  ChevronDown, FileSpreadsheet, Calendar,
-} from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
+  Search,
+  Download,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  FileSpreadsheet,
+  Calendar,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 20;
 
-const CURRENT_YEAR = new Date().getFullYear()
-const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 2000 + 1 }, (_, i) => CURRENT_YEAR - i)
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from(
+  { length: CURRENT_YEAR - 2000 + 1 },
+  (_, i) => CURRENT_YEAR - i,
+);
 
 const COMP_TYPE_LABELS: Record<string, string> = {
-  '': 'Нөхөн төлбөр (бүгд)',
-  cash: 'Мөнгөн',
-  land_grant: 'Газраар',
-}
+  "": "Нөхөн төлбөр (бүгд)",
+  cash: "Мөнгөн",
+  land_grant: "Газраар",
+};
 
 function formatMoney(value: number): string {
-  return value > 0 ? value.toLocaleString('mn-MN') : '—'
+  return value > 0 ? value.toLocaleString("mn-MN") : "—";
 }
 
 function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query.trim() || !text) return <>{text}</>
-  const idx = text.toLowerCase().indexOf(query.trim().toLowerCase())
-  if (idx === -1) return <>{text}</>
+  if (!query.trim() || !text) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.trim().toLowerCase());
+  if (idx === -1) return <>{text}</>;
   return (
     <>
       {text.slice(0, idx)}
@@ -39,7 +48,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
       </mark>
       {text.slice(idx + query.trim().length)}
     </>
-  )
+  );
 }
 
 // ── Searchable acquisition select ─────────────────────────────────────────────
@@ -49,60 +58,61 @@ function AcquisitionSelect({
   onClear,
   className,
 }: {
-  selectedId: string
-  onSelect: (id: string, label: string) => void
-  onClear: () => void
-  className?: string
+  selectedId: string;
+  onSelect: (id: string, label: string) => void;
+  onClear: () => void;
+  className?: string;
 }) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const { data } = useQuery({
-    queryKey: ['acq-list-all'],
+    queryKey: ["acq-list-all"],
     queryFn: () => landApi.list({ page: 1, page_size: 200 }),
     staleTime: 60_000,
-  })
+  });
 
-  const acquisitions = data?.data ?? []
-  const selected = acquisitions.find((a) => a.id === selectedId)
-  const displayLabel = selected?.acquisition_name ?? ''
+  const acquisitions = data?.data ?? [];
+  const selected = acquisitions.find((a) => a.id === selectedId);
+  const displayLabel = selected?.acquisition_name ?? "";
 
   const filtered = query.trim()
     ? acquisitions.filter((acq) => {
-        const q = query.trim().toLowerCase()
+        const q = query.trim().toLowerCase();
         return (
-          (acq.acquisition_name ?? '').toLowerCase().includes(q) ||
-          (acq.plan_code ?? '').toLowerCase().includes(q)
-        )
+          (acq.acquisition_name ?? "").toLowerCase().includes(q) ||
+          (acq.plan_code ?? "").toLowerCase().includes(q)
+        );
       })
-    : acquisitions
+    : acquisitions;
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
     }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [])
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
 
   function select(acq: { id: string; acquisition_name: string }) {
-    setQuery('')
-    onSelect(acq.id, acq.acquisition_name)
-    setOpen(false)
+    setQuery("");
+    onSelect(acq.id, acq.acquisition_name);
+    setOpen(false);
   }
 
   function clear(e: React.MouseEvent) {
-    e.stopPropagation()
-    setQuery('')
-    onClear()
-    setOpen(false)
+    e.stopPropagation();
+    setQuery("");
+    onClear();
+    setOpen(false);
   }
 
-  const hasValue = !!selectedId
+  const hasValue = !!selectedId;
 
   return (
-    <div ref={wrapRef} className={`relative ${className ?? ''}`}>
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
       <div
         className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
         onClick={() => setOpen(true)}
@@ -120,8 +130,8 @@ function AcquisitionSelect({
             placeholder="Чөлөөлөлтийн нэр"
             value={query}
             onChange={(e) => {
-              setQuery(e.target.value)
-              setOpen(true)
+              setQuery(e.target.value);
+              setOpen(true);
             }}
             onFocus={() => setOpen(true)}
             autoFocus={open}
@@ -152,8 +162,8 @@ function AcquisitionSelect({
                 <button
                   key={acq.id}
                   onMouseDown={(e) => {
-                    e.preventDefault()
-                    select(acq)
+                    e.preventDefault();
+                    select(acq);
                   }}
                   className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
                 >
@@ -161,7 +171,7 @@ function AcquisitionSelect({
                     {acq.acquisition_name ? (
                       <Highlight text={acq.acquisition_name} query={query} />
                     ) : (
-                      '—'
+                      "—"
                     )}
                   </span>
                 </button>
@@ -171,7 +181,7 @@ function AcquisitionSelect({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ── Searchable plan select ────────────────────────────────────────────────────
@@ -180,19 +190,19 @@ function PlanSelect({
   onChange,
   className,
 }: {
-  value: string
-  onChange: (code: string) => void
-  className?: string
+  value: string;
+  onChange: (code: string) => void;
+  className?: string;
 }) {
-  const [query, setQuery] = useState(value)
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   const { data } = useQuery({
-    queryKey: ['acq-list-all'],
+    queryKey: ["acq-list-all"],
     queryFn: () => landApi.list({ page: 1, page_size: 200 }),
     staleTime: 60_000,
-  })
+  });
 
   const plans = Array.from(
     new Map(
@@ -200,10 +210,10 @@ function PlanSelect({
         .filter((a) => a.plan_code)
         .map((a) => [
           a.plan_code,
-          { plan_code: a.plan_code, name: a.plan_name ?? '' },
+          { plan_code: a.plan_code, name: a.plan_name ?? "" },
         ]),
     ).values(),
-  )
+  );
 
   const filtered = query.trim()
     ? plans.filter(
@@ -211,35 +221,36 @@ function PlanSelect({
           p.plan_code.toLowerCase().includes(query.trim().toLowerCase()) ||
           p.name.toLowerCase().includes(query.trim().toLowerCase()),
       )
-    : plans
+    : plans;
 
   useEffect(() => {
     function handle(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
     }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [])
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
 
   useEffect(() => {
-    if (!value) setQuery('')
-  }, [value])
+    if (!value) setQuery("");
+  }, [value]);
 
   function select(p: { plan_code: string; name: string }) {
-    setQuery(p.plan_code)
-    onChange(p.plan_code)
-    setOpen(false)
+    setQuery(p.plan_code);
+    onChange(p.plan_code);
+    setOpen(false);
   }
 
   function clear(e: React.MouseEvent) {
-    e.stopPropagation()
-    setQuery('')
-    onChange('')
-    setOpen(false)
+    e.stopPropagation();
+    setQuery("");
+    onChange("");
+    setOpen(false);
   }
 
   return (
-    <div ref={wrapRef} className={`relative ${className ?? ''}`}>
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
       <div
         className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
         onClick={() => setOpen(true)}
@@ -249,9 +260,9 @@ function PlanSelect({
           placeholder="Төлөвлөгөөний дугаар"
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value)
-            onChange(e.target.value)
-            setOpen(true)
+            setQuery(e.target.value);
+            onChange(e.target.value);
+            setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
@@ -280,8 +291,8 @@ function PlanSelect({
                 <button
                   key={p.plan_code}
                   onMouseDown={(e) => {
-                    e.preventDefault()
-                    select(p)
+                    e.preventDefault();
+                    select(p);
                   }}
                   className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
                 >
@@ -305,96 +316,143 @@ function PlanSelect({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ── Year multi-select ──────────────────────────────────────────────────────────
-function YearMultiSelect({ value, onChange }: {
-  value: string[]
-  onChange: (years: string[]) => void
+function YearMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (years: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function h(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
     }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
 
   const toggle = (y: string) =>
-    onChange(value.includes(y) ? value.filter(v => v !== y) : [...value, y].sort((a, b) => Number(b) - Number(a)))
+    onChange(
+      value.includes(y)
+        ? value.filter((v) => v !== y)
+        : [...value, y].sort((a, b) => Number(b) - Number(a)),
+    );
 
-  const label = value.length === 0 ? null : value.join(' ')
+  const label = value.length === 0 ? null : value.join(" ");
 
   return (
     <div ref={wrapRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         className={cn(
-          'flex items-center h-9 gap-1.5 rounded-lg border px-3 text-[13px] min-w-[150px] transition-all',
-          open ? 'border-[#02c0ce] ring-2 ring-[#02c0ce]/15' : 'border-slate-200 dark:border-white/[0.08]',
-          'bg-white dark:bg-[#1e1f27]',
+          "flex items-center h-9 gap-1.5 rounded-lg border px-3 text-[13px] min-w-[150px] transition-all",
+          open
+            ? "border-[#02c0ce] ring-2 ring-[#02c0ce]/15"
+            : "border-slate-200 dark:border-white/[0.08]",
+          "bg-white dark:bg-[#1e1f27]",
         )}
       >
         <Calendar className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        <span className={cn('flex-1 text-left truncate', value.length === 0 ? 'text-slate-400' : 'text-slate-700 dark:text-white')}>
-          {label ?? 'Он...'}
+        <span
+          className={cn(
+            "flex-1 text-left truncate",
+            value.length === 0
+              ? "text-slate-400"
+              : "text-slate-700 dark:text-white",
+          )}
+        >
+          {label ?? "Он..."}
         </span>
-        {value.length > 0
-          ? <button type="button" onClick={e => { e.stopPropagation(); onChange([]) }} className="shrink-0">
-              <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
-            </button>
-          : <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-        }
+        {value.length > 0 ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange([]);
+            }}
+            className="shrink-0"
+          >
+            <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
+          </button>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+        )}
       </button>
 
       {open && (
         <ul className="absolute z-50 mt-1 w-36 max-h-56 overflow-auto rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#252630] shadow-lg py-1">
-          {YEAR_OPTIONS.map(year => {
-            const y = String(year)
-            const checked = value.includes(y)
+          {YEAR_OPTIONS.map((year) => {
+            const y = String(year);
+            const checked = value.includes(y);
             return (
               <li
                 key={y}
                 onClick={() => toggle(y)}
                 className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-[#1e1f27] select-none text-[13px]"
               >
-                <div className={cn(
-                  'h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 transition-colors',
-                  checked ? 'bg-[#02c0ce] border-[#02c0ce]' : 'border-slate-300 dark:border-white/[0.2]',
-                )}>
+                <div
+                  className={cn(
+                    "h-3.5 w-3.5 rounded-sm border flex items-center justify-center shrink-0 transition-colors",
+                    checked
+                      ? "bg-[#02c0ce] border-[#02c0ce]"
+                      : "border-slate-300 dark:border-white/[0.2]",
+                  )}
+                >
                   {checked && (
                     <svg viewBox="0 0 10 8" fill="none" className="h-2 w-2">
-                      <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path
+                        d="M1 4l3 3 5-6"
+                        stroke="white"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
                     </svg>
                   )}
                 </div>
-                <span className={checked ? 'text-slate-800 dark:text-white font-medium' : 'text-slate-600 dark:text-slate-300'}>
+                <span
+                  className={
+                    checked
+                      ? "text-slate-800 dark:text-white font-medium"
+                      : "text-slate-600 dark:text-slate-300"
+                  }
+                >
                   {y}
                 </span>
               </li>
-            )
+            );
           })}
         </ul>
       )}
     </div>
-  )
+  );
 }
 
 // ── Progress modal ─────────────────────────────────────────────────────────────
-function ProgressModal({ open, progress, total, status, onClose }: {
-  open: boolean
-  progress: number
-  total: number
-  status: 'idle' | 'fetching' | 'generating' | 'done' | 'error'
-  onClose: () => void
+function ProgressModal({
+  open,
+  progress,
+  total,
+  status,
+  onClose,
+}: {
+  open: boolean;
+  progress: number;
+  total: number;
+  status: "idle" | "fetching" | "generating" | "done" | "error";
+  onClose: () => void;
 }) {
-  if (!open) return null
-  const pct = total > 0 ? Math.round((progress / total) * 100) : 0
+  if (!open) return null;
+  const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white dark:bg-[#1e1f27] rounded-2xl shadow-2xl w-[420px] p-6 flex flex-col gap-5">
@@ -403,12 +461,15 @@ function ProgressModal({ open, progress, total, status, onClose }: {
             <FileSpreadsheet className="h-5 w-5 text-[#02c0ce]" />
           </div>
           <div>
-            <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Тайлан үүсгэж байна</p>
+            <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
+              Тайлан үүсгэж байна
+            </p>
             <p className="text-[12px] text-slate-400">
-              {status === 'fetching' && `Мэдээлэл татаж байна... ${progress}/${total}`}
-              {status === 'generating' && 'Excel файл үүсгэж байна...'}
-              {status === 'done' && 'Татаж авлаа!'}
-              {status === 'error' && 'Алдаа гарлаа'}
+              {status === "fetching" &&
+                `Мэдээлэл татаж байна... ${progress}/${total}`}
+              {status === "generating" && "Excel файл үүсгэж байна..."}
+              {status === "done" && "Татаж авлаа!"}
+              {status === "error" && "Алдаа гарлаа"}
             </p>
           </div>
         </div>
@@ -416,27 +477,27 @@ function ProgressModal({ open, progress, total, status, onClose }: {
         <div className="space-y-1.5">
           <div className="flex justify-between text-[12px] text-slate-500">
             <span>
-              {status === 'generating'
-                ? 'Excel боловсруулж байна...'
+              {status === "generating"
+                ? "Excel боловсруулж байна..."
                 : `${progress} / ${total} чөлөөлөлт`}
             </span>
             <span className="font-medium text-[#02c0ce]">
-              {status === 'generating' ? '' : `${pct}%`}
+              {status === "generating" ? "" : `${pct}%`}
             </span>
           </div>
           <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-white/[0.06] overflow-hidden">
             <div
               className={cn(
-                'h-full rounded-full transition-all duration-300',
-                status === 'error' ? 'bg-red-500' : 'bg-[#02c0ce]',
-                status === 'generating' && 'animate-pulse w-full',
+                "h-full rounded-full transition-all duration-300",
+                status === "error" ? "bg-red-500" : "bg-[#02c0ce]",
+                status === "generating" && "animate-pulse w-full",
               )}
-              style={{ width: status === 'generating' ? '100%' : `${pct}%` }}
+              style={{ width: status === "generating" ? "100%" : `${pct}%` }}
             />
           </div>
         </div>
 
-        {(status === 'done' || status === 'error') && (
+        {(status === "done" || status === "error") && (
           <button
             onClick={onClose}
             className="self-end px-4 py-2 rounded-lg bg-[#02c0ce] text-white text-[13px] font-medium hover:bg-[#00a8b5] transition-colors"
@@ -446,44 +507,58 @@ function ProgressModal({ open, progress, total, status, onClose }: {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function ReportPage() {
   // Input state — хэрэглэгч бичиж буй утга
-  const [inPlanCode, setInPlanCode] = useState('')
-  const [inAcqId, setInAcqId]       = useState('')
-  const [inAcqName, setInAcqName]   = useState('')
-  const [inAcqYears, setInAcqYears] = useState<string[]>([])
-  const [inAu3Code, setInAu3Code]   = useState('')
-  const [inRightType, setInRightType] = useState(0)
-  const [inLanduse, setInLanduse] = useState('')
-  const [inCompType, setInCompType] = useState('')
+  const [inPlanCode, setInPlanCode] = useState("");
+  const [inAcqId, setInAcqId] = useState("");
+  const [inAcqName, setInAcqName] = useState("");
+  const [inAcqYears, setInAcqYears] = useState<string[]>([]);
+  const [inAu3Code, setInAu3Code] = useState("");
+  const [inRightType, setInRightType] = useState(0);
+  const [inLanduse, setInLanduse] = useState("");
+  const [inCompType, setInCompType] = useState("");
 
   // Query state — "Хайх" дарахад л шинэчлэгдэнэ, API руу илгээнэ
-  const [page, setPage] = useState(1)
-  const [planCode, setPlanCode] = useState('')
-  const [acqId, setAcqId]       = useState('')
-  const [acqName, setAcqName]   = useState('')
-  const [acqYears, setAcqYears] = useState<string[]>([])
-  const [au3Code, setAu3Code]   = useState('')
-  const [rightType, setRightType] = useState(0)
-  const [landuse, setLanduse] = useState('')
-  const [compType, setCompType] = useState('')
+  const [page, setPage] = useState(1);
+  const [planCode, setPlanCode] = useState("");
+  const [acqId, setAcqId] = useState("");
+  const [acqName, setAcqName] = useState("");
+  const [acqYears, setAcqYears] = useState<string[]>([]);
+  const [au3Code, setAu3Code] = useState("");
+  const [rightType, setRightType] = useState(0);
+  const [landuse, setLanduse] = useState("");
+  const [compType, setCompType] = useState("");
 
-  const [dlOpen, setDlOpen] = useState(false)
-  const [dlProgress, setDlProgress] = useState(0)
-  const [dlTotal, setDlTotal] = useState(0)
-  const [dlStatus, setDlStatus] = useState<'idle' | 'fetching' | 'generating' | 'done' | 'error'>('idle')
+  const [dlOpen, setDlOpen] = useState(false);
+  const [dlProgress, setDlProgress] = useState(0);
+  const [dlTotal, setDlTotal] = useState(0);
+  const [dlStatus, setDlStatus] = useState<
+    "idle" | "fetching" | "generating" | "done" | "error"
+  >("idle");
 
-  const hasActiveFilter = !!(planCode || acqId || acqName || acqYears.length || au3Code || rightType || landuse || compType)
-  const hasPendingChange = (
-    inPlanCode !== planCode || inAcqId !== acqId || inAcqName !== acqName ||
-    inAcqYears.join(',') !== acqYears.join(',') ||
-    inAu3Code !== au3Code  || inRightType !== rightType ||
-    inLanduse !== landuse || inCompType !== compType
-  )
+  const hasActiveFilter = !!(
+    planCode ||
+    acqId ||
+    acqName ||
+    acqYears.length ||
+    au3Code ||
+    rightType ||
+    landuse ||
+    compType
+  );
+  const hasPendingChange =
+    inPlanCode !== planCode ||
+    inAcqId !== acqId ||
+    inAcqName !== acqName ||
+    inAcqYears.join(",") !== acqYears.join(",") ||
+    inAu3Code !== au3Code ||
+    inRightType !== rightType ||
+    inLanduse !== landuse ||
+    inCompType !== compType;
 
   const filter = {
     plan_code: planCode || undefined,
@@ -496,104 +571,138 @@ export default function ReportPage() {
     compensation_type: compType || undefined,
     page,
     page_size: PAGE_SIZE,
-  }
+  };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['report-parcel-list', filter],
+    queryKey: ["report-parcel-list", filter],
     queryFn: () => reportApi.list(filter),
     staleTime: 30_000,
-  })
+  });
 
-  const parcels: ReportParcelRow[] = data?.data ?? []
-  const totalPages = data?.total_pages ?? 1
-  const total = data?.total ?? 0
+  const parcels: ReportParcelRow[] = data?.data ?? [];
+  const totalPages = data?.total_pages ?? 1;
+  const total = data?.total ?? 0;
 
-  const filtered = parcels
+  const filtered = parcels;
 
   const handleSearch = () => {
-    setPlanCode(inPlanCode)
-    setAcqId(inAcqId)
-    setAcqName(inAcqName)
-    setAcqYears(inAcqYears)
-    setAu3Code(inAu3Code)
-    setRightType(inRightType)
-    setLanduse(inLanduse)
-    setCompType(inCompType)
-    setPage(1)
-  }
+    setPlanCode(inPlanCode);
+    setAcqId(inAcqId);
+    setAcqName(inAcqName);
+    setAcqYears(inAcqYears);
+    setAu3Code(inAu3Code);
+    setRightType(inRightType);
+    setLanduse(inLanduse);
+    setCompType(inCompType);
+    setPage(1);
+  };
 
   const handleReset = () => {
-    setInPlanCode(''); setInAcqId(''); setInAcqName(''); setInAcqYears([])
-    setInAu3Code(''); setInRightType(0); setInLanduse(''); setInCompType('')
-    setPlanCode(''); setAcqId(''); setAcqName(''); setAcqYears([])
-    setAu3Code(''); setRightType(0); setLanduse(''); setCompType(''); setPage(1)
-  }
+    setInPlanCode("");
+    setInAcqId("");
+    setInAcqName("");
+    setInAcqYears([]);
+    setInAu3Code("");
+    setInRightType(0);
+    setInLanduse("");
+    setInCompType("");
+    setPlanCode("");
+    setAcqId("");
+    setAcqName("");
+    setAcqYears([]);
+    setAu3Code("");
+    setRightType(0);
+    setLanduse("");
+    setCompType("");
+    setPage(1);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch()
-  }
+    if (e.key === "Enter") handleSearch();
+  };
 
   // ── Download — query state ашиглана ───────────────────────────────────────
   const handleDownload = useCallback(async () => {
-    setDlOpen(true)
-    setDlStatus('fetching')
-    setDlProgress(0)
-    setDlTotal(0)
+    setDlOpen(true);
+    setDlStatus("fetching");
+    setDlProgress(0);
+    setDlTotal(0);
 
-    const token = authStorage.getAccessToken() ?? ''
-    const params = new URLSearchParams()
-    if (planCode)           params.set('plan_code', planCode)
-    if (acqId)              params.set('acquisition_id', acqId)
-    if (acqName)            params.set('acquisition_name', acqName)
-    acqYears.forEach(y =>  params.append('year', y))
-    if (au3Code)            params.set('au3_code', au3Code)
-    if (rightType)          params.set('right_type', String(rightType))
-    if (landuse)            params.set('landuse', landuse)
-    if (compType)           params.set('compensation_type', compType)
-    if (token)              params.set('token', token)
+    const token = authStorage.getAccessToken() ?? "";
+    const params = new URLSearchParams();
+    if (planCode) params.set("plan_code", planCode);
+    if (acqId) params.set("acquisition_id", acqId);
+    if (acqName) params.set("acquisition_name", acqName);
+    acqYears.forEach((y) => params.append("year", y));
+    if (au3Code) params.set("au3_code", au3Code);
+    if (rightType) params.set("right_type", String(rightType));
+    if (landuse) params.set("landuse", landuse);
+    if (compType) params.set("compensation_type", compType);
+    if (token) params.set("token", token);
 
     try {
-      const es = new EventSource(`/api/report/download?${params.toString()}`)
+      const es = new EventSource(`/api/report/download?${params.toString()}`);
 
       es.onmessage = (e) => {
-        const msg = JSON.parse(e.data)
-        if (msg.type === 'total') {
-          setDlTotal(msg.total)
-        } else if (msg.type === 'progress') {
-          setDlProgress(msg.current)
-        } else if (msg.type === 'generating') {
-          setDlStatus('generating')
-        } else if (msg.type === 'done') {
-          es.close()
-          setDlStatus('done')
-          const bytes = Uint8Array.from(atob(msg.base64), c => c.charCodeAt(0))
-          const blob  = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-          const url   = URL.createObjectURL(blob)
-          const a     = document.createElement('a')
-          a.href = url; a.download = msg.filename ?? 'тайлан.xlsx'; a.click()
-          URL.revokeObjectURL(url)
-        } else if (msg.type === 'error') {
-          es.close()
-          setDlStatus('error')
-          toast.error(msg.message ?? 'Тайлан үүсгэхэд алдаа гарлаа')
+        const msg = JSON.parse(e.data);
+        if (msg.type === "total") {
+          setDlTotal(msg.total);
+        } else if (msg.type === "progress") {
+          setDlProgress(msg.current);
+        } else if (msg.type === "generating") {
+          setDlStatus("generating");
+        } else if (msg.type === "done") {
+          es.close();
+          setDlStatus("done");
+          const bytes = Uint8Array.from(atob(msg.base64), (c) =>
+            c.charCodeAt(0),
+          );
+          const blob = new Blob([bytes], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = msg.filename ?? "тайлан.xlsx";
+          a.click();
+          URL.revokeObjectURL(url);
+        } else if (msg.type === "error") {
+          es.close();
+          setDlStatus("error");
+          toast.error(msg.message ?? "Тайлан үүсгэхэд алдаа гарлаа");
         }
-      }
+      };
 
       es.onerror = () => {
-        es.close(); setDlStatus('error'); toast.error('Холболт тасарлаа')
-      }
+        es.close();
+        setDlStatus("error");
+        toast.error("Холболт тасарлаа");
+      };
     } catch {
-      setDlStatus('error')
+      setDlStatus("error");
     }
-  }, [planCode, acqId, acqName, acqYears, au3Code, rightType, landuse, compType])
+  }, [
+    planCode,
+    acqId,
+    acqName,
+    acqYears,
+    au3Code,
+    rightType,
+    landuse,
+    compType,
+  ]);
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-[#37394d] shrink-0">
         <div>
-          <h1 className="text-[17px] font-bold text-slate-800 dark:text-white">Тайлан</h1>
-          <p className="text-[12px] text-slate-400 mt-0.5">Бүх чөлөөлөлтийн нэгж талбаруудын мэдээлэл</p>
+          <h1 className="text-[17px] font-bold text-slate-800 dark:text-white">
+            Тайлан
+          </h1>
+          <p className="text-[12px] text-slate-400 mt-0.5">
+            Бүх чөлөөлөлтийн нэгж талбаруудын мэдээлэл
+          </p>
         </div>
         <button
           onClick={handleDownload}
@@ -618,12 +727,12 @@ export default function ReportPage() {
           <AcquisitionSelect
             selectedId={inAcqId}
             onSelect={(id, label) => {
-              setInAcqId(id)
-              setInAcqName(label)
+              setInAcqId(id);
+              setInAcqName(label);
             }}
             onClear={() => {
-              setInAcqId('')
-              setInAcqName('')
+              setInAcqId("");
+              setInAcqName("");
             }}
             className="w-56"
           />
@@ -634,7 +743,9 @@ export default function ReportPage() {
           {/* Right type */}
           <select
             value={inRightType}
-            onChange={(e) => setInRightType(e.target.value ? Number(e.target.value) : 0)}
+            onChange={(e) =>
+              setInRightType(e.target.value ? Number(e.target.value) : 0)
+            }
             className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-white outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all w-36"
           >
             <option value={0}>Эрхийн төрөл</option>
@@ -650,11 +761,11 @@ export default function ReportPage() {
               className="flex-1 min-w-0 bg-transparent text-[13px] text-slate-700 dark:text-white placeholder:text-slate-400 outline-none"
               placeholder="Газрын зориулалт"
               value={inLanduse}
-              onChange={e => setInLanduse(e.target.value)}
+              onChange={(e) => setInLanduse(e.target.value)}
               onKeyDown={handleKeyDown}
             />
             {inLanduse && (
-              <button onClick={() => setInLanduse('')} className="shrink-0">
+              <button onClick={() => setInLanduse("")} className="shrink-0">
                 <X className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600" />
               </button>
             )}
@@ -664,11 +775,13 @@ export default function ReportPage() {
           <div className="relative">
             <select
               value={inCompType}
-              onChange={e => setInCompType(e.target.value)}
+              onChange={(e) => setInCompType(e.target.value)}
               className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-3 pr-8 text-[13px] text-slate-700 dark:text-white outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             >
               {Object.entries(COMP_TYPE_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
+                <option key={v} value={v}>
+                  {l}
+                </option>
               ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -678,10 +791,10 @@ export default function ReportPage() {
           <button
             onClick={handleSearch}
             className={cn(
-              'flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium transition-colors',
+              "flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium transition-colors",
               hasPendingChange
-                ? 'bg-[#02c0ce] text-white hover:bg-[#00a8b5]'
-                : 'bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.1]',
+                ? "bg-[#02c0ce] text-white hover:bg-[#00a8b5]"
+                : "bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.1]",
             )}
           >
             <Search className="h-3.5 w-3.5" />
@@ -689,7 +802,15 @@ export default function ReportPage() {
           </button>
 
           {/* Цэвэрлэх */}
-          {(hasActiveFilter || inPlanCode || inAcqId || inAcqName || inAcqYears.length || inAu3Code || inRightType || inLanduse || inCompType) && (
+          {(hasActiveFilter ||
+            inPlanCode ||
+            inAcqId ||
+            inAcqName ||
+            inAcqYears.length ||
+            inAu3Code ||
+            inRightType ||
+            inLanduse ||
+            inCompType) && (
             <button
               onClick={handleReset}
               className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 dark:border-white/[0.08] text-[13px] text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors"
@@ -702,20 +823,40 @@ export default function ReportPage() {
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="rounded-xl border border-slate-200 dark:border-[#37394d] overflow-hidden">
+        <div className="rounded-xl border border-slate-200 dark:border-[#37394d] overflow-hidden bg-white dark:bg-[#1e1f27] shadow-sm">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-[#252630] border-b border-slate-200 dark:border-[#37394d]">
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1] w-10">№</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Нэгж талбарын дугаар</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Чөлөөлөлтийн нэр</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Төлөвлөгөө</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Өмчлөгч, эзэмшигч</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Регистр</th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">Талбай (м²)</th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">Чөлөөлөх (м²)</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">Эрхийн төрөл</th>
-                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">Нөхөн төлбөрийн дүн</th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1] w-10">
+                  №
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Нэгж талбарын дугаар
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Чөлөөлөлтийн нэр
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Төлөвлөгөө
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Өмчлөгч, эзэмшигч
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Регистр
+                </th>
+                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Талбай (м²)
+                </th>
+                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Чөлөөлөх (м²)
+                </th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Эрхийн төрөл
+                </th>
+                <th className="px-3 py-3 text-right font-semibold text-slate-500 dark:text-[#97aac1]">
+                  Нөхөн төлбөрийн дүн
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
@@ -731,48 +872,67 @@ export default function ReportPage() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
+                  <td
+                    colSpan={10}
+                    className="px-4 py-12 text-center text-slate-400"
+                  >
                     Мэдээлэл олдсонгүй
                   </td>
                 </tr>
-              ) : filtered.map((p, idx) => {
-                const rowNum = (page - 1) * PAGE_SIZE + idx + 1
-                const holderName = [p.holder_last_name, p.holder_name].filter(Boolean).join(' ')
-                return (
-                  <tr key={`${p.acquisition_id}-${p.parcel_id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors">
-                    <td className="px-3 py-3 text-slate-400 tabular-nums">{rowNum}</td>
-                    <td className="px-3 py-3 font-mono text-[12px] text-slate-700 dark:text-slate-200">{p.parcel_id}</td>
-                    <td className="px-3 py-3">
-                      <p className="text-slate-700 dark:text-slate-200 truncate max-w-[200px]">{p.acquisition_name}</p>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className="font-mono text-[11px] text-[#02c0ce] bg-[#02c0ce]/10 px-2 py-0.5 rounded">
-                        {p.plan_code}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <p className="text-slate-700 dark:text-slate-200 truncate max-w-[180px]" title={holderName}>
-                        {holderName || '—'}
-                      </p>
-                    </td>
-                    <td className="px-3 py-3 font-mono text-[12px] text-slate-600 dark:text-slate-300">
-                      {p.holder_register_no || '—'}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                      {p.area_m2?.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                      {p.acquisition_area_m2?.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
-                      {RIGHT_TYPE_LABELS[p.right_type] ?? '—'}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200 font-medium">
-                      {formatMoney(p.total_comp)}
-                    </td>
-                  </tr>
-                )
-              })}
+              ) : (
+                filtered.map((p, idx) => {
+                  const rowNum = (page - 1) * PAGE_SIZE + idx + 1;
+                  const holderName = [p.holder_last_name, p.holder_name]
+                    .filter(Boolean)
+                    .join(" ");
+                  return (
+                    <tr
+                      key={`${p.acquisition_id}-${p.parcel_id}-${idx}`}
+                      className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02] transition-colors"
+                    >
+                      <td className="px-3 py-3 text-slate-400 tabular-nums">
+                        {rowNum}
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[12px] text-slate-700 dark:text-slate-200">
+                        {p.parcel_id}
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="text-slate-700 dark:text-slate-200 truncate max-w-[200px]">
+                          {p.acquisition_name}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="font-mono text-[11px] text-[#02c0ce] bg-[#02c0ce]/10 px-2 py-0.5 rounded">
+                          {p.plan_code}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <p
+                          className="text-slate-700 dark:text-slate-200 truncate max-w-[180px]"
+                          title={holderName}
+                        >
+                          {holderName || "—"}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[12px] text-slate-600 dark:text-slate-300">
+                        {p.holder_register_no || "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {p.area_m2?.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {p.acquisition_area_m2?.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">
+                        {RIGHT_TYPE_LABELS[p.right_type] ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-200 font-medium">
+                        {formatMoney(p.total_comp)}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -781,12 +941,16 @@ export default function ReportPage() {
       {/* Pagination */}
       <div className="flex items-center justify-between px-6 py-3 border-t border-slate-200 dark:border-[#37394d] shrink-0">
         <p className="text-[12px] text-slate-400">
-          Нийт <span className="font-semibold text-slate-600 dark:text-white">{total}</span> нэгж талбар
+          Нийт{" "}
+          <span className="font-semibold text-slate-600 dark:text-white">
+            {total}
+          </span>{" "}
+          нэгж талбар
         </p>
         <div className="flex items-center gap-1">
           <button
             disabled={page <= 1}
-            onClick={() => setPage(p => p - 1)}
+            onClick={() => setPage((p) => p - 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -796,7 +960,7 @@ export default function ReportPage() {
           </span>
           <button
             disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => setPage((p) => p + 1)}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
@@ -809,8 +973,11 @@ export default function ReportPage() {
         progress={dlProgress}
         total={dlTotal}
         status={dlStatus}
-        onClose={() => { setDlOpen(false); setDlStatus('idle') }}
+        onClose={() => {
+          setDlOpen(false);
+          setDlStatus("idle");
+        }}
       />
     </div>
-  )
+  );
 }
