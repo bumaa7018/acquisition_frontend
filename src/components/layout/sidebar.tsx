@@ -71,6 +71,9 @@ export function Sidebar() {
   const router = useRouter();
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
+  const [adminOpen, setAdminOpen] = useState(
+    NAV_ADMIN.some((item) => pathname.startsWith(item.href)),
+  );
   useEffect(() => {
     setUser(authStorage.getUser());
   }, []);
@@ -138,14 +141,31 @@ export function Sidebar() {
         </div>
 
         <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-            Удирдлага
-          </p>
-          <nav className="space-y-0.5">
-            {NAV_ADMIN.map((item) => (
-              <NavItem key={item.href} {...item} active={isActive(item.href)} />
-            ))}
-          </nav>
+          <button
+            onClick={() => setAdminOpen((v) => !v)}
+            className="flex w-full items-center px-3 mb-1 gap-1"
+          >
+            <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+              Удирдлага
+            </p>
+            <ChevronDown
+              className={cn(
+                "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                adminOpen ? "rotate-180" : "rotate-0",
+              )}
+            />
+          </button>
+          {adminOpen && (
+            <nav className="space-y-0.5">
+              {NAV_ADMIN.map((item) => (
+                <NavItem
+                  key={item.href}
+                  {...item}
+                  active={isActive(item.href)}
+                />
+              ))}
+            </nav>
+          )}
         </div>
       </div>
     </aside>
