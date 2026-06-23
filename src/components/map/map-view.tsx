@@ -8,7 +8,7 @@ import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
 import type { Coordinate } from "ol/coordinate";
-import "ol/ol.css";
+// import "ol/ol.css";
 
 import LayerPanel, { LayerConfig } from "./layer-panel";
 import FeaturePopup from "./feature-popup";

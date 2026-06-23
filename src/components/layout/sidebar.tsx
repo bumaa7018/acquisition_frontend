@@ -89,7 +89,7 @@ export function Sidebar() {
     : null;
 
   const fullName = user
-    ? `${user.first_name ?? ""} ${user.last_name ?? ""}`.trim()
+    ? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()
     : "Хэрэглэгч";
 
   return (
@@ -106,7 +106,7 @@ export function Sidebar() {
       </div>
 
       {/* User profile */}
-      <div className="px-4 py-3.5 border-b border-slate-100 dark:border-[#37394d] dark:bg-[#252630] shrink-0">
+      {/* <div className="px-4 py-3.5 border-b border-slate-100 dark:border-[#37394d] dark:bg-[#252630] shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#02c0ce] text-white text-[12px] font-bold select-none">
             {initials ?? <User className="h-4 w-4" />}
@@ -120,7 +120,7 @@ export function Sidebar() {
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-5">

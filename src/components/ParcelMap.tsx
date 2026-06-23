@@ -7,7 +7,7 @@ import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
-import "ol/ol.css";
+// import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./map/layer-panel";
 
 const GS_WMS = "/geoserver/land/wms";
