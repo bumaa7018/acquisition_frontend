@@ -86,6 +86,15 @@ export function Sidebar() {
     setUser(authStorage.getUser());
   }, []);
 
+  useEffect(() => {
+    const handleResize = () => {
+      setCollapsed(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
