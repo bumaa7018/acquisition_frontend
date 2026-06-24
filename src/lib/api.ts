@@ -347,4 +347,17 @@ export const planApi = {
     api.get<ApiResponse<Plan[]>>('/plans/suggest', { params: { q } }).then(r => r.data.data ?? []),
 }
 
+// ── Dashboard (aggregated) ────────────────────────────
+export interface DashboardData {
+  acquisitions:    LandAcquisition[]
+  parcel_statuses: ParcelStatus[]
+  report_rows:     ReportParcelRow[]
+  parcels:         GlobalParcel[]
+}
+
+export const dashboardApi = {
+  get: (): Promise<DashboardData> =>
+    api.get<ApiResponse<DashboardData>>('/dashboard').then(r => r.data.data),
+}
+
 export default api

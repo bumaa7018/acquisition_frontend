@@ -1,5 +1,6 @@
 import type OLMap from "ol/Map";
-import { transformExtent } from "ol/proj";
+import GeoJSON from 'ol/format/GeoJSON'
+import { createEmpty, extend as extendExtent, isEmpty } from 'ol/extent'
 
 export type MapLayerId =
   | 'au1'
@@ -75,12 +76,21 @@ export async function fitLayerToMap({
   try {
     const res = await fetch(`${wfsUrl}?${params}`)
     const json = await res.json()
-    const bbox: number[] | undefined =
-      json?.bbox ?? json?.features?.[0]?.geometry?.bbox
-    if (bbox?.length !== 4 || bbox.some((v) => typeof v !== "number" || Number.isNaN(v)))
-      return
 
-    const extent = transformExtent(bbox, "EPSG:4326", "EPSG:3857")
+    const format = new GeoJSON()
+    const features = format.readFeatures(json, {
+      dataProjection: 'EPSG:4326',
+      featureProjection: 'EPSG:3857',
+    })
+    if (!features.length) return
+
+    const extent = createEmpty()
+    features.forEach(f => {
+      const geomExtent = f.getGeometry()?.getExtent()
+      if (geomExtent) extendExtent(extent, geomExtent)
+    })
+    if (isEmpty(extent)) return
+
     map.getView().fit(extent, { padding, maxZoom, duration: 1000 })
   } catch {
     // Keep the current view when a layer has no feature or WFS is unavailable.

@@ -2,7 +2,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AreaChart,
   Area,
@@ -12,7 +12,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { landApi, reportApi } from "@/lib/api";
+import { dashboardApi, landApi } from "@/lib/api";
+import type { GlobalParcel } from "@/types";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import {
@@ -39,18 +40,7 @@ const YEAR_OPTIONS = Array.from(
   (_, i) => CURRENT_YEAR - i,
 );
 
-type ParcelWithCtx = {
-  id: string;
-  parcel_id: string;
-  area_m2: number;
-  acquisition_area_m2: number;
-  compensation_paid: boolean;
-  status: number;
-  status_name: string;
-  acquisition_id: string;
-  acquisition_status: number;
-  start_date?: string;
-};
+type ParcelWithCtx = GlobalParcel;
 
 /* ── Text highlighter ────────────────────────────────── */
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -504,29 +494,17 @@ export default function DashboardPage() {
   const [planCode, setPlanCode] = useState("");
   const [years,    setYears]    = useState<string[]>([String(CURRENT_YEAR)]);
 
-  /* ── ONE primary API call ───────────────────────────── */
-  const { data: acqData, isLoading: acqLoading } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
+  /* ── Single aggregated dashboard API call ───────────── */
+  const { data: dashData, isLoading } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: dashboardApi.get,
     staleTime: 60_000,
   });
 
-  /* Parcel statuses from DB — legend + map dropdown */
-  const { data: parcelStatusList = [] } = useQuery({
-    queryKey: ["parcel-statuses"],
-    queryFn: () => landApi.listParcelStatuses(),
-    staleTime: 10 * 60_000,
-  });
-
-  /* Secondary: compensation total */
-  const { data: reportData, isLoading: reportLoading } = useQuery({
-    queryKey: ["dashboard-report"],
-    queryFn: () => reportApi.list({ page_size: 2000 }),
-    staleTime: 5 * 60_000,
-    enabled: !acqLoading,
-  });
-
-  const allAcqs = acqData?.data ?? [];
+  const allAcqs          = dashData?.acquisitions    ?? [];
+  const parcelStatusList = dashData?.parcel_statuses ?? [];
+  const reportRows       = dashData?.report_rows     ?? [];
+  const allParcels       = dashData?.parcels         ?? [];
 
   /* ── Applied filter ──────────────────────────────────── */
   const filteredAcqs = useMemo(() => {
@@ -554,37 +532,20 @@ export default function DashboardPage() {
     setAcqId(""); setAcqName(""); setPlanCode(""); setYears([]);
   };
 
-  /* ── Parcel queries — шүүгдсэн чөлөөлөлт тус бүрийн нэгж талбарууд ── */
-  const parcelResults = useQueries({
-    queries: filteredAcqs.map((acq) => ({
-      queryKey: ["acq-parcels", acq.id],
-      queryFn: () =>
-        landApi.getParcels(acq.id, { page_size: 1000 }).then((r) =>
-          r.data.map(
-            (p): ParcelWithCtx => ({
-              id: p.id,
-              parcel_id: p.parcel_id,
-              area_m2: p.area_m2,
-              acquisition_area_m2: p.acquisition_area_m2,
-              compensation_paid: p.compensation_paid,
-              status: p.status,
-              status_name: p.status_name,
-              acquisition_id: acq.id,
-              acquisition_status: acq.status,
-              start_date: acq.start_date,
-            }),
-          ),
-        ),
-      staleTime: 5 * 60_000,
-      enabled: !acqLoading && filteredAcqs.length > 0,
-    })),
-  });
-
-  const parcelsLoading = parcelResults.some((r) => r.isLoading);
+  /* ── Шүүлтэд тохирох нэгж талбарууд ── */
+  const filteredAcqSet = useMemo(
+    () => new Set(filteredAcqs.map((a) => a.id)),
+    [filteredAcqs],
+  );
+  const filteredParcels = useMemo(
+    () => allParcels.filter((p) => filteredAcqSet.has(p.acquisition_id)),
+    [allParcels, filteredAcqSet],
+  );
 
   /* ── Computed stats — нэгж талбаруудын мэдээлэл дээр үндэслэсэн ── */
   const { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE } = useMemo(() => {
-    const parcels = parcelResults.flatMap((r) => r.data ?? []);
+    const parcels = filteredParcels;
+    const statusNameMap = new Map(parcelStatusList.map((s) => [s.id, s.name]));
 
     const totalParcels = parcels.length;
     const freed = parcels.filter((p) => p.compensation_paid);
@@ -594,7 +555,7 @@ export default function DashboardPage() {
     const statusMap: Record<number, { name: string; count: number; area: number }> = {};
     parcels.forEach((p) => {
       if (!statusMap[p.status]) {
-        statusMap[p.status] = { name: p.status_name || String(p.status), count: 0, area: 0 };
+        statusMap[p.status] = { name: statusNameMap.get(p.status) ?? String(p.status), count: 0, area: 0 };
       }
       statusMap[p.status].count += 1;
       statusMap[p.status].area += p.acquisition_area_m2 ?? 0;
@@ -621,7 +582,7 @@ export default function DashboardPage() {
       .map(([date, count]) => ({ date, count }));
 
     return { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE };
-  }, [parcelResults]);
+  }, [filteredParcels, parcelStatusList]);
 
   /* Acquisition-level stats */
   const planAreaHa = useMemo(
@@ -634,9 +595,8 @@ export default function DashboardPage() {
   );
 
   const totalCompensation = useMemo(() => {
-    const rows = reportData?.data ?? [];
-    return rows.reduce((s, r) => s + (r.total_comp ?? 0), 0) / 1_000_000_000;
-  }, [reportData]);
+    return reportRows.reduce((s, r) => s + (r.total_comp ?? 0), 0) / 1_000_000_000;
+  }, [reportRows]);
 
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
   const maxArea  = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.area))  : 1;
@@ -724,7 +684,7 @@ export default function DashboardPage() {
             {filteredAcqs.length} чөлөөлөлт
           </p>
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-            {acqLoading ? "…" : `${totalParcels} нэгж талбар`}
+            {isLoading ? "…" : `${totalParcels} нэгж талбар`}
           </p>
         </div>
       </div>
@@ -735,7 +695,7 @@ export default function DashboardPage() {
           {
             label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
             sub: "нийт талбай",
-            value: acqLoading ? null : `${planAreaHa.toFixed(1)} га`,
+            value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
             pct: 100,
             color: "#02c0ce",
             icon: MapIcon,
@@ -744,7 +704,7 @@ export default function DashboardPage() {
           {
             label: "НЭГЖ ТАЛБАР",
             sub: "нийт тоо",
-            value: acqLoading || parcelsLoading ? null : totalParcels,
+            value: isLoading ? null : totalParcels,
             pct: 100,
             color: "#777edd",
             icon: Layers,
@@ -753,7 +713,7 @@ export default function DashboardPage() {
           {
             label: "НИЙТ ЗАХИРАМЖ",
             sub: "чөлөөлөлтийн тоо",
-            value: acqLoading ? null : totalOrders,
+            value: isLoading ? null : totalOrders,
             pct: 100,
             color: "#f9bc0b",
             icon: FileText,
@@ -762,7 +722,7 @@ export default function DashboardPage() {
           {
             label: "НИЙТ НӨХӨХ ОЛГОВОР",
             sub: "тэрбум ₮",
-            value: reportLoading ? null : `${totalCompensation.toFixed(2)} тэр`,
+            value: isLoading ? null : `${totalCompensation.toFixed(2)} тэр`,
             pct: 100,
             color: "#0acf97",
             icon: Banknote,
@@ -799,15 +759,15 @@ export default function DashboardPage() {
         {[
           {
             label: "ЧӨЛӨӨЛӨГДСӨН НЭГЖ ТАЛБАР",
-            sub: acqLoading ? "…" : `${totalParcels} нийт нэгж талбараас`,
-            value: acqLoading || parcelsLoading ? null : freedParcels,
+            sub: isLoading ? "…" : `${totalParcels} нийт нэгж талбараас`,
+            value: isLoading ? null : freedParcels,
             pct: totalParcels > 0 ? Math.round((freedParcels / totalParcels) * 100) : 0,
             color: "#0acf97",
           },
           {
             label: "ЧӨЛӨӨЛӨГДСӨН ТАЛБАЙ",
-            sub: acqLoading ? "…" : `${planAreaHa.toFixed(1)} га нийт талбайгаас`,
-            value: parcelsLoading ? null : `${freedAreaHa.toFixed(1)} га`,
+            sub: isLoading ? "…" : `${planAreaHa.toFixed(1)} га нийт талбайгаас`,
+            value: isLoading ? null : `${freedAreaHa.toFixed(1)} га`,
             pct: planAreaHa > 0 ? Math.round((freedAreaHa / planAreaHa) * 100) : 0,
             color: "#0acf97",
           },
@@ -926,7 +886,7 @@ export default function DashboardPage() {
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
             ЧӨЛӨӨЛӨЛТҮҮД
           </p>
-          {acqLoading ? (
+          {isLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-10 rounded-lg bg-slate-100 dark:bg-white/[0.05] animate-pulse" />

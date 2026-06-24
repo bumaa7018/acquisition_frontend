@@ -152,7 +152,7 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /* ── Apply acquisition filter to parcel status + boundary layers ── */
+  /* ── Apply acquisition filter + zoom to filtered extent ── */
   useEffect(() => {
     let filter = ''
     if (acquisitionIds && acquisitionIds.length > 0) {
@@ -163,6 +163,16 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
     ACQUISITION_FILTERED_LAYERS.forEach(id => {
       wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: filter })
     })
+    if (filter && olMap.current) {
+      void fitLayerToMap({
+        map: olMap.current,
+        wfsUrl: GS_WFS,
+        layerId: 'v_acquisition_boundary',
+        cqlFilter: filter,
+        padding: [48, 48, 48, 48],
+        maxZoom: 16,
+      })
+    }
   }, [acquisitionIds])
 
   /* ── Layer toggle ── */

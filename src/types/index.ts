@@ -216,6 +216,7 @@ export interface GlobalParcel {
   area_m2: number;
   acquisition_area_m2: number;
   compensation_paid: boolean;
+  status: number;
   acquisition_id: string;
   acquisition_name: string;
   plan_code: string;
