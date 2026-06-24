@@ -6,7 +6,7 @@ import type {
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
-  ConstructionType, ReportParcelRow,
+  ConstructionType, ReportParcelRow, ParcelStatus,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -283,6 +283,8 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
+  listParcelStatuses: () =>
+    api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data),
 }
 
 // ── Global Parcels ────────────────────────────────────

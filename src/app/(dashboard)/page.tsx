@@ -1,6 +1,8 @@
 "use client";
+import { useState, useMemo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import {
   AreaChart,
   Area,
@@ -10,13 +12,19 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { landApi, reportApi } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import {
-  STATS,
-  STATUSES,
-  REJECTED_PARCELS,
-  TIMELINE,
-} from "@/components/dashboard/mock-data";
-import { Map, Layers, FileText, Banknote } from "lucide-react";
+  Map as MapIcon,
+  Layers,
+  FileText,
+  Banknote,
+  Search,
+  X,
+  ChevronDown,
+  Calendar,
+} from "lucide-react";
 
 const MapView = dynamic(() => import("@/components/map/map-view"), {
   ssr: false,
@@ -25,7 +33,411 @@ const MapView = dynamic(() => import("@/components/map/map-view"), {
   ),
 });
 
-/* ── Custom horizontal bar ─────────────────────────────── */
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from(
+  { length: CURRENT_YEAR - 2000 + 1 },
+  (_, i) => CURRENT_YEAR - i,
+);
+
+type ParcelWithCtx = {
+  id: string;
+  parcel_id: string;
+  area_m2: number;
+  acquisition_area_m2: number;
+  compensation_paid: boolean;
+  status: number;
+  status_name: string;
+  acquisition_id: string;
+  acquisition_status: number;
+  start_date?: string;
+};
+
+/* ── Text highlighter ────────────────────────────────── */
+function Highlight({ text, query }: { text: string; query: string }) {
+  if (!query.trim() || !text) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(query.trim().toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="bg-[#02c0ce]/20 text-[#02c0ce] rounded px-0.5 not-italic font-semibold">
+        {text.slice(idx, idx + query.trim().length)}
+      </mark>
+      {text.slice(idx + query.trim().length)}
+    </>
+  );
+}
+
+/* ── Acquisition select ──────────────────────────────── */
+function AcquisitionSelect({
+  selectedId,
+  onSelect,
+  onClear,
+  className,
+}: {
+  selectedId: string;
+  onSelect: (id: string, label: string) => void;
+  onClear: () => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const { data } = useQuery({
+    queryKey: ["acq-list-all"],
+    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
+    staleTime: 60_000,
+  });
+
+  const acquisitions = data?.data ?? [];
+  const selected = acquisitions.find((a) => a.id === selectedId);
+  const displayLabel = selected?.acquisition_name ?? "";
+
+  const filtered = query.trim()
+    ? acquisitions.filter((acq) => {
+        const q = query.trim().toLowerCase();
+        return (
+          (acq.acquisition_name ?? "").toLowerCase().includes(q) ||
+          (acq.plan_code ?? "").toLowerCase().includes(q)
+        );
+      })
+    : acquisitions;
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  function select(acq: { id: string; acquisition_name: string }) {
+    setQuery("");
+    onSelect(acq.id, acq.acquisition_name);
+    setOpen(false);
+  }
+
+  function clear(e: React.MouseEvent) {
+    e.stopPropagation();
+    setQuery("");
+    onClear();
+    setOpen(false);
+  }
+
+  return (
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
+      <div
+        className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
+        onClick={() => setOpen(true)}
+      >
+        {selectedId && !open ? (
+          <span
+            title={displayLabel}
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate"
+          >
+            {displayLabel}
+          </span>
+        ) : (
+          <input
+            type="text"
+            placeholder="Чөлөөлөлт сонгох…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            autoFocus={open}
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
+          />
+        )}
+        {selectedId ? (
+          <button
+            onClick={clear}
+            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-80 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+          <div className="max-h-56 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Олдсонгүй
+              </div>
+            ) : (
+              filtered.map((acq) => (
+                <button
+                  key={acq.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    select(acq);
+                  }}
+                  className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
+                >
+                  <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                    {acq.acquisition_name ? (
+                      <Highlight text={acq.acquisition_name} query={query} />
+                    ) : (
+                      "—"
+                    )}
+                  </span>
+                  {acq.plan_code && (
+                    <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">
+                      {acq.plan_code}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Plan select ─────────────────────────────────────── */
+function PlanSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (code: string) => void;
+  className?: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const { data } = useQuery({
+    queryKey: ["acq-list-all"],
+    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
+    staleTime: 60_000,
+  });
+
+  const plans = Array.from(
+    new Map(
+      (data?.data ?? [])
+        .filter((a) => a.plan_code)
+        .map((a) => [a.plan_code, { plan_code: a.plan_code, name: a.plan_name ?? "" }]),
+    ).values(),
+  );
+
+  const filtered = query.trim()
+    ? plans.filter(
+        (p) =>
+          p.plan_code.toLowerCase().includes(query.trim().toLowerCase()) ||
+          p.name.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+    : plans;
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        if (!value) setQuery("");
+      }
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) setQuery(value);
+  }, [value, open]);
+
+  return (
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
+      <div
+        className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
+        onClick={() => setOpen(true)}
+      >
+        <input
+          type="text"
+          placeholder="Төлөвлөгөөний код…"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+            if (!e.target.value) onChange("");
+          }}
+          onFocus={() => setOpen(true)}
+          className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
+        />
+        {value ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              setQuery("");
+            }}
+            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        )}
+      </div>
+      {open && (
+        <div className="absolute z-50 mt-1 w-64 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+          <div className="max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Олдсонгүй
+              </div>
+            ) : (
+              filtered.map((p) => (
+                <button
+                  key={p.plan_code}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(p.plan_code);
+                    setQuery(p.plan_code);
+                    setOpen(false);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
+                >
+                  <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                    <Highlight text={p.plan_code} query={query} />
+                  </span>
+                  {p.name && (
+                    <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                      {p.name}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Year multi-select ───────────────────────────────── */
+function YearMultiSelect({
+  value,
+  onChange,
+  className,
+}: {
+  value: string[];
+  onChange: (years: string[]) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  function toggle(y: string) {
+    onChange(value.includes(y) ? value.filter((v) => v !== y) : [...value, y]);
+  }
+
+  const label =
+    value.length === 0
+      ? "Он сонгох…"
+      : value.length === 1
+        ? `${value[0]} он`
+        : `${value.length} он сонгосон`;
+
+  return (
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 text-left focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+      >
+        <Calendar className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <span className="flex-1 text-[13px] text-slate-800 dark:text-slate-200 truncate">
+          {label}
+        </span>
+        {value.length > 0 ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange([]);
+            }}
+            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-44 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+          <div className="max-h-52 overflow-y-auto py-1">
+            {YEAR_OPTIONS.map((y) => {
+              const ys = String(y);
+              const checked = value.includes(ys);
+              return (
+                <button
+                  key={y}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    toggle(ys);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors text-[13px]",
+                    checked
+                      ? "text-[#02c0ce] font-semibold"
+                      : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-[#252630]",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0",
+                      checked
+                        ? "bg-[#02c0ce] border-[#02c0ce]"
+                        : "border-slate-300 dark:border-white/20",
+                    )}
+                  >
+                    {checked && (
+                      <svg
+                        viewBox="0 0 10 8"
+                        className="h-2 w-2 text-white fill-current"
+                      >
+                        <path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </span>
+                  {y}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Skeleton ────────────────────────────────────────── */
+function Skel({ w = "w-12" }: { w?: string }) {
+  return (
+    <span className={`inline-block ${w} h-[1em] rounded bg-slate-200 dark:bg-white/10 animate-pulse align-middle`} />
+  );
+}
+
+/* ── Custom horizontal bar ───────────────────────────── */
 function HBar({
   label,
   value,
@@ -39,7 +451,7 @@ function HBar({
   color: string;
   suffix?: string;
 }) {
-  const pct = Math.max(3, (value / maxVal) * 100);
+  const pct = Math.max(3, (value / Math.max(maxVal, 1)) * 100);
   return (
     <div className="flex items-center gap-2">
       <span
@@ -65,75 +477,12 @@ function HBar({
   );
 }
 
-/* ── 270° gauge ─────────────────────────────────────────── */
-function Gauge({ value, isDark }: { value: number; isDark: boolean }) {
-  const r = 52,
-    cx = 70,
-    cy = 72;
-  const circ = 2 * Math.PI * r;
-  const arcLen = circ * 0.75;
-  const filled = arcLen * (value / 100);
-  return (
-    <svg viewBox="0 0 140 118" className="w-full max-w-[160px] mx-auto">
-      <defs>
-        <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#0acf97" />
-          <stop offset="100%" stopColor="#02c0ce" />
-        </linearGradient>
-      </defs>
-      {/* Track */}
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke={isDark ? "#37394d" : "#e5e7eb"}
-        strokeWidth="12"
-        strokeDasharray={`${arcLen} ${circ - arcLen}`}
-        strokeLinecap="round"
-        transform={`rotate(135, ${cx}, ${cy})`}
-      />
-      {/* Fill */}
-      <circle
-        cx={cx}
-        cy={cy}
-        r={r}
-        fill="none"
-        stroke="url(#gaugeGrad)"
-        strokeWidth="12"
-        strokeDasharray={`${filled} ${circ - filled}`}
-        strokeLinecap="round"
-        transform={`rotate(135, ${cx}, ${cy})`}
-      />
-      <text
-        x={cx}
-        y={cy + 7}
-        textAnchor="middle"
-        fontSize="24"
-        fontWeight="800"
-        fill={isDark ? "#fff" : "#1e293b"}
-      >
-        {value}%
-      </text>
-      <text
-        x={cx}
-        y={cy + 22}
-        textAnchor="middle"
-        fontSize="10"
-        fill={isDark ? "#8391a2" : "#94a3b8"}
-      >
-        ЯВЦ
-      </text>
-    </svg>
-  );
-}
-
-/* ── Page ───────────────────────────────────────────────── */
+/* ── Page ────────────────────────────────────────────── */
 export default function DashboardPage() {
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
-  const tickColor = isDark ? "#8391a2" : "#94a3b8";
-  const gridColor = isDark ? "#37394d" : "#eef2f7";
+  const tickColor  = isDark ? "#8391a2" : "#94a3b8";
+  const gridColor  = isDark ? "#37394d" : "#eef2f7";
   const tooltipStyle = {
     fontSize: 12,
     borderRadius: 6,
@@ -143,108 +492,300 @@ export default function DashboardPage() {
     boxShadow: "0 4px 20px rgba(0,0,0,.12)",
   };
 
-  const maxCount = Math.max(...STATUSES.map((s) => s.count));
-  const maxArea = Math.max(...STATUSES.map((s) => s.area));
+  /* Input state — хэрэглэгч сонгож буй утга */
+  const [inAcqId,    setInAcqId]    = useState("");
+  const [inAcqName,  setInAcqName]  = useState("");
+  const [inPlanCode, setInPlanCode] = useState("");
+  const [inYears,    setInYears]    = useState<string[]>([String(CURRENT_YEAR)]);
 
-  const MAIN_STATS = [
-    {
-      label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
-      value: STATS.planArea,
-      unit: "га",
-      sub: "ТАЛБАЙ",
-      icon: Map,
-      color: "#02c0ce",
-      bg: "#02c0ce18",
-    },
-    {
-      label: "НЭГЖ ТАЛБАР",
-      value: STATS.totalParcels,
-      unit: "",
-      sub: "НИЙТ",
-      icon: Layers,
-      color: "#777edd",
-      bg: "#777edd18",
-    },
-    {
-      label: "НИЙТ ЗАХИРАМЖ",
-      value: STATS.totalOrders,
-      unit: "",
-      sub: "ЗАХИРАМЖ",
-      icon: FileText,
-      color: "#f9bc0b",
-      bg: "#f9bc0b18",
-    },
-    {
-      label: "НИЙТ НӨХӨХ ОЛГОВРЫН ДҮН",
-      value: STATS.totalCompensation,
-      unit: "тэрбум",
-      sub: "НИЙТ ДҮН",
-      icon: Banknote,
-      color: "#0acf97",
-      bg: "#0acf9718",
-    },
-  ] as const;
+  /* Applied state — "Харах" дарахад л шинэчлэгдэнэ */
+  const [acqId,    setAcqId]    = useState("");
+  const [acqName,  setAcqName]  = useState("");
+  const [planCode, setPlanCode] = useState("");
+  const [years,    setYears]    = useState<string[]>([String(CURRENT_YEAR)]);
+
+  /* ── ONE primary API call ───────────────────────────── */
+  const { data: acqData, isLoading: acqLoading } = useQuery({
+    queryKey: ["acq-list-all"],
+    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
+    staleTime: 60_000,
+  });
+
+  /* Parcel statuses from DB — legend + map dropdown */
+  const { data: parcelStatusList = [] } = useQuery({
+    queryKey: ["parcel-statuses"],
+    queryFn: () => landApi.listParcelStatuses(),
+    staleTime: 10 * 60_000,
+  });
+
+  /* Secondary: compensation total */
+  const { data: reportData, isLoading: reportLoading } = useQuery({
+    queryKey: ["dashboard-report"],
+    queryFn: () => reportApi.list({ page_size: 2000 }),
+    staleTime: 5 * 60_000,
+    enabled: !acqLoading,
+  });
+
+  const allAcqs = acqData?.data ?? [];
+
+  /* ── Applied filter ──────────────────────────────────── */
+  const filteredAcqs = useMemo(() => {
+    return allAcqs.filter((a) => {
+      if (acqId && a.id !== acqId) return false;
+      if (planCode && !(a.plan_code ?? "").toLowerCase().includes(planCode.toLowerCase())) return false;
+      if (years.length > 0) {
+        if (!a.start_date) return false;
+        const y = String(new Date(a.start_date).getFullYear());
+        if (!years.includes(y)) return false;
+      }
+      return true;
+    });
+  }, [allAcqs, acqId, planCode, years]);
+
+  const handleView = () => {
+    setAcqId(inAcqId);
+    setAcqName(inAcqName);
+    setPlanCode(inPlanCode);
+    setYears(inYears);
+  };
+
+  const handleReset = () => {
+    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([]);
+    setAcqId(""); setAcqName(""); setPlanCode(""); setYears([]);
+  };
+
+  /* ── Parcel queries — шүүгдсэн чөлөөлөлт тус бүрийн нэгж талбарууд ── */
+  const parcelResults = useQueries({
+    queries: filteredAcqs.map((acq) => ({
+      queryKey: ["acq-parcels", acq.id],
+      queryFn: () =>
+        landApi.getParcels(acq.id, { page_size: 1000 }).then((r) =>
+          r.data.map(
+            (p): ParcelWithCtx => ({
+              id: p.id,
+              parcel_id: p.parcel_id,
+              area_m2: p.area_m2,
+              acquisition_area_m2: p.acquisition_area_m2,
+              compensation_paid: p.compensation_paid,
+              status: p.status,
+              status_name: p.status_name,
+              acquisition_id: acq.id,
+              acquisition_status: acq.status,
+              start_date: acq.start_date,
+            }),
+          ),
+        ),
+      staleTime: 5 * 60_000,
+      enabled: !acqLoading && filteredAcqs.length > 0,
+    })),
+  });
+
+  const parcelsLoading = parcelResults.some((r) => r.isLoading);
+
+  /* ── Computed stats — нэгж талбаруудын мэдээлэл дээр үндэслэсэн ── */
+  const { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE } = useMemo(() => {
+    const parcels = parcelResults.flatMap((r) => r.data ?? []);
+
+    const totalParcels = parcels.length;
+    const freed = parcels.filter((p) => p.compensation_paid);
+    const freedParcels = freed.length;
+    const freedAreaHa = freed.reduce((s, p) => s + (p.acquisition_area_m2 ?? 0), 0) / 10000;
+
+    const statusMap: Record<number, { name: string; count: number; area: number }> = {};
+    parcels.forEach((p) => {
+      if (!statusMap[p.status]) {
+        statusMap[p.status] = { name: p.status_name || String(p.status), count: 0, area: 0 };
+      }
+      statusMap[p.status].count += 1;
+      statusMap[p.status].area += p.acquisition_area_m2 ?? 0;
+    });
+    const STATUSES = Object.entries(statusMap)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([statusId, data]) => ({
+        key: `ps-${statusId}`,
+        label: data.name,
+        color: getParcelStatusStyle(Number(statusId), data.name).color,
+        count: data.count,
+        area: Math.round(data.area),
+      }));
+
+    const timelineMap: Record<string, number> = {};
+    parcels.forEach((p) => {
+      if (!p.start_date) return;
+      const d = new Date(p.start_date);
+      const key = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+      timelineMap[key] = (timelineMap[key] ?? 0) + 1;
+    });
+    const TIMELINE = Object.entries(timelineMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }));
+
+    return { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE };
+  }, [parcelResults]);
+
+  /* Acquisition-level stats */
+  const planAreaHa = useMemo(
+    () => filteredAcqs.reduce((s, a) => s + (a.area_m2 ?? 0), 0) / 10000,
+    [filteredAcqs],
+  );
+  const totalOrders = useMemo(
+    () => filteredAcqs.filter((a) => a.decree_number?.trim()).length,
+    [filteredAcqs],
+  );
+
+  const totalCompensation = useMemo(() => {
+    const rows = reportData?.data ?? [];
+    return rows.reduce((s, r) => s + (r.total_comp ?? 0), 0) / 1_000_000_000;
+  }, [reportData]);
+
+  const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
+  const maxArea  = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.area))  : 1;
+
+  /* Map filter — шүүлт идэвхтэй үед л acquisition ID-уудыг дамжуулна */
+  const mapAcquisitionIds = useMemo(() => {
+    const hasFilter = !!(acqId || planCode || years.length > 0);
+    if (!hasFilter || filteredAcqs.length === 0) return undefined;
+    return filteredAcqs.map((a) => a.id);
+  }, [acqId, planCode, years, filteredAcqs]);
+
+  /* Filter display label */
+  const filterLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (acqName) parts.push(acqName);
+    if (planCode) parts.push(`Төлөвлөгөө: ${planCode}`);
+    if (years.length > 0) parts.push(`${years.join(", ")} он`);
+    return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
+  }, [acqName, planCode, years]);
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Title ─────────────────────────────────────── */}
+
+      {/* ── Filter card ───────────────────────────────── */}
+      <div className="ap-card px-4 py-3">
+        <div className="flex flex-wrap items-end gap-3">
+          {/* Acquisition select */}
+          <div className="flex flex-col gap-1 min-w-[220px] flex-1">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Чөлөөлөлт
+            </label>
+            <AcquisitionSelect
+              selectedId={inAcqId}
+              onSelect={(id, label) => { setInAcqId(id); setInAcqName(label); }}
+              onClear={() => { setInAcqId(""); setInAcqName(""); }}
+            />
+          </div>
+
+          {/* Plan code */}
+          <div className="flex flex-col gap-1 min-w-[180px] flex-1">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Төлөвлөгөө
+            </label>
+            <PlanSelect value={inPlanCode} onChange={setInPlanCode} />
+          </div>
+
+          {/* Year multi-select */}
+          <div className="flex flex-col gap-1 min-w-[160px]">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Он
+            </label>
+            <YearMultiSelect value={inYears} onChange={setInYears} />
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-2 shrink-0">
+            <button
+              onClick={handleView}
+              className="h-9 px-4 rounded-lg text-[13px] font-semibold text-white flex items-center gap-1.5 transition-all hover:opacity-90 active:scale-95"
+              style={{ background: "#02c0ce" }}
+            >
+              <Search className="h-3.5 w-3.5" />
+              Харах
+            </button>
+            <button
+              onClick={handleReset}
+              className="h-9 px-3 rounded-lg text-[13px] font-medium text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/[0.08] hover:bg-slate-50 dark:hover:bg-white/[0.04] transition-all"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Title / active filter ──────────────────────── */}
       <div className="ap-card px-5 py-3 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-3">
-          <div
-            className="h-8 w-[3px] rounded-full shrink-0"
-            style={{ background: "#02c0ce" }}
-          />
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 leading-snug">
-            СХД 5-Р ХОРОО &quot;ХЭСЭГЧИЛСЭН ЕРӨНХИЙ ТӨЛӨВЛӨГӨӨНИЙ ДАГУУ ГЭР
-            ХОРООЛЛЫН ОРОН СУУЦЖУУЛАХ&quot; ДАХИН ТӨЛӨВЛӨЛТИЙН АЖИЛ
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-8 w-[3px] rounded-full shrink-0" style={{ background: "#02c0ce" }} />
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 leading-snug truncate">
+            {filterLabel}
           </p>
         </div>
         <div className="shrink-0 text-right border-l border-slate-100 dark:border-[#37394d] pl-4">
-          <p
-            className="text-[10px] font-bold uppercase tracking-widest"
-            style={{ color: "#02c0ce" }}
-          >
-            ТӨЛБӨР ШҮҮХ
+          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
+            {filteredAcqs.length} чөлөөлөлт
           </p>
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-            Ангилал сонгоогүй
+            {acqLoading ? "…" : `${totalParcels} нэгж талбар`}
           </p>
         </div>
       </div>
 
       {/* ── 4 stat cards ──────────────────────────────── */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        {MAIN_STATS.map((s) => {
+        {[
+          {
+            label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
+            sub: "нийт талбай",
+            value: acqLoading ? null : `${planAreaHa.toFixed(1)} га`,
+            pct: 100,
+            color: "#02c0ce",
+            icon: MapIcon,
+            bg: "#02c0ce18",
+          },
+          {
+            label: "НЭГЖ ТАЛБАР",
+            sub: "нийт тоо",
+            value: acqLoading || parcelsLoading ? null : totalParcels,
+            pct: 100,
+            color: "#777edd",
+            icon: Layers,
+            bg: "#777edd18",
+          },
+          {
+            label: "НИЙТ ЗАХИРАМЖ",
+            sub: "чөлөөлөлтийн тоо",
+            value: acqLoading ? null : totalOrders,
+            pct: 100,
+            color: "#f9bc0b",
+            icon: FileText,
+            bg: "#f9bc0b18",
+          },
+          {
+            label: "НИЙТ НӨХӨХ ОЛГОВОР",
+            sub: "тэрбум ₮",
+            value: reportLoading ? null : `${totalCompensation.toFixed(2)} тэр`,
+            pct: 100,
+            color: "#0acf97",
+            icon: Banknote,
+            bg: "#0acf9718",
+          },
+        ].map((s) => {
           const Icon = s.icon;
           return (
             <div key={s.label} className="ap-card relative overflow-hidden p-5">
-              <div
-                className="absolute top-0 left-0 right-0 h-[3px]"
-                style={{ background: s.color }}
-              />
+              <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: s.color }} />
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
                     {s.label}
                   </p>
                   <div className="flex items-end gap-1.5 mt-2">
-                    <span className="text-[28px] font-black tabular-nums leading-none text-slate-800 dark:text-white">
-                      {s.value}
+                    <span className="text-[26px] font-black tabular-nums leading-none text-slate-800 dark:text-white">
+                      {s.value === null ? <Skel w="w-16" /> : s.value}
                     </span>
-                    {s.unit && (
-                      <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 mb-0.5">
-                        {s.unit}
-                      </span>
-                    )}
                   </div>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                    {s.sub}
-                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{s.sub}</p>
                 </div>
-                <div
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                  style={{ background: s.bg }}
-                >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: s.bg }}>
                   <Icon className="h-5 w-5" style={{ color: s.color }} />
                 </div>
               </div>
@@ -253,57 +794,39 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* ── Sub stats ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* ── Freed parcels row ──────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {[
           {
-            label: "ЧӨЛӨӨЛСӨН НЭГЖ ТАЛБАР",
-            sub: `${STATS.totalParcels} нэгж талбараас`,
-            value: STATS.freedParcels,
-            pct: Math.round((STATS.freedParcels / STATS.totalParcels) * 100),
-            color: "#02c0ce",
+            label: "ЧӨЛӨӨЛӨГДСӨН НЭГЖ ТАЛБАР",
+            sub: acqLoading ? "…" : `${totalParcels} нийт нэгж талбараас`,
+            value: acqLoading || parcelsLoading ? null : freedParcels,
+            pct: totalParcels > 0 ? Math.round((freedParcels / totalParcels) * 100) : 0,
+            color: "#0acf97",
           },
           {
-            label: "ЧӨЛӨӨЛСӨН ТАЛБАЙ",
-            sub: `${STATS.planArea} га нийт талбайгаас`,
-            value: `${STATS.freedArea} га`,
-            pct: Math.round(
-              (parseFloat(STATS.freedArea) / parseFloat(STATS.planArea)) * 100,
-            ),
+            label: "ЧӨЛӨӨЛӨГДСӨН ТАЛБАЙ",
+            sub: acqLoading ? "…" : `${planAreaHa.toFixed(1)} га нийт талбайгаас`,
+            value: parcelsLoading ? null : `${freedAreaHa.toFixed(1)} га`,
+            pct: planAreaHa > 0 ? Math.round((freedAreaHa / planAreaHa) * 100) : 0,
             color: "#0acf97",
           },
         ].map((s) => (
-          <div
-            key={s.label}
-            className="ap-card px-5 py-3.5 flex items-center justify-between gap-4"
-          >
+          <div key={s.label} className="ap-card px-5 py-3.5 flex items-center justify-between gap-4">
             <div className="min-w-0">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
                 {s.label}
               </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {s.sub}
-              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{s.sub}</p>
             </div>
             <div className="shrink-0 text-right">
-              <span
-                className="text-[32px] font-black tabular-nums leading-none"
-                style={{ color: s.color }}
-              >
-                {s.value}
+              <span className="text-[32px] font-black tabular-nums leading-none" style={{ color: s.color }}>
+                {s.value === null ? <Skel w="w-16" /> : s.value}
               </span>
               <div className="mt-1.5 h-1.5 w-24 rounded-full bg-slate-100 dark:bg-white/[0.07] overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${s.pct}%`, background: s.color }}
-                />
+                <div className="h-full rounded-full transition-all" style={{ width: `${s.pct}%`, background: s.color }} />
               </div>
-              <p
-                className="text-[10px] font-bold mt-0.5"
-                style={{ color: s.color }}
-              >
-                {s.pct}%
-              </p>
+              <p className="text-[10px] font-bold mt-0.5" style={{ color: s.color }}>{s.pct}%</p>
             </div>
           </div>
         ))}
@@ -311,60 +834,55 @@ export default function DashboardPage() {
 
       {/* ── 3-column main ─────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-[240px_1fr_252px] gap-4 items-start">
-        {/* LEFT: bar charts */}
+
+        {/* LEFT: bar charts + legend */}
         <div className="flex flex-col gap-4">
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3.5">
               НЭГЖ ТАЛБАРЫН МЭДЭЭЛЭЛ
             </p>
-            <div className="space-y-2.5">
-              {STATUSES.map((s) => (
-                <HBar
-                  key={s.key}
-                  label={s.label}
-                  value={s.count}
-                  maxVal={maxCount}
-                  color={s.color}
-                />
-              ))}
-            </div>
+            {STATUSES.length === 0 ? (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">—</p>
+            ) : (
+              <div className="space-y-2.5">
+                {STATUSES.map((s) => (
+                  <HBar key={s.key} label={s.label} value={s.count} maxVal={maxCount} color={s.color} />
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3.5">
               НЭГЖ ТАЛБАРЫН ТАЛБАЙ /М.КВ/
             </p>
-            <div className="space-y-2.5">
-              {STATUSES.map((s) => (
-                <HBar
-                  key={s.key}
-                  label={s.label}
-                  value={s.area}
-                  maxVal={maxArea}
-                  color={s.color}
-                  suffix=" м²"
-                />
-              ))}
-            </div>
+            {STATUSES.length === 0 ? (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">—</p>
+            ) : (
+              <div className="space-y-2.5">
+                {STATUSES.map((s) => (
+                  <HBar key={s.key} label={s.label} value={s.area} maxVal={maxArea} color={s.color} suffix=" м²" />
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Legend */}
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
               ТАЙЛБАР
             </p>
             <div className="space-y-2">
-              {STATUSES.map((s) => (
-                <div key={s.key} className="flex items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                    style={{ background: s.color }}
-                  />
-                  <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">
-                    {s.label}
-                  </span>
-                </div>
-              ))}
+              {[...parcelStatusList]
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((s) => (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                      style={{ background: PARCEL_STATUS_STYLES[s.id]?.color ?? "#64748b" }}
+                    />
+                    <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{s.name}</span>
+                  </div>
+                ))}
             </div>
           </div>
         </div>
@@ -372,130 +890,79 @@ export default function DashboardPage() {
         {/* CENTER: map + timeline */}
         <div className="flex flex-col gap-4">
           <div className="ap-card overflow-hidden" style={{ height: 320 }}>
-            <MapView />
+            <MapView acquisitionIds={mapAcquisitionIds} />
           </div>
 
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
-              НӨХӨХ ОЛГОВОРТОЙГООР ЧӨЛӨӨЛСӨН НЭГЖ ТАЛБАР
+              ЭХЛЭСЭН ОГНООГООР НЭГЖ ТАЛБАР
             </p>
-            <ResponsiveContainer width="100%" height={168}>
-              <AreaChart
-                data={TIMELINE}
-                margin={{ top: 10, bottom: 0, left: -10, right: 8 }}
-              >
-                <defs>
-                  <linearGradient id="tlGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="5%"
-                      stopColor="#02c0ce"
-                      stopOpacity={isDark ? 0.3 : 0.18}
-                    />
-                    <stop offset="95%" stopColor="#02c0ce" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke={gridColor} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 9, fill: tickColor }}
-                  axisLine={false}
-                  tickLine={false}
-                  interval={3}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: tickColor }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  cursor={{
-                    stroke: "#02c0ce",
-                    strokeWidth: 1,
-                    strokeDasharray: "3 3",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="count"
-                  stroke="#02c0ce"
-                  strokeWidth={2}
-                  fill="url(#tlGrad)"
-                  name="Нэгж талбар"
-                  dot={{ fill: "#02c0ce", r: 3, strokeWidth: 0 }}
-                  activeDot={{ r: 5, fill: "#02c0ce", strokeWidth: 0 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {TIMELINE.length === 0 ? (
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 py-4 text-center">
+                Огноон мэдээлэл байхгүй
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height={168}>
+                <AreaChart data={TIMELINE} margin={{ top: 10, bottom: 0, left: -10, right: 8 }}>
+                  <defs>
+                    <linearGradient id="tlGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="#02c0ce" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#02c0ce" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: tickColor }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 9, fill: tickColor }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Area type="monotone" dataKey="count" name="Нэгж талбар" stroke="#02c0ce" strokeWidth={2} fill="url(#tlGrad)" dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
-        {/* RIGHT: gauge + rejected */}
-        <div className="flex flex-col gap-4">
-          <div className="ap-card p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">
-              ГАЗАР ЧӨЛӨӨЛТИЙН ЯВЦ
-            </p>
-            <Gauge value={STATS.progress} isDark={isDark} />
-            <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 -mt-2">
-              Шинэчлэгдсэн: 4 минутын өмнө
-            </p>
-          </div>
-
-          <div className="ap-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-100 dark:border-[#37394d]">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                ТАТГАЛЗСАН НЭГЖ ТАЛБАРЫН МЭДЭЭЛЭЛ
-              </p>
-            </div>
-            <div
-              className="overflow-y-auto divide-y divide-slate-50 dark:divide-[#37394d]"
-              style={{ maxHeight: 420 }}
-            >
-              {REJECTED_PARCELS.map((p, i) => (
-                <div
-                  key={p.id}
-                  className="p-3.5 flex gap-2.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-                >
-                  <div
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-[11px] font-bold mt-0.5"
-                    style={{ background: "#f1556c" }}
-                  >
-                    {i + 1}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-bold text-slate-800 dark:text-white leading-tight">
-                      {p.name}
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-3 mt-1.5">
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                          ҮНЭЛГЭЭ
-                        </p>
-                        <p
-                          className="text-[11px] font-bold mt-0.5"
-                          style={{ color: "#02c0ce" }}
-                        >
-                          {p.valuation}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                          ТАЛБАЙ
-                        </p>
-                        <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mt-0.5">
-                          {p.area}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-1.5 line-clamp-2">
-                      {p.reason}
-                    </p>
-                  </div>
-                </div>
+        {/* RIGHT: acquisition list */}
+        <div className="ap-card p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
+            ЧӨЛӨӨЛӨЛТҮҮД
+          </p>
+          {acqLoading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-10 rounded-lg bg-slate-100 dark:bg-white/[0.05] animate-pulse" />
               ))}
             </div>
-          </div>
+          ) : filteredAcqs.length === 0 ? (
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 py-4 text-center">
+              Олдсонгүй
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
+              {filteredAcqs.map((acq) => {
+                const style = { 1: "#02c0ce", 2: "#f59e0b", 3: "#0acf97", 4: "#f1556c" } as Record<number, string>;
+                const dotColor = style[acq.status] ?? "#94a3b8";
+                return (
+                  <div
+                    key={acq.id}
+                    className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors"
+                  >
+                    <span
+                      className="mt-1 h-2 w-2 shrink-0 rounded-full"
+                      style={{ background: dotColor }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight truncate">
+                        {acq.acquisition_name || "—"}
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                        {acq.plan_code} · {acq.parcel_count ?? 0} нэгж талбар
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
