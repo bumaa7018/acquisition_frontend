@@ -13,6 +13,8 @@ import {
   Shield,
   LogOut,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Receipt,
   Layers,
   User,
@@ -39,11 +41,13 @@ function NavItem({
   label,
   icon: Icon,
   active,
+  collapsed,
 }: {
   href: string;
   label: string;
   icon: React.ElementType;
   active: boolean;
+  collapsed: boolean;
 }) {
   return (
     <div className="relative">
@@ -52,15 +56,17 @@ function NavItem({
       )}
       <Link
         href={href}
+        title={collapsed ? label : undefined}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
+          "flex items-center rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
+          collapsed ? "justify-center" : "gap-3",
           active
             ? "bg-[#02c0ce]/10 text-[#02c0ce] dark:bg-[#02c0ce]/10 dark:text-[#02c0ce]"
             : "text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
         )}
       >
         <Icon className="h-[17px] w-[17px] shrink-0" />
-        <span className="flex-1">{label}</span>
+        {!collapsed && <span className="flex-1">{label}</span>}
       </Link>
     </div>
   );
@@ -74,94 +80,97 @@ export function Sidebar() {
   const [adminOpen, setAdminOpen] = useState(
     NAV_ADMIN.some((item) => pathname.startsWith(item.href)),
   );
+  const [collapsed, setCollapsed] = useState(false);
+
   useEffect(() => {
     setUser(authStorage.getUser());
   }, []);
 
-  // const handleLogout = async () => {
-  //   try {
-  //     await authApi.logout();
-  //   } catch {}
-  //   authStorage.clear();
-  //   router.push("/login");
-  // };
-
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  // const initials = user?.first_name
-  //   ? `${user.first_name[0]}${user.last_name?.[0] ?? ""}`.toUpperCase()
-  //   : null;
-
-  // const fullName = user
-  //   ? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()
-  //   : "Хэрэглэгч";
-
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col bg-white dark:bg-[#1e1f27] border-r border-slate-200/80 dark:border-[#37394d]">
+    <aside
+      className={cn(
+        "relative flex h-screen shrink-0 flex-col bg-white dark:bg-[#1e1f27] border-r border-slate-200/80 dark:border-[#37394d] transition-all duration-300",
+        collapsed ? "w-16" : "w-60",
+      )}
+    >
+      {/* Toggle button */}
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm hover:bg-slate-50 dark:bg-[#1e1f27] dark:border-[#37394d] dark:hover:bg-[#252630]"
+      >
+        {collapsed ? (
+          <ChevronRight className="h-3 w-3 text-slate-500 dark:text-[#97aac1]" />
+        ) : (
+          <ChevronLeft className="h-3 w-3 text-slate-500 dark:text-[#97aac1]" />
+        )}
+      </button>
+
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-[85px] border-b border-slate-100 dark:border-[#37394d] shrink-0">
+      <div
+        className={cn(
+          "flex items-center h-[85px] border-b border-slate-100 dark:border-[#37394d] shrink-0 overflow-hidden transition-all duration-300",
+          collapsed ? "justify-center px-0" : "gap-3 px-5",
+        )}
+      >
         <div className="relative h-8 w-8 shrink-0 flex items-center justify-center">
           <div className="absolute inset-0 rotate-45 rounded-[6px] bg-[#02c0ce]" />
           <Layers className="relative z-10 h-4 w-4 text-white" />
         </div>
-        <span className="text-[15px] font-bold text-slate-800 dark:text-white tracking-tight">
-          Газрын Систем
-        </span>
+        {!collapsed && (
+          <span className="text-[15px] font-bold text-slate-800 dark:text-white tracking-tight whitespace-nowrap">
+            Газрын Систем
+          </span>
+        )}
       </div>
-
-      {/* User profile */}
-      {/* <div className="px-4 py-3.5 border-b border-slate-100 dark:border-[#37394d] dark:bg-[#252630] shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#02c0ce] text-white text-[12px] font-bold select-none">
-            {initials ?? <User className="h-4 w-4" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-bold text-slate-800 dark:text-white truncate leading-tight">
-              {fullName || "Админ"}
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-[#97aac1] truncate leading-tight mt-0.5">
-              {user?.email ?? "имэйл"}
-            </p>
-          </div>
-        </div>
-      </div> */}
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-5">
         <div>
-          <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-            Үндсэн цэс
-          </p>
+          {!collapsed && (
+            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+              Үндсэн цэс
+            </p>
+          )}
           <nav className="space-y-0.5">
             {NAV_MAIN.map((item) => (
-              <NavItem key={item.href} {...item} active={isActive(item.href)} />
+              <NavItem
+                key={item.href}
+                {...item}
+                active={isActive(item.href)}
+                collapsed={collapsed}
+              />
             ))}
           </nav>
         </div>
 
         <div>
-          <button
-            onClick={() => setAdminOpen((v) => !v)}
-            className="flex w-full items-center px-3 mb-1 gap-1"
-          >
-            <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-              Удирдлага
-            </p>
-            <ChevronDown
-              className={cn(
-                "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
-                adminOpen ? "rotate-180" : "rotate-0",
-              )}
-            />
-          </button>
-          {adminOpen && (
+          {!collapsed && (
+            <button
+              onClick={() => setAdminOpen((v) => !v)}
+              className="flex w-full items-center px-3 mb-1 gap-1"
+            >
+              <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+                Удирдлага
+              </p>
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                  adminOpen ? "rotate-180" : "rotate-0",
+                )}
+              />
+            </button>
+          )}
+          {(adminOpen || collapsed) && (
             <nav className="space-y-0.5">
               {NAV_ADMIN.map((item) => (
                 <NavItem
                   key={item.href}
                   {...item}
                   active={isActive(item.href)}
+                  collapsed={collapsed}
                 />
               ))}
             </nav>

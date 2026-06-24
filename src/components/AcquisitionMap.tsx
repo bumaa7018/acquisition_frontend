@@ -7,6 +7,7 @@ import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
+// @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import type { AU } from "@/types";
 import LayerPanel, { type LayerConfig } from "./map/layer-panel";
@@ -147,13 +148,11 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
           json?.features?.[0]?.geometry?.bbox ?? json?.bbox;
         if (bbox?.length === 4) {
           const ext = transformExtent(bbox, "EPSG:4326", "EPSG:3857");
-          map
-            .getView()
-            .fit(ext, {
-              padding: [48, 48, 48, 48],
-              maxZoom: 17,
-              duration: 1000,
-            });
+          map.getView().fit(ext, {
+            padding: [48, 48, 48, 48],
+            maxZoom: 17,
+            duration: 1000,
+          });
         }
       })
       .catch(() => {
@@ -178,7 +177,7 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
         </div>
       </div>
 
-      {aus.length > 0 && (
+      {Array.isArray(aus) && aus.length > 0 && (
         <div className="w-full lg:w-64 shrink-0">
           <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wider">
             Давхцаж буй нутаг дэвсгэр

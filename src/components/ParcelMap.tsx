@@ -7,6 +7,7 @@ import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
+// @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./map/layer-panel";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./map/layers";
@@ -157,13 +158,11 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
           json?.features?.[0]?.geometry?.bbox ?? json?.bbox;
         if (bbox?.length === 4) {
           const ext = transformExtent(bbox, "EPSG:4326", "EPSG:3857");
-          map
-            .getView()
-            .fit(ext, {
-              padding: [60, 60, 60, 60],
-              maxZoom: 18,
-              duration: 1000,
-            });
+          map.getView().fit(ext, {
+            padding: [60, 60, 60, 60],
+            maxZoom: 18,
+            duration: 1000,
+          });
         }
       })
       .catch(() => {

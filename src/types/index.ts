@@ -215,53 +215,53 @@ export interface ReportParcelRow {
 }
 
 export interface Asset {
-  id: string
-  acquisition_id: string
-  parcel_id: string
-  asset_number: string
-  asset_type: 'real_state' | 'property'
-  asset_name: string
-  floor_count: number
-  area_m2: number
-  owner_name: string
-  address: string
-  notes: string
-  created_at: string
-  updated_at: string
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  asset_number: string;
+  asset_type: "real_state" | "property";
+  asset_name: string;
+  floor_count: number;
+  area_m2: number;
+  owner_name: string;
+  address: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CompensationGrant {
-  id: string
-  acquisition_id: string
-  compensation_id: string
-  amount: number
-  grant_date?: string
-  note?: string
-  land_area_m2: number
-  land_price: number
-  land_location: string
-  land_purpose: string
-  land_use_type: string
-  parcel_number: string
-  decree_number: string
-  created_at: string
-  updated_at: string
+  id: string;
+  acquisition_id: string;
+  compensation_id: string;
+  amount: number;
+  grant_date?: string;
+  note?: string;
+  land_area_m2: number;
+  land_price: number;
+  land_location: string;
+  land_purpose: string;
+  land_use_type: string;
+  parcel_number: string;
+  decree_number: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Compensation {
-  id: string
-  acquisition_id: string
-  target_type: 'parcel' | 'asset'
-  parcel_id: string
-  asset_id?: string
-  compensation_type: 'cash' | 'land_grant'
-  coverage_percent: number
-  amount: number
-  compensation_date?: string
-  note?: string
-  grant?: CompensationGrant
-  created_at: string
-  updated_at: string
+  id: string;
+  acquisition_id: string;
+  target_type: "parcel" | "asset";
+  parcel_id: string;
+  asset_id?: string;
+  compensation_type: "cash" | "land_grant";
+  coverage_percent: number;
+  amount: number;
+  compensation_date?: string;
+  note?: string;
+  grant?: CompensationGrant;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ParcelPayment {

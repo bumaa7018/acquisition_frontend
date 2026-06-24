@@ -8,6 +8,7 @@ import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
 import type { Coordinate } from "ol/coordinate";
+// @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 
 import LayerPanel, { LayerConfig } from "./layer-panel";
