@@ -20,6 +20,7 @@ import {
   User,
   Grid2x2,
   BarChart3,
+  Settings,
 } from "lucide-react";
 
 const NAV_MAIN = [
@@ -138,11 +139,11 @@ export function Sidebar() {
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-5">
         <div>
-          {!collapsed && (
+          {/* {!collapsed && (
             <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
               Үндсэн цэс
             </p>
-          )}
+          )} */}
           <nav className="space-y-0.5">
             {NAV_MAIN.map((item) => (
               <NavItem
@@ -156,34 +157,47 @@ export function Sidebar() {
         </div>
 
         <div>
-          {!collapsed && (
-            <button
-              onClick={() => setAdminOpen((v) => !v)}
-              className="flex w-full items-center px-3 mb-1 gap-1"
-            >
-              <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-                Удирдлага
-              </p>
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
-                  adminOpen ? "rotate-180" : "rotate-0",
-                )}
-              />
-            </button>
-          )}
-          {(adminOpen || collapsed) && (
-            <nav className="space-y-0.5">
-              {NAV_ADMIN.map((item) => (
-                <NavItem
-                  key={item.href}
-                  {...item}
-                  active={isActive(item.href)}
-                  collapsed={collapsed}
+          <button
+            onClick={() => setAdminOpen((v) => !v)}
+            className={cn(
+              "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+              collapsed ? "justify-center px-3 py-2.5" : "px-3",
+            )}
+          >
+            <Settings className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+            {!collapsed && (
+              <>
+                <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+                  Удирдлага
+                </p>
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                    adminOpen ? "rotate-180" : "rotate-0",
+                  )}
                 />
-              ))}
-            </nav>
-          )}
+              </>
+            )}
+          </button>
+          <div
+            className={cn(
+              "grid transition-[grid-template-rows] duration-200",
+              adminOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+            )}
+          >
+            <div className="overflow-hidden">
+              <nav className="space-y-0.5">
+                {NAV_ADMIN.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    {...item}
+                    active={isActive(item.href)}
+                    collapsed={collapsed}
+                  />
+                ))}
+              </nav>
+            </div>
+          </div>
         </div>
       </div>
     </aside>

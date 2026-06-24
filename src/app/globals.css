@@ -108,7 +108,7 @@
   *,
   ::before,
   ::after {
-    border-style: none;
+    border-style: solid;
   }
   * {
     @apply border-border;
