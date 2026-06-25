@@ -52,11 +52,22 @@ export interface ConstructionType {
   sort_order: number;
 }
 
-export interface ProgressType {
+export interface AcquisitionProgressStatus {
   id: number;
   name: string;
   description?: string;
   sort_order?: number;
+}
+
+export interface DocumentType {
+  id: number;
+  type: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+  updated_by?: string;
 }
 
 export interface LandAcquisition {

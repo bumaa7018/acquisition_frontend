@@ -37,9 +37,19 @@ const NAV_ADMIN = [
   { href: "/users", label: "Хэрэглэгчид", icon: Users },
   { href: "/roles", label: "Эрх & Роль", icon: Shield },
   {
-    href: "/progress_types",
-    label: "Чөлөөлөлтийн явцын төрөл",
+    href: "/acquisition_progress_status",
+    label: "Чөлөөлөлтийн явцын статус",
     icon: ClipboardList,
+  },
+  {
+    href: "/parcel_status",
+    label: "Нэгж талбарын статус",
+    icon: Grid2x2,
+  },
+  {
+    href: "/document_type",
+    label: "Баримт бичгийн төрөл",
+    icon: FileText,
   },
 ];
 

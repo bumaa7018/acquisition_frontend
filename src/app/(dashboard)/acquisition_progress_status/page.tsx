@@ -1,31 +1,31 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { progressTypesApi } from "@/lib/api";
+import { acquisitionProgressStatusApi } from "@/lib/api";
 import { ClipboardList, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ProgressType } from "@/types";
+import type { AcquisitionProgressStatus } from "@/types";
 
-export default function ProgressTypesPage() {
+export default function AcquisitionProgressStatusPage() {
   const [showCreate, setShowCreate] = useState(false);
-  const [editItem, setEditItem] = useState<ProgressType | null>(null);
+  const [editItem, setEditItem] = useState<AcquisitionProgressStatus | null>(null);
   const [form, setForm] = useState({ name: "", description: "" });
   const queryClient = useQueryClient();
 
   const { data = [], isLoading } = useQuery({
-    queryKey: ["progress-types"],
-    queryFn: () => progressTypesApi.list(),
+    queryKey: ["acquisition-progress-statuses"],
+    queryFn: () => acquisitionProgressStatusApi.list(),
   });
 
   const createMutation = useMutation({
     mutationFn: () =>
-      progressTypesApi.create({
+      acquisitionProgressStatusApi.create({
         name: form.name.trim(),
         description: form.description.trim() || undefined,
       }),
     onSuccess: () => {
-      toast.success("Чөлөөлөлтийн явцын төрөл үүслээ");
-      queryClient.invalidateQueries({ queryKey: ["progress-types"] });
+      toast.success("Чөлөөлөлтийн явцын статус үүслээ");
+      queryClient.invalidateQueries({ queryKey: ["acquisition-progress-statuses"] });
       setShowCreate(false);
       setForm({ name: "", description: "" });
     },
@@ -34,13 +34,13 @@ export default function ProgressTypesPage() {
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      progressTypesApi.update(editItem!.id, {
+      acquisitionProgressStatusApi.update(editItem!.id, {
         name: form.name.trim(),
         description: form.description.trim() || undefined,
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["progress-types"] });
+      queryClient.invalidateQueries({ queryKey: ["acquisition-progress-statuses"] });
       setEditItem(null);
       setForm({ name: "", description: "" });
     },
@@ -48,15 +48,15 @@ export default function ProgressTypesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => progressTypesApi.delete(id),
+    mutationFn: (id: number) => acquisitionProgressStatusApi.delete(id),
     onSuccess: () => {
       toast.success("Устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["progress-types"] });
+      queryClient.invalidateQueries({ queryKey: ["acquisition-progress-statuses"] });
     },
     onError: () => toast.error("Устгахад алдаа гарлаа"),
   });
 
-  const openEdit = (item: ProgressType) => {
+  const openEdit = (item: AcquisitionProgressStatus) => {
     setEditItem(item);
     setForm({ name: item.name, description: item.description ?? "" });
     setShowCreate(false);
@@ -89,10 +89,10 @@ export default function ProgressTypesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Чөлөөлөлтийн явцын төрөл
+            Чөлөөлөлтийн явцын статус
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Газар чөлөөлөлтийн явцын төрлүүд
+            Газар чөлөөлөлтийн явцын статусууд
           </p>
         </div>
         <button
@@ -112,7 +112,7 @@ export default function ProgressTypesPage() {
       {isFormOpen && (
         <div className="ap-card p-5">
           <p className="text-[13px] font-semibold text-slate-700 dark:text-white mb-4">
-            {editItem ? "Засварлах" : "Шинэ явцын төрөл"}
+            {editItem ? "Засварлах" : "Шинэ явцын статус"}
           </p>
           <div className="flex flex-col gap-3 max-w-md">
             <input
@@ -154,7 +154,7 @@ export default function ProgressTypesPage() {
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Чөлөөлөлтийн явцын төрлүүд
+            Чөлөөлөлтийн явцын статусууд
           </p>
         </div>
 
@@ -171,13 +171,13 @@ export default function ProgressTypesPage() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <ClipboardList className="h-10 w-10 text-slate-300 dark:text-[#37394d] mb-3" />
             <p className="text-[13px] text-slate-400 dark:text-slate-500">
-              Явцын төрөл олдсонгүй
+              Явцын статус олдсонгүй
             </p>
             <button
               onClick={openCreate}
               className="mt-4 text-[13px] font-medium text-[#02c0ce] hover:underline"
             >
-              Шинэ төрөл нэмэх
+              Шинэ статус нэмэх
             </button>
           </div>
         ) : (

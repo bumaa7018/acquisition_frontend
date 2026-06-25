@@ -6,7 +6,7 @@ import type {
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
-  ConstructionType, ReportParcelRow, ParcelStatus, ProgressType,
+  ConstructionType, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
@@ -287,8 +287,6 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
-  listParcelStatuses: () =>
-    api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data),
 }
 
 // ── Global Parcels ────────────────────────────────────
@@ -393,15 +391,37 @@ export const dashboardApi = {
   },
 }
 
-// ── Progress Types ────────────────────────────────────
-export const progressTypesApi = {
+// ── Acquisition Progress Statuses ─────────────────────
+export const acquisitionProgressStatusApi = {
   list: () =>
-    api.get<ApiResponse<ProgressType[]>>('/progress-types').then(r => r.data.data ?? []),
+    api.get<ApiResponse<AcquisitionProgressStatus[]>>('/acquisition-progress-statuses').then(r => r.data.data ?? []),
   create: (body: { name: string; description?: string; sort_order?: number }) =>
-    api.post<ApiResponse<ProgressType>>('/progress-types', body).then(r => r.data.data),
+    api.post<ApiResponse<AcquisitionProgressStatus>>('/acquisition-progress-statuses', body).then(r => r.data.data),
   update: (id: number, body: { name?: string; description?: string; sort_order?: number }) =>
-    api.put<ApiResponse<ProgressType>>(`/progress-types/${id}`, body).then(r => r.data.data),
-  delete: (id: number) => api.delete(`/progress-types/${id}`),
+    api.put<ApiResponse<AcquisitionProgressStatus>>(`/acquisition-progress-statuses/${id}`, body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/acquisition-progress-statuses/${id}`),
+}
+
+// ── Document Types ────────────────────────────────────
+export const documentTypeApi = {
+  list: () =>
+    api.get<ApiResponse<DocumentType[]>>('/document-types').then(r => r.data.data ?? []),
+  create: (body: { type: string; name: string; description?: string }) =>
+    api.post<ApiResponse<DocumentType>>('/document-types', body).then(r => r.data.data),
+  update: (id: number, body: { type?: string; name?: string; description?: string }) =>
+    api.put<ApiResponse<DocumentType>>(`/document-types/${id}`, body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/document-types/${id}`),
+}
+
+// ── Parcel Statuses ───────────────────────────────────
+export const parcelStatusApi = {
+  list: () =>
+    api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data ?? []),
+  create: (body: { code: string; name: string; sort_order?: number }) =>
+    api.post<ApiResponse<ParcelStatus>>('/parcel-statuses', body).then(r => r.data.data),
+  update: (id: number, body: { code?: string; name?: string; sort_order?: number }) =>
+    api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
 }
 
 export default api
