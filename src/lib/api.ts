@@ -262,6 +262,16 @@ export const landApi = {
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`),
+  syncContractAct: (acqId: string, parcelId: string) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/contract-act`).then(r => r.data),
+  syncValuation: (acqId: string, parcelId: string) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/valuation`).then(r => r.data),
+  syncSettlementAct: (acqId: string, parcelId: string) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/settlement-act`).then(r => r.data),
+  syncLocationValuation: (acqId: string, parcelId: string) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/location-valuation`).then(r => r.data),
+  syncMonitoring: (acqId: string, parcelId: string) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/monitoring`).then(r => r.data),
   updateParcelValuation: (acqId: string, parcelId: string, body: { valuation_zone: string; base_price_per_ha?: number | null; auction_coeff?: number | null; auction_price?: number | null }) =>
     api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation`, body),
   getProgress: (id: string) =>
