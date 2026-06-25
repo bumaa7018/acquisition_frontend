@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { RIGHT_TYPE_LABELS } from "@/types";
-import { ArrowLeft, Info, Paperclip, Wallet, MapPin, Building2 } from "lucide-react";
+import { ArrowLeft, Info, Paperclip, Wallet, MapPin, Building2, Printer } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { type Tab } from "./_components/constants";
@@ -12,6 +12,7 @@ import { GeneralTab } from "./_components/general_tab";
 import { RealEstateTab } from "./_components/real_estate_tab";
 import { DocumentsTab } from "./_components/documents_tab";
 import { PaymentTab } from "./_components/payment_tab";
+import { PrintTemplatesTab } from "./_components/print_templates_tab";
 
 const ParcelMap = dynamic(
   () => import("@/components/ParcelMap").then((m) => m.ParcelMap),
@@ -41,6 +42,7 @@ export default function ParcelDetailPage() {
     { key: "documents", label: "Баримт бичиг", icon: <Paperclip className="h-4 w-4" /> },
     { key: "payment", label: "Төлбөр", icon: <Wallet className="h-4 w-4" /> },
     { key: "map", label: "Байршил", icon: <MapPin className="h-4 w-4" /> },
+    { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
   ];
 
   return (
@@ -91,6 +93,7 @@ export default function ParcelDetailPage() {
       {tab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} />}
       {tab === "documents" && <DocumentsTab parcelId={id} />}
       {tab === "payment" && <PaymentTab parcelId={id} acqId={acqId} parcelCode={parcel?.parcel_id ?? ""} />}
+      {tab === "print" && <PrintTemplatesTab parcel={parcel} />}
       {tab === "map" && (
         <div className="ap-card p-5">
           <ParcelMap parcelId={parcel?.parcel_id ?? ""} acquisitionId={acqId} />

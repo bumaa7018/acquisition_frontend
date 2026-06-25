@@ -275,12 +275,19 @@ export const landApi = {
       decree_number: decreeNumber ?? '',
       decree_date: decreeDate ?? null,
     }).then(r => r.data.data),
-  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string) =>
-    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/meta`, { db_changed: dbChanged, changed_parcel_id: changedParcelId }).then(r => r.data),
+  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string, acquisitionAreaM2?: number) =>
+    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/meta`, {
+      db_changed: dbChanged,
+      changed_parcel_id: changedParcelId,
+      ...(acquisitionAreaM2 != null ? { acquisition_area_m2: acquisitionAreaM2 } : {}),
+    }).then(r => r.data),
   listDocuments: (id: string) =>
     api.get<ApiResponse<Document[]>>(`/land-acquisitions/${id}/documents`).then(r => r.data.data ?? []),
-  uploadDocument: (id: string, file: File) => {
-    const fd = new FormData(); fd.append('file', file)
+  uploadDocument: (id: string, file: File, documentTypeId?: number, name?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
+    if (name?.trim()) fd.append('name', name.trim())
     return api.post<ApiResponse<Document>>(`/land-acquisitions/${id}/documents`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data)
@@ -311,8 +318,11 @@ export const parcelApi = {
     api.post(`/parcels/${id}/payments`, body).then(r => r.data),
   listDocuments: (id: string) =>
     api.get<ApiResponse<Document[]>>(`/parcels/${id}/documents`).then(r => r.data.data ?? []),
-  uploadDocument: (id: string, file: File) => {
-    const fd = new FormData(); fd.append('file', file)
+  uploadDocument: (id: string, file: File, documentTypeId?: number, name?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
+    if (name?.trim()) fd.append('name', name.trim())
     return api.post<ApiResponse<Document>>(`/parcels/${id}/documents`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data)
@@ -404,11 +414,11 @@ export const acquisitionProgressStatusApi = {
 
 // ── Document Types ────────────────────────────────────
 export const documentTypeApi = {
-  list: () =>
-    api.get<ApiResponse<DocumentType[]>>('/document-types').then(r => r.data.data ?? []),
-  create: (body: { type: string; name: string; description?: string }) =>
+  list: (target?: 'acquisition' | 'parcel' | '') =>
+    api.get<ApiResponse<DocumentType[]>>('/document-types', { params: target ? { target } : undefined }).then(r => r.data.data ?? []),
+  create: (body: { type: string; name: string; target?: string; description?: string }) =>
     api.post<ApiResponse<DocumentType>>('/document-types', body).then(r => r.data.data),
-  update: (id: number, body: { type?: string; name?: string; description?: string }) =>
+  update: (id: number, body: { type?: string; name?: string; target?: string; description?: string }) =>
     api.put<ApiResponse<DocumentType>>(`/document-types/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/document-types/${id}`),
 }

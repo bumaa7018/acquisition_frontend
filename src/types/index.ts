@@ -63,6 +63,7 @@ export interface DocumentType {
   id: number;
   type: string;
   name: string;
+  target: 'acquisition' | 'parcel' | 'both';
   description?: string;
   created_at: string;
   updated_at: string;
@@ -189,6 +190,7 @@ export interface Document {
   note: string;
   uploaded_by: string;
   uploaded_at: string;
+  document_type_id?: number;
 }
 
 export interface ParcelFull extends Parcel {

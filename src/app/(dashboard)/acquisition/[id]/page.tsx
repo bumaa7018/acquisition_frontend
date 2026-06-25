@@ -1,7 +1,7 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi } from "@/lib/api";
+import { landApi, documentTypeApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
 import { formatDate, formatArea } from "@/lib/utils";
@@ -29,7 +29,42 @@ import {
   ChevronUp,
   Plus,
   FileDown,
+  Calculator,
 } from "lucide-react";
+
+function calcAreaFromWkt(wkt: string): number | null {
+  try {
+    const cleaned = wkt.replace(/^SRID=\d+;/i, "");
+    const coordStr = cleaned.replace(/^[A-Z\s]+\(\(/, "").replace(/\)\).*$/, "");
+    const coords = coordStr.split(",").map((p) => {
+      const [x, y] = p.trim().split(/\s+/).map(Number);
+      return [x, y] as [number, number];
+    });
+    if (coords.length < 3) return null;
+    const isGeographic = coords.every(([x, y]) => x >= -180 && x <= 180 && y >= -90 && y <= 90);
+    if (isGeographic) {
+      const R = 6378137;
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      let area = 0;
+      for (let i = 0; i < coords.length - 1; i++) {
+        const [lon1, lat1] = coords[i];
+        const [lon2, lat2] = coords[(i + 1) % coords.length];
+        area += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
+      }
+      return Math.abs((area * R * R) / 2);
+    } else {
+      let area = 0;
+      for (let i = 0; i < coords.length - 1; i++) {
+        const [x1, y1] = coords[i];
+        const [x2, y2] = coords[(i + 1) % coords.length];
+        area += x1 * y2 - x2 * y1;
+      }
+      return Math.abs(area / 2);
+    }
+  } catch {
+    return null;
+  }
+}
 import type { Compensation } from "@/types";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -99,6 +134,10 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["construction-types"],
     queryFn: () => landApi.listConstructionTypes(),
   });
+  const { data: parcelsData } = useQuery({
+    queryKey: ["land-parcels-summary", id],
+    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+  });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     acquisition_name: "",
@@ -109,9 +148,9 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     start_date: "",
     end_date: "",
   });
-  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(
-    null,
-  );
+  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(null);
+  const [areaM2, setAreaM2] = useState<string>("");
+  const [areaAutoCalc, setAreaAutoCalc] = useState(false);
 
   useEffect(() => {
     if (acq) {
@@ -125,17 +164,17 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         end_date: acq.end_date ?? "",
       });
       setConstructionTypeId(acq.construction_type_id ?? null);
+      setAreaM2(String(acq.area_m2 ?? ""));
+      setAreaAutoCalc(false);
     }
   }, [acq]);
 
   const saveMutation = useMutation({
     mutationFn: () => {
       const fd = new FormData();
-      // Огноо — зөвхөн утгатай бол илгээх
       if (form.start_date) fd.append("start_date", form.start_date);
       if (form.end_date) fd.append("end_date", form.end_date);
       else if (acq?.end_date) fd.append("clear_end_date", "true");
-      // Төслийн талбарууд — хоосон ч үргэлж илгээх (Цэвэрлэх боломж)
       fd.append("acquisition_name", form.acquisition_name);
       fd.append("implementing_org", form.implementing_org);
       fd.append("reason", form.reason);
@@ -143,11 +182,15 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       fd.append("funding_source", form.funding_source);
       if (constructionTypeId)
         fd.append("construction_type_id", String(constructionTypeId));
+      const areaVal = parseFloat(areaM2);
+      if (!isNaN(areaVal) && areaVal > 0)
+        fd.append("area_m2", String(areaVal));
       return landApi.update(id, fd);
     },
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
       setEditing(false);
+      setAreaAutoCalc(false);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
     },
     onError: () => toast.error("Хадгалахад алдаа гарлаа"),
@@ -155,6 +198,11 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
 
   if (!acq) return null;
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
+  const parcelCount = parcelsData?.total ?? acq.parcel_count ?? 0;
+  const totalAcqAreaM2 = (parcelsData?.data ?? []).reduce(
+    (sum, p) => sum + (p.acquisition_area_m2 || 0),
+    0,
+  );
   const inp =
     "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
   const resetForm = () => {
@@ -168,6 +216,8 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       end_date: acq.end_date ?? "",
     });
     setConstructionTypeId(acq.construction_type_id ?? null);
+    setAreaM2(String(acq.area_m2 ?? ""));
+    setAreaAutoCalc(false);
   };
 
   const row = (label: string, value: React.ReactNode, last = false) => (
@@ -259,7 +309,47 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               {STATUS_LABELS[acq.status] ?? "Тодорхойгүй"}
             </span>,
           )}
-          {row("Талбай", formatArea(acq.area_m2))}
+          {/* Талбай — засах горимд input + хилээс тооцоолох товч */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Талбай</span>
+            {editing ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="number"
+                  value={areaM2}
+                  onChange={(e) => { setAreaM2(e.target.value); setAreaAutoCalc(false); }}
+                  placeholder="м² оруулах..."
+                  className="h-7 w-36 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                />
+                {acq.geometry_wkt && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const calc = calcAreaFromWkt(acq.geometry_wkt);
+                      if (calc != null) {
+                        setAreaM2(String(Math.round(calc)));
+                        setAreaAutoCalc(true);
+                        toast.success("Талбай тооцоологдлоо");
+                      } else {
+                        toast.error("Геометриас талбай тооцоолох боломжгүй");
+                      }
+                    }}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[11px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors whitespace-nowrap"
+                  >
+                    <Calculator className="h-3 w-3" />
+                    Хилээс тооцоолох
+                  </button>
+                )}
+                {areaAutoCalc && (
+                  <span className="text-[11px] text-[#0acf97] font-medium whitespace-nowrap">Автоматаар тооцоологдсон</span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {formatArea(acq.area_m2)}
+              </span>
+            )}
+          </div>
           {row("Үүсгэсэн", formatDate(acq.created_at))}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
@@ -298,6 +388,37 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                 {acq.end_date ? formatDate(acq.end_date) : "—"}
               </span>
             )}
+          </div>
+
+          {/* Нэгж талбарын тоо ба нийт чөлөөлөгдөх талбай */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-[#37394d] flex flex-col gap-0">
+            <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Нэгж талбарын тоо</span>
+              <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                {parcelCount > 0 ? (
+                  <span className="inline-flex items-center gap-1">
+                    {parcelCount}
+                    <span className="text-[11px] font-normal text-slate-400">нэгж талбар</span>
+                  </span>
+                ) : (
+                  parcelsData ? "0 нэгж талбар" : <span className="inline-block h-3.5 w-16 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 py-2.5">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Нийт нөлөөлөлд өртсөн талбай</span>
+              <span className="text-[13px] font-semibold">
+                {parcelsData ? (
+                  totalAcqAreaM2 > 0 ? (
+                    <span className="inline-flex rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+                      {formatArea(totalAcqAreaM2)}
+                    </span>
+                  ) : "—"
+                ) : (
+                  <span className="inline-block h-3.5 w-24 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
+                )}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -421,16 +542,29 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState("");
+  const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
+
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["acq-documents", id],
     queryFn: () => landApi.listDocuments(id),
   });
 
+  const { data: docTypes = [] } = useQuery({
+    queryKey: ["document-types", "acquisition"],
+    queryFn: () => documentTypeApi.list("acquisition"),
+    staleTime: 60_000,
+  });
+
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => landApi.uploadDocument(id, file),
+    mutationFn: ({ file, typeId, name }: { file: File; typeId: number; name: string }) =>
+      landApi.uploadDocument(id, file, typeId, name),
     onSuccess: () => {
       toast.success("Баримт бичиг хавсаргагдлаа");
       queryClient.invalidateQueries({ queryKey: ["acq-documents", id] });
+      closeModal();
     },
     onError: () => toast.error("Файл хавсаргахад алдаа гарлаа"),
   });
@@ -444,115 +578,184 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     onError: () => toast.error("Устгахад алдаа гарлаа"),
   });
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("Файлын хэмжээ 10MB-аас хэтрэхгүй байх ёстой");
-      return;
-    }
-    uploadMutation.mutate(file);
-    e.target.value = "";
-  };
+  function openModal() {
+    setSelectedFile(null);
+    setFileName("");
+    setDocumentTypeId("");
+    setModalOpen(true);
+  }
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  function closeModal() {
+    setModalOpen(false);
+    setSelectedFile(null);
+    setFileName("");
+    setDocumentTypeId("");
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
+    if (f.size > 10 * 1024 * 1024) { toast.error("Файлын хэмжээ 10MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
+    setSelectedFile(f);
+    setFileName(f.name.replace(/\.pdf$/i, ""));
+  }
+
+  function handleSubmit() {
+    if (!selectedFile) { toast.error("Файл сонгоно уу"); return; }
+    if (!documentTypeId) { toast.error("Файлын төрөл сонгоно уу"); return; }
+    if (!fileName.trim()) { toast.error("Файлын нэр оруулна уу"); return; }
+    uploadMutation.mutate({ file: selectedFile, typeId: documentTypeId as number, name: fileName });
+  }
+
+  const formatSize = (bytes: number) =>
+    bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
   return (
-    <div className="ap-card overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-        <div>
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            Баримт бичгүүд
-          </p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-            Дээд хэмжээ 10MB
-          </p>
-        </div>
-        {canEdit && (
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFile}
-            />
+    <>
+      <div className="ap-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <div>
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
+          </div>
+          {canEdit && (
             <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploadMutation.isPending}
-              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+              onClick={openModal}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
             >
-              {uploadMutation.isPending ? (
-                <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              ) : (
-                <Upload className="h-4 w-4" />
-              )}
+              <Upload className="h-4 w-4" />
               Нэмэх
             </button>
-          </>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="p-5 space-y-3 animate-pulse">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+            ))}
+          </div>
+        ) : !docs.length ? (
+          <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
+            <Paperclip className="h-8 w-8 mb-2 opacity-30" />
+            <p className="text-[13px]">Баримт бичиг байхгүй</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+            {docs.map((doc) => {
+              const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
+              return (
+                <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
+                    <FileText className="h-4 w-4 text-red-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
+                      {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                    {canEdit && (
+                      <button
+                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
-      {isLoading ? (
-        <div className="p-5 space-y-3 animate-pulse">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]"
-            />
-          ))}
-        </div>
-      ) : !docs.length ? (
-        <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
-          <Paperclip className="h-8 w-8 mb-2 opacity-30" />
-          <p className="text-[13px]">Баримт бичиг байхгүй</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
-          {docs.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
-                <FileText className="h-4 w-4 text-red-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
-                  {doc.name}
-                </p>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <a
-                  href={doc.file_url}
-                  download={doc.name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+
+      {/* Upload modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#37394d]">
+              <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Баримт бичиг нэмэх</p>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Document type */}
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын төрөл</label>
+                <select
+                  value={documentTypeId}
+                  onChange={e => setDocumentTypeId(e.target.value ? Number(e.target.value) : "")}
+                  className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
-                  <Download className="h-3.5 w-3.5" />
-                </a>
-                {canEdit && (
-                  <button
-                    onClick={() => {
-                      if (confirm("Баримт бичиг устгах уу?"))
-                        deleteMutation.mutate(doc.id);
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                  <option value="">— Сонгох —</option>
+                  {docTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* File picker */}
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файл</label>
+                <input ref={inputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileChange} />
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="w-full h-9 rounded-lg border border-dashed border-slate-300 dark:border-white/[0.1] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors text-left truncate"
+                >
+                  {selectedFile ? selectedFile.name : "Файл сонгох…"}
+                </button>
+              </div>
+
+              {/* File name */}
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын нэр</label>
+                <input
+                  type="text"
+                  value={fileName}
+                  onChange={e => setFileName(e.target.value)}
+                  placeholder="Жишээ: Гэрээ №1"
+                  className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-[#02c0ce] transition-colors"
+                />
               </div>
             </div>
-          ))}
+
+            <div className="flex justify-end gap-2 px-6 pb-5">
+              <button
+                onClick={closeModal}
+                className="h-9 px-4 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#252630] hover:bg-slate-200 dark:hover:bg-[#2e2f3e] transition-colors"
+              >
+                Цуцлах
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={uploadMutation.isPending}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+              >
+                {uploadMutation.isPending && (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                )}
+                Хадгалах
+              </button>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
