@@ -6,8 +6,8 @@ import { STATUS_LABELS, RIGHT_TYPE_LABELS } from "@/types";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
-import { AcquisitionSelect } from "./_components/acquisition-select";
-import { PlanSelect } from "./_components/plan-select";
+import { AcquisitionSelect } from "./_components/acquisition_select";
+import { PlanSelect } from "./_components/plan_select";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
