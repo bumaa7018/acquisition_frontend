@@ -52,6 +52,13 @@ export interface ConstructionType {
   sort_order: number;
 }
 
+export interface ProgressType {
+  id: number;
+  name: string;
+  description?: string;
+  sort_order?: number;
+}
+
 export interface LandAcquisition {
   id: string;
   plan_code: string;

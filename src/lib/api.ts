@@ -23,6 +23,7 @@ import type {
   ConstructionType,
   ReportParcelRow,
   ParcelStatus,
+  ProgressType,
 } from "@/types";
 
 const api = axios.create({ baseURL: "/api/v1", timeout: 30000 });
@@ -556,6 +557,26 @@ export const planApi = {
     api
       .get<ApiResponse<Plan[]>>("/plans/suggest", { params: { q } })
       .then((r) => r.data.data ?? []),
+};
+
+// ── Progress Types ────────────────────────────────────
+export const progressTypesApi = {
+  list: () =>
+    api
+      .get<ApiResponse<ProgressType[]>>("/progress-types")
+      .then((r) => r.data.data ?? []),
+  create: (body: { name: string; description?: string; sort_order?: number }) =>
+    api
+      .post<ApiResponse<ProgressType>>("/progress-types", body)
+      .then((r) => r.data.data),
+  update: (
+    id: number,
+    body: { name?: string; description?: string; sort_order?: number },
+  ) =>
+    api
+      .put<ApiResponse<ProgressType>>(`/progress-types/${id}`, body)
+      .then((r) => r.data.data),
+  delete: (id: number) => api.delete(`/progress-types/${id}`),
 };
 
 export default api;
