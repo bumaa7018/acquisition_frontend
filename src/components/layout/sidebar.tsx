@@ -109,12 +109,12 @@ export function Sidebar() {
       {/* Toggle button */}
       <button
         onClick={() => setCollapsed((v) => !v)}
-        className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white shadow-sm hover:bg-slate-50 dark:bg-[#1e1f27] dark:border-[#37394d] dark:hover:bg-[#252630]"
+        className="absolute -right-11 top-[24px] z-10 flex h-10 w-10 items-center justify-center bg-transparent"
       >
         {collapsed ? (
-          <ChevronRight className="h-3 w-3 text-slate-500 dark:text-[#97aac1]" />
+          <ChevronRight className="h-5 w-5 text-slate-500 dark:text-[#97aac1]" />
         ) : (
-          <ChevronLeft className="h-3 w-3 text-slate-500 dark:text-[#97aac1]" />
+          <ChevronLeft className="h-5 w-5 text-slate-500 dark:text-[#97aac1]" />
         )}
       </button>
 
@@ -160,7 +160,7 @@ export function Sidebar() {
           <button
             onClick={() => setAdminOpen((v) => !v)}
             className={cn(
-              "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+              "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630] py-2",
               collapsed ? "justify-center px-3 py-2.5" : "px-3",
             )}
           >

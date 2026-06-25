@@ -83,7 +83,7 @@ export function Header() {
 
   return (
     <header
-      className="flex h-[85px] shrink-0 items-center gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-6"
+      className="flex pl-14 h-[85px] shrink-0 items-center gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-6"
       style={{ boxShadow: "0 0 35px 0 rgba(154,161,171,.15)" }}
     >
       {/* Page title + breadcrumb */}
