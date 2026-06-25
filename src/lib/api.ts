@@ -215,6 +215,10 @@ export const landApi = {
     api.get<ApiResponse<ConstructionType[]>>('/construction-types').then(r => r.data.data),
   list: (filter?: LandAcquisitionFilter) =>
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', { params: filter }).then(r => r.data),
+  suggest: (q: string) =>
+    api.get<ApiResponse<{ id: string; acquisition_name: string; plan_code: string }[]>>(
+      '/land-acquisitions/suggest', { params: { q } }
+    ).then(r => r.data.data ?? []),
   getById: (id: string) =>
     api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
   create: (data: FormData) =>
@@ -348,16 +352,45 @@ export const planApi = {
 }
 
 // ── Dashboard (aggregated) ────────────────────────────
+export interface ParcelStatusStat {
+  status_id: number
+  name:      string
+  count:     number
+  area_m2:   number
+}
+
+export interface TimelinePoint {
+  date:  string
+  count: number
+}
+
 export interface DashboardData {
-  acquisitions:    LandAcquisition[]
-  parcel_statuses: ParcelStatus[]
-  report_rows:     ReportParcelRow[]
-  parcels:         GlobalParcel[]
+  acquisitions:       LandAcquisition[]
+  parcel_statuses:    ParcelStatus[]
+  total_parcels:      number
+  freed_parcels:      number
+  freed_area_m2:      number
+  plan_area_m2:       number
+  total_orders:       number
+  total_compensation: number
+  status_breakdown:   ParcelStatusStat[]
+  timeline:           TimelinePoint[]
+}
+
+export type DashboardFilter = {
+  acquisition_id?: string
+  plan_code?:      string
+  years?:          number[]
 }
 
 export const dashboardApi = {
-  get: (): Promise<DashboardData> =>
-    api.get<ApiResponse<DashboardData>>('/dashboard').then(r => r.data.data),
+  get: (filter?: DashboardFilter): Promise<DashboardData> => {
+    const params = new URLSearchParams()
+    if (filter?.acquisition_id) params.set('acquisition_id', filter.acquisition_id)
+    if (filter?.plan_code)      params.set('plan_code', filter.plan_code)
+    filter?.years?.forEach(y => params.append('year', String(y)))
+    return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
+  },
 }
 
 export default api

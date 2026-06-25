@@ -34,6 +34,7 @@ const LAYER_DEFS: MapLayerDef[] = [
 
 const PARCEL_STATUS_LAYERS = ['v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
 const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_boundary', 'v_acquisition_plan'] as const
+const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
 
 const DEFAULT_VISIBLE = new Set<string>(['v_acquisition_boundary', ...PARCEL_STATUS_LAYERS])
 
@@ -51,12 +52,21 @@ interface PopupState {
 
 interface MapViewProps {
   acquisitionIds?: string[]
+  filterPending?: boolean
 }
 
-export default function MapView({ acquisitionIds }: MapViewProps) {
-  const mapRef    = useRef<HTMLDivElement>(null)
-  const olMap     = useRef<OLMap | null>(null)
-  const wmsLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({})
+function buildCql(acquisitionIds?: string[]): string {
+  if (!acquisitionIds || acquisitionIds.length === 0) return ''
+  return acquisitionIds.length === 1
+    ? `acquisition_id = '${acquisitionIds[0]}'`
+    : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
+}
+
+export default function MapView({ acquisitionIds, filterPending }: MapViewProps) {
+  const mapRef         = useRef<HTMLDivElement>(null)
+  const olMap          = useRef<OLMap | null>(null)
+  const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
+  const wmsLayersAdded = useRef(false)
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
@@ -64,28 +74,27 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
   const [popup,   setPopup]   = useState<PopupState | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const makeWmsLayer = useCallback((id: string, visible: boolean) =>
+  const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') =>
     new ImageLayer({
       visible,
       opacity: 0.75,
       zIndex: LAYER_DEFS.find(l => l.id === id)?.zIndex ?? 0,
       source: new ImageWMS({
         url: GS_BASE,
-        params: { LAYERS: `land:${id}`, FORMAT: 'image/png', TRANSPARENT: true },
+        params: {
+          LAYERS: `land:${id}`,
+          FORMAT: 'image/png',
+          TRANSPARENT: true,
+          ...(cqlFilter ? { CQL_FILTER: cqlFilter } : {}),
+        },
         ratio: 1,
         serverType: 'geoserver',
       }),
     }), [])
 
-  /* ── Map init (once) ── */
+  /* ── Map init (once) — base tile layer only, no WMS ── */
   useEffect(() => {
     if (!mapRef.current || olMap.current) return
-
-    const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {}
-    LAYER_DEFS.forEach(d => {
-      wmsRecord[d.id] = makeWmsLayer(d.id, DEFAULT_VISIBLE.has(d.id))
-    })
-    wmsLayers.current = wmsRecord
 
     const map = new OLMap({
       target: mapRef.current,
@@ -102,7 +111,6 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
             crossOrigin: "anonymous",
           }),
         }),
-        ...Object.values(wmsRecord),
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -119,7 +127,7 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
       const pixel      = evt.pixel as [number, number]
 
       const visibleIds = LAYER_DEFS
-        .filter(d => wmsRecord[d.id]?.getVisible())
+        .filter(d => wmsLayers.current[d.id]?.getVisible())
         .sort((a, b) => b.zIndex - a.zIndex)
         .map(d => d.id)
 
@@ -128,8 +136,8 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
       setPopup(null)
 
       for (const id of visibleIds) {
-        const lyr = wmsRecord[id]
-        const url = lyr.getSource()?.getFeatureInfoUrl(pixelCoord, viewRes, projection, {
+        const lyr = wmsLayers.current[id]
+        const url = lyr?.getSource()?.getFeatureInfoUrl(pixelCoord, viewRes, projection, {
           INFO_FORMAT: "application/json",
           FEATURE_COUNT: 1,
         })
@@ -148,32 +156,52 @@ export default function MapView({ acquisitionIds }: MapViewProps) {
     })
 
     olMap.current = map
-    return () => { map.setTarget(undefined); olMap.current = null }
+    return () => {
+      map.setTarget(undefined)
+      olMap.current = null
+      wmsLayers.current = {}
+      wmsLayersAdded.current = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  /* ── Apply acquisition filter + zoom to filtered extent ── */
+  /* ── WMS layers: created lazily after filter is ready, updated on filter change ── */
   useEffect(() => {
-    let filter = ''
-    if (acquisitionIds && acquisitionIds.length > 0) {
-      filter = acquisitionIds.length === 1
-        ? `acquisition_id = '${acquisitionIds[0]}'`
-        : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
+    // Wait until the dashboard has finished loading so the first GeoServer request
+    // already carries the correct CQL_FILTER — no all-layers flash on page open.
+    if (filterPending || !olMap.current) return
+
+    const cql = buildCql(acquisitionIds)
+
+    if (!wmsLayersAdded.current) {
+      // First time: create all WMS layers with the correct filter baked in from the start
+      const map = olMap.current
+      const record: Record<string, ImageLayer<ImageWMS>> = {}
+      LAYER_DEFS.forEach(d => {
+        const initCql = ACQUISITION_FILTERED_SET.has(d.id) ? cql : ''
+        record[d.id] = makeWmsLayer(d.id, DEFAULT_VISIBLE.has(d.id), initCql)
+        map.addLayer(record[d.id])
+      })
+      wmsLayers.current = record
+      wmsLayersAdded.current = true
+    } else {
+      // Subsequent filter changes: just update params
+      ACQUISITION_FILTERED_LAYERS.forEach(id => {
+        wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: cql })
+      })
     }
-    ACQUISITION_FILTERED_LAYERS.forEach(id => {
-      wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: filter })
-    })
-    if (filter && olMap.current) {
+
+    if (cql && olMap.current) {
       void fitLayerToMap({
         map: olMap.current,
         wfsUrl: GS_WFS,
         layerId: 'v_acquisition_boundary',
-        cqlFilter: filter,
+        cqlFilter: cql,
         padding: [48, 48, 48, 48],
         maxZoom: 16,
       })
     }
-  }, [acquisitionIds])
+  }, [acquisitionIds, filterPending, makeWmsLayer])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {

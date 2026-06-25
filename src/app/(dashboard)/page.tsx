@@ -72,27 +72,23 @@ function AcquisitionSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [displayLabel, setDisplayLabel] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ["acq-suggest", debounced],
+    queryFn: () => landApi.suggest(debounced),
+    enabled: debounced.trim().length > 0,
+    staleTime: 30_000,
   });
 
-  const acquisitions = data?.data ?? [];
-  const selected = acquisitions.find((a) => a.id === selectedId);
-  const displayLabel = selected?.acquisition_name ?? "";
-
-  const filtered = query.trim()
-    ? acquisitions.filter((acq) => {
-        const q = query.trim().toLowerCase();
-        return (
-          (acq.acquisition_name ?? "").toLowerCase().includes(q) ||
-          (acq.plan_code ?? "").toLowerCase().includes(q)
-        );
-      })
-    : acquisitions;
+  const results = data ?? [];
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -105,6 +101,7 @@ function AcquisitionSelect({
 
   function select(acq: { id: string; acquisition_name: string }) {
     setQuery("");
+    setDisplayLabel(acq.acquisition_name);
     onSelect(acq.id, acq.acquisition_name);
     setOpen(false);
   }
@@ -112,6 +109,7 @@ function AcquisitionSelect({
   function clear(e: React.MouseEvent) {
     e.stopPropagation();
     setQuery("");
+    setDisplayLabel("");
     onClear();
     setOpen(false);
   }
@@ -158,12 +156,20 @@ function AcquisitionSelect({
       {open && (
         <div className="absolute z-50 mt-1 w-80 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 ? (
+            {!debounced.trim() ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайх үгээ бичнэ үү…
+              </div>
+            ) : isFetching ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайж байна…
+              </div>
+            ) : results.length === 0 ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
                 Олдсонгүй
               </div>
             ) : (
-              filtered.map((acq) => (
+              results.map((acq) => (
                 <button
                   key={acq.id}
                   onMouseDown={(e) => {
@@ -205,30 +211,29 @@ function PlanSelect({
   className?: string;
 }) {
   const [query, setQuery] = useState(value);
+  const [debounced, setDebounced] = useState(value);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ["plan-suggest", debounced],
+    queryFn: () => landApi.suggest(debounced),
+    enabled: debounced.trim().length > 0,
+    staleTime: 30_000,
   });
 
   const plans = Array.from(
     new Map(
-      (data?.data ?? [])
+      (data ?? [])
         .filter((a) => a.plan_code)
-        .map((a) => [a.plan_code, { plan_code: a.plan_code, name: a.plan_name ?? "" }]),
+        .map((a) => [a.plan_code, { plan_code: a.plan_code, name: a.acquisition_name ?? "" }]),
     ).values(),
   );
-
-  const filtered = query.trim()
-    ? plans.filter(
-        (p) =>
-          p.plan_code.toLowerCase().includes(query.trim().toLowerCase()) ||
-          p.name.toLowerCase().includes(query.trim().toLowerCase()),
-      )
-    : plans;
 
   useEffect(() => {
     function handle(e: MouseEvent) {
@@ -281,12 +286,20 @@ function PlanSelect({
       {open && (
         <div className="absolute z-50 mt-1 w-64 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-52 overflow-y-auto">
-            {filtered.length === 0 ? (
+            {!debounced.trim() ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайх үгээ бичнэ үү…
+              </div>
+            ) : isFetching ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайж байна…
+              </div>
+            ) : plans.length === 0 ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
                 Олдсонгүй
               </div>
             ) : (
-              filtered.map((p) => (
+              plans.map((p) => (
                 <button
                   key={p.plan_code}
                   onMouseDown={(e) => {
@@ -488,134 +501,67 @@ export default function DashboardPage() {
   const [inPlanCode, setInPlanCode] = useState("");
   const [inYears,    setInYears]    = useState<string[]>([String(CURRENT_YEAR)]);
 
-  /* Applied state — "Харах" дарахад л шинэчлэгдэнэ */
-  const [acqId,    setAcqId]    = useState("");
-  const [acqName,  setAcqName]  = useState("");
-  const [planCode, setPlanCode] = useState("");
-  const [years,    setYears]    = useState<string[]>([String(CURRENT_YEAR)]);
+  /* Applied filter — хуудас нээгдэхэд одоогийн он автоматаар сонгогдоно */
+  const [appliedFilter, setAppliedFilter] = useState({
+    acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)],
+  });
 
-  /* ── Single aggregated dashboard API call ───────────── */
+  const handleView = () => {
+    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears });
+  };
+  const handleReset = () => {
+    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]);
+    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)] });
+  };
+
+  /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
   const { data: dashData, isLoading } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: dashboardApi.get,
+    queryKey: ["dashboard", appliedFilter],
+    queryFn: () => dashboardApi.get({
+      acquisition_id: appliedFilter.acqId || undefined,
+      plan_code:      appliedFilter.planCode || undefined,
+      years:          appliedFilter.years.map(Number).filter(Boolean),
+    }),
     staleTime: 60_000,
   });
 
-  const allAcqs          = dashData?.acquisitions    ?? [];
+  /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
+  const filteredAcqs     = dashData?.acquisitions    ?? [];
   const parcelStatusList = dashData?.parcel_statuses ?? [];
-  const reportRows       = dashData?.report_rows     ?? [];
-  const allParcels       = dashData?.parcels         ?? [];
+  const totalParcels     = dashData?.total_parcels   ?? 0;
+  const freedParcels     = dashData?.freed_parcels   ?? 0;
+  const freedAreaHa      = (dashData?.freed_area_m2  ?? 0) / 10_000;
+  const planAreaHa       = (dashData?.plan_area_m2   ?? 0) / 10_000;
+  const totalOrders      = dashData?.total_orders    ?? 0;
+  const totalCompensation = (dashData?.total_compensation ?? 0) / 1_000_000_000;
 
-  /* ── Applied filter ──────────────────────────────────── */
-  const filteredAcqs = useMemo(() => {
-    return allAcqs.filter((a) => {
-      if (acqId && a.id !== acqId) return false;
-      if (planCode && !(a.plan_code ?? "").toLowerCase().includes(planCode.toLowerCase())) return false;
-      if (years.length > 0) {
-        if (!a.start_date) return false;
-        const y = String(new Date(a.start_date).getFullYear());
-        if (!years.includes(y)) return false;
-      }
-      return true;
-    });
-  }, [allAcqs, acqId, planCode, years]);
+  const STATUSES = useMemo(() => (dashData?.status_breakdown ?? []).map((s) => ({
+    key:   `ps-${s.status_id}`,
+    label: s.name,
+    color: getParcelStatusStyle(s.status_id, s.name).color,
+    count: s.count,
+    area:  Math.round(s.area_m2),
+  })), [dashData?.status_breakdown]);
 
-  const handleView = () => {
-    setAcqId(inAcqId);
-    setAcqName(inAcqName);
-    setPlanCode(inPlanCode);
-    setYears(inYears);
-  };
-
-  const handleReset = () => {
-    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([]);
-    setAcqId(""); setAcqName(""); setPlanCode(""); setYears([]);
-  };
-
-  /* ── Шүүлтэд тохирох нэгж талбарууд ── */
-  const filteredAcqSet = useMemo(
-    () => new Set(filteredAcqs.map((a) => a.id)),
-    [filteredAcqs],
-  );
-  const filteredParcels = useMemo(
-    () => allParcels.filter((p) => filteredAcqSet.has(p.acquisition_id)),
-    [allParcels, filteredAcqSet],
-  );
-
-  /* ── Computed stats — нэгж талбаруудын мэдээлэл дээр үндэслэсэн ── */
-  const { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE } = useMemo(() => {
-    const parcels = filteredParcels;
-    const statusNameMap = new Map(parcelStatusList.map((s) => [s.id, s.name]));
-
-    const totalParcels = parcels.length;
-    const freed = parcels.filter((p) => p.compensation_paid);
-    const freedParcels = freed.length;
-    const freedAreaHa = freed.reduce((s, p) => s + (p.acquisition_area_m2 ?? 0), 0) / 10000;
-
-    const statusMap: Record<number, { name: string; count: number; area: number }> = {};
-    parcels.forEach((p) => {
-      if (!statusMap[p.status]) {
-        statusMap[p.status] = { name: statusNameMap.get(p.status) ?? String(p.status), count: 0, area: 0 };
-      }
-      statusMap[p.status].count += 1;
-      statusMap[p.status].area += p.acquisition_area_m2 ?? 0;
-    });
-    const STATUSES = Object.entries(statusMap)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([statusId, data]) => ({
-        key: `ps-${statusId}`,
-        label: data.name,
-        color: getParcelStatusStyle(Number(statusId), data.name).color,
-        count: data.count,
-        area: Math.round(data.area),
-      }));
-
-    const timelineMap: Record<string, number> = {};
-    parcels.forEach((p) => {
-      if (!p.start_date) return;
-      const d = new Date(p.start_date);
-      const key = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
-      timelineMap[key] = (timelineMap[key] ?? 0) + 1;
-    });
-    const TIMELINE = Object.entries(timelineMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date, count }));
-
-    return { totalParcels, freedParcels, freedAreaHa, STATUSES, TIMELINE };
-  }, [filteredParcels, parcelStatusList]);
-
-  /* Acquisition-level stats */
-  const planAreaHa = useMemo(
-    () => filteredAcqs.reduce((s, a) => s + (a.area_m2 ?? 0), 0) / 10000,
-    [filteredAcqs],
-  );
-  const totalOrders = useMemo(
-    () => filteredAcqs.filter((a) => a.decree_number?.trim()).length,
-    [filteredAcqs],
-  );
-
-  const totalCompensation = useMemo(() => {
-    return reportRows.reduce((s, r) => s + (r.total_comp ?? 0), 0) / 1_000_000_000;
-  }, [reportRows]);
+  const TIMELINE = dashData?.timeline ?? [];
 
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
   const maxArea  = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.area))  : 1;
 
-  /* Map filter — шүүлт идэвхтэй үед л acquisition ID-уудыг дамжуулна */
-  const mapAcquisitionIds = useMemo(() => {
-    const hasFilter = !!(acqId || planCode || years.length > 0);
-    if (!hasFilter || filteredAcqs.length === 0) return undefined;
-    return filteredAcqs.map((a) => a.id);
-  }, [acqId, planCode, years, filteredAcqs]);
+  /* Map: шүүлт идэвхтэй үед acquisition ID-уудыг дамжуулна */
+  const hasFilter = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0);
+  const mapAcquisitionIds = hasFilter
+    ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
+    : undefined;
 
   /* Filter display label */
   const filterLabel = useMemo(() => {
     const parts: string[] = [];
-    if (acqName) parts.push(acqName);
-    if (planCode) parts.push(`Төлөвлөгөө: ${planCode}`);
-    if (years.length > 0) parts.push(`${years.join(", ")} он`);
+    if (appliedFilter.acqName)          parts.push(appliedFilter.acqName);
+    if (appliedFilter.planCode)         parts.push(`Төлөвлөгөө: ${appliedFilter.planCode}`);
+    if (appliedFilter.years.length > 0) parts.push(`${appliedFilter.years.join(", ")} он`);
     return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
-  }, [acqName, planCode, years]);
+  }, [appliedFilter]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -850,7 +796,7 @@ export default function DashboardPage() {
         {/* CENTER: map + timeline */}
         <div className="flex flex-col gap-4">
           <div className="ap-card overflow-hidden" style={{ height: 320 }}>
-            <MapView acquisitionIds={mapAcquisitionIds} />
+            <MapView acquisitionIds={mapAcquisitionIds} filterPending={isLoading && hasFilter} />
           </div>
 
           <div className="ap-card p-4">
