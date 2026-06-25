@@ -22,6 +22,7 @@ import {
   BarChart3,
   Settings,
   ClipboardList,
+  SlidersHorizontal,
 } from "lucide-react";
 
 const NAV_MAIN = [
@@ -36,6 +37,9 @@ const NAV_MAIN = [
 const NAV_ADMIN = [
   { href: "/users", label: "Хэрэглэгчид", icon: Users },
   { href: "/roles", label: "Эрх & Роль", icon: Shield },
+];
+
+const NAV_CONFIG = [
   {
     href: "/acquisition_progress_status",
     label: "Чөлөөлөлтийн явцын статус",
@@ -59,12 +63,14 @@ function NavItem({
   icon: Icon,
   active,
   collapsed,
+  indent = false,
 }: {
   href: string;
   label: string;
   icon: React.ElementType;
   active: boolean;
   collapsed: boolean;
+  indent?: boolean;
 }) {
   return (
     <div className="relative">
@@ -77,6 +83,7 @@ function NavItem({
         className={cn(
           "flex items-center rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
           collapsed ? "justify-center" : "gap-3",
+          indent && !collapsed && "pl-6",
           active
             ? "bg-[#02c0ce]/10 text-[#02c0ce] dark:bg-[#02c0ce]/10 dark:text-[#02c0ce]"
             : "text-slate-500 hover:bg-slate-50 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
@@ -94,8 +101,13 @@ export function Sidebar() {
   const router = useRouter();
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
+
+  const allAdminHrefs = [...NAV_ADMIN, ...NAV_CONFIG].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
-    NAV_ADMIN.some((item) => pathname.startsWith(item.href)),
+    allAdminHrefs.some((href) => pathname.startsWith(href)),
+  );
+  const [configOpen, setConfigOpen] = useState(
+    NAV_CONFIG.some((item) => pathname.startsWith(item.href)),
   );
   const [collapsed, setCollapsed] = useState(false);
 
@@ -154,12 +166,8 @@ export function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-5">
+        {/* Main nav */}
         <div>
-          {/* {!collapsed && (
-            <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-              Үндсэн цэс
-            </p>
-          )} */}
           <nav className="space-y-0.5">
             {NAV_MAIN.map((item) => (
               <NavItem
@@ -172,6 +180,7 @@ export function Sidebar() {
           </nav>
         </div>
 
+        {/* Удирдлага dropdown */}
         <div>
           <button
             onClick={() => setAdminOpen((v) => !v)}
@@ -195,6 +204,7 @@ export function Sidebar() {
               </>
             )}
           </button>
+
           <div
             className={cn(
               "grid transition-[grid-template-rows] duration-200",
@@ -212,6 +222,54 @@ export function Sidebar() {
                   />
                 ))}
               </nav>
+
+              {/* Тохиргоо nested dropdown */}
+              <div className="mt-0.5">
+                <button
+                  onClick={() => setConfigOpen((v) => !v)}
+                  title={collapsed ? "Тохиргоо" : undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+                    collapsed ? "justify-center px-3" : "px-3",
+                  )}
+                >
+                  <SlidersHorizontal className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left text-[13px] font-medium text-slate-500 dark:text-[#97aac1]">
+                        Тохиргоо
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                          configOpen ? "rotate-180" : "rotate-0",
+                        )}
+                      />
+                    </>
+                  )}
+                </button>
+
+                <div
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-200",
+                    configOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <nav className="space-y-0.5">
+                      {NAV_CONFIG.map((item) => (
+                        <NavItem
+                          key={item.href}
+                          {...item}
+                          active={isActive(item.href)}
+                          collapsed={collapsed}
+                          indent
+                        />
+                      ))}
+                    </nav>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
