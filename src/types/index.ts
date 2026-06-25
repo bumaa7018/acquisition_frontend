@@ -106,7 +106,10 @@ export interface ParcelStatus {
   sort_order: number;
 }
 
-export const PARCEL_STATUS_STYLES: Record<number, { color: string; bg: string }> = {
+export const PARCEL_STATUS_STYLES: Record<
+  number,
+  { color: string; bg: string }
+> = {
   1: { color: "#eab308", bg: "#eab3081f" }, // Зөвшилцөх шатандаа — шар
   2: { color: "#f97316", bg: "#f973161f" }, // НОСК — улбар шар
   3: { color: "#ec4899", bg: "#ec48991f" }, // Нөлөөлөгдсөн гарсан — ягаан
@@ -114,12 +117,15 @@ export const PARCEL_STATUS_STYLES: Record<number, { color: string; bg: string }>
   5: { color: "#22c55e", bg: "#22c55e1f" }, // Чөлөөлсөн — ногоон
 };
 
-export const PARCEL_STATUS_NAME_STYLES: Record<string, { color: string; bg: string }> = {
+export const PARCEL_STATUS_NAME_STYLES: Record<
+  string,
+  { color: string; bg: string }
+> = {
   "Зөвшилцөх шатандаа": PARCEL_STATUS_STYLES[1],
-  "НОСК":               PARCEL_STATUS_STYLES[2],
+  НОСК: PARCEL_STATUS_STYLES[2],
   "Нөлөөлөгдсөн гарсан": PARCEL_STATUS_STYLES[3],
-  "Татгалзсан":         PARCEL_STATUS_STYLES[4],
-  "Чөлөөлсөн":         PARCEL_STATUS_STYLES[5],
+  Татгалзсан: PARCEL_STATUS_STYLES[4],
+  Чөлөөлсөн: PARCEL_STATUS_STYLES[5],
 };
 
 export function getParcelStatusStyle(status?: number, statusName?: string) {

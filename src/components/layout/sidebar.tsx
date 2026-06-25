@@ -36,7 +36,11 @@ const NAV_MAIN = [
 const NAV_ADMIN = [
   { href: "/users", label: "Хэрэглэгчид", icon: Users },
   { href: "/roles", label: "Эрх & Роль", icon: Shield },
-  { href: "/progress_types", label: "Явцын төрөл", icon: ClipboardList },
+  {
+    href: "/progress_types",
+    label: "Чөлөөлөлтийн явцын төрөл",
+    icon: ClipboardList,
+  },
 ];
 
 function NavItem({

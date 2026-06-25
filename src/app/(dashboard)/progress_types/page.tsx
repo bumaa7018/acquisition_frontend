@@ -18,9 +18,13 @@ export default function ProgressTypesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => progressTypesApi.create({ name: form.name.trim(), description: form.description.trim() || undefined }),
+    mutationFn: () =>
+      progressTypesApi.create({
+        name: form.name.trim(),
+        description: form.description.trim() || undefined,
+      }),
     onSuccess: () => {
-      toast.success("Явцын төрөл үүслээ");
+      toast.success("Чөлөөлөлтийн явцын төрөл үүслээ");
       queryClient.invalidateQueries({ queryKey: ["progress-types"] });
       setShowCreate(false);
       setForm({ name: "", description: "" });
@@ -85,17 +89,21 @@ export default function ProgressTypesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Явцын төрөл
+            Чөлөөлөлтийн явцын төрөл
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Газар олголтын явцын төрлүүдийн жагсаалт
+            Газар чөлөөлөлтийн явцын төрлүүд
           </p>
         </div>
         <button
           onClick={isFormOpen ? closeForm : openCreate}
           className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
         >
-          {isFormOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {isFormOpen ? (
+            <X className="h-4 w-4" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
           {isFormOpen ? "Болих" : "Нэмэх"}
         </button>
       </div>
@@ -117,7 +125,9 @@ export default function ProgressTypesPage() {
             <input
               placeholder="Тайлбар (заавал биш)"
               value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, description: e.target.value }))
+              }
               onKeyDown={(e) => e.key === "Enter" && submit()}
               className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             />
@@ -144,14 +154,17 @@ export default function ProgressTypesPage() {
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Явцын төрлүүд
+            Чөлөөлөлтийн явцын төрлүүд
           </p>
         </div>
 
         {isLoading ? (
           <div className="p-5 space-y-2 animate-pulse">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-14 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+              <div
+                key={i}
+                className="h-14 rounded-lg bg-slate-100 dark:bg-[#252630]"
+              />
             ))}
           </div>
         ) : data.length === 0 ? (
