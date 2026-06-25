@@ -28,6 +28,7 @@ const TITLES: Record<string, { greeting: string; crumb: string }> = {
   },
   "/compensation": { greeting: "Нэхэмжлэл", crumb: "Нэхэмжлэл" },
   "/users": { greeting: "Хэрэглэгчид", crumb: "Хэрэглэгчид" },
+  "/profile": { greeting: "Хувийн мэдээлэл", crumb: "Хувийн мэдээлэл" },
   "/roles": { greeting: "Эрх & Роль", crumb: "Эрх & Роль" },
 };
 
@@ -82,7 +83,7 @@ export function Header() {
 
   return (
     <header
-      className="flex h-[85px] shrink-0 items-center gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-6"
+      className="flex pl-14 h-[85px] shrink-0 items-center gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-6"
       style={{ boxShadow: "0 0 35px 0 rgba(154,161,171,.15)" }}
     >
       {/* Page title + breadcrumb */}
@@ -180,12 +181,12 @@ export function Header() {
               {/* Menu items */}
               <div className="py-1.5">
                 <Link
-                  href="/users"
+                  href="/profile"
                   onClick={() => setProfileOpen(false)}
                   className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
                 >
                   <UserCircle className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                  Профайл
+                  Хувийн мэдээлэл
                 </Link>
                 <Link
                   href="/roles"

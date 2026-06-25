@@ -163,11 +163,13 @@ function CreateModal({ onClose }: CreateModalProps) {
   const [reason, setReason] = useState("");
   const [responsibleOrg, setResponsibleOrg] = useState("");
   const [fundingSource, setFundingSource] = useState("");
-  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(null);
+  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(
+    null,
+  );
   const [shpFile, setShpFile] = useState<File | null>(null);
 
   const { data: constructionTypes = [] } = useQuery({
-    queryKey: ['construction-types'],
+    queryKey: ["construction-types"],
     queryFn: () => landApi.listConstructionTypes(),
   });
 
@@ -204,7 +206,8 @@ function CreateModal({ onClose }: CreateModalProps) {
     fd.append("reason", reason);
     fd.append("responsible_org", responsibleOrg);
     fd.append("funding_source", fundingSource);
-    if (constructionTypeId) fd.append("construction_type_id", String(constructionTypeId));
+    if (constructionTypeId)
+      fd.append("construction_type_id", String(constructionTypeId));
     fd.append("shapefile", shpFile);
     createMutation.mutate(fd);
   };
@@ -325,13 +328,19 @@ function CreateModal({ onClose }: CreateModalProps) {
               <div>
                 <label className={labelCls}>Бүтээн байгуулалтын төрөл</label>
                 <select
-                  value={constructionTypeId ?? ''}
-                  onChange={(e) => setConstructionTypeId(e.target.value ? Number(e.target.value) : null)}
+                  value={constructionTypeId ?? ""}
+                  onChange={(e) =>
+                    setConstructionTypeId(
+                      e.target.value ? Number(e.target.value) : null,
+                    )
+                  }
                   className={inputCls}
                 >
                   <option value="">— Сонгоно уу —</option>
                   {constructionTypes.map((ct) => (
-                    <option key={ct.id} value={ct.id}>{ct.name}</option>
+                    <option key={ct.id} value={ct.id}>
+                      {ct.name}
+                    </option>
                   ))}
                 </select>
               </div>
