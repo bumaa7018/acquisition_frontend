@@ -194,7 +194,7 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
       <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
         <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Эх хэвлэлүүд</p>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          Татах дарахад баримт нээгдэнэ — дотор байгаа "PDF хадгалах" товчоор хадгална. Excel маягт шууд татагдана.
+          Татах дарахад баримт нээгдэнэ — дотор байгаа &ldquo;PDF хадгалах&rdquo; товчоор хадгална. Excel маягт шууд татагдана.
         </p>
       </div>
       <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
