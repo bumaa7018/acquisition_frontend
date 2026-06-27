@@ -17,9 +17,12 @@ export interface PaginatedResponse<T> {
 
 export interface User {
   id: string;
+  username?: string;
   email: string;
+  full_name?: string;
   first_name: string;
   last_name: string;
+  position?: string;
   roles: Role[];
 }
 
@@ -71,6 +74,15 @@ export interface DocumentType {
   updated_by?: string;
 }
 
+export interface AcquisitionAssignee {
+  user_id: string;
+  user_name: string;
+  user_position?: string;
+  assigned_by: string;
+  assigned_by_name: string;
+  assigned_at: string;
+}
+
 export interface LandAcquisition {
   id: string;
   plan_code: string;
@@ -94,6 +106,7 @@ export interface LandAcquisition {
   parcel_count: number;
   aus: AU[];
   parcels: Parcel[];
+  assigned_users?: AcquisitionAssignee[];
 }
 
 export interface AU {

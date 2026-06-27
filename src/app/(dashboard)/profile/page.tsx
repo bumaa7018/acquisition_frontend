@@ -13,6 +13,7 @@ import { User, Mail, Shield, Save, Loader2 } from "lucide-react";
 const editSchema = z.object({
   first_name: z.string().min(1, "Нэр оруулна уу"),
   last_name: z.string().min(1, "Овог оруулна уу"),
+  position: z.string().optional(),
   email: z.string().email("Имэйл буруу"),
 });
 type EditForm = z.infer<typeof editSchema>;
@@ -48,6 +49,7 @@ export default function ProfilePage() {
       reset({
         first_name: user.first_name,
         last_name: user.last_name,
+        position: user.position ?? "",
         email: user.email,
       });
     }
@@ -62,6 +64,7 @@ export default function ProfilePage() {
       reset({
         first_name: updated.first_name,
         last_name: updated.last_name,
+        position: updated.position ?? "",
         email: updated.email,
       });
     },
@@ -107,6 +110,11 @@ export default function ProfilePage() {
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
                   {user?.email}
                 </p>
+                {user?.position && (
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {user.position}
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -166,6 +174,7 @@ export default function ProfilePage() {
             [
               ["first_name", "Нэр"],
               ["last_name", "Овог"],
+              ["position", "Албан тушаал"],
             ] as const
           ).map(([field, label]) => (
             <div key={field}>

@@ -7,6 +7,7 @@ import type {
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
   ConstructionType, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
+  AcquisitionAssignee,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -180,9 +181,9 @@ export const usersApi = {
   list: (params?: { page?: number; page_size?: number }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { email: string; password: string; first_name: string; last_name: string }) =>
+  create: (body: { email: string; password: string; first_name: string; last_name: string; position?: string }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
-  update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string }>) =>
+  update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string; position: string }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
   delete: (id: string) => api.delete(`/users/${id}`),
 }
@@ -305,6 +306,14 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
+
+  getAssignees: (acquisitionId: string): Promise<AcquisitionAssignee[]> =>
+    api.get<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`)
+      .then(r => r.data.data ?? []),
+
+  setAssignees: (acquisitionId: string, users: { user_id: string; user_name: string; user_position?: string }[]): Promise<AcquisitionAssignee[]> =>
+    api.put<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`, { users })
+      .then(r => r.data.data ?? []),
 }
 
 // ── Global Parcels ────────────────────────────────────

@@ -1,7 +1,7 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi, documentTypeApi } from "@/lib/api";
+import { landApi, documentTypeApi, usersApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
@@ -30,6 +30,9 @@ import {
   Plus,
   FileDown,
   Calculator,
+  Users,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 
 function calcAreaFromWkt(wkt: string): number | null {
@@ -65,7 +68,7 @@ function calcAreaFromWkt(wkt: string): number | null {
     return null;
   }
 }
-import type { Compensation } from "@/types";
+import type { Compensation, AcquisitionAssignee } from "@/types";
 import { toast } from "sonner";
 import Link from "next/link";
 import React, { useState, useRef, useEffect } from "react";
@@ -101,6 +104,33 @@ function hasPermission(name: string): boolean {
   }
 }
 
+function isSeniorSpecialist(): boolean {
+  const token = authStorage.getAccessToken();
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return (
+      Array.isArray(payload.roles) &&
+      payload.roles.some((r: string) =>
+        r === "senior_specialist" || r === "Ахлах мэргэжилтэн"
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getCurrentUserId(): string | null {
+  const token = authStorage.getAccessToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.user_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 type Tab =
   | "general"
   | "attachments"
@@ -108,6 +138,7 @@ type Tab =
   | "parcels"
   | "assets"
   | "compensation"
+  | "assignees"
   | "map";
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
@@ -122,6 +153,83 @@ const COMP_TYPE_LABELS: Record<string, string> = {
   cash: "Мөнгөн дүн",
   land_grant: "Газрын нөхөн олговор",
 };
+
+// ─── Confirm dialog ───────────────────────────────────────────────────────────
+function ConfirmDialog({
+  open, title, description, confirmLabel = "Тийм", confirmColor = "#f1556c",
+  onConfirm, onClose,
+}: {
+  open: boolean; title: string; description?: string;
+  confirmLabel?: string; confirmColor?: string;
+  onConfirm: () => void; onClose: () => void;
+}) {
+  const [countdown, setCountdown] = useState(10);
+
+  useEffect(() => {
+    if (!open) { setCountdown(10); return; }
+    setCountdown(10);
+    const t = setInterval(() => setCountdown((c) => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && countdown === 0) onClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countdown, open]);
+
+  if (!open) return null;
+  const circumference = 2 * Math.PI * 19;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] overflow-hidden">
+        <div className="flex flex-col items-center px-6 pt-7 pb-5 text-center">
+          <div className="relative mb-4">
+            <svg className="h-16 w-16 -rotate-90" viewBox="0 0 44 44">
+              <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" strokeWidth="2.5"
+                className="text-slate-100 dark:text-[#2d2f3a]" />
+              <circle cx="22" cy="22" r="19" fill="none" stroke={confirmColor} strokeWidth="2.5"
+                strokeLinecap="round"
+                className="transition-all duration-1000 ease-linear"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - countdown / 10)}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[18px] font-bold tabular-nums text-slate-700 dark:text-white leading-none">
+                {countdown}
+              </span>
+            </div>
+          </div>
+          <p className="text-[15px] font-semibold text-slate-800 dark:text-white mb-1.5">{title}</p>
+          {description && (
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">{description}</p>
+          )}
+          <p className="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+            {countdown} секундын дараа автоматаар цуцлагдана
+          </p>
+        </div>
+        <div className="h-px bg-slate-100 dark:bg-[#37394d]" />
+        <div className="flex">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3.5 text-[13px] font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-r border-slate-100 dark:border-[#37394d]"
+          >
+            Болих
+          </button>
+          <button
+            onClick={() => { onClose(); onConfirm(); }}
+            className="flex-1 py-3.5 text-[13px] font-semibold transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]"
+            style={{ color: confirmColor }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type PendingConfirm = { title: string; description?: string; confirmLabel?: string; confirmColor?: string; onConfirm: () => void } | null;
 
 // ─── General tab ─────────────────────────────────────────────────────────────
 function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
@@ -541,7 +649,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
 function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
@@ -667,7 +775,7 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                     </a>
                     {canEdit && (
                       <button
-                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Тийм, устгах", onConfirm: () => deleteMutation.mutate(doc.id) })}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -755,6 +863,15 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }
@@ -1069,6 +1186,324 @@ function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   );
 }
 
+// ─── Assignees tab ────────────────────────────────────────────────────────────
+type UserOption = { id: string; first_name: string; last_name: string; email: string; position?: string };
+
+function AssigneesTab({ id }: { id: string }) {
+  const queryClient = useQueryClient();
+  const canManage = isSeniorSpecialist();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [step, setStep] = useState<"select" | "confirm">("select");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<UserOption[]>([]);
+
+  const { data: assignees = [], isLoading } = useQuery<AcquisitionAssignee[]>({
+    queryKey: ["assignees", id],
+    queryFn: () => landApi.getAssignees(id),
+  });
+
+  const { data: usersData } = useQuery({
+    queryKey: ["users-all"],
+    queryFn: () => usersApi.list({ page: 1, page_size: 200 }),
+    enabled: modalOpen,
+  });
+
+  const allUsers = usersData?.data ?? [];
+  const assignedIds = new Set(assignees.map((a) => a.user_id));
+  const selectedIds = new Set(selected.map((u) => u.id));
+  const currentUserId = getCurrentUserId();
+
+  const filteredUsers = allUsers.filter((u) => {
+    if (u.id === currentUserId) return false;
+    if (assignedIds.has(u.id)) return false;
+    const name = `${u.first_name} ${u.last_name}`.toLowerCase();
+    const position = (u.position ?? "").toLowerCase();
+    const q = search.toLowerCase();
+    return name.includes(q) || position.includes(q) || u.email.toLowerCase().includes(q);
+  });
+
+  const setMutation = useMutation({
+    mutationFn: (users: { user_id: string; user_name: string; user_position?: string }[]) =>
+      landApi.setAssignees(id, users),
+    onSuccess: () => {
+      toast.success("Ажилтны жагсаалт шинэчлэгдлээ");
+      queryClient.invalidateQueries({ queryKey: ["assignees", id] });
+      closeModal();
+    },
+    onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
+  });
+
+  function openModal() {
+    setSearch("");
+    setSelected([]);
+    setStep("select");
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setSelected([]);
+    setSearch("");
+    setStep("select");
+  }
+
+  function toggleUser(u: UserOption) {
+    setSelected((prev) =>
+      selectedIds.has(u.id) ? prev.filter((x) => x.id !== u.id) : [...prev, u]
+    );
+  }
+
+  function removeAssignee(userId: string) {
+    const updated = assignees
+      .filter((a) => a.user_id !== userId)
+      .map((a) => ({ user_id: a.user_id, user_name: a.user_name ?? "", user_position: a.user_position ?? "" }));
+    setMutation.mutate(updated);
+  }
+
+  function confirmAdd() {
+    const updated = [
+      ...assignees.map((a) => ({ user_id: a.user_id, user_name: a.user_name ?? "", user_position: a.user_position ?? "" })),
+      ...selected.map((u) => ({
+        user_id: u.id,
+        user_name: [u.first_name, u.last_name].filter(Boolean).join(" ") || u.id,
+        user_position: u.position ?? "",
+      })),
+    ];
+    setMutation.mutate(updated);
+  }
+
+  return (
+    <>
+      <div className="ap-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <div>
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Ажиллах ажилтнууд</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+              Энэ чөлөөлөлтэд ажиллах эрх бүхий ажилтнууд
+            </p>
+          </div>
+          {canManage && (
+            <button
+              onClick={openModal}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+            >
+              <UserPlus className="h-4 w-4" /> Ажилтан нэмэх
+            </button>
+          )}
+        </div>
+
+        {isLoading ? (
+          <div className="p-5 space-y-3 animate-pulse">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+            ))}
+          </div>
+        ) : !assignees.length ? (
+          <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
+            <Users className="h-8 w-8 mb-2 opacity-30" />
+            <p className="text-[13px]">
+              {canManage ? "Ажилтан бүртгэгдээгүй байна. Нэмэх товч дарна уу." : "Ажиллах ажилтан бүртгэгдээгүй байна"}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+            {assignees.map((a) => (
+              <div key={a.user_id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#02c0ce]/10 text-[#02c0ce] text-[13px] font-bold select-none">
+                  {(a.user_name ?? "?").charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{a.user_name}</p>
+                  {a.user_position && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{a.user_position}</p>
+                  )}
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {a.assigned_by_name ? `${a.assigned_by_name} оноосон` : ""}
+                    {a.assigned_at ? ` · ${new Date(a.assigned_at).toLocaleDateString("mn-MN")}` : ""}
+                  </p>
+                </div>
+                {canManage && (
+                  <button
+                    onClick={() => setPendingConfirm({ title: `"${a.user_name}" ажилтныг хасах уу?`, confirmLabel: "Тийм, хасах", onConfirm: () => removeAssignee(a.user_id) })}
+                    disabled={setMutation.isPending}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+                  >
+                    <UserMinus className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] flex flex-col max-h-[85vh]">
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
+              <div className="flex items-center gap-2">
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
+                  {step === "select" ? "Ажилтан сонгох" : "Баталгаажуулах"}
+                </p>
+                {step === "select" && selected.length > 0 && (
+                  <span className="inline-flex items-center justify-center h-5 min-w-[20px] rounded-full bg-[#02c0ce] text-white text-[11px] font-bold px-1.5">
+                    {selected.length}
+                  </span>
+                )}
+              </div>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Step 1 — Select */}
+            {step === "select" && (
+              <>
+                <div className="px-6 pt-4 pb-2 shrink-0">
+                  <input
+                    type="text"
+                    placeholder="Нэр, албан тушаалаар хайх..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    autoFocus
+                    className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-[#02c0ce] transition-colors"
+                  />
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-2 py-1 min-h-0">
+                  {!usersData ? (
+                    <div className="space-y-2 p-4 animate-pulse">
+                      {[...Array(5)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+                    </div>
+                  ) : !filteredUsers.length ? (
+                    <div className="flex items-center justify-center py-10 text-slate-400 text-[13px]">
+                      {search ? "Хайлтад тохирох ажилтан олдсонгүй" : "Нэмэх боломжтой ажилтан байхгүй"}
+                    </div>
+                  ) : (
+                    filteredUsers.map((u) => {
+                      const isChecked = selectedIds.has(u.id);
+                      return (
+                        <button
+                          key={u.id}
+                          onClick={() => toggleUser(u)}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-colors text-left ${
+                            isChecked
+                              ? "bg-[#02c0ce]/8 dark:bg-[#02c0ce]/12"
+                              : "hover:bg-slate-50 dark:hover:bg-[#252630]"
+                          }`}
+                        >
+                          {/* Checkbox */}
+                          <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+                            isChecked ? "bg-[#02c0ce] border-[#02c0ce]" : "border-slate-300 dark:border-slate-600"
+                          }`}>
+                            {isChecked && (
+                              <svg viewBox="0 0 10 8" className="h-3 w-3 text-white fill-current">
+                                <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02c0ce]/10 text-[#02c0ce] text-[12px] font-bold select-none">
+                            {(u.first_name || u.last_name || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                              {u.first_name} {u.last_name}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                              {u.position || u.email}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 px-6 py-3 border-t border-slate-100 dark:border-[#37394d] shrink-0">
+                  <button
+                    onClick={closeModal}
+                    className="flex-1 h-9 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#252630] hover:bg-slate-200 dark:hover:bg-[#2e2f3e] transition-colors"
+                  >
+                    Цуцлах
+                  </button>
+                  <button
+                    onClick={() => setStep("confirm")}
+                    disabled={selected.length === 0}
+                    className="flex-1 h-9 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-40 transition-colors"
+                  >
+                    Үргэлжлэх ({selected.length})
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2 — Confirm */}
+            {step === "confirm" && (
+              <>
+                <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0 space-y-3">
+                  <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                    Дараах {selected.length} ажилтныг нэмэх үү?
+                  </p>
+                  <div className="rounded-xl border border-slate-100 dark:border-[#37394d] overflow-hidden divide-y divide-slate-100 dark:divide-[#37394d]">
+                    {selected.map((u) => (
+                      <div key={u.id} className="flex items-center gap-3 px-4 py-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02c0ce]/10 text-[#02c0ce] text-[12px] font-bold select-none">
+                          {(u.first_name || u.last_name || "?").charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                            {u.first_name} {u.last_name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {u.position || u.email}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 px-6 py-3 border-t border-slate-100 dark:border-[#37394d] shrink-0">
+                  <button
+                    onClick={() => setStep("select")}
+                    disabled={setMutation.isPending}
+                    className="flex-1 h-9 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#252630] hover:bg-slate-200 dark:hover:bg-[#2e2f3e] disabled:opacity-50 transition-colors"
+                  >
+                    Буцах
+                  </button>
+                  <button
+                    onClick={confirmAdd}
+                    disabled={setMutation.isPending}
+                    className="flex flex-1 items-center justify-center gap-2 h-9 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+                  >
+                    {setMutation.isPending && (
+                      <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    )}
+                    Баталгаажуулах
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
+    </>
+  );
+}
+
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
   { value: 2, label: "Эзэмших" },
@@ -1078,6 +1513,7 @@ const RIGHT_TYPE_OPTIONS = [
 // ─── Parcels tab ──────────────────────────────────────────────────────────────
 function ParcelsTab({ id }: { id: string }) {
   const queryClient = useQueryClient();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [filter, setFilter] = useState({
     parcel_id: "",
     right_type: 0,
@@ -1323,12 +1759,13 @@ function ParcelsTab({ id }: { id: string }) {
                               <Info className="h-3 w-3" /> Дэлгэрэнгүй
                             </Link>
                             <button
-                              onClick={() => {
-                                if (
-                                  confirm("Нэгж талбарын мэдээлэл дуудах уу?")
-                                )
-                                  syncMutation.mutate(p.id);
-                              }}
+                              onClick={() => setPendingConfirm({
+                                title: "Нэгж талбарын мэдээлэл дуудах уу?",
+                                description: "Кадастрын системээс мэдээлэл шинэчлэн татаж авах болно.",
+                                confirmLabel: "Тийм, дуудах",
+                                confirmColor: "#0acf97",
+                                onConfirm: () => syncMutation.mutate(p.id),
+                              })}
                               disabled={syncMutation.isPending}
                               className="inline-flex items-center gap-1 rounded-lg bg-[#0acf97]/10 text-[#0acf97] hover:bg-[#0acf97]/20 px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 transition-colors"
                             >
@@ -1537,6 +1974,15 @@ function ParcelsTab({ id }: { id: string }) {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }
@@ -1713,6 +2159,7 @@ function GrantPanel({ grant }: { grant: NonNullable<Compensation["grant"]> }) {
 
 function CompensationTab({ id }: { id: string }) {
   const queryClient = useQueryClient();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [expandedParcels, setExpandedParcels] = useState<Set<string>>(
     new Set(),
   );
@@ -1971,10 +2418,11 @@ function CompensationTab({ id }: { id: string }) {
                                     </button>
                                   )}
                                   <button
-                                    onClick={() => {
-                                      if (confirm("Нөхөн төлбөр устгах уу?"))
-                                        deleteMutation.mutate(comp.id);
-                                    }}
+                                    onClick={() => setPendingConfirm({
+                                      title: "Нөхөн төлбөр устгах уу?",
+                                      confirmLabel: "Тийм, устгах",
+                                      onConfirm: () => deleteMutation.mutate(comp.id),
+                                    })}
                                     className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -2089,6 +2537,15 @@ function CompensationTab({ id }: { id: string }) {
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }
@@ -2128,9 +2585,14 @@ export default function AcquisitionDetailPage() {
   const [reportLoading, setReportLoading] = useState(false);
   const canEdit = hasPermission("acquisition.create");
 
-  const { data: acq, isLoading } = useQuery({
+  const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],
     queryFn: () => landApi.getById(id),
+    retry: (failCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failCount < 2;
+    },
   });
 
   if (isLoading)
@@ -2141,6 +2603,34 @@ export default function AcquisitionDetailPage() {
         <div className="h-64 w-full rounded-lg bg-slate-100 dark:bg-[#252630]" />
       </div>
     );
+
+  const errStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (errStatus === 403)
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <Users className="h-8 w-8 text-red-400" />
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Хандах эрх байхгүй
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1">
+            Энэ чөлөөлөлтэд ажиллах эрх танд олгогдоогүй байна.
+          </p>
+          <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
+            Ахлах мэргэжилтэнтэй холбогдоно уу.
+          </p>
+        </div>
+        <Link
+          href="/acquisition"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Жагсаалт руу буцах
+        </Link>
+      </div>
+    );
+
   if (!acq)
     return (
       <div className="flex items-center justify-center py-20 text-slate-400 dark:text-slate-500">
@@ -2176,6 +2666,11 @@ export default function AcquisitionDetailPage() {
       key: "compensation",
       label: "Нөхөн төлбөр",
       icon: <ReceiptText className="h-4 w-4" />,
+    },
+    {
+      key: "assignees",
+      label: "Ажилтнууд",
+      icon: <Users className="h-4 w-4" />,
     },
     { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
   ];
@@ -2271,6 +2766,7 @@ export default function AcquisitionDetailPage() {
       {tab === "parcels" && <ParcelsTab id={id} />}
       {tab === "assets" && <AssetsTab id={id} />}
       {tab === "compensation" && <CompensationTab id={id} />}
+      {tab === "assignees" && <AssigneesTab id={id} />}
       {tab === "map" && (
         <div className="ap-card p-5">
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />

@@ -14,6 +14,7 @@ const createSchema = z.object({
   password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт"),
   first_name: z.string().min(1, "Нэр оруулна уу"),
   last_name: z.string().min(1, "Овог оруулна уу"),
+  position: z.string().optional(),
 });
 type CreateForm = z.infer<typeof createSchema>;
 
@@ -61,11 +62,12 @@ export default function UsersPage() {
   const fields: [keyof CreateForm, string, string][] = [
     ["first_name", "Нэр", "text"],
     ["last_name", "Овог", "text"],
+    ["position", "Албан тушаал", "text"],
     ["email", "Имэйл", "email"],
     ["password", "Нууц үг", "password"],
   ];
 
-  const HEADERS = ["Хэрэглэгч", "Имэйл", "Роль", ""];
+  const HEADERS = ["Хэрэглэгч", "Албан тушаал", "Имэйл", "Роль", ""];
 
   return (
     <div className="flex flex-col gap-5">
@@ -168,7 +170,7 @@ export default function UsersPage() {
               ) : !data?.data.length ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     <Users className="mx-auto mb-2 h-8 w-8 opacity-30" />
@@ -193,6 +195,9 @@ export default function UsersPage() {
                           {user.first_name} {user.last_name}
                         </p>
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                      {user.position || "—"}
                     </td>
                     <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                       {user.email}

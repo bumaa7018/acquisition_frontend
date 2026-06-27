@@ -146,6 +146,11 @@ export function Header() {
                 <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 leading-tight">
                   {user.first_name} {user.last_name}
                 </p>
+                {user.position && (
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight truncate">
+                    {user.position}
+                  </p>
+                )}
               </div>
             )}
             <ChevronRight
@@ -174,6 +179,11 @@ export function Header() {
                     <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
                       {user?.email}
                     </p>
+                    {user?.position && (
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                        {user.position}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
