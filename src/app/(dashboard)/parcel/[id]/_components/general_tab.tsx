@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { RIGHT_TYPE_LABELS, type AU } from "@/types";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { CompensationSection } from "./compensation_section";
@@ -163,7 +163,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
       setEditingMeta(false);
       setAreaAutoCalc(false);
     },
-    onError: () => toast.error("Хадгалахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
   const [syncOpen, setSyncOpen] = useState(false);

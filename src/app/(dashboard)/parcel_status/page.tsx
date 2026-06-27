@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelStatusApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { Grid2x2, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
@@ -31,7 +32,7 @@ export default function ParcelStatusPage() {
       setShowCreate(false);
       setForm({ code: "", name: "", sort_order: "" });
     },
-    onError: () => toast.error("Үүсгэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
 
   const updateMutation = useMutation({
@@ -47,7 +48,7 @@ export default function ParcelStatusPage() {
       setEditItem(null);
       setForm({ code: "", name: "", sort_order: "" });
     },
-    onError: () => toast.error("Засварлахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -56,7 +57,7 @@ export default function ParcelStatusPage() {
       toast.success("Устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-statuses"] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const openEdit = (item: ParcelStatus) => {

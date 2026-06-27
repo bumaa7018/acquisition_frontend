@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authApi, usersApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { authStorage } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -64,7 +65,7 @@ export default function ProfilePage() {
         email: updated.email,
       });
     },
-    onError: () => toast.error("Шинэчлэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
   });
 
   const initials = (user ?? localUser)?.first_name

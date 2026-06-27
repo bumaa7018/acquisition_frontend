@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, documentTypeApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import {
   ArrowLeft,
   MapPin,
@@ -193,7 +193,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setAreaAutoCalc(false);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
     },
-    onError: () => toast.error("Хадгалахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
   if (!acq) return null;
@@ -566,7 +566,7 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       queryClient.invalidateQueries({ queryKey: ["acq-documents", id] });
       closeModal();
     },
-    onError: () => toast.error("Файл хавсаргахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Файл хавсаргахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -575,7 +575,7 @@ function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       toast.success("Баримт бичиг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["acq-documents", id] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   function openModal() {
@@ -797,11 +797,7 @@ function AdvanceModal({
       queryClient.invalidateQueries({ queryKey: ["available-statuses", id] });
       onClose();
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message;
-      toast.error(msg || "Явц шинэчлэхэд алдаа гарлаа");
-    },
+    onError: (err) => toast.error(getApiError(err, "Явц шинэчлэхэд алдаа гарлаа")),
   });
 
   const needsDecree = selectedStatus === 3;
@@ -1109,7 +1105,7 @@ function ParcelsTab({ id }: { id: string }) {
       queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
       window.location.reload();
     },
-    onError: () => toast.error("Синхрончлоход алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Синхрончлоход алдаа гарлаа")),
   });
 
   const compensationMutation = useMutation({
@@ -1119,7 +1115,7 @@ function ParcelsTab({ id }: { id: string }) {
       toast.success("Нөхөн төлбөрийн төлөв шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
     },
-    onError: () => toast.error("Нөхөн төлбөр шинэчлэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Нөхөн төлбөр шинэчлэхэд алдаа гарлаа")),
   });
 
   const compsByParcel = allComps.reduce<Record<string, Compensation[]>>(
@@ -1770,7 +1766,7 @@ function CompensationTab({ id }: { id: string }) {
       toast.success("Нөхөн төлбөр устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["compensations", id] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const activeParcels = parcels.filter(

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { documentTypeApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { FileText, Plus, X, Pencil, Trash2, Calendar, User } from "lucide-react";
 import { toast } from "sonner";
 import type { DocumentType } from "@/types";
@@ -38,7 +39,7 @@ export default function DocumentTypePage() {
       setShowCreate(false);
       setForm({ type: "", name: "", description: "" });
     },
-    onError: () => toast.error("Үүсгэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
 
   const updateMutation = useMutation({
@@ -54,7 +55,7 @@ export default function DocumentTypePage() {
       setEditItem(null);
       setForm({ type: "", name: "", description: "" });
     },
-    onError: () => toast.error("Засварлахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -63,7 +64,7 @@ export default function DocumentTypePage() {
       toast.success("Устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["document-types"] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const openEdit = (item: DocumentType) => {

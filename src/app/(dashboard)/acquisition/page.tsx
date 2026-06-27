@@ -1,12 +1,11 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { landApi, planApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
 import type { Plan } from "@/types";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   Search,
@@ -43,6 +42,17 @@ function hasPermission(name: string): boolean {
     return (
       Array.isArray(payload.permissions) && payload.permissions.includes(name)
     );
+  } catch {
+    return false;
+  }
+}
+
+function hasRole(...names: string[]): boolean {
+  const token = authStorage.getAccessToken();
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return Array.isArray(payload.roles) && payload.roles.some((r: string) => names.includes(r));
   } catch {
     return false;
   }
@@ -184,12 +194,7 @@ function CreateModal({ onClose }: CreateModalProps) {
       queryClient.invalidateQueries({ queryKey: ["land"] });
       onClose();
     },
-    onError: (err) => {
-      const msg = axios.isAxiosError(err)
-        ? err.response?.data?.error
-        : undefined;
-      toast.error(msg || "Бүртгэх үед алдаа гарлаа");
-    },
+    onError: (err) => toast.error(getApiError(err, "Бүртгэх үед алдаа гарлаа")),
   });
 
   const handleSubmit = () => {
@@ -486,7 +491,7 @@ export default function LandPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
 
-  const canCreate = hasPermission("acquisition.create");
+  const canCreate = hasPermission("land:create") && hasRole("senior_specialist", "Ахлах мэргэжилтэн");
 
   const { data, isLoading } = useQuery({
     queryKey: ["land", page, search],
@@ -504,7 +509,7 @@ export default function LandPage() {
       toast.success("Чөлөөлөлт устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["land"] });
     },
-    onError: () => toast.error("Устгах боломжгүй (зөвхөн NEW статустай)"),
+    onError: (err) => toast.error(getApiError(err, "Устгах боломжгүй (зөвхөн NEW статустай)")),
   });
 
   const total = data?.total ?? 0;

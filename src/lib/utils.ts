@@ -19,3 +19,8 @@ export function formatArea(m2?: number): string {
   if (m2 >= 10000) return `${(m2 / 10000).toFixed(2)} га`;
   return `${m2.toFixed(2)} м²`;
 }
+
+export function getApiError(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
+  return data?.error || data?.message || fallback;
+}

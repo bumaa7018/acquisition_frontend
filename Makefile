@@ -1,4 +1,4 @@
-.PHONY: dev build start lint install \
+.PHONY: dev build start lint install clear \
         docker-build docker-up docker-down docker-run docker-restart docker-logs docker-clean \
         docker-dev docker-dev-down docker-dev-logs docker-fg \
         deploy docker-rebuild reload
@@ -21,6 +21,10 @@ lint:
 
 install:
 	npm install
+
+clear:
+	rm -rf .next
+	rm -rf node_modules/.cache
 
 # ── Docker ────────────────────────────────────────────
 # gov_network-г backend (government/) үүсгэдэг.

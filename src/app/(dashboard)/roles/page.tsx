@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rolesApi, permissionsApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { Shield, Plus, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,7 +42,7 @@ export default function RolesPage() {
     mutationFn: ({ roleId, permId }: { roleId: string; permId: string }) =>
       rolesApi.assignPermission(roleId, permId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles"] }),
-    onError: () => toast.error("Эрх нэмэхэд алдаа"),
+    onError: (err) => toast.error(getApiError(err, "Эрх нэмэхэд алдаа")),
   });
   const removePermMutation = useMutation({
     mutationFn: ({ roleId, permId }: { roleId: string; permId: string }) =>

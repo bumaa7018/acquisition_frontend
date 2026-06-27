@@ -9,7 +9,7 @@ import type {
   ConstructionType, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
 } from '@/types'
 
-const api = axios.create({ baseURL: '/api/v1', timeout: 30000 })
+const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
 
 type ParcelListParams = {
   page?: number
@@ -148,6 +148,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
+    console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
     if (error.response?.status === 401 && !error.config._retry && !isAuthRoute) {
       error.config._retry = true

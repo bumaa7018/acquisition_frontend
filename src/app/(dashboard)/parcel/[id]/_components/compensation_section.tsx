@@ -3,7 +3,7 @@ import { Fragment, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi } from "@/lib/api";
 import { type Compensation } from "@/types";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import {
   X, Plus, ChevronDown, ChevronUp, Trash2,
   ReceiptText, Building2, Wallet,
@@ -106,7 +106,7 @@ export function CompensationSection({
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["compensations", acqId] });
     },
-    onError: () => toast.error("Нэмэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Нэмэхэд алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -115,7 +115,7 @@ export function CompensationSection({
       toast.success("Нөхөн төлбөр устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["compensations", acqId] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const cashTotal = compensations

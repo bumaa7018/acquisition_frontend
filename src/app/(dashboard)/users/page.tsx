@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { usersApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { UserPlus, Trash2, X, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -36,7 +37,7 @@ export default function UsersPage() {
       setShowCreate(false);
       reset();
     },
-    onError: () => toast.error("Үүсгэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -45,7 +46,7 @@ export default function UsersPage() {
       toast.success("Устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: () => toast.error("Устгах боломжгүй"),
+    onError: (err) => toast.error(getApiError(err, "Устгах боломжгүй")),
   });
 
   const {

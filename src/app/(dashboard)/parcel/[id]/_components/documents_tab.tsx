@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelApi, documentTypeApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, getApiError } from "@/lib/utils";
 import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,7 +38,7 @@ export function DocumentsTab({ parcelId }: { parcelId: string }) {
       queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
       closeModal();
     },
-    onError: () => toast.error("Файл хавсаргахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Файл хавсаргахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -47,7 +47,7 @@ export function DocumentsTab({ parcelId }: { parcelId: string }) {
       toast.success("Баримт бичиг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   function openModal() {

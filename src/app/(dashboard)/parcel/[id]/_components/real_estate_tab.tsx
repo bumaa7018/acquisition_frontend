@@ -3,8 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { type Asset } from "@/types";
-import { formatArea } from "@/lib/utils";
-import { formatDate } from "@/lib/utils";
+import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import { X, Plus, Trash2, Building2, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 import { TARGET_TYPE_LABELS, COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
@@ -72,7 +71,7 @@ export function RealEstateTab({
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode] });
     },
-    onError: () => toast.error("Хөрөнгө нэмэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Хөрөнгө нэмэхэд алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -81,7 +80,7 @@ export function RealEstateTab({
       toast.success("Хөрөнгө устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const parcelAssets = assets?.data ?? [];

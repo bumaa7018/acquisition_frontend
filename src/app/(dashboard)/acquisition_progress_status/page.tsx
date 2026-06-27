@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { acquisitionProgressStatusApi } from "@/lib/api";
+import { getApiError } from "@/lib/utils";
 import { ClipboardList, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { AcquisitionProgressStatus } from "@/types";
@@ -29,7 +30,7 @@ export default function AcquisitionProgressStatusPage() {
       setShowCreate(false);
       setForm({ name: "", description: "" });
     },
-    onError: () => toast.error("Үүсгэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
 
   const updateMutation = useMutation({
@@ -44,7 +45,7 @@ export default function AcquisitionProgressStatusPage() {
       setEditItem(null);
       setForm({ name: "", description: "" });
     },
-    onError: () => toast.error("Засварлахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
@@ -53,7 +54,7 @@ export default function AcquisitionProgressStatusPage() {
       toast.success("Устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["acquisition-progress-statuses"] });
     },
-    onError: () => toast.error("Устгахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
   const openEdit = (item: AcquisitionProgressStatus) => {

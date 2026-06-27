@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi } from "@/lib/api";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { X, Plus, Wallet, MapPin, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { TARGET_TYPE_LABELS, COMP_TYPE_LABELS, INP } from "./constants";
@@ -57,7 +57,7 @@ export function PaymentTab({
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["parcel-payments", parcelId] });
     },
-    onError: () => toast.error("Бүртгэхэд алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Бүртгэхэд алдаа гарлаа")),
   });
 
   const detail = parcelData?.detail;
@@ -78,7 +78,7 @@ export function PaymentTab({
       setEditValuation(false);
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
     },
-    onError: () => toast.error("Хадгалахад алдаа гарлаа"),
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
   return (
