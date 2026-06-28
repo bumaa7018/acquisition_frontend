@@ -4,49 +4,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { RIGHT_TYPE_LABELS, type AU } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
-import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCircle } from "lucide-react";
+import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCircle, UserPlus, Trash2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
-import { CompensationSection } from "./compensation_section";
-
-function calcAreaFromWkt(wkt: string): number | null {
-  try {
-    // Strip EWKT SRID prefix if present: "SRID=4326;POLYGON..."
-    const cleaned = wkt.replace(/^SRID=\d+;/i, "");
-    const coordStr = cleaned.replace(/^[A-Z\s]+\(\(/, "").replace(/\)\).*$/, "");
-    const coords = coordStr.split(",").map((p) => {
-      const [x, y] = p.trim().split(/\s+/).map(Number);
-      return [x, y] as [number, number];
-    });
-    if (coords.length < 3) return null;
-
-    // Detect CRS: geographic (degrees) if x in [-180,180] and y in [-90,90]
-    const isGeographic = coords.every(([x, y]) => x >= -180 && x <= 180 && y >= -90 && y <= 90);
-
-    if (isGeographic) {
-      // Spherical excess formula for EPSG:4326
-      const R = 6378137;
-      const toRad = (d: number) => (d * Math.PI) / 180;
-      let area = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [lon1, lat1] = coords[i];
-        const [lon2, lat2] = coords[(i + 1) % coords.length];
-        area += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
-      }
-      return Math.abs((area * R * R) / 2);
-    } else {
-      // Planar shoelace formula for projected CRS (UTM etc., coordinates in meters)
-      let area = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [x1, y1] = coords[i];
-        const [x2, y2] = coords[(i + 1) % coords.length];
-        area += x1 * y2 - x2 * y1;
-      }
-      return Math.abs(area / 2);
-    }
-  } catch {
-    return null;
-  }
-}
+import { isExternalSpecialRole } from "@/lib/role-utils";
+import type { AuthorizedRepresentative } from "@/types";
+import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
 
 const SYNC_STEPS = [
   {
@@ -101,6 +63,7 @@ function highlightArea(value: string) {
 
 export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
   const queryClient = useQueryClient();
+  const isExternal = isExternalSpecialRole();
   const { data, isLoading } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
     queryFn: () => landApi.getParcel(acqId, parcelId),
@@ -111,21 +74,11 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
     queryFn: () => landApi.getById(acqId),
     enabled: !!acqId,
   });
-  const { data: compensations = [] } = useQuery({
-    queryKey: ["compensations", acqId],
-    queryFn: () => landApi.listCompensations(acqId),
-    enabled: !!acqId,
-  });
-  const { data: assetsData } = useQuery({
-    queryKey: ["parcel-assets", acqId, data?.parcel_id],
-    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: data?.parcel_id }),
-    enabled: !!acqId && !!data?.parcel_id,
-  });
-
   const [editingMeta, setEditingMeta] = useState(false);
   const [dbChanged, setDbChanged] = useState(false);
   const [changedParcelId, setChangedParcelId] = useState("");
   const [acquisitionAreaM2, setAcquisitionAreaM2] = useState<string>("");
+  const [acquisitionGeomWkt, setAcquisitionGeomWkt] = useState("");
   const [areaAutoCalc, setAreaAutoCalc] = useState(false);
 
   useEffect(() => {
@@ -133,13 +86,14 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
       setDbChanged(data.db_changed ?? false);
       setChangedParcelId(data.changed_parcel_id ?? "");
       setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
+      setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
       setAreaAutoCalc(false);
     }
   }, [data]);
 
   const handleAutoCalcArea = useCallback(() => {
-    if (!data?.acquisition_geom_wkt) return;
-    const calc = calcAreaFromWkt(data.acquisition_geom_wkt);
+    if (!acquisitionGeomWkt.trim()) return;
+    const calc = calcAreaFromWkt(acquisitionGeomWkt);
     if (calc != null) {
       setAcquisitionAreaM2(String(Math.round(calc)));
       setAreaAutoCalc(true);
@@ -147,7 +101,27 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
     } else {
       toast.error("Геометриас талбай тооцоолох боломжгүй");
     }
-  }, [data?.acquisition_geom_wkt]);
+  }, [acquisitionGeomWkt]);
+
+  const handleBoundaryLayerFile = useCallback(async (file: File) => {
+    const text = await file.text();
+    const wkt = layerTextToWkt(text);
+    if (!wkt) {
+      toast.error("WKT эсвэл GeoJSON polygon файл оруулна уу");
+      return;
+    }
+
+    setAcquisitionGeomWkt(wkt);
+    const calc = calcAreaFromWkt(wkt);
+    if (calc != null) {
+      setAcquisitionAreaM2(String(Math.round(calc)));
+      setAreaAutoCalc(true);
+      toast.success("Давхардсан хил оруулж, талбай тооцоологдлоо");
+    } else {
+      setAreaAutoCalc(false);
+      toast.success("Давхардсан хил орууллаа");
+    }
+  }, []);
 
   const metaMutation = useMutation({
     mutationFn: () => {
@@ -155,6 +129,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
       return landApi.updateParcelMeta(
         acqId, parcelId, dbChanged, changedParcelId,
         isNaN(areaVal) ? undefined : areaVal,
+        acquisitionGeomWkt.trim() || undefined,
       );
     },
     onSuccess: () => {
@@ -165,6 +140,47 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
+
+  // Итгэмжлэгдсэн төлөөлөгчийн state
+  const [repModalOpen, setRepModalOpen] = useState(false);
+  const [repForm, setRepForm] = useState({ last_name: "", first_name: "", register_no: "", phone: "", email: "", address: "", note: "" });
+  const [repFormErrors, setRepFormErrors] = useState<{ last_name?: boolean; first_name?: boolean }>({});
+  const [repDeleteConfirm, setRepDeleteConfirm] = useState<string | null>(null);
+
+  const { data: representatives = [], refetch: refetchReps } = useQuery<AuthorizedRepresentative[]>({
+    queryKey: ["representatives", acqId, parcelId],
+    queryFn: () => landApi.listRepresentatives(acqId, parcelId),
+    enabled: !!acqId && !!parcelId,
+  });
+
+  const createRepMutation = useMutation({
+    mutationFn: () => landApi.createRepresentative(acqId, parcelId, repForm),
+    onSuccess: () => {
+      toast.success("Итгэмжлэгдсэн төлөөлөгч бүртгэгдлээ");
+      setRepModalOpen(false);
+      setRepForm({ last_name: "", first_name: "", register_no: "", phone: "", email: "", address: "", note: "" });
+      setRepFormErrors({});
+      void refetchReps();
+    },
+    onError: (err) => toast.error(getApiError(err, "Бүртгэхэд алдаа гарлаа")),
+  });
+
+  const deleteRepMutation = useMutation({
+    mutationFn: (repId: string) => landApi.deleteRepresentative(acqId, parcelId, repId),
+    onSuccess: () => {
+      toast.success("Устгагдлаа");
+      setRepDeleteConfirm(null);
+      void refetchReps();
+    },
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
+  });
+
+  const handleRepSubmit = () => {
+    const errors = { last_name: !repForm.last_name.trim(), first_name: !repForm.first_name.trim() };
+    setRepFormErrors(errors);
+    if (errors.last_name || errors.first_name) return;
+    createRepMutation.mutate();
+  };
 
   const [syncOpen, setSyncOpen] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
@@ -237,7 +253,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
     );
     queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
     queryClient.invalidateQueries({ queryKey: ["land", acqId] });
-  }, [acqId, data, queryClient]);
+  }, [acqId, data, parcelId, queryClient]);
 
   const handleSyncClose = useCallback(() => {
     if (syncRunning) return;
@@ -282,15 +298,6 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
 
   const adminUnit = findAdminUnit(acquisition?.aus, data.au1_code, data.au2_code, data.au3_code);
 
-  const parcelComps = compensations.filter((c) => c.parcel_id === data.parcel_id);
-  const assets = assetsData?.data ?? [];
-  const parcelLandValue = parcelComps.filter((c) => c.target_type === "parcel").reduce((s, c) => s + c.amount, 0);
-  const realStateAssetIds = new Set(assets.filter((a) => a.asset_type === "real_state").map((a) => a.id));
-  const propertyAssetIds = new Set(assets.filter((a) => a.asset_type === "property").map((a) => a.id));
-  const realStateComp = parcelComps.filter((c) => c.target_type === "asset" && c.asset_id && realStateAssetIds.has(c.asset_id)).reduce((s, c) => s + c.amount, 0);
-  const propertyComp = parcelComps.filter((c) => c.target_type === "asset" && c.asset_id && propertyAssetIds.has(c.asset_id)).reduce((s, c) => s + c.amount, 0);
-  const totalComp = parcelLandValue + realStateComp + propertyComp;
-
   return (
     <div className="flex flex-col gap-5">
       <div className="grid md:grid-cols-2 gap-5">
@@ -300,14 +307,42 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Талбарын мэдээлэл
             </p>
-            <button
-              onClick={() => setConfirmOpen(true)}
-              disabled={!acqId || syncOpen || confirmOpen}
-              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3 text-[12px] font-semibold text-[#0acf97] transition-colors hover:bg-[#0acf97]/20 disabled:opacity-50"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Нэгж талбарын мэдээлэл дуудах
-            </button>
+            <div className="flex items-center gap-2">
+              {!isExternal && (editingMeta ? (
+                <>
+                  <button
+                    onClick={() => {
+                      setEditingMeta(false);
+                      setDbChanged(data.db_changed ?? false);
+                      setChangedParcelId(data.changed_parcel_id ?? "");
+                      setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
+                      setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
+                      setAreaAutoCalc(false);
+                    }}
+                    className="h-7 px-3 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
+                  >Болих</button>
+                  <button
+                    onClick={() => metaMutation.mutate()}
+                    disabled={metaMutation.isPending}
+                    className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+                  >Хадгалах</button>
+                </>
+              ) : (
+                <button onClick={() => setEditingMeta(true)} className="h-7 px-3 rounded-lg text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors">
+                  Засах
+                </button>
+              ))}
+              {!isExternal && !editingMeta && (
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  disabled={!acqId || syncOpen || confirmOpen}
+                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3 text-[12px] font-semibold text-[#0acf97] transition-colors hover:bg-[#0acf97]/20 disabled:opacity-50"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Мэдээлэл дуудах
+                </button>
+              )}
+            </div>
           </div>
           {row("Дугаар", <span className="font-mono">{data.parcel_id}</span>)}
           {row("Аймаг/Нийслэл", formatAdminUnit(adminUnit?.au1_name, data.au1_code))}
@@ -318,12 +353,103 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
           {row("Эрх эхэлсэн", data.valid_from ? formatDate(data.valid_from) : undefined)}
           {row("Эрх дуусах", data.valid_till ? formatDate(data.valid_till) : undefined)}
           {row("Нийт талбай", formatArea(data.area_m2))}
-          {row("Чөлөөлөгдөх талбай", highlightArea(formatArea(data.acquisition_area_m2)))}
+          {/* Чөлөөлөгдөх талбай */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбай</span>
+            {editingMeta ? (
+              <div className="flex flex-1 items-center gap-2">
+                <input
+                  type="number"
+                  value={acquisitionAreaM2}
+                  onChange={(e) => { setAcquisitionAreaM2(e.target.value); setAreaAutoCalc(false); }}
+                  placeholder="Талбай оруулах (м²)..."
+                  className="h-8 w-44 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                />
+                {acquisitionGeomWkt.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleAutoCalcArea}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                  >
+                    <Calculator className="h-3.5 w-3.5" />
+                    Хилээс тооцоолох
+                  </button>
+                )}
+                {areaAutoCalc && (
+                  <span className="text-[11px] text-[#0acf97] font-medium">Автоматаар тооцоологдсон</span>
+                )}
+              </div>
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {highlightArea(formatArea(data.acquisition_area_m2))}
+              </span>
+            )}
+          </div>
           {row("Үлдэх газрын хэмжээ",
             data.remaining_area_m2 != null
               ? formatArea(data.remaining_area_m2)
               : formatArea((data.area_m2 || 0) - (data.acquisition_area_m2 || 0))
           )}
+          {/* Мэдээллийн санд өөрчлөлт орсон эсэх */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">МС-д өөрчлөлт орсон эсэх</span>
+            {editingMeta ? (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={dbChanged} onChange={(e) => setDbChanged(e.target.checked)} className="w-4 h-4 accent-[#02c0ce]" />
+                <span className="text-[13px] text-slate-700 dark:text-slate-200">{dbChanged ? "Тийм" : "Үгүй"}</span>
+              </label>
+            ) : (
+              <span className={`text-[13px] font-medium ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}>
+                {data.db_changed ? "Тийм" : "Үгүй"}
+              </span>
+            )}
+          </div>
+          {/* Өөрчлөгдсөн нэгж талбарын дугаар */}
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өөрчлөгдсөн НТ дугаар</span>
+            {editingMeta ? (
+              <input
+                type="text" value={changedParcelId}
+                onChange={(e) => setChangedParcelId(e.target.value)}
+                placeholder="Нэгж талбарын дугаар..."
+                className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              />
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{data.changed_parcel_id || "—"}</span>
+            )}
+          </div>
+          {/* Давхардсан хилийн зураг */}
+          <div className="flex items-start gap-3 py-2.5 last:border-0 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбайн хил</span>
+            {editingMeta ? (
+              <div className="flex-1 space-y-2">
+                <input
+                  type="file"
+                  accept=".wkt,.txt,.json,.geojson,application/geo+json,application/json,text/plain"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleBoundaryLayerFile(file);
+                    e.currentTarget.value = "";
+                  }}
+                  className="block w-full text-[12px] text-slate-500 file:mr-3 file:h-8 file:rounded-lg file:border-0 file:bg-[#02c0ce]/10 file:px-3 file:text-[12px] file:font-semibold file:text-[#02c0ce] hover:file:bg-[#02c0ce]/20 dark:text-slate-400"
+                />
+                <textarea
+                  value={acquisitionGeomWkt}
+                  onChange={(e) => {
+                    setAcquisitionGeomWkt(e.target.value);
+                    setAreaAutoCalc(false);
+                  }}
+                  rows={3}
+                  placeholder="POLYGON((106.76 47.66,...)) эсвэл GeoJSON файлаар оруулна"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-800 outline-none transition-all focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
+                />
+              </div>
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {data.acquisition_geom_wkt ? "Оруулсан" : "—"}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Эзэмшигч */}
@@ -346,6 +472,18 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
               {row("Шийдвэрийн огноо", data.detail.decision_date ? formatDate(data.detail.decision_date) : undefined)}
               {row("Гэрээний дугаар", data.detail.contract_no)}
               {row("Гэрчилгээний дугаар", data.detail.certificate_no)}
+              {(data.detail.valuation_zone || data.detail.base_price_per_ha != null || data.detail.auction_price != null) && (
+                <>
+                  <div className="mt-5">
+                    <div className="h-px w-full bg-[#e2e8f0] dark:bg-[#37394d]" />
+                    <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Газрын үнэлгээ</p>
+                  </div>
+                  {row("Үнэлгээний бүс / зэрэглэл", data.detail.valuation_zone)}
+                  {row("Газрын суурь үнэ /1га/", data.detail.base_price_per_ha != null ? data.detail.base_price_per_ha.toLocaleString() : undefined)}
+                  {row("Дуудлагын анхны үнийн итгэлцүүр", data.detail.auction_coeff != null ? String(data.detail.auction_coeff) : undefined)}
+                  {row("Дуудлагын анхны үнэ", data.detail.auction_price != null ? `${data.detail.auction_price.toLocaleString()} ₮` : undefined)}
+                </>
+              )}
             </>
           ) : (
             <p className="text-[13px] text-slate-400 dark:text-slate-500 text-center py-8">Эзэмшигчийн мэдээлэл байхгүй</p>
@@ -353,150 +491,173 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
         </div>
       </div>
 
-      {/* Газрын үнэлгээ */}
-      {data.detail && (data.detail.valuation_zone || data.detail.base_price_per_ha != null || data.detail.auction_price != null) && (
-        <div className="ap-card overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Газрын үнэлгээ</p>
+      {/* Итгэмжлэгдсэн төлөөлөгч */}
+      <div className="ap-card p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-[#02c0ce]" />
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Итгэмжлэгдсэн төлөөлөгч
+            </p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                  {["#", "Газрын суурь үнэлгээний зэрэглэл / Бүс", "Газрын суурь үнэ /1га/", "Дуудлага худалдааны анхны үнийн итгэлцүүр", "Дуудлага худалдааны анхны үнэ", "Нийт"].map((h) => (
-                    <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400">1</td>
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{data.detail.valuation_zone || "—"}</td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200">
-                    {data.detail.base_price_per_ha != null ? data.detail.base_price_per_ha.toLocaleString() : "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200">
-                    {data.detail.auction_coeff != null ? data.detail.auction_coeff : "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-700 dark:text-slate-200">
-                    {data.detail.auction_price != null ? data.detail.auction_price.toLocaleString() : "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums font-semibold text-slate-800 dark:text-white">
-                    {data.detail.auction_price != null ? `${data.detail.auction_price.toLocaleString()}₮` : "—"}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Нөхөн төлбөрийн дүн */}
-      {parcelComps.length > 0 && (
-        <div className="ap-card overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Нөхөн төлбөрийн дүн</p>
-          </div>
-          <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
-            {row("Нөлөөлөлд өртсөн газрын үнэ", parcelLandValue > 0 ? `${parcelLandValue.toLocaleString()} ₮` : "—")}
-            {row("Үл хөдлөх хөрөнгийн нөхөн төлбөр", realStateComp > 0 ? `${realStateComp.toLocaleString()} ₮` : "—")}
-            {row("Эд хөрөнгийн нөхөн төлбөр", propertyComp > 0 ? `${propertyComp.toLocaleString()} ₮` : "—")}
-            {row("Нийт нөхөн төлбөр", totalComp > 0 ? <span className="font-bold text-[#02c0ce]">{totalComp.toLocaleString()} ₮</span> : "—")}
-          </div>
-        </div>
-      )}
-
-      {/* Мэдээллийн сангийн өөрчлөлт */}
-      <div className="ap-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Мэдээллийн сангийн өөрчлөлт</p>
-          {editingMeta ? (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setEditingMeta(false);
-                  setDbChanged(data.db_changed ?? false);
-                  setChangedParcelId(data.changed_parcel_id ?? "");
-                  setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
-                  setAreaAutoCalc(false);
-                }}
-                className="h-7 px-3 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
-              >Болих</button>
-              <button
-                onClick={() => metaMutation.mutate()}
-                disabled={metaMutation.isPending}
-                className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
-              >Хадгалах</button>
-            </div>
-          ) : (
-            <button onClick={() => setEditingMeta(true)} className="h-7 px-3 rounded-lg text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors">
-              Засах
+          {!isExternal && (
+            <button
+              onClick={() => { setRepModalOpen(true); setRepFormErrors({}); }}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Бүртгэх
             </button>
           )}
         </div>
-        <div className="px-5 divide-y divide-slate-100 dark:divide-[#37394d]">
-          {/* Чөлөөлөгдөх талбай */}
-          <div className="flex items-center gap-3 py-2.5">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбай (м²)</span>
-            {editingMeta ? (
-              <div className="flex flex-1 items-center gap-2">
-                <input
-                  type="number"
-                  value={acquisitionAreaM2}
-                  onChange={(e) => { setAcquisitionAreaM2(e.target.value); setAreaAutoCalc(false); }}
-                  placeholder="Талбай оруулах..."
-                  className="h-8 w-44 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-                />
-                {data.acquisition_geom_wkt && (
-                  <button
-                    type="button"
-                    onClick={handleAutoCalcArea}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
-                  >
-                    <Calculator className="h-3.5 w-3.5" />
-                    Хилээс тооцоолох
-                  </button>
-                )}
-                {areaAutoCalc && (
-                  <span className="text-[11px] text-[#0acf97] font-medium">Автоматаар тооцоологдсон</span>
+
+        {representatives.length === 0 ? (
+          <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
+            Итгэмжлэгдсэн төлөөлөгч бүртгэгдээгүй байна
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {representatives.map((rep) => (
+              <div key={rep.id} className="flex items-start justify-between gap-3 rounded-xl border border-slate-100 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#191b22] px-4 py-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] font-semibold text-slate-800 dark:text-white">
+                      {rep.last_name} {rep.first_name}
+                    </span>
+                    {rep.register_no && (
+                      <span className="rounded-md bg-slate-200/70 dark:bg-white/[0.06] px-2 py-0.5 text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                        {rep.register_no}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+                    {rep.phone && <span>📞 {rep.phone}</span>}
+                    {rep.email && <span>✉ {rep.email}</span>}
+                    {rep.address && <span>📍 {rep.address}</span>}
+                  </div>
+                  {rep.note && (
+                    <p className="text-[11px] italic text-slate-400 dark:text-slate-500">{rep.note}</p>
+                  )}
+                </div>
+                {!isExternal && (
+                  repDeleteConfirm === rep.id ? (
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <span className="text-[11px] text-slate-500">Устгах уу?</span>
+                      <button
+                        onClick={() => deleteRepMutation.mutate(rep.id)}
+                        disabled={deleteRepMutation.isPending}
+                        className="h-7 px-2.5 rounded-lg bg-red-500 text-[12px] font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                      >Тийм</button>
+                      <button
+                        onClick={() => setRepDeleteConfirm(null)}
+                        className="h-7 px-2.5 rounded-lg text-[12px] text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
+                      >Үгүй</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setRepDeleteConfirm(rep.id)}
+                      className="shrink-0 flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )
                 )}
               </div>
-            ) : (
-              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                {data.acquisition_area_m2 != null ? formatArea(data.acquisition_area_m2) : "—"}
-              </span>
-            )}
+            ))}
           </div>
-          <div className="flex items-center gap-3 py-2.5">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Мэдээллийн санд өөрчлөлт орсон эсэх</span>
-            {editingMeta ? (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={dbChanged} onChange={(e) => setDbChanged(e.target.checked)} className="w-4 h-4 accent-[#02c0ce]" />
-                <span className="text-[13px] text-slate-700 dark:text-slate-200">{dbChanged ? "Тийм" : "Үгүй"}</span>
-              </label>
-            ) : (
-              <span className={`text-[13px] font-medium ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}>
-                {data.db_changed ? "Тийм" : "Үгүй"}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 py-2.5">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өөрчлөгдсөн нэгж талбарын дугаар</span>
-            {editingMeta ? (
-              <input
-                type="text" value={changedParcelId}
-                onChange={(e) => setChangedParcelId(e.target.value)}
-                placeholder="Нэгж талбарын дугаар..."
-                className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-              />
-            ) : (
-              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{data.changed_parcel_id || "—"}</span>
-            )}
-          </div>
-        </div>
+        )}
       </div>
 
-      <CompensationSection acqId={acqId} parcelCode={data.parcel_id} parcelId={parcelId} />
+      {/* Төлөөлөгч бүртгэх modal */}
+      {repModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#02c0ce]/10">
+                  <UserPlus className="h-4 w-4 text-[#02c0ce]" />
+                </div>
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Итгэмжлэгдсэн төлөөлөгч бүртгэх</p>
+              </div>
+              <button onClick={() => setRepModalOpen(false)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Овог <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    value={repForm.last_name}
+                    onChange={(e) => { setRepForm(f => ({ ...f, last_name: e.target.value })); setRepFormErrors(e2 => ({ ...e2, last_name: false })); }}
+                    placeholder="Овог"
+                    className={`h-9 w-full rounded-lg border px-3 text-[13px] outline-none transition-all dark:bg-[#1e1f27] dark:text-slate-200 ${repFormErrors.last_name ? "border-red-400 bg-red-50/30 focus:ring-red-400/20" : "border-slate-200 dark:border-white/[0.08] bg-white focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15"}`}
+                  />
+                  {repFormErrors.last_name && <p className="mt-0.5 text-[11px] text-red-400">Заавал бөглөнө</p>}
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Нэр <span className="text-red-400">*</span></label>
+                  <input
+                    type="text"
+                    value={repForm.first_name}
+                    onChange={(e) => { setRepForm(f => ({ ...f, first_name: e.target.value })); setRepFormErrors(e2 => ({ ...e2, first_name: false })); }}
+                    placeholder="Нэр"
+                    className={`h-9 w-full rounded-lg border px-3 text-[13px] outline-none transition-all dark:bg-[#1e1f27] dark:text-slate-200 ${repFormErrors.first_name ? "border-red-400 bg-red-50/30 focus:ring-red-400/20" : "border-slate-200 dark:border-white/[0.08] bg-white focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15"}`}
+                  />
+                  {repFormErrors.first_name && <p className="mt-0.5 text-[11px] text-red-400">Заавал бөглөнө</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Регистрийн дугаар</label>
+                  <input type="text" value={repForm.register_no} onChange={(e) => setRepForm(f => ({ ...f, register_no: e.target.value }))} placeholder="АА99999999" className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Утас</label>
+                  <input type="text" value={repForm.phone} onChange={(e) => setRepForm(f => ({ ...f, phone: e.target.value }))} placeholder="9999 9999" className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">И-мэйл</label>
+                <input type="email" value={repForm.email} onChange={(e) => setRepForm(f => ({ ...f, email: e.target.value }))} placeholder="example@email.mn" className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Хаяг</label>
+                <input type="text" value={repForm.address} onChange={(e) => setRepForm(f => ({ ...f, address: e.target.value }))} placeholder="Хаяг оруулах..." className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all" />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1">Тэмдэглэл</label>
+                <textarea
+                  value={repForm.note}
+                  onChange={(e) => setRepForm(f => ({ ...f, note: e.target.value }))}
+                  rows={2}
+                  placeholder="Нэмэлт тэмдэглэл..."
+                  className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
+              <button onClick={() => setRepModalOpen(false)} className="h-9 px-4 rounded-xl text-[13px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors">
+                Болих
+              </button>
+              <button
+                onClick={handleRepSubmit}
+                disabled={createRepMutation.isPending}
+                className="h-9 px-5 rounded-xl bg-[#02c0ce] text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+              >
+                {createRepMutation.isPending ? "Хадгалж байна..." : "Бүртгэх"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm dialog */}
       {confirmOpen && (

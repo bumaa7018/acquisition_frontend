@@ -55,6 +55,13 @@ export interface ConstructionType {
   sort_order: number;
 }
 
+export interface AcquisitionCategory {
+  id: number;
+  name: string;
+  parent_id: number | null;
+  sort_order: number;
+}
+
 export interface AcquisitionProgressStatus {
   id: number;
   name: string;
@@ -83,6 +90,18 @@ export interface AcquisitionAssignee {
   assigned_at: string;
 }
 
+export interface FundingSource {
+  id: string;
+  acquisition_id: string;
+  organization_name: string;
+  source_type: string;
+  amount?: number;
+  currency?: string;
+  note?: string;
+  created_at: string;
+  created_by?: string;
+}
+
 export interface LandAcquisition {
   id: string;
   plan_code: string;
@@ -97,8 +116,10 @@ export interface LandAcquisition {
   reason: string;
   responsible_org: string;
   funding_source: string;
-  construction_type_id?: number;
-  construction_type_name: string;
+  general_category_id?: number;
+  general_category_name: string;
+  sub_category_id?: number;
+  sub_category_name: string;
   decree_number: string;
   decree_date?: string;
   created_at: string;
@@ -107,6 +128,9 @@ export interface LandAcquisition {
   aus: AU[];
   parcels: Parcel[];
   assigned_users?: AcquisitionAssignee[];
+  // Professional org assigned to perform the primary valuation
+  professional_org_id?: string;
+  professional_org_name?: string;
 }
 
 export interface AU {
@@ -135,8 +159,9 @@ export const PARCEL_STATUS_STYLES: Record<
   number,
   { color: string; bg: string }
 > = {
+  0: { color: "#64748b", bg: "#64748b1f" }, // Хүлээгдэж буй — саарал
   1: { color: "#eab308", bg: "#eab3081f" }, // Зөвшилцөх шатандаа — шар
-  2: { color: "#f97316", bg: "#f973161f" }, // НОСК — улбар шар
+  2: { color: "#f97316", bg: "#f973161f" }, // Үнэлгээ хийх — улбар шар
   3: { color: "#ec4899", bg: "#ec48991f" }, // Нөлөөлөгдсөн гарсан — ягаан
   4: { color: "#ef4444", bg: "#ef44441f" }, // Татгалзсан — улаан
   5: { color: "#22c55e", bg: "#22c55e1f" }, // Чөлөөлсөн — ногоон
@@ -146,8 +171,9 @@ export const PARCEL_STATUS_NAME_STYLES: Record<
   string,
   { color: string; bg: string }
 > = {
+  "Хүлээгдэж буй": PARCEL_STATUS_STYLES[0],
   "Зөвшилцөх шатандаа": PARCEL_STATUS_STYLES[1],
-  НОСК: PARCEL_STATUS_STYLES[2],
+  "Үнэлгээ хийх": PARCEL_STATUS_STYLES[2],
   "Нөлөөлөгдсөн гарсан": PARCEL_STATUS_STYLES[3],
   Татгалзсан: PARCEL_STATUS_STYLES[4],
   Чөлөөлсөн: PARCEL_STATUS_STYLES[5],
@@ -157,7 +183,7 @@ export function getParcelStatusStyle(status?: number, statusName?: string) {
   return (
     (statusName && PARCEL_STATUS_NAME_STYLES[statusName]) ||
     (status !== undefined && PARCEL_STATUS_STYLES[status]) ||
-    PARCEL_STATUS_STYLES[1]
+    PARCEL_STATUS_STYLES[0]
   );
 }
 
@@ -178,6 +204,8 @@ export interface Parcel {
   db_changed: boolean;
   changed_parcel_id: string;
   geometry_wkt?: string;
+  independent_org_id?: string;
+  independent_org_name?: string;
 }
 
 export interface StatusOption {
@@ -194,6 +222,15 @@ export interface AcquisitionProgress {
   changed_at: string;
 }
 
+export interface BoundaryHistory {
+  id: string;
+  land_acquisition_id: string;
+  old_geometry_wkt: string;
+  new_geometry_wkt: string;
+  changed_by: string;
+  changed_at: string;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -206,6 +243,25 @@ export interface Document {
   document_type_id?: number;
 }
 
+export interface ParcelStatusHistory {
+  id: number;
+  parcel_id: string;
+  acquisition_id: string;
+  status_id: number;
+  status_name: string;
+  status_date: string;
+  created_by: string;
+}
+
+export interface ParcelWorkflow {
+  id: number;
+  from_status_id: number | null;
+  to_status_id: number;
+  from_status_name: string;
+  to_status_name: string;
+  sort_order: number;
+}
+
 export interface ParcelFull extends Parcel {
   acquisition_id: string;
   old_parcel_id?: string;
@@ -213,6 +269,8 @@ export interface ParcelFull extends Parcel {
   valid_till?: string;
   geometry_wkt: string;
   acquisition_geom_wkt: string;
+  status_id: number;
+  status_name: string;
   created_at: string;
   created_by: string;
   detail?: ParcelDetail;
@@ -220,7 +278,25 @@ export interface ParcelFull extends Parcel {
   remaining_area_m2?: number;
   db_changed: boolean;
   changed_parcel_id: string;
+  // Independent org assigned to this parcel for independent valuation (Хөндлөнгийн үнэлгээ)
+  independent_org_id?: string;
+  independent_org_name?: string;
 }
+
+// Role constants for role-based access control
+export const ROLE_CODES = {
+  PROFESSIONAL_ORG: "professional_org",
+  MIKA: "mika",
+  FINANCE_SPECIALIST: "finance_specialist",
+  SENIOR_SPECIALIST: "senior_specialist",
+} as const;
+
+export const ROLE_DISPLAY_NAMES: Record<string, string> = {
+  professional_org: "Мэргэжлийн байгуулл...",
+  mika: "МИКА",
+  finance_specialist: "Санхүүгийн мэргэжилтэн",
+  senior_specialist: "Ахлах мэргэжилтэн",
+};
 
 export interface ParcelDetail {
   right_type: number;
@@ -275,7 +351,8 @@ export interface ReportParcelRow {
   acquisition_id: string;
   acquisition_name: string;
   plan_code: string;
-  construction_type_name: string;
+  general_category_name: string;
+  sub_category_name: string;
   decree_number: string;
   decree_date?: string;
   holder_last_name: string;
@@ -333,8 +410,42 @@ export interface Compensation {
   compensation_date?: string;
   note?: string;
   grant?: CompensationGrant;
+  status: "pending" | "approved" | "rejected";
+  review_note?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface CompensationHistory {
+  id: string;
+  compensation_id: string;
+  compensation_type: "cash" | "land_grant";
+  coverage_percent: number;
+  amount: number;
+  compensation_date?: string;
+  note?: string;
+  status: string;
+  review_note?: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  archived_at: string;
+}
+
+export interface AuthorizedRepresentative {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  last_name: string;
+  first_name: string;
+  register_no: string;
+  phone: string;
+  email: string;
+  address: string;
+  note: string;
+  created_at: string;
+  created_by: string;
 }
 
 export interface ParcelPayment {
@@ -352,6 +463,8 @@ export interface LandAcquisitionFilter {
   plan_code?: string;
   status?: number;
   au3_code?: string;
+  general_category_id?: number;
+  sub_category_id?: number;
   page?: number;
   page_size?: number;
 }

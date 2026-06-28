@@ -521,6 +521,8 @@ export default function ReportPage() {
   const [inRightType, setInRightType] = useState(0);
   const [inLanduse, setInLanduse] = useState("");
   const [inCompType, setInCompType] = useState("");
+  const [inGenCatId, setInGenCatId] = useState(0);
+  const [inSubCatId, setInSubCatId] = useState(0);
 
   // Query state — "Хайх" дарахад л шинэчлэгдэнэ, API руу илгээнэ
   const [page, setPage] = useState(1);
@@ -532,6 +534,8 @@ export default function ReportPage() {
   const [rightType, setRightType] = useState(0);
   const [landuse, setLanduse] = useState("");
   const [compType, setCompType] = useState("");
+  const [genCatId, setGenCatId] = useState(0);
+  const [subCatId, setSubCatId] = useState(0);
 
   const [dlOpen, setDlOpen] = useState(false);
   const [dlProgress, setDlProgress] = useState(0);
@@ -539,6 +543,16 @@ export default function ReportPage() {
   const [dlStatus, setDlStatus] = useState<
     "idle" | "fetching" | "generating" | "done" | "error"
   >("idle");
+
+  const { data: reportGenCats = [] } = useQuery({
+    queryKey: ["acquisition-categories"],
+    queryFn: () => landApi.listCategories(),
+  });
+  const { data: reportSubCats = [] } = useQuery({
+    queryKey: ["acquisition-categories", inGenCatId],
+    queryFn: () => landApi.listCategories(inGenCatId),
+    enabled: !!inGenCatId,
+  });
 
   const hasActiveFilter = !!(
     planCode ||
@@ -548,7 +562,9 @@ export default function ReportPage() {
     au3Code ||
     rightType ||
     landuse ||
-    compType
+    compType ||
+    genCatId ||
+    subCatId
   );
   const hasPendingChange =
     inPlanCode !== planCode ||
@@ -558,7 +574,9 @@ export default function ReportPage() {
     inAu3Code !== au3Code ||
     inRightType !== rightType ||
     inLanduse !== landuse ||
-    inCompType !== compType;
+    inCompType !== compType ||
+    inGenCatId !== genCatId ||
+    inSubCatId !== subCatId;
 
   const filter = {
     plan_code: planCode || undefined,
@@ -569,6 +587,8 @@ export default function ReportPage() {
     landuse: landuse || undefined,
     years: acqYears.length > 0 ? acqYears.map(Number) : undefined,
     compensation_type: compType || undefined,
+    general_category_id: genCatId || undefined,
+    sub_category_id: subCatId || undefined,
     page,
     page_size: PAGE_SIZE,
   };
@@ -594,6 +614,8 @@ export default function ReportPage() {
     setRightType(inRightType);
     setLanduse(inLanduse);
     setCompType(inCompType);
+    setGenCatId(inGenCatId);
+    setSubCatId(inSubCatId);
     setPage(1);
   };
 
@@ -606,6 +628,8 @@ export default function ReportPage() {
     setInRightType(0);
     setInLanduse("");
     setInCompType("");
+    setInGenCatId(0);
+    setInSubCatId(0);
     setPlanCode("");
     setAcqId("");
     setAcqName("");
@@ -614,6 +638,8 @@ export default function ReportPage() {
     setRightType(0);
     setLanduse("");
     setCompType("");
+    setGenCatId(0);
+    setSubCatId(0);
     setPage(1);
   };
 
@@ -638,6 +664,8 @@ export default function ReportPage() {
     if (rightType) params.set("right_type", String(rightType));
     if (landuse) params.set("landuse", landuse);
     if (compType) params.set("compensation_type", compType);
+    if (genCatId) params.set("general_category_id", String(genCatId));
+    if (subCatId) params.set("sub_category_id", String(subCatId));
     if (token) params.set("token", token);
 
     try {
@@ -690,6 +718,8 @@ export default function ReportPage() {
     rightType,
     landuse,
     compType,
+    genCatId,
+    subCatId,
   ]);
 
   return (
@@ -782,6 +812,39 @@ export default function ReportPage() {
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           </div>
 
+          <div className="relative">
+            <select
+              value={inGenCatId}
+              onChange={(e) => {
+                setInGenCatId(Number(e.target.value));
+                setInSubCatId(0);
+              }}
+              className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-3 pr-8 text-[13px] text-slate-700 dark:text-white outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+            >
+              <option value={0}>Бүх ерөнхий ангилал</option>
+              {reportGenCats.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          </div>
+
+          {!!inGenCatId && (
+            <div className="relative">
+              <select
+                value={inSubCatId}
+                onChange={(e) => setInSubCatId(Number(e.target.value))}
+                className="h-9 appearance-none rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-3 pr-8 text-[13px] text-slate-700 dark:text-white outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              >
+                <option value={0}>Бүх дэд ангилал</option>
+                {reportSubCats.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            </div>
+          )}
+
           <button
             onClick={handleSearch}
             className={cn(
@@ -803,7 +866,8 @@ export default function ReportPage() {
             inAu3Code ||
             inRightType ||
             inLanduse ||
-            inCompType) && (
+            inCompType ||
+            inGenCatId) && (
             <button
               onClick={handleReset}
               className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 dark:border-white/[0.08] text-[13px] text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors"
@@ -823,6 +887,8 @@ export default function ReportPage() {
                   "Нэгж талбарын дугаар",
                   "Чөлөөлөлтийн нэр",
                   "Төлөвлөгөө",
+                  "Ерөнхий ангилал",
+                  "Дэд ангилал",
                   "Өмчлөгч, эзэмшигч",
                   "Регистр",
                   "Талбай (м²)",
@@ -843,7 +909,7 @@ export default function ReportPage() {
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 10 }).map((__, j) => (
+                    {Array.from({ length: 12 }).map((__, j) => (
                       <td key={j} className="px-5 py-3.5">
                         <div className="h-4 bg-slate-100 dark:bg-white/[0.06] rounded w-3/4" />
                       </td>
@@ -853,7 +919,7 @@ export default function ReportPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={12}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     Мэдээлэл олдсонгүй
@@ -885,6 +951,12 @@ export default function ReportPage() {
                         <span className="font-mono text-[11px] text-[#02c0ce] bg-[#02c0ce]/10 px-2 py-0.5 rounded">
                           {p.plan_code}
                         </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
+                        <span className="truncate block">{p.general_category_name || "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
+                        <span className="truncate block">{p.sub_category_name || "—"}</span>
                       </td>
                       <td className="px-5 py-3.5">
                         <p

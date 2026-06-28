@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import path from "path";
+import { isExternalAuthorization } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,13 @@ export async function GET(request: NextRequest) {
         ? rawToken
         : `Bearer ${rawToken}`
       : "");
+
+  if (isExternalAuthorization(token)) {
+    return new Response(JSON.stringify({ error: "Тайлан татах эрхгүй" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const planCode = searchParams.get("plan_code") ?? "";
   const acqId = searchParams.get("acquisition_id") ?? "";

@@ -11,6 +11,7 @@ export type MapLayerId =
   | 'parcel'
   | 'building'
   | 'v_parcel_acquisition'
+  | 'v_parcel_s0'
   | 'v_parcel_s1'
   | 'v_parcel_s2'
   | 'v_parcel_s3'
@@ -34,8 +35,9 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   parcel:                 { label: 'Нэгж талбарын хил',    color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },
   v_parcel_acquisition:   { label: 'Нэгж талбар (бүгд)',   color: '#94a3b8', zIndex: 35 },
+  v_parcel_s0: { label: 'Хүлээгдэж буй',        color: '#64748b', zIndex: 30, group: 'parcel_status' },
   v_parcel_s1: { label: 'Зөвшилцөх шатандаа',  color: '#eab308', zIndex: 31, group: 'parcel_status' },
-  v_parcel_s2: { label: 'НОСК',                color: '#f97316', zIndex: 32, group: 'parcel_status' },
+  v_parcel_s2: { label: 'Үнэлгээ хийх',         color: '#f97316', zIndex: 32, group: 'parcel_status' },
   v_parcel_s3: { label: 'Нөлөөлөгдсөн гарсан', color: '#ec4899', zIndex: 33, group: 'parcel_status' },
   v_parcel_s4: { label: 'Татгалзсан',          color: '#ef4444', zIndex: 34, group: 'parcel_status' },
   v_parcel_s5: { label: 'Чөлөөлсөн',          color: '#22c55e', zIndex: 35, group: 'parcel_status' },

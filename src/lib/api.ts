@@ -1,13 +1,17 @@
 import axios from 'axios'
 import { authStorage } from './auth'
+import { notifyRequestStart, notifyRequestEnd } from './blocking-loader-state'
+import { canCallApiEndpointForActor } from './access-policy'
+import { getCurrentActor } from './role-utils'
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
-  ConstructionType, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
-  AcquisitionAssignee,
+  ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
+  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
+  CompensationHistory, AuthorizedRepresentative,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -37,6 +41,8 @@ type ReportListParams = {
   landuse?: string
   years?: number[]
   compensation_type?: string
+  general_category_id?: number
+  sub_category_id?: number
 }
 
 type LegacyParcel = Omit<Parcel, 'right_type' | 'compensation_paid'> & {
@@ -59,19 +65,29 @@ function normalizeRightType(value: number | string): number {
   return LEGACY_RIGHT_TYPES[value.toUpperCase()] ?? 0
 }
 
-function yearFromDate(value?: string): string {
-  return value?.match(/\b\d{4}\b/)?.[0] ?? ''
-}
+function parcelListSearchParams(params?: ParcelListParams): URLSearchParams {
+  const q = new URLSearchParams()
+  if (!params) return q
 
-function yearSet(values?: number[]): Set<string> {
-  return new Set((values ?? []).map(String).filter(Boolean))
+  if (params.page) q.set('page', String(params.page))
+  if (params.page_size) q.set('page_size', String(params.page_size))
+  if (params.parcel_id) q.set('parcel_id', params.parcel_id)
+  if (params.right_type) q.set('right_type', String(params.right_type))
+  if (params.landuse) q.set('landuse', params.landuse)
+  if (params.au3_code) q.set('au3_code', params.au3_code)
+  if (params.acquisition_id) q.set('acquisition_id', params.acquisition_id)
+  if (params.acquisition_name) q.set('acquisition_name', params.acquisition_name)
+  if (params.plan_code) q.set('plan_code', params.plan_code)
+  if (params.status != null) q.set('status', String(params.status))
+  params.years?.forEach(year => q.append('year', String(year)))
+
+  return q
 }
 
 async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<PaginatedResponse<GlobalParcel>> {
   const page = params?.page ?? 1
   const pageSize = params?.page_size ?? 20
   const acqPageSize = 100
-  const selectedYears = yearSet(params?.years)
 
   const fetchAcquisitions = async (pageNo: number) =>
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', {
@@ -93,7 +109,6 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
       if (name && !(acq.acquisition_name ?? '').toLowerCase().includes(name)) return false
       const plan = params?.plan_code?.trim().toLowerCase()
       if (plan && !(acq.plan_code ?? '').toLowerCase().includes(plan)) return false
-      if (selectedYears.size > 0 && !selectedYears.has(yearFromDate(acq.start_date))) return false
       return true
     })
 
@@ -143,12 +158,32 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
 api.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
+  if (
+    token &&
+    config.url &&
+    !canCallApiEndpointForActor(getCurrentActor(), config.method, config.url)
+  ) {
+    return Promise.reject(
+      Object.assign(new Error('Энэ API хүсэлтэд хандах эрхгүй'), {
+        config,
+        response: {
+          status: 403,
+          data: { message: 'Энэ API хүсэлтэд хандах эрхгүй' },
+        },
+      }),
+    )
+  }
+  notifyRequestStart()
   return config
 })
 
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    notifyRequestEnd()
+    return res
+  },
   async (error) => {
+    notifyRequestEnd()
     console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
     if (error.response?.status === 401 && !error.config._retry && !isAuthRoute) {
@@ -181,7 +216,7 @@ export const usersApi = {
   list: (params?: { page?: number; page_size?: number }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { email: string; password: string; first_name: string; last_name: string; position?: string }) =>
+  create: (body: { email: string; password: string; first_name: string; last_name: string; position?: string; role_names?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
   update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string; position: string }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
@@ -215,6 +250,10 @@ export const permissionsApi = {
 export const landApi = {
   listConstructionTypes: () =>
     api.get<ApiResponse<ConstructionType[]>>('/construction-types').then(r => r.data.data),
+  listCategories: (parentId?: number) =>
+    api.get<ApiResponse<AcquisitionCategory[]>>('/acquisition-categories', {
+      params: parentId !== undefined ? { parent_id: parentId } : undefined,
+    }).then(r => r.data.data ?? []),
   list: (filter?: LandAcquisitionFilter) =>
     api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', { params: filter }).then(r => r.data),
   suggest: (q: string) =>
@@ -232,7 +271,7 @@ export const landApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
-  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; right_type?: number; landuse?: string }) =>
+  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
   getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
@@ -252,6 +291,12 @@ export const landApi = {
     api.put<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}`, body).then(r => r.data.data),
   deleteCompensation: (acqId: string, compId: string) =>
     api.delete(`/land-acquisitions/${acqId}/compensations/${compId}`),
+  approveCompensation: (acqId: string, compId: string, note: string) =>
+    api.post(`/land-acquisitions/${acqId}/compensations/${compId}/approve`, { note }),
+  rejectCompensation: (acqId: string, compId: string, note: string) =>
+    api.post(`/land-acquisitions/${acqId}/compensations/${compId}/reject`, { note }),
+  listCompensationHistory: (acqId: string, compId: string) =>
+    api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
     api.post<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
   updateCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
@@ -278,6 +323,8 @@ export const landApi = {
     api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation`, body),
   getProgress: (id: string) =>
     api.get<ApiResponse<AcquisitionProgress[]>>(`/land-acquisitions/${id}/progress`).then(r => r.data.data),
+  getBoundaryHistory: (id: string) =>
+    api.get<ApiResponse<BoundaryHistory[]>>(`/land-acquisitions/${id}/boundary-history`).then(r => r.data.data ?? []),
   getAvailableStatuses: (id: string) =>
     api.get<ApiResponse<StatusOption[]>>(`/land-acquisitions/${id}/available-statuses`).then(r => r.data.data),
   advanceStatus: (id: string, toStatus: number, note?: string, decreeNumber?: string, decreeDate?: string) =>
@@ -287,11 +334,12 @@ export const landApi = {
       decree_number: decreeNumber ?? '',
       decree_date: decreeDate ?? null,
     }).then(r => r.data.data),
-  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string, acquisitionAreaM2?: number) =>
+  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string, acquisitionAreaM2?: number, acquisitionGeomWkt?: string) =>
     api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/meta`, {
       db_changed: dbChanged,
       changed_parcel_id: changedParcelId,
       ...(acquisitionAreaM2 != null ? { acquisition_area_m2: acquisitionAreaM2 } : {}),
+      ...(acquisitionGeomWkt ? { acquisition_geom_wkt: acquisitionGeomWkt } : {}),
     }).then(r => r.data),
   listDocuments: (id: string) =>
     api.get<ApiResponse<Document[]>>(`/land-acquisitions/${id}/documents`).then(r => r.data.data ?? []),
@@ -314,19 +362,64 @@ export const landApi = {
   setAssignees: (acquisitionId: string, users: { user_id: string; user_name: string; user_position?: string }[]): Promise<AcquisitionAssignee[]> =>
     api.put<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`, { users })
       .then(r => r.data.data ?? []),
+
+  // Set the professional org user for an acquisition
+  setProfessionalOrg: (acquisitionId: string, orgUserId: string | null) => {
+    const fd = new FormData()
+    if (orgUserId) fd.append('professional_org_id', orgUserId)
+    else fd.append('clear_professional_org', 'true')
+    return api.put<ApiResponse<import('@/types').LandAcquisition>>(`/land-acquisitions/${acquisitionId}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
+
+  // Set the independent org user for a specific parcel
+  setParcelIndependentOrg: (acqId: string, parcelId: string, orgUserId: string | null) =>
+    api.patch<ApiResponse<import('@/types').ParcelFull>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelId}/independent-org`,
+      { independent_org_id: orgUserId }
+    ).then(r => r.data.data),
+
+  // Funding sources
+  listFundingSources: (acqId: string) =>
+    api.get<ApiResponse<FundingSource[]>>(`/land-acquisitions/${acqId}/funding-sources`).then(r => r.data.data ?? []),
+  createFundingSource: (acqId: string, body: Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>) =>
+    api.post<ApiResponse<FundingSource>>(`/land-acquisitions/${acqId}/funding-sources`, body).then(r => r.data.data),
+  updateFundingSource: (acqId: string, srcId: string, body: Partial<Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>>) =>
+    api.put<ApiResponse<FundingSource>>(`/land-acquisitions/${acqId}/funding-sources/${srcId}`, body).then(r => r.data.data),
+  deleteFundingSource: (acqId: string, srcId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/funding-sources/${srcId}`),
+
+  // AuthorizedRepresentative
+  listRepresentatives: (acqId: string, parcelId: string) =>
+    api.get<ApiResponse<AuthorizedRepresentative[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`).then(r => r.data.data ?? []),
+  createRepresentative: (acqId: string, parcelId: string, body: Omit<AuthorizedRepresentative, 'id' | 'acquisition_id' | 'parcel_id' | 'created_at' | 'created_by'>) =>
+    api.post<ApiResponse<AuthorizedRepresentative>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`, body).then(r => r.data.data),
+  deleteRepresentative: (acqId: string, parcelId: string, repId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives/${repId}`),
+
+  // List users with professional_org role (for org selectors)
+  listProfessionalOrgUsers: () =>
+    api.get<PaginatedResponse<User>>('/users', { params: { role: 'professional_org', page_size: 200 } })
+      .then(r => {
+        const users = r.data.data ?? []
+        return users.filter(user => {
+          if (!Array.isArray(user.roles) || user.roles.length === 0) return true
+          return user.roles.some(role => role.name === 'professional_org' || role.id === 'professional_org')
+        })
+      }),
 }
 
 // ── Global Parcels ────────────────────────────────────
 export const parcelApi = {
   list: async (params?: ParcelListParams) => {
-    if (params?.years?.length) {
-      return listParcelsFromAcquisitions(params)
-    }
+    const q = parcelListSearchParams(params)
+    const suffix = q.toString()
 
     try {
-      return await api.get<PaginatedResponse<GlobalParcel>>('/parcels', { params }).then(r => r.data)
+      return await api.get<PaginatedResponse<GlobalParcel>>(`/parcels${suffix ? `?${suffix}` : ''}`).then(r => r.data)
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 404) {
+      if (axios.isAxiosError(error) && error.response?.status === 404 && !params?.years?.length) {
         return listParcelsFromAcquisitions(params)
       }
       throw error
@@ -349,6 +442,23 @@ export const parcelApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/parcels/${id}/documents/${docId}`),
+  getAvailableStatuses: (acqId: string, parcelId: string) =>
+    api.get<ApiResponse<ParcelStatus[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/available-statuses`)
+      .then(r => r.data.data ?? []),
+  updateStatus: (acqId: string, parcelId: string, statusId: number) =>
+    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/status`, { status_id: statusId }),
+  listStatusHistory: (acqId: string, parcelId: string) =>
+    api.get<ApiResponse<ParcelStatusHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`)
+      .then(r => r.data.data ?? []),
+}
+
+// ── Parcel Workflow ───────────────────────────────────
+export const parcelWorkflowApi = {
+  list: () =>
+    api.get<ApiResponse<ParcelWorkflow[]>>('/parcel-workflow').then(r => r.data.data ?? []),
+  create: (body: { from_status_id: number | null; to_status_id: number; sort_order?: number }) =>
+    api.post<{ code: number; data: ParcelWorkflow }>('/parcel-workflow', body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/parcel-workflow/${id}`),
 }
 
 // ── Report rows ───────────────────────────────────────
@@ -365,6 +475,8 @@ export const reportApi = {
     if (params?.landuse) q.set('landuse', params.landuse)
     params?.years?.forEach(year => q.append('year', String(year)))
     if (params?.compensation_type) q.set('compensation_type', params.compensation_type)
+    if (params?.general_category_id) q.set('general_category_id', String(params.general_category_id))
+    if (params?.sub_category_id) q.set('sub_category_id', String(params.sub_category_id))
 
     const suffix = q.toString()
     return api.get<PaginatedResponse<ReportParcelRow>>(`/report/download${suffix ? `?${suffix}` : ''}`).then(r => r.data)
@@ -393,29 +505,37 @@ export interface TimelinePoint {
 }
 
 export interface DashboardData {
-  acquisitions:       LandAcquisition[]
-  parcel_statuses:    ParcelStatus[]
-  total_parcels:      number
-  freed_parcels:      number
-  freed_area_m2:      number
-  plan_area_m2:       number
-  total_orders:       number
-  total_compensation: number
-  status_breakdown:   ParcelStatusStat[]
-  timeline:           TimelinePoint[]
+  acquisitions:         LandAcquisition[]
+  parcel_statuses:      ParcelStatus[]
+  total_parcels:        number
+  freed_parcels:        number
+  freed_area_m2:        number
+  plan_area_m2:         number
+  total_orders:         number
+  total_compensation:   number
+  status_breakdown:     ParcelStatusStat[]
+  timeline:             TimelinePoint[]
+  filtered_parcel_ids:  string[]
+  filtered_au1_codes:   string[]
+  filtered_au2_codes:   string[]
+  filtered_au3_codes:   string[]
 }
 
 export type DashboardFilter = {
-  acquisition_id?: string
-  plan_code?:      string
-  years?:          number[]
+  acquisition_id?:      string
+  plan_code?:           string
+  years?:               number[]
+  general_category_id?: number
+  sub_category_id?:     number
 }
 
 export const dashboardApi = {
   get: (filter?: DashboardFilter): Promise<DashboardData> => {
     const params = new URLSearchParams()
-    if (filter?.acquisition_id) params.set('acquisition_id', filter.acquisition_id)
-    if (filter?.plan_code)      params.set('plan_code', filter.plan_code)
+    if (filter?.acquisition_id)      params.set('acquisition_id', filter.acquisition_id)
+    if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
+    if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
+    if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
     filter?.years?.forEach(y => params.append('year', String(y)))
     return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
   },
@@ -452,6 +572,18 @@ export const parcelStatusApi = {
   update: (id: number, body: { code?: string; name?: string; sort_order?: number }) =>
     api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
+}
+
+export const acquisitionCategoryApi = {
+  list: (parentId?: number) =>
+    api.get<ApiResponse<AcquisitionCategory[]>>('/acquisition-categories', {
+      params: parentId !== undefined ? { parent_id: parentId } : undefined,
+    }).then(r => r.data.data ?? []),
+  create: (body: { name: string; parent_id?: number | null; sort_order?: number }) =>
+    api.post<{ code: number; data: AcquisitionCategory }>('/acquisition-categories', body).then(r => r.data.data),
+  update: (id: number, body: { name: string; sort_order?: number }) =>
+    api.put<ApiResponse<AcquisitionCategory>>(`/acquisition-categories/${id}`, body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/acquisition-categories/${id}`),
 }
 
 export default api

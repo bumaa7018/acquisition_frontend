@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
+import { isExternalAuthorization } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,13 @@ export async function GET(
 ) {
   const { id } = await params;
   const token = request.headers.get("authorization") ?? "";
+
+  if (isExternalAuthorization(token)) {
+    return NextResponse.json(
+      { error: "Тайлан татах эрхгүй" },
+      { status: 403 },
+    );
+  }
 
   try {
     // 1. Бүх мэдээллийг зэрэг татах

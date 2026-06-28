@@ -1,16 +1,14 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { landApi, planApi } from "@/lib/api";
-import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
-import type { Plan } from "@/types";
+import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   Search,
   Trash2,
-  Eye,
   MapPin,
   ChevronLeft,
   ChevronRight,
@@ -34,29 +32,7 @@ const STATUS_CFG: Record<number, { color: string; bg: string }> = {
 
 const PAGE_SIZE = 15;
 
-function hasPermission(name: string): boolean {
-  const token = authStorage.getAccessToken();
-  if (!token) return false;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return (
-      Array.isArray(payload.permissions) && payload.permissions.includes(name)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasRole(...names: string[]): boolean {
-  const token = authStorage.getAccessToken();
-  if (!token) return false;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return Array.isArray(payload.roles) && payload.roles.some((r: string) => names.includes(r));
-  } catch {
-    return false;
-  }
-}
+import { hasPermission, hasRole, isProfessionalOrg, isExternalSpecialRole, getCurrentUserId } from "@/lib/role-utils";
 
 // ── Plan combobox ─────────────────────────────────────────────────────────────
 function PlanCombobox({ onSelect }: { onSelect: (plan: Plan) => void }) {
@@ -168,23 +144,40 @@ function CreateModal({ onClose }: CreateModalProps) {
   const [startDate, setStartDate] = useState(
     () => new Date().toISOString().split("T")[0],
   );
-  const [endDate, setEndDate] = useState("");
   const [implementingOrg, setImplementingOrg] = useState("");
   const [reason, setReason] = useState("");
   const [responsibleOrg, setResponsibleOrg] = useState("");
-  const [fundingSource, setFundingSource] = useState("");
-  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(
-    null,
-  );
+  const [fundingSources, setFundingSources] = useState<string[]>([""]);
+  const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
+  const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
   const [shpFile, setShpFile] = useState<File | null>(null);
 
-  const { data: constructionTypes = [] } = useQuery({
-    queryKey: ["construction-types"],
-    queryFn: () => landApi.listConstructionTypes(),
+  const { data: generalCategories = [] } = useQuery({
+    queryKey: ["acquisition-categories"],
+    queryFn: () => landApi.listCategories(),
+  });
+  const { data: subCategories = [] } = useQuery({
+    queryKey: ["acquisition-categories", generalCategoryId],
+    queryFn: () => landApi.listCategories(generalCategoryId!),
+    enabled: !!generalCategoryId,
   });
 
   const createMutation = useMutation({
-    mutationFn: (fd: FormData) => landApi.create(fd),
+    mutationFn: async (fd: FormData) => {
+      const acq = await landApi.create(fd);
+      const nonEmpty = fundingSources.filter((s) => s.trim());
+      if (nonEmpty.length > 0) {
+        await Promise.all(
+          nonEmpty.map((src) =>
+            landApi.createFundingSource(acq.id, {
+              organization_name: src.trim(),
+              source_type: src.trim(),
+            }),
+          ),
+        );
+      }
+      return acq;
+    },
     onSuccess: (acq) => {
       toast.success("Чөлөөлөлт амжилттай бүртгэгдлээ");
       if (acq.aus?.length) {
@@ -202,17 +195,25 @@ function CreateModal({ onClose }: CreateModalProps) {
       toast.error("Бүх заавал талбаруудыг бөглөнө үү");
       return;
     }
+    if (!generalCategoryId) {
+      toast.error("Ерөнхий ангилал сонгоно уу");
+      return;
+    }
+    if (!subCategoryId) {
+      toast.error("Дэд ангилал сонгоно уу");
+      return;
+    }
     const fd = new FormData();
     fd.append("plan_code", plan.plan_code);
     fd.append("start_date", startDate);
-    fd.append("end_date", endDate);
     fd.append("acquisition_name", projectName);
     fd.append("implementing_org", implementingOrg);
     fd.append("reason", reason);
     fd.append("responsible_org", responsibleOrg);
-    fd.append("funding_source", fundingSource);
-    if (constructionTypeId)
-      fd.append("construction_type_id", String(constructionTypeId));
+    if (generalCategoryId)
+      fd.append("general_category_id", String(generalCategoryId));
+    if (subCategoryId)
+      fd.append("sub_category_id", String(subCategoryId));
     fd.append("shapefile", shpFile);
     createMutation.mutate(fd);
   };
@@ -331,44 +332,49 @@ function CreateModal({ onClose }: CreateModalProps) {
               </div>
 
               <div>
-                <label className={labelCls}>Бүтээн байгуулалтын төрөл</label>
+                <label className={labelCls}>Ерөнхий ангилал *</label>
                 <select
-                  value={constructionTypeId ?? ""}
-                  onChange={(e) =>
-                    setConstructionTypeId(
-                      e.target.value ? Number(e.target.value) : null,
-                    )
-                  }
+                  value={generalCategoryId ?? ""}
+                  onChange={(e) => {
+                    setGeneralCategoryId(e.target.value ? Number(e.target.value) : null);
+                    setSubCategoryId(null);
+                  }}
                   className={inputCls}
                 >
                   <option value="">— Сонгоно уу —</option>
-                  {constructionTypes.map((ct) => (
-                    <option key={ct.id} value={ct.id}>
-                      {ct.name}
-                    </option>
+                  {generalCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Эхлэх огноо *</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Дуусах огноо</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
+              <div>
+                <label className={labelCls}>Дэд ангилал *</label>
+                <select
+                  value={subCategoryId ?? ""}
+                  onChange={(e) =>
+                    setSubCategoryId(e.target.value ? Number(e.target.value) : null)
+                  }
+                  disabled={!generalCategoryId}
+                  className={inputCls + (!generalCategoryId ? " opacity-50 cursor-not-allowed" : "")}
+                >
+                  <option value="">
+                    {generalCategoryId ? "— Сонгоно уу —" : "— Эхлээд ерөнхий ангилал сонгоно уу —"}
+                  </option>
+                  {subCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelCls}>Эхлэх огноо *</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={inputCls}
+                />
               </div>
 
               <div>
@@ -391,14 +397,41 @@ function CreateModal({ onClose }: CreateModalProps) {
                 />
               </div>
 
-              <div>
+              <div className="col-span-1 md:col-span-2">
                 <label className={labelCls}>Санхүүжилтийн эх үүсвэр</label>
-                <input
-                  value={fundingSource}
-                  onChange={(e) => setFundingSource(e.target.value)}
-                  placeholder="Улсын төсөв / Гадаадын зээл..."
-                  className={inputCls}
-                />
+                <div className="flex flex-col gap-2">
+                  {fundingSources.map((src, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        value={src}
+                        onChange={(e) => {
+                          const next = [...fundingSources];
+                          next[idx] = e.target.value;
+                          setFundingSources(next);
+                        }}
+                        placeholder="Улсын төсөв / Гадаадын зээл..."
+                        className={inputCls}
+                      />
+                      {fundingSources.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setFundingSources(fundingSources.filter((_, i) => i !== idx))}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 transition-colors"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setFundingSources([...fundingSources, ""])}
+                    className="inline-flex items-center gap-1.5 self-start rounded-lg border border-dashed border-slate-300 dark:border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-slate-500 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Эх үүсвэр нэмэх
+                  </button>
+                </div>
               </div>
 
               <div>
@@ -488,20 +521,61 @@ function CreateModal({ onClose }: CreateModalProps) {
 export default function LandPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [filterGenCat, setFilterGenCat] = useState<number | undefined>(undefined);
+  const [filterSubCat, setFilterSubCat] = useState<number | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
 
   const canCreate = hasPermission("land:create") && hasRole("senior_specialist", "Ахлах мэргэжилтэн");
+  const isExternal = isExternalSpecialRole();
+  const currentUserId = getCurrentUserId();
+  const isProfOrg = isProfessionalOrg();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["land", page, search],
+  const { data: filterGenCats = [] } = useQuery({
+    queryKey: ["acquisition-categories"],
+    queryFn: () => landApi.listCategories(),
+  });
+  const { data: filterSubCats = [] } = useQuery({
+    queryKey: ["acquisition-categories", filterGenCat],
+    queryFn: () => landApi.listCategories(filterGenCat!),
+    enabled: !!filterGenCat,
+  });
+
+  const { data: rawData, isLoading } = useQuery({
+    queryKey: ["land", page, search, filterGenCat, filterSubCat],
     queryFn: () =>
       landApi.list({
         page,
-        page_size: PAGE_SIZE,
+        page_size: isProfOrg ? 200 : PAGE_SIZE, // fetch all for client-side filter
         plan_code: search || undefined,
+        general_category_id: filterGenCat,
+        sub_category_id: filterSubCat,
       }),
   });
+
+  const profOrgParcelQueries = useQueries({
+    queries: isProfOrg && currentUserId
+      ? (rawData?.data ?? []).map((acq) => ({
+          queryKey: ["land-parcels-access", acq.id],
+          queryFn: () => landApi.getParcels(acq.id, { page: 1, page_size: 1000 }),
+          enabled: !!rawData?.data,
+        }))
+      : [],
+  });
+
+  // professional_org users see only acquisitions assigned to them
+  const filteredAcquisitions: LandAcquisition[] = (() => {
+    const all = rawData?.data ?? [];
+    if (isProfOrg && currentUserId) {
+      return all.filter((a, index) => {
+        if (a.professional_org_id === currentUserId) return true;
+        const parcels = profOrgParcelQueries[index]?.data?.data ?? [];
+        return parcels.some((p) => p.independent_org_id === currentUserId);
+      });
+    }
+    // МИКА and Санхүүгийн мэргэжилтэн see all acquisitions (no filter)
+    return all;
+  })();
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => landApi.delete(id),
@@ -512,11 +586,16 @@ export default function LandPage() {
     onError: (err) => toast.error(getApiError(err, "Устгах боломжгүй (зөвхөн NEW статустай)")),
   });
 
-  const total = data?.total ?? 0;
+  const total = isProfOrg ? filteredAcquisitions.length : (rawData?.total ?? 0);
+  const displayData = isProfOrg
+    ? filteredAcquisitions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : filteredAcquisitions;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const HEADERS = [
     "Төлөвлөгөө",
     "Чөлөөлөлтийн нэр",
+    "Ерөнхий ангилал",
+    "Дэд ангилал",
     "Статус",
     "Талбай",
     "Эхлэх",
@@ -574,6 +653,35 @@ export default function LandPage() {
               </button>
             )}
           </div>
+          <select
+            value={filterGenCat ?? ""}
+            onChange={(e) => {
+              setFilterGenCat(e.target.value ? Number(e.target.value) : undefined);
+              setFilterSubCat(undefined);
+              setPage(1);
+            }}
+            className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+          >
+            <option value="">Бүх ерөнхий ангилал</option>
+            {filterGenCats.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {filterGenCat && (
+            <select
+              value={filterSubCat ?? ""}
+              onChange={(e) => {
+                setFilterSubCat(e.target.value ? Number(e.target.value) : undefined);
+                setPage(1);
+              }}
+              className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+            >
+              <option value="">Бүх дэд ангилал</option>
+              {filterSubCats.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Table */}
@@ -602,10 +710,10 @@ export default function LandPage() {
                     ))}
                   </tr>
                 ))
-              ) : !data?.data.length ? (
+              ) : !displayData.length ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={9}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     <FileText className="mx-auto mb-2 h-8 w-8 opacity-30" />
@@ -613,7 +721,7 @@ export default function LandPage() {
                   </td>
                 </tr>
               ) : (
-                data.data.map((land) => {
+                displayData.map((land) => {
                   const sc = STATUS_CFG[land.status] ?? STATUS_CFG[1];
                   return (
                     <tr
@@ -645,6 +753,12 @@ export default function LandPage() {
                           </p>
                         )}
                       </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
+                        <span className="truncate block">{land.general_category_name || "—"}</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
+                        <span className="truncate block">{land.sub_category_name || "—"}</span>
+                      </td>
                       <td className="px-5 py-3.5">
                         <span
                           className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
@@ -667,20 +781,23 @@ export default function LandPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1">
-                          <Link href={`/acquisition/${land.id}`}>
-                            <button className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors">
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
-                          </Link>
-                          <button
-                            onClick={() => {
-                              if (confirm("Устгах уу?"))
-                                deleteMutation.mutate(land.id);
-                            }}
-                            className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                          <Link
+                            href={`/acquisition/${land.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                            Дэлгэрэнгүй
+                          </Link>
+                          {!isExternal && (
+                            <button
+                              onClick={() => {
+                                if (confirm("Устгах уу?"))
+                                  deleteMutation.mutate(land.id);
+                              }}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

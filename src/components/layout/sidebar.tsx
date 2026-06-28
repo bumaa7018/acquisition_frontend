@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
+import { isExternalSpecialRole } from "@/lib/role-utils";
 import {
   LayoutDashboard,
   Map,
@@ -23,7 +24,10 @@ import {
   Settings,
   ClipboardList,
   SlidersHorizontal,
+  GitBranch,
+  FolderOpen,
 } from "lucide-react";
+import { notifyNavStart } from "@/lib/blocking-loader-state";
 
 const NAV_MAIN = [
   { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
@@ -41,6 +45,11 @@ const NAV_ADMIN = [
 
 const NAV_CONFIG = [
   {
+    href: "/acquisition_category",
+    label: "Чөлөөлөлтийн ангилал",
+    icon: FolderOpen,
+  },
+  {
     href: "/acquisition_progress_status",
     label: "Чөлөөлөлтийн явцын статус",
     icon: ClipboardList,
@@ -54,6 +63,11 @@ const NAV_CONFIG = [
     href: "/document_type",
     label: "Баримт бичгийн төрөл",
     icon: FileText,
+  },
+  {
+    href: "/parcel_workflow",
+    label: "Нэгж ажлын урсгал",
+    icon: GitBranch,
   },
 ];
 
@@ -80,6 +94,7 @@ function NavItem({
       <Link
         href={href}
         title={collapsed ? label : undefined}
+        onClick={notifyNavStart}
         className={cn(
           "flex items-center rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
           collapsed ? "justify-center" : "gap-3",
@@ -101,6 +116,7 @@ export function Sidebar() {
   const router = useRouter();
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
+  const [isExternal, setIsExternal] = useState(false);
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_CONFIG].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
@@ -113,6 +129,7 @@ export function Sidebar() {
 
   useEffect(() => {
     setUser(authStorage.getUser());
+    setIsExternal(isExternalSpecialRole());
   }, []);
 
   useEffect(() => {
@@ -166,10 +183,13 @@ export function Sidebar() {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto py-5 px-3 space-y-5">
-        {/* Main nav */}
+        {/* Main nav — external special roles see only acquisition menu */}
         <div>
           <nav className="space-y-0.5">
-            {NAV_MAIN.map((item) => (
+            {(isExternal
+              ? NAV_MAIN.filter((item) => item.href === "/acquisition")
+              : NAV_MAIN
+            ).map((item) => (
               <NavItem
                 key={item.href}
                 {...item}
@@ -180,8 +200,8 @@ export function Sidebar() {
           </nav>
         </div>
 
-        {/* Удирдлага dropdown */}
-        <div>
+        {/* Удирдлага dropdown — hidden for external special roles */}
+        {!isExternal && <div>
           <button
             onClick={() => setAdminOpen((v) => !v)}
             className={cn(
@@ -272,7 +292,7 @@ export function Sidebar() {
               </div>
             </div>
           </div>
-        </div>
+        </div>}
       </div>
     </aside>
   );

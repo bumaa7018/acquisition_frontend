@@ -6,7 +6,7 @@ export const STATUSES = [
     count: 179,
     area: 79851,
   },
-  { key: "nosk", label: "НОСК", color: "#06b6d4", count: 24, area: 11386 },
+  { key: "evaluating", label: "Үнэлгээ хийх", color: "#f97316", count: 24, area: 11386 },
   {
     key: "nologdson",
     label: "Нөлөөлөгдсөн гарсан",

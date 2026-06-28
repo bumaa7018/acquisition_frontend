@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
+import { isExternalSpecialRole } from "@/lib/role-utils";
 import {
   Bell,
   Search,
@@ -48,8 +49,10 @@ export function Header() {
   const router = useRouter();
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
+  const [isExternal, setIsExternal] = useState(false);
   useEffect(() => {
     setUser(authStorage.getUser());
+    setIsExternal(isExternalSpecialRole());
   }, []);
   const { greeting, crumb } = resolveTitle(pathname);
   const { resolvedTheme, setTheme } = useTheme();
@@ -198,14 +201,16 @@ export function Header() {
                   <UserCircle className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                   Хувийн мэдээлэл
                 </Link>
-                <Link
-                  href="/roles"
-                  onClick={() => setProfileOpen(false)}
-                  className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
-                >
-                  <Settings className="h-4 w-4 text-slate-400 dark:text-slate-500" />
-                  Тохиргоо
-                </Link>
+                {!isExternal && (
+                  <Link
+                    href="/roles"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
+                  >
+                    <Settings className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+                    Тохиргоо
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-[#f1556c] hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"

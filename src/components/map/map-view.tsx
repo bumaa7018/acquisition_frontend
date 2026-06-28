@@ -25,6 +25,7 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('v_acquisition_plan'),
   layerDef('v_acquisition_boundary'),
   layerDef('building'),
+  layerDef('v_parcel_s0'),
   layerDef('v_parcel_s1'),
   layerDef('v_parcel_s2'),
   layerDef('v_parcel_s3'),
@@ -32,7 +33,7 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('v_parcel_s5'),
 ]
 
-const PARCEL_STATUS_LAYERS = ['v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
+const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
 const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_boundary', 'v_acquisition_plan'] as const
 const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
 
@@ -52,17 +53,35 @@ interface PopupState {
 
 interface MapViewProps {
   acquisitionIds?: string[]
+  parcelIds?: string[]
+  au1Codes?: string[]
+  au2Codes?: string[]
+  au3Codes?: string[]
   filterPending?: boolean
 }
 
-function buildCql(acquisitionIds?: string[]): string {
+function buildAcqCql(acquisitionIds?: string[]): string {
   if (!acquisitionIds || acquisitionIds.length === 0) return ''
   return acquisitionIds.length === 1
     ? `acquisition_id = '${acquisitionIds[0]}'`
     : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
 }
 
-export default function MapView({ acquisitionIds, filterPending }: MapViewProps) {
+function buildParcelCql(parcelIds: string[]): string {
+  if (parcelIds.length === 0) return `parcel_id = '__none__'`
+  return parcelIds.length === 1
+    ? `parcel_id = '${parcelIds[0]}'`
+    : `parcel_id IN (${parcelIds.map(id => `'${id}'`).join(',')})`
+}
+
+function buildCodeCql(codes: string[], col: string): string {
+  if (codes.length === 0) return `${col} = '__none__'`
+  return codes.length === 1
+    ? `${col} = '${codes[0]}'`
+    : `${col} IN (${codes.map(c => `'${c}'`).join(',')})`
+}
+
+export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes, au3Codes, filterPending }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
   const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
@@ -171,37 +190,53 @@ export default function MapView({ acquisitionIds, filterPending }: MapViewProps)
     // already carries the correct CQL_FILTER — no all-layers flash on page open.
     if (filterPending || !olMap.current) return
 
-    const cql = buildCql(acquisitionIds)
+    const acqCql    = buildAcqCql(acquisitionIds)
+    const parcelCql = parcelIds !== undefined ? buildParcelCql(parcelIds) : acqCql
+    const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
+
+    const getCql = (id: string): string => {
+      if (PARCEL_STATUS_LAYERS.includes(id as typeof PARCEL_STATUS_LAYERS[number]))
+        return parcelCql
+      if (id === 'v_acquisition_boundary' || id === 'v_acquisition_plan')
+        return acqCql
+      if (id === 'au3')
+        return hasFilter && au3Codes ? buildCodeCql(au3Codes, 'code') : ''
+      if (id === 'au2')
+        return hasFilter && au2Codes ? buildCodeCql(au2Codes, 'code') : ''
+      if (id === 'au1')
+        return hasFilter && au1Codes ? buildCodeCql(au1Codes, 'code') : ''
+      return ''
+    }
+
+    const DYNAMIC_LAYERS = [...ACQUISITION_FILTERED_LAYERS, 'au1', 'au2', 'au3'] as const
 
     if (!wmsLayersAdded.current) {
-      // First time: create all WMS layers with the correct filter baked in from the start
       const map = olMap.current
       const record: Record<string, ImageLayer<ImageWMS>> = {}
       LAYER_DEFS.forEach(d => {
-        const initCql = ACQUISITION_FILTERED_SET.has(d.id) ? cql : ''
-        record[d.id] = makeWmsLayer(d.id, DEFAULT_VISIBLE.has(d.id), initCql)
+        record[d.id] = makeWmsLayer(d.id, DEFAULT_VISIBLE.has(d.id), getCql(d.id))
         map.addLayer(record[d.id])
       })
       wmsLayers.current = record
       wmsLayersAdded.current = true
     } else {
-      // Subsequent filter changes: just update params
-      ACQUISITION_FILTERED_LAYERS.forEach(id => {
-        wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: cql })
+      DYNAMIC_LAYERS.forEach(id => {
+        const cql = getCql(id)
+        wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: cql || undefined })
       })
     }
 
-    if (cql && olMap.current) {
+    if (acqCql && olMap.current) {
       void fitLayerToMap({
         map: olMap.current,
         wfsUrl: GS_WFS,
         layerId: 'v_acquisition_boundary',
-        cqlFilter: cql,
+        cqlFilter: acqCql,
         padding: [48, 48, 48, 48],
         maxZoom: 16,
       })
     }
-  }, [acquisitionIds, filterPending, makeWmsLayer])
+  }, [acquisitionIds, parcelIds, au1Codes, au2Codes, au3Codes, filterPending, makeWmsLayer])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {

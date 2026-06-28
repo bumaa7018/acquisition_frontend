@@ -1,10 +1,17 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi, documentTypeApi, usersApi } from "@/lib/api";
+import { landApi, documentTypeApi, usersApi, parcelStatusApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { STATUS_LABELS } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
+import {
+  canAccessAcquisition,
+  canAccessParcel,
+  getCurrentUserId,
+  isExternalSpecialRole,
+  isProfessionalOrg,
+} from "@/lib/role-utils";
 import {
   ArrowLeft,
   MapPin,
@@ -68,7 +75,8 @@ function calcAreaFromWkt(wkt: string): number | null {
     return null;
   }
 }
-import type { Compensation, AcquisitionAssignee } from "@/types";
+import type { Compensation, AcquisitionAssignee, ParcelStatus } from "@/types";
+import { getParcelStatusStyle } from "@/types";
 import { toast } from "sonner";
 import Link from "next/link";
 import React, { useState, useRef, useEffect } from "react";
@@ -120,26 +128,14 @@ function isSeniorSpecialist(): boolean {
   }
 }
 
-function getCurrentUserId(): string | null {
-  const token = authStorage.getAccessToken();
-  if (!token) return null;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return payload.user_id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 type Tab =
   | "general"
   | "attachments"
   | "progress"
   | "parcels"
-  | "assets"
-  | "compensation"
   | "assignees"
-  | "map";
+  | "map"
+  | "financing";
 
 const ASSET_TYPE_LABELS: Record<string, string> = {
   real_state: "Үл хөдлөх хөрөнгө",
@@ -238,13 +234,23 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["land", id],
     queryFn: () => landApi.getById(id),
   });
-  const { data: constructionTypes = [] } = useQuery({
-    queryKey: ["construction-types"],
-    queryFn: () => landApi.listConstructionTypes(),
+  const { data: fundingSources = [] } = useQuery({
+    queryKey: ["funding-sources", id],
+    queryFn: () => landApi.listFundingSources(id),
+  });
+  const { data: generalCategories = [] } = useQuery({
+    queryKey: ["acquisition-categories"],
+    queryFn: () => landApi.listCategories(),
   });
   const { data: parcelsData } = useQuery({
     queryKey: ["land-parcels-summary", id],
     queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+  });
+  const { data: professionalOrgUsers = [] } = useQuery({
+    queryKey: ["professional-org-users"],
+    queryFn: () => landApi.listProfessionalOrgUsers(),
+    enabled: canEdit,
+    staleTime: 60_000,
   });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -252,13 +258,20 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     implementing_org: "",
     reason: "",
     responsible_org: "",
-    funding_source: "",
     start_date: "",
     end_date: "",
   });
-  const [constructionTypeId, setConstructionTypeId] = useState<number | null>(null);
+  const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
+  const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
+  const [professionalOrgId, setProfessionalOrgId] = useState<string>("");
+  const { data: subCategories = [] } = useQuery({
+    queryKey: ["acquisition-categories", generalCategoryId],
+    queryFn: () => landApi.listCategories(generalCategoryId!),
+    enabled: !!generalCategoryId,
+  });
   const [areaM2, setAreaM2] = useState<string>("");
   const [areaAutoCalc, setAreaAutoCalc] = useState(false);
+  const [boundaryFile, setBoundaryFile] = useState<File | null>(null);
 
   useEffect(() => {
     if (acq) {
@@ -267,13 +280,15 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         implementing_org: acq.implementing_org ?? "",
         reason: acq.reason ?? "",
         responsible_org: acq.responsible_org ?? "",
-        funding_source: acq.funding_source ?? "",
         start_date: acq.start_date ?? "",
         end_date: acq.end_date ?? "",
       });
-      setConstructionTypeId(acq.construction_type_id ?? null);
+      setGeneralCategoryId(acq.general_category_id ?? null);
+      setSubCategoryId(acq.sub_category_id ?? null);
+      setProfessionalOrgId(acq.professional_org_id ?? "");
       setAreaM2(String(acq.area_m2 ?? ""));
       setAreaAutoCalc(false);
+      setBoundaryFile(null);
     }
   }, [acq]);
 
@@ -287,19 +302,29 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       fd.append("implementing_org", form.implementing_org);
       fd.append("reason", form.reason);
       fd.append("responsible_org", form.responsible_org);
-      fd.append("funding_source", form.funding_source);
-      if (constructionTypeId)
-        fd.append("construction_type_id", String(constructionTypeId));
+      if (generalCategoryId)
+        fd.append("general_category_id", String(generalCategoryId));
+      if (subCategoryId)
+        fd.append("sub_category_id", String(subCategoryId));
+      if (professionalOrgId) {
+        fd.append("professional_org_id", professionalOrgId);
+      } else if (acq?.professional_org_id) {
+        fd.append("clear_professional_org", "true");
+      }
       const areaVal = parseFloat(areaM2);
       if (!isNaN(areaVal) && areaVal > 0)
         fd.append("area_m2", String(areaVal));
+      if (boundaryFile) fd.append("shapefile", boundaryFile);
       return landApi.update(id, fd);
     },
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
       setEditing(false);
       setAreaAutoCalc(false);
+      setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
+      queryClient.invalidateQueries({ queryKey: ["land-parcels-summary", id] });
+      queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
@@ -319,13 +344,15 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       implementing_org: acq.implementing_org ?? "",
       reason: acq.reason ?? "",
       responsible_org: acq.responsible_org ?? "",
-      funding_source: acq.funding_source ?? "",
       start_date: acq.start_date ?? "",
       end_date: acq.end_date ?? "",
     });
-    setConstructionTypeId(acq.construction_type_id ?? null);
+    setGeneralCategoryId(acq.general_category_id ?? null);
+    setSubCategoryId(acq.sub_category_id ?? null);
+    setProfessionalOrgId(acq.professional_org_id ?? "");
     setAreaM2(String(acq.area_m2 ?? ""));
     setAreaAutoCalc(false);
+    setBoundaryFile(null);
   };
 
   const row = (label: string, value: React.ReactNode, last = false) => (
@@ -408,6 +435,36 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           </p>
           {row("Төлөвлөгөөний дугаар", acq.plan_code)}
           {row("Төлөвлөгөөний нэр", acq.plan_name)}
+          {editing && (
+            <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+                Хил солих файл
+              </span>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <label className="inline-flex h-7 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 text-[12px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce]/60 hover:text-[#02c0ce] transition-colors">
+                  <Upload className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {boundaryFile ? boundaryFile.name : "Файл сонгох"}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".zip,.shp"
+                    className="hidden"
+                    onChange={(e) => setBoundaryFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {boundaryFile && (
+                  <button
+                    type="button"
+                    onClick={() => setBoundaryFile(null)}
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] hover:text-red-500 transition-colors"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {row(
             "Статус",
             <span
@@ -544,7 +601,6 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                 "Байгууллагын нэр",
               ],
               ["Хариуцах байгууллага", "responsible_org", "Байгууллагын нэр"],
-              ["Санхүүжилтийн эх үүсвэр", "funding_source", "Улсын төсөв..."],
             ] as [string, keyof typeof form, string][]
           ).map(([label, key, ph]) => (
             <div
@@ -570,30 +626,88 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               )}
             </div>
           ))}
+          {/* Санхүүжилтийн эх үүсвэр — funding-sources API-аас авна */}
+          <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-0.5">
+              Санхүүжилтийн эх үүсвэр
+            </span>
+            <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200 leading-relaxed">
+              {fundingSources.length > 0
+                ? fundingSources.map((s) =>
+                    [s.organization_name, s.source_type].filter(Boolean).join(" — ")
+                  ).join(", ")
+                : "—"}
+            </span>
+          </div>
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
-              Бүтээн байгуулалтын төрөл
+              Ерөнхий ангилал
             </span>
             {editing ? (
               <select
-                value={constructionTypeId ?? ""}
-                onChange={(e) =>
-                  setConstructionTypeId(
-                    e.target.value ? Number(e.target.value) : null,
-                  )
-                }
+                value={generalCategoryId ?? ""}
+                onChange={(e) => {
+                  setGeneralCategoryId(e.target.value ? Number(e.target.value) : null);
+                  setSubCategoryId(null);
+                }}
                 className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
               >
                 <option value="">— Сонгоно уу —</option>
-                {constructionTypes.map((ct) => (
-                  <option key={ct.id} value={ct.id}>
-                    {ct.name}
+                {generalCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {acq.general_category_name || "—"}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+              Дэд ангилал
+            </span>
+            {editing ? (
+              <select
+                value={subCategoryId ?? ""}
+                onChange={(e) =>
+                  setSubCategoryId(e.target.value ? Number(e.target.value) : null)
+                }
+                disabled={!generalCategoryId}
+                className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all disabled:opacity-50"
+              >
+                <option value="">— Сонгоно уу —</option>
+                {subCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {acq.sub_category_name || "—"}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+              Мэргэжлийн байгууллага
+            </span>
+            {editing ? (
+              <select
+                value={professionalOrgId}
+                onChange={(e) => setProfessionalOrgId(e.target.value)}
+                className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              >
+                <option value="">— Сонгоно уу —</option>
+                {professionalOrgUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
+                    {u.position ? ` · ${u.position}` : ""}
                   </option>
                 ))}
               </select>
             ) : (
               <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                {acq.construction_type_name || "—"}
+                {acq.professional_org_name || "—"}
               </span>
             )}
           </div>
@@ -1511,16 +1625,35 @@ const RIGHT_TYPE_OPTIONS = [
 ];
 
 // ─── Parcels tab ──────────────────────────────────────────────────────────────
-function ParcelsTab({ id }: { id: string }) {
+function ParcelsTab({
+  id,
+  acquisitionProfOrgId,
+}: {
+  id: string;
+  acquisitionProfOrgId?: string | null;
+}) {
   const queryClient = useQueryClient();
+  const isExternal = isExternalSpecialRole();
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  const [filterForm, setFilterForm] = useState({
+    parcel_id: "",
+    right_type: 0,
+    landuse: "",
+    status_id: 0,
+  });
   const [filter, setFilter] = useState({
     parcel_id: "",
     right_type: 0,
     landuse: "",
+    status_id: 0,
   });
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
+
+  const { data: parcelStatuses = [] } = useQuery<ParcelStatus[]>({
+    queryKey: ["parcel-statuses"],
+    queryFn: () => parcelStatusApi.list(),
+  });
 
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
     queryKey: ["land-parcels", id, filter],
@@ -1564,6 +1697,13 @@ function ParcelsTab({ id }: { id: string }) {
 
   const inp =
     "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+  const visibleParcels = (parcels?.data ?? []).filter((parcel) =>
+    canAccessParcel(
+      parcel.status_name,
+      acquisitionProfOrgId,
+      parcel.independent_org_id,
+    ),
+  );
 
   return (
     <>
@@ -1575,23 +1715,23 @@ function ParcelsTab({ id }: { id: string }) {
                 Нэгж талбарууд
               </p>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {parcels?.total ?? 0} нэгж талбар
+                {isExternal ? visibleParcels.length : (parcels?.total ?? 0)} нэгж талбар
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <input
                 type="text"
                 placeholder="Дугаараар хайх"
-                value={filter.parcel_id}
+                value={filterForm.parcel_id}
                 onChange={(e) =>
-                  setFilter((f) => ({ ...f, parcel_id: e.target.value }))
+                  setFilterForm((f) => ({ ...f, parcel_id: e.target.value }))
                 }
                 className={`${inp} w-40`}
               />
               <select
-                value={filter.right_type}
+                value={filterForm.right_type}
                 onChange={(e) =>
-                  setFilter((f) => ({
+                  setFilterForm((f) => ({
                     ...f,
                     right_type: e.target.value ? Number(e.target.value) : 0,
                   }))
@@ -1608,19 +1748,45 @@ function ParcelsTab({ id }: { id: string }) {
               <input
                 type="text"
                 placeholder="Газрын зориулалт"
-                value={filter.landuse}
+                value={filterForm.landuse}
                 onChange={(e) =>
-                  setFilter((f) => ({ ...f, landuse: e.target.value }))
+                  setFilterForm((f) => ({ ...f, landuse: e.target.value }))
                 }
                 className={`${inp} w-40`}
               />
+              <select
+                value={filterForm.status_id}
+                onChange={(e) =>
+                  setFilterForm((f) => ({
+                    ...f,
+                    status_id: e.target.value ? Number(e.target.value) : 0,
+                  }))
+                }
+                className={`${inp} w-36`}
+              >
+                <option value="">Төлөв</option>
+                {parcelStatuses.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setFilter({ ...filterForm })}
+                className="h-8 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
+              >
+                Хайх
+              </button>
               {(filter.parcel_id ||
                 filter.right_type !== 0 ||
-                filter.landuse) && (
+                filter.landuse ||
+                filter.status_id !== 0) && (
                 <button
-                  onClick={() =>
-                    setFilter({ parcel_id: "", right_type: 0, landuse: "" })
-                  }
+                  onClick={() => {
+                    const empty = { parcel_id: "", right_type: 0, landuse: "", status_id: 0 };
+                    setFilterForm(empty);
+                    setFilter(empty);
+                  }}
                   className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors"
                 >
                   Цэвэрлэх
@@ -1653,6 +1819,7 @@ function ParcelsTab({ id }: { id: string }) {
                     "Талбай",
                     "Давхцал",
                     "Нөхөн төлбөр",
+                    "Төлөв",
                     "",
                   ].map((h, i) => (
                     <th
@@ -1665,7 +1832,7 @@ function ParcelsTab({ id }: { id: string }) {
                 </tr>
               </thead>
               <tbody>
-                {parcels?.data.map((p) => {
+                {visibleParcels.map((p) => {
                   const comps = compsByParcel[p.parcel_id] ?? [];
                   const isOpen = expandedParcel === p.id;
                   const cashAmt = comps
@@ -1716,26 +1883,6 @@ function ParcelsTab({ id }: { id: string }) {
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                              onClick={() =>
-                                compensationMutation.mutate({
-                                  parcelId: p.id,
-                                  paid: !p.compensation_paid,
-                                })
-                              }
-                              disabled={compensationMutation.isPending}
-                              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-50"
-                              style={
-                                p.compensation_paid
-                                  ? {
-                                      color: "#0acf97",
-                                      background: "#0acf9718",
-                                    }
-                                  : { color: "#94a3b8", background: "#f1f5f9" }
-                              }
-                            >
-                              {p.compensation_paid ? "✓ Төлсөн" : "Төлөөгүй"}
-                            </button>
                             {cashAmt > 0 && (
                               <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
                                 {cashAmt.toLocaleString()}₮
@@ -1749,6 +1896,18 @@ function ParcelsTab({ id }: { id: string }) {
                           </div>
                         </td>
                         <td className="px-4 py-2.5">
+                          {p.status_name ? (
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+                              style={getParcelStatusStyle(p.status, p.status_name)}
+                            >
+                              {p.status_name}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
                             <Link
                               href={`/parcel/${p.id}?acq=${id}`}
@@ -1758,19 +1917,6 @@ function ParcelsTab({ id }: { id: string }) {
                             >
                               <Info className="h-3 w-3" /> Дэлгэрэнгүй
                             </Link>
-                            <button
-                              onClick={() => setPendingConfirm({
-                                title: "Нэгж талбарын мэдээлэл дуудах уу?",
-                                description: "Кадастрын системээс мэдээлэл шинэчлэн татаж авах болно.",
-                                confirmLabel: "Тийм, дуудах",
-                                confirmColor: "#0acf97",
-                                onConfirm: () => syncMutation.mutate(p.id),
-                              })}
-                              disabled={syncMutation.isPending}
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#0acf97]/10 text-[#0acf97] hover:bg-[#0acf97]/20 px-2.5 py-1 text-[11px] font-medium disabled:opacity-50 transition-colors"
-                            >
-                              <RefreshCw className="h-3 w-3" /> Sync
-                            </button>
                           </div>
                         </td>
                       </tr>
@@ -2109,6 +2255,228 @@ function AssetsTab({ id }: { id: string }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Financing tab ────────────────────────────────────────────────────────────
+function FinancingTab({ id }: { id: string }) {
+  const queryClient = useQueryClient();
+  const isSenior = isSeniorSpecialist();
+
+  const EMPTY_FORM = { organization_name: "", source_type: "", amount: "", currency: "MNT", note: "" };
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const { data: sources = [], isLoading } = useQuery({
+    queryKey: ["funding-sources", id],
+    queryFn: () => landApi.listFundingSources(id),
+  });
+
+  const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); };
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const body = {
+        organization_name: form.organization_name,
+        source_type: form.source_type,
+        amount: form.amount ? Number(form.amount) : undefined,
+        currency: form.currency || undefined,
+        note: form.note || undefined,
+      };
+      return editId
+        ? landApi.updateFundingSource(id, editId, body)
+        : landApi.createFundingSource(id, body);
+    },
+    onSuccess: () => {
+      toast.success(editId ? "Мэдээлэл шинэчлэгдлээ" : "Санхүүжилтын эх үүсвэр нэмэгдлээ");
+      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+      closeForm();
+    },
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (srcId: string) => landApi.deleteFundingSource(id, srcId),
+    onSuccess: () => {
+      toast.success("Устгагдлаа");
+      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
+  });
+
+  const inp = "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="ap-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Санхүүжилтын эх үүсвэрүүд
+          </p>
+          {isSenior && !showForm && (
+            <button
+              onClick={() => { setEditId(null); setForm(EMPTY_FORM); setShowForm(true); }}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Нэмэх
+            </button>
+          )}
+        </div>
+
+        {showForm && (
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
+            <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-3">
+              {editId ? "Засварлах" : "Шинэ санхүүжилтын эх үүсвэр"}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">Санхүүжилт хийх байгууллага *</p>
+                <input
+                  value={form.organization_name}
+                  onChange={(e) => setForm((f) => ({ ...f, organization_name: e.target.value }))}
+                  placeholder="Байгууллагын нэр..."
+                  className={inp}
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">Санхүүжилтын эх үүсвэрийн төрөл *</p>
+                <input
+                  value={form.source_type}
+                  onChange={(e) => setForm((f) => ({ ...f, source_type: e.target.value }))}
+                  placeholder="Улсын төсөв / Гадаадын зээл / Орон нутгийн төсөв..."
+                  className={inp}
+                />
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">Санхүүжилтын дүн</p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={form.amount}
+                    onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                    placeholder="0"
+                    className={inp}
+                  />
+                  <select
+                    value={form.currency}
+                    onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
+                    className="h-9 w-24 shrink-0 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                  >
+                    <option value="MNT">MNT</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="CNY">CNY</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">Тайлбар</p>
+                <input
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="Нэмэлт тайлбар..."
+                  className={inp}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-4">
+              <button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending || !form.organization_name.trim() || !form.source_type.trim()}
+                className="h-9 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+              >
+                {saveMutation.isPending ? "Хадгалж байна..." : "Хадгалах"}
+              </button>
+              <button
+                onClick={closeForm}
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] px-4 text-[13px] text-slate-600 dark:text-slate-400 hover:border-slate-300 transition-colors"
+              >
+                Болих
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="p-5 animate-pulse space-y-3">
+            {[...Array(3)].map((_, i) => <div key={i} className="h-12 rounded bg-slate-100 dark:bg-[#252630]" />)}
+          </div>
+        ) : !sources.length ? (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
+            <ReceiptText className="h-7 w-7 mb-2 opacity-30" />
+            <p className="text-[13px]">Санхүүжилтын эх үүсвэр бүртгэгдээгүй</p>
+            {isSenior && <p className="text-[12px] mt-1 text-slate-400">"Нэмэх" товч дарж бүртгэнэ үү</p>}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
+                  {["#", "Байгууллага", "Эх үүсвэрийн төрөл", "Дүн", "Тайлбар", ""].map((h) => (
+                    <th key={h} className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                {sources.map((src, i) => (
+                  <tr key={src.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
+                    <td className="px-4 py-3 text-[12px] font-mono text-slate-400">{i + 1}</td>
+                    <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{src.organization_name || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{src.source_type || "—"}</td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                      {src.amount != null ? `${src.amount.toLocaleString()} ${src.currency ?? "MNT"}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{src.note || "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      {isSenior && (
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditId(src.id);
+                              setForm({
+                                organization_name: src.organization_name,
+                                source_type: src.source_type,
+                                amount: src.amount != null ? String(src.amount) : "",
+                                currency: src.currency ?? "MNT",
+                                note: src.note ?? "",
+                              });
+                              setShowForm(true);
+                            }}
+                            className="inline-flex h-7 items-center gap-1 rounded-lg border border-slate-200 dark:border-white/[0.08] px-2.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Засах
+                          </button>
+                          <button
+                            onClick={() => { if (confirm("Устгах уу?")) deleteMutation.mutate(src.id); }}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {sources.some((s) => s.amount != null) && (
+                <tfoot>
+                  <tr className="border-t border-slate-200 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
+                    <td colSpan={3} className="px-4 py-3 text-right text-[12px] font-semibold text-slate-500">Нийт дүн</td>
+                    <td className="px-4 py-3 font-bold text-slate-800 dark:text-white tabular-nums">
+                      {sources.reduce((s, src) => s + (src.amount ?? 0), 0).toLocaleString()} MNT
+                    </td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2579,10 +2947,17 @@ export default function AcquisitionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const initialTab =
-    (tabParam === "buildings" ? "assets" : (tabParam as Tab)) ?? "general";
+  const initialTab = (tabParam as Tab) ?? "general";
   const [tab, setTab] = useState<Tab>(initialTab);
+  const [tabKey, setTabKey] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
+  const isExternal = isExternalSpecialRole();
+  const isProfOrg = isProfessionalOrg();
+
+  function handleTabClick(key: Tab) {
+    setTab(key);
+    setTabKey((k) => k + 1);
+  }
   const canEdit = hasPermission("acquisition.create");
 
   const { data: acq, isLoading, error } = useQuery({
@@ -2595,7 +2970,13 @@ export default function AcquisitionDetailPage() {
     },
   });
 
-  if (isLoading)
+  const { data: accessParcels, isLoading: accessParcelsLoading } = useQuery({
+    queryKey: ["land-parcels-access", id],
+    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+    enabled: isExternal && isProfOrg && !!acq,
+  });
+
+  if (isLoading || accessParcelsLoading)
     return (
       <div className="flex flex-col gap-5 animate-pulse">
         <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
@@ -2639,6 +3020,33 @@ export default function AcquisitionDetailPage() {
     );
 
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
+  const canAccessCurrentAcquisition = canAccessAcquisition(
+    acq.professional_org_id,
+    accessParcels?.data,
+  );
+
+  if (!canAccessCurrentAcquisition)
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <Users className="h-8 w-8 text-red-400" />
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Хандах эрх байхгүй
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1">
+            Энэ чөлөөлөлтөд таны байгууллага холбогдоогүй байна.
+          </p>
+        </div>
+        <Link
+          href="/acquisition"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Жагсаалт руу буцах
+        </Link>
+      </div>
+    );
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     {
@@ -2651,29 +3059,30 @@ export default function AcquisitionDetailPage() {
       label: "Хавсралт",
       icon: <Paperclip className="h-4 w-4" />,
     },
-    { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
     {
       key: "parcels",
       label: "Нэгж талбарууд",
       icon: <MapPin className="h-4 w-4" />,
     },
     {
-      key: "assets",
-      label: "Хөрөнгө",
-      icon: <Building2 className="h-4 w-4" />,
-    },
-    {
-      key: "compensation",
-      label: "Нөхөн төлбөр",
-      icon: <ReceiptText className="h-4 w-4" />,
-    },
-    {
       key: "assignees",
       label: "Ажилтнууд",
       icon: <Users className="h-4 w-4" />,
     },
+    {
+      key: "financing",
+      label: "Санхүүжилт",
+      icon: <Calculator className="h-4 w-4" />,
+    },
     { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
+    { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
   ];
+  const visibleTabs = isExternal
+    ? TABS.filter((item) => item.key === "general" || item.key === "parcels")
+    : TABS;
+  const activeTab = visibleTabs.some((item) => item.key === tab)
+    ? tab
+    : "general";
 
   return (
     <div className="flex flex-col gap-5">
@@ -2702,37 +3111,39 @@ export default function AcquisitionDetailPage() {
             {acq.plan_name ? ` · ${acq.plan_name}` : ""}
           </p>
         </div>
-        <button
-          disabled={reportLoading}
-          onClick={async () => {
-            setReportLoading(true);
-            try {
-              await generateReport(id);
-            } catch {
-              toast.error("Тайлан үүсгэхэд алдаа гарлаа");
-            } finally {
-              setReportLoading(false);
-            }
-          }}
-          className="flex shrink-0 items-center gap-2 h-9 px-4 rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-50 transition-colors"
-        >
-          {reportLoading ? (
-            <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-          ) : (
-            <FileDown className="h-4 w-4" />
-          )}
-          Тайлан татах
-        </button>
+        {!isExternal && (
+          <button
+            disabled={reportLoading}
+            onClick={async () => {
+              setReportLoading(true);
+              try {
+                await generateReport(id);
+              } catch {
+                toast.error("Тайлан үүсгэхэд алдаа гарлаа");
+              } finally {
+                setReportLoading(false);
+              }
+            }}
+            className="flex shrink-0 items-center gap-2 h-9 px-4 rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-50 transition-colors"
+          >
+            {reportLoading ? (
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            Тайлан татах
+          </button>
+        )}
       </div>
 
       {/* Tab bar */}
       <div className="ap-card flex items-stretch overflow-x-auto divide-x divide-slate-100 dark:divide-[#37394d]">
-        {TABS.map((t, i) => {
-          const active = tab === t.key;
+        {visibleTabs.map((t) => {
+          const active = activeTab === t.key;
           return (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => handleTabClick(t.key)}
               className={`relative flex flex-col items-center justify-center gap-1.5 px-6 py-3.5 min-w-[100px] whitespace-nowrap transition-all select-none
                 ${
                   active
@@ -2759,16 +3170,21 @@ export default function AcquisitionDetailPage() {
         })}
       </div>
 
-      {/* Tab content */}
-      {tab === "general" && <GeneralTab id={id} canEdit={canEdit} />}
-      {tab === "attachments" && <AttachmentsTab id={id} canEdit={canEdit} />}
-      {tab === "progress" && <ProgressTab id={id} canEdit={canEdit} />}
-      {tab === "parcels" && <ParcelsTab id={id} />}
-      {tab === "assets" && <AssetsTab id={id} />}
-      {tab === "compensation" && <CompensationTab id={id} />}
-      {tab === "assignees" && <AssigneesTab id={id} />}
-      {tab === "map" && (
-        <div className="ap-card p-5">
+      {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
+      {activeTab === "general" && <GeneralTab key={tabKey} id={id} canEdit={canEdit && !isExternal} />}
+      {activeTab === "attachments" && <AttachmentsTab key={tabKey} id={id} canEdit={canEdit} />}
+      {activeTab === "progress" && <ProgressTab key={tabKey} id={id} canEdit={canEdit} />}
+      {activeTab === "parcels" && (
+        <ParcelsTab
+          key={tabKey}
+          id={id}
+          acquisitionProfOrgId={acq.professional_org_id}
+        />
+      )}
+      {activeTab === "assignees" && <AssigneesTab key={tabKey} id={id} />}
+      {activeTab === "financing" && <FinancingTab key={tabKey} id={id} />}
+      {activeTab === "map" && (
+        <div key={tabKey} className="ap-card p-5">
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />
         </div>
       )}

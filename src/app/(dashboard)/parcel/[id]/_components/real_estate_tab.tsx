@@ -1,12 +1,43 @@
 "use client";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi } from "@/lib/api";
-import { type Asset } from "@/types";
+import { landApi, parcelApi } from "@/lib/api";
+import { type Asset, type Compensation, type CompensationHistory } from "@/types";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
-import { X, Plus, Trash2, Building2, ReceiptText } from "lucide-react";
+import {
+  X,
+  Plus,
+  Trash2,
+  Building2,
+  ReceiptText,
+  ChevronDown,
+  ChevronRight,
+  Calculator,
+  CircleDollarSign,
+  Camera,
+  ImagePlus,
+  CheckCircle,
+  XCircle,
+  History,
+  Clock,
+  CheckCheck,
+} from "lucide-react";
 import { toast } from "sonner";
-import { TARGET_TYPE_LABELS, COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
+import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
+import {
+  canEditValuationSubTab,
+  canViewValuationSubTab,
+  isExternalSpecialRole,
+  isFinanceSpecialist,
+} from "@/lib/role-utils";
+import type { ValuationSubTabKey } from "@/lib/access-policy";
+import {
+  assetValuationRows,
+  parcelValuations,
+  sumCompensations,
+  valuationTotals,
+} from "@/lib/valuation-summary";
+import type { LucideIcon } from "lucide-react";
 
 const EMPTY_ASSET = {
   asset_number: "",
@@ -19,6 +50,56 @@ const EMPTY_ASSET = {
   notes: "",
 };
 
+const EMPTY_VALUATION = {
+  compensation_type: "cash" as Compensation["compensation_type"],
+  coverage_percent: "100",
+  amount: "",
+  compensation_date: "",
+  note: "",
+};
+
+type ValuationForm = typeof EMPTY_VALUATION;
+
+type SectionTone = {
+  card: string;
+  header: string;
+  tableHead: string;
+  footer: string;
+  icon: string;
+};
+
+const LAND_TONE: SectionTone = {
+  card: "ap-card overflow-hidden border-l-4 border-l-emerald-200 dark:border-l-emerald-500/40",
+  header: "bg-emerald-50/70 dark:bg-emerald-500/10",
+  tableHead: "bg-emerald-50/55 dark:bg-emerald-500/10",
+  footer: "bg-emerald-50/70 dark:bg-emerald-500/10",
+  icon: "text-emerald-500",
+};
+
+const REAL_ESTATE_TONE: SectionTone = {
+  card: "ap-card overflow-hidden border-l-4 border-l-sky-200 dark:border-l-sky-500/40",
+  header: "bg-sky-50/70 dark:bg-sky-500/10",
+  tableHead: "bg-sky-50/55 dark:bg-sky-500/10",
+  footer: "bg-sky-50/70 dark:bg-sky-500/10",
+  icon: "text-sky-500",
+};
+
+const PROPERTY_TONE: SectionTone = {
+  card: "ap-card overflow-hidden border-l-4 border-l-amber-200 dark:border-l-amber-500/40",
+  header: "bg-amber-50/70 dark:bg-amber-500/10",
+  tableHead: "bg-amber-50/55 dark:bg-amber-500/10",
+  footer: "bg-amber-50/70 dark:bg-amber-500/10",
+  icon: "text-amber-500",
+};
+
+function money(value: number) {
+  return `${Math.round(Number(value) || 0).toLocaleString()}₮`;
+}
+
+function detailLabel(comp: Compensation) {
+  return comp.note?.trim() || COMP_TYPE_LABELS[comp.compensation_type] || comp.compensation_type;
+}
+
 export function RealEstateTab({
   acqId,
   parcelId,
@@ -29,8 +110,21 @@ export function RealEstateTab({
   parcelCode: string;
 }) {
   const queryClient = useQueryClient();
+  const isExternal = isExternalSpecialRole();
+  const [subTab, setSubTab] = useState<ValuationSubTabKey>("asset");
   const [showForm, setShowForm] = useState(false);
+  const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_ASSET);
+  const [valuationForm, setValuationForm] = useState(EMPTY_VALUATION);
+  const [modalValuations, setModalValuations] = useState<ValuationForm[]>([
+    { ...EMPTY_VALUATION },
+  ]);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState(false);
+  const isFinance = isFinanceSpecialist();
+  const [approveModal, setApproveModal] = useState<{ compId: string; note: string } | null>(null);
+  const [rejectModal, setRejectModal] = useState<{ compId: string; note: string } | null>(null);
+  const [historyModal, setHistoryModal] = useState<{ compId: string; list: CompensationHistory[] } | null>(null);
 
   const { data: parcelData } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
@@ -40,6 +134,19 @@ export function RealEstateTab({
 
   const effectiveParcelCode = parcelData?.parcel_id ?? parcelCode;
 
+  const { data: acquisition } = useQuery({
+    queryKey: ["land", acqId],
+    queryFn: () => landApi.getById(acqId),
+    enabled: !!acqId,
+  });
+
+  const { data: professionalOrgUsers = [] } = useQuery({
+    queryKey: ["professional-org-users"],
+    queryFn: () => landApi.listProfessionalOrgUsers(),
+    enabled: !isExternal,
+    staleTime: 60_000,
+  });
+
   const { data: assets, isLoading: assetsLoading } = useQuery({
     queryKey: ["parcel-assets", acqId, effectiveParcelCode],
     queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 1000, parcel_id: effectiveParcelCode }),
@@ -47,15 +154,23 @@ export function RealEstateTab({
   });
 
   const { data: allComps = [] } = useQuery({
-    queryKey: ["compensations", acqId],
-    queryFn: () => landApi.listCompensations(acqId),
-    enabled: !!acqId,
+    queryKey: ["compensations", acqId, effectiveParcelCode],
+    queryFn: () => landApi.listCompensations(acqId, effectiveParcelCode),
+    enabled: !!acqId && !!effectiveParcelCode,
   });
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      landApi.createAsset(acqId, {
-        parcel_id: parcelData?.parcel_id ?? parcelCode,
+  const closeAssetModal = () => {
+    setShowForm(false);
+    setForm(EMPTY_ASSET);
+    setModalValuations([{ ...EMPTY_VALUATION }]);
+    setPhotos([]);
+    setPhotoError(false);
+  };
+
+  const createAssetMutation = useMutation({
+    mutationFn: async () => {
+      const created = await landApi.createAsset(acqId, {
+        parcel_id: effectiveParcelCode,
         asset_number: form.asset_number,
         asset_type: form.asset_type,
         asset_name: form.asset_name,
@@ -64,188 +179,962 @@ export function RealEstateTab({
         owner_name: form.owner_name,
         address: form.address,
         notes: form.notes,
-      }),
+      });
+
+      const valuationRows = modalValuations.filter((row) => Number(row.amount) > 0);
+      await Promise.all(
+        valuationRows.map((row) =>
+          landApi.createCompensation(acqId, {
+            target_type: "asset",
+            parcel_id: effectiveParcelCode,
+            asset_id: created.id,
+            compensation_type: row.compensation_type,
+            coverage_percent: Number(row.coverage_percent) || 100,
+            amount: Number(row.amount) || 0,
+            compensation_date: row.compensation_date || undefined,
+            note: row.note,
+          }),
+        ),
+      );
+
+      await Promise.all(
+        photos.map((file) =>
+          parcelApi.uploadDocument(parcelId, file, undefined, `Хөрөнгийн зураг: ${form.asset_name || form.asset_number || "—"}`),
+        ),
+      );
+
+      return created;
+    },
     onSuccess: () => {
       toast.success("Хөрөнгө нэмэгдлээ");
-      setForm(EMPTY_ASSET);
-      setShowForm(false);
+      closeAssetModal();
       queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode] });
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
     },
     onError: (err) => toast.error(getApiError(err, "Хөрөнгө нэмэхэд алдаа гарлаа")),
   });
 
-  const deleteMutation = useMutation({
+  const createCompensationMutation = useMutation({
+    mutationFn: (assetId: string) =>
+      landApi.createCompensation(acqId, {
+        target_type: "asset",
+        parcel_id: effectiveParcelCode,
+        asset_id: assetId,
+        compensation_type: valuationForm.compensation_type,
+        coverage_percent: Number(valuationForm.coverage_percent) || 100,
+        amount: Number(valuationForm.amount) || 0,
+        compensation_date: valuationForm.compensation_date || undefined,
+        note: valuationForm.note,
+      }),
+    onSuccess: () => {
+      toast.success("Үнэлгээний задаргаа нэмэгдлээ");
+      setValuationForm(EMPTY_VALUATION);
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Үнэлгээ нэмэхэд алдаа гарлаа")),
+  });
+
+  const deleteAssetMutation = useMutation({
     mutationFn: (assetId: string) => landApi.deleteAsset(acqId, assetId),
     onSuccess: () => {
       toast.success("Хөрөнгө устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode] });
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
+  const deleteCompensationMutation = useMutation({
+    mutationFn: (compId: string) => landApi.deleteCompensation(acqId, compId),
+    onSuccess: () => {
+      toast.success("Үнэлгээ устгагдлаа");
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Үнэлгээ устгахад алдаа гарлаа")),
+  });
+
+  const approveCompMutation = useMutation({
+    mutationFn: ({ compId, note }: { compId: string; note: string }) =>
+      landApi.approveCompensation(acqId, compId, note),
+    onSuccess: () => {
+      toast.success("Үнэлгээ зөвшөөрөгдлөө");
+      setApproveModal(null);
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Зөвшөөрөхөд алдаа гарлаа")),
+  });
+
+  const rejectCompMutation = useMutation({
+    mutationFn: ({ compId, note }: { compId: string; note: string }) =>
+      landApi.rejectCompensation(acqId, compId, note),
+    onSuccess: () => {
+      toast.success("Үнэлгээ татгалзагдлаа");
+      setRejectModal(null);
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Татгалзахад алдаа гарлаа")),
+  });
+
+  const openHistory = async (compId: string) => {
+    try {
+      const list = await landApi.listCompensationHistory(acqId, compId);
+      setHistoryModal({ compId, list });
+    } catch {
+      toast.error("Түүх ачаалахад алдаа гарлаа");
+    }
+  };
+
+  const independentOrgMutation = useMutation({
+    mutationFn: (orgUserId: string | null) =>
+      landApi.setParcelIndependentOrg(acqId, parcelId, orgUserId),
+    onSuccess: () => {
+      toast.success("Хөндлөнгийн байгууллага шинэчлэгдлээ");
+      queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+      queryClient.invalidateQueries({ queryKey: ["land-parcels", acqId] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Байгууллага холбох үед алдаа гарлаа")),
+  });
+
   const parcelAssets = assets?.data ?? [];
-  const compsByAsset = allComps.reduce<Record<string, typeof allComps>>((acc, c) => {
-    if (c.asset_id) (acc[c.asset_id] ??= []).push(c);
-    return acc;
-  }, {});
+  const landComps = parcelValuations(allComps, effectiveParcelCode);
+  const realStateRows = assetValuationRows(parcelAssets, allComps, "real_state");
+  const propertyRows = assetValuationRows(parcelAssets, allComps, "property");
+  const totals = valuationTotals(parcelAssets, allComps, effectiveParcelCode);
+
+  const subTabs: { key: ValuationSubTabKey; label: string; description: string }[] = [
+    { key: "asset", label: "Хөрөнгийн үнэлгээ", description: "Үндсэн мэргэжлийн байгууллагын үнэлгээ" },
+    { key: "independent", label: "Хөндлөнгийн үнэлгээ", description: "Нэгж талбарт холбосон байгууллагын үнэлгээ" },
+    { key: "mika", label: "МИКА", description: "МИКА хяналт, санхүүгийн баталгаажуулалт" },
+  ];
+  const visibleSubTabs = isExternal
+    ? subTabs.filter((item) => canViewValuationSubTab(item.key))
+    : subTabs;
+  const activeSubTab = visibleSubTabs.some((item) => item.key === subTab)
+    ? subTab
+    : visibleSubTabs[0]?.key ?? "asset";
+  const canEditCurrent = canEditValuationSubTab(activeSubTab, parcelData, acquisition);
+  const selectedIndependentOrgName =
+    parcelData?.independent_org_name ||
+    professionalOrgUsers.find((u) => u.id === parcelData?.independent_org_id)?.email ||
+    "—";
+  const summaryItems: { label: string; value: number; Icon: LucideIcon }[] = [
+    { label: "Газрын үнэлгээ", value: totals.landTotal, Icon: Calculator },
+    { label: "Хөрөнгийн үнэлгээ", value: totals.assetTotal, Icon: Building2 },
+    { label: "Нэгдсэн дүн", value: totals.total, Icon: CircleDollarSign },
+  ];
+
+  const StatusBadge = ({ status }: { status?: string }) => {
+    if (status === "approved")
+      return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"><CheckCheck className="h-3 w-3" />Зөвшөөрсөн</span>;
+    if (status === "rejected")
+      return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:bg-red-500/15 dark:text-red-400"><XCircle className="h-3 w-3" />Татгалзсан</span>;
+    return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><Clock className="h-3 w-3" />Хүлээгдэж байна</span>;
+  };
+
+  const renderAssetTable = (
+    title: string,
+    rows: ReturnType<typeof assetValuationRows>,
+    emptyText: string,
+    tone: SectionTone,
+  ) => {
+    const total = sumCompensations(rows.flatMap((row) => row.compensations));
+
+    return (
+      <div className={tone.card}>
+        <div className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${tone.header}`}>
+          <div className="flex items-center gap-2">
+            <Building2 className={`h-4 w-4 ${tone.icon}`} />
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">{title}</p>
+          </div>
+          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">{money(total)}</p>
+        </div>
+
+        {!rows.length ? (
+          <div className="px-5 py-7 text-center text-[12px] text-slate-400">{emptyText}</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-[12px]">
+              <thead>
+                <tr className={`border-b border-slate-100 dark:border-[#37394d] ${tone.tableHead}`}>
+                  {["Хөрөнгө", "Дугаар", "Талбай", "Эзэмшигч", "Нийт үнэлгээ", ""].map((head) => (
+                    <th key={head} className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      {head}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                {rows.map(({ asset, compensations, total: assetTotal }) => {
+                  const expanded = expandedAssetId === asset.id;
+                  return (
+                    <Fragment key={asset.id}>
+                      <tr className="hover:bg-slate-50/60 dark:hover:bg-[#252630]/50">
+                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
+                          {asset.asset_name || ASSET_TYPE_LABELS[asset.asset_type]}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500">{asset.asset_number || "—"}</td>
+                        <td className="px-4 py-3 text-slate-500">{formatArea(asset.area_m2)}</td>
+                        <td className="px-4 py-3 text-slate-500">{asset.owner_name || "—"}</td>
+                        <td className="px-4 py-3 font-semibold tabular-nums text-slate-800 dark:text-slate-100">{money(assetTotal)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => setExpandedAssetId(expanded ? null : asset.id)}
+                              className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+                            >
+                              {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                              Дэлгэрэнгүй
+                            </button>
+                            {activeSubTab !== "mika" && canEditCurrent && (
+                              <button
+                                onClick={() => {
+                                  if (confirm("Хөрөнгө устгах уу?")) deleteAssetMutation.mutate(asset.id);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr key={`${asset.id}-details`} className="bg-slate-50/60 dark:bg-[#1a1d20]">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-white/[0.08] dark:bg-[#1e1f27]">
+                              <table className="w-full text-[12px]">
+                                <thead>
+                                  <tr className="border-b border-slate-100 dark:border-[#37394d]">
+                                    {["Үнэлсэн хэсэг", "Хэлбэр", "Хувь", "Дүн", "Огноо", "Статус", ""].map((head) => (
+                                      <th key={head} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                        {head}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
+                                  {compensations.length ? (
+                                    compensations.map((comp) => (
+                                      <tr key={comp.id}>
+                                        <td className="px-3 py-2.5 text-slate-700 dark:text-slate-200">{detailLabel(comp)}</td>
+                                        <td className="px-3 py-2.5 text-slate-500">{COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}</td>
+                                        <td className="px-3 py-2.5 text-slate-500 tabular-nums">{comp.coverage_percent}%</td>
+                                        <td className="px-3 py-2.5 font-semibold text-slate-800 dark:text-slate-100 tabular-nums">{money(comp.amount)}</td>
+                                        <td className="px-3 py-2.5 text-slate-400">{comp.compensation_date ? formatDate(comp.compensation_date) : "—"}</td>
+                                        <td className="px-3 py-2.5">
+                                          <div className="flex flex-col gap-1">
+                                            <StatusBadge status={comp.status} />
+                                            {comp.review_note && comp.status === "approved" && (
+                                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 max-w-[160px] truncate" title={comp.review_note}>
+                                                {comp.review_note}
+                                              </p>
+                                            )}
+                                            {comp.review_note && comp.status === "rejected" && (
+                                              <p className="text-[10px] text-red-500 dark:text-red-400 max-w-[160px] truncate" title={comp.review_note}>
+                                                {comp.review_note}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="px-3 py-2.5 text-right">
+                                          <div className="inline-flex items-center gap-1">
+                                            {isFinance && comp.status === "pending" && (
+                                              <>
+                                                <button
+                                                  onClick={() => setApproveModal({ compId: comp.id, note: "" })}
+                                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+                                                  title="Зөвшөөрөх"
+                                                >
+                                                  <CheckCircle className="h-3.5 w-3.5" />
+                                                </button>
+                                                <button
+                                                  onClick={() => setRejectModal({ compId: comp.id, note: "" })}
+                                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                                  title="Татгалзах"
+                                                >
+                                                  <XCircle className="h-3.5 w-3.5" />
+                                                </button>
+                                              </>
+                                            )}
+                                            <button
+                                              onClick={() => openHistory(comp.id)}
+                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
+                                              title="Түүх харах"
+                                            >
+                                              <History className="h-3.5 w-3.5" />
+                                            </button>
+                                            {canEditCurrent && comp.status !== "approved" && (
+                                              <button
+                                                onClick={() => {
+                                                  if (confirm("Үнэлгээ устгах уу?")) deleteCompensationMutation.mutate(comp.id);
+                                                }}
+                                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))
+                                  ) : (
+                                    <tr>
+                                      <td colSpan={6} className="px-3 py-4 text-center text-slate-400">
+                                        Үнэлгээний задаргаа бүртгэгдээгүй
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+
+                              {activeSubTab !== "mika" && canEditCurrent && (
+                                <div className="grid gap-3 border-t border-slate-100 p-3 dark:border-[#37394d] md:grid-cols-[1.4fr_120px_130px_150px_auto]">
+                                  <input
+                                    value={valuationForm.note}
+                                    onChange={(e) => setValuationForm((prev) => ({ ...prev, note: e.target.value }))}
+                                    placeholder="Үнэлсэн хэсэг"
+                                    className={INP}
+                                  />
+                                  <select
+                                    value={valuationForm.compensation_type}
+                                    onChange={(e) =>
+                                      setValuationForm((prev) => ({
+                                        ...prev,
+                                        compensation_type: e.target.value as Compensation["compensation_type"],
+                                      }))
+                                    }
+                                    className={INP}
+                                  >
+                                    <option value="cash">Мөнгө</option>
+                                    <option value="land_grant">Дүйцүүлсэн</option>
+                                  </select>
+                                  <input
+                                    value={valuationForm.coverage_percent}
+                                    onChange={(e) => setValuationForm((prev) => ({ ...prev, coverage_percent: e.target.value }))}
+                                    type="number"
+                                    placeholder="Хувь"
+                                    className={INP}
+                                  />
+                                  <input
+                                    value={valuationForm.amount}
+                                    onChange={(e) => setValuationForm((prev) => ({ ...prev, amount: e.target.value }))}
+                                    type="number"
+                                    placeholder="Дүн"
+                                    className={INP}
+                                  />
+                                  <button
+                                    onClick={() => createCompensationMutation.mutate(asset.id)}
+                                    disabled={createCompensationMutation.isPending || !Number(valuationForm.amount)}
+                                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    Нэмэх
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className={`border-t border-slate-200 dark:border-[#37394d] ${tone.footer}`}>
+                  <td colSpan={4} className="px-4 py-3 text-right text-[12px] font-semibold text-slate-500">
+                    Нийт үнэлгээ
+                  </td>
+                  <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{money(total)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
+      <div className="ap-card flex items-stretch overflow-x-auto divide-x divide-slate-100 dark:divide-[#37394d]">
+        {visibleSubTabs.map((item) => {
+          const active = activeSubTab === item.key;
+          return (
+            <button
+              key={item.key}
+              onClick={() => {
+                setSubTab(item.key);
+                setShowForm(false);
+              }}
+              className={`relative flex min-w-[170px] flex-col justify-center gap-1 px-5 py-3 text-left transition-colors ${
+                active
+                  ? "bg-[#02c0ce]/5 text-[#02c0ce] dark:bg-[#02c0ce]/10"
+                  : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-[#252630]"
+              }`}
+            >
+              {active && <span className="absolute top-0 left-4 right-4 h-0.5 rounded-b-full bg-[#02c0ce]" />}
+              <span className="text-[12px] font-semibold">{item.label}</span>
+              <span className="text-[10.5px] text-slate-400 dark:text-slate-500">{item.description}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeSubTab === "independent" && (
+        <div className="ap-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <div>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөндлөнгийн мэргэжлийн байгууллага</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Одоогийн холболт: {selectedIndependentOrgName}</p>
+            </div>
+            {!isExternal && (
+              <select
+                value={parcelData?.independent_org_id ?? ""}
+                onChange={(e) => independentOrgMutation.mutate(e.target.value || null)}
+                disabled={independentOrgMutation.isPending}
+                className="h-9 min-w-64 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all disabled:opacity-50"
+              >
+                <option value="">— Сонгоно уу —</option>
+                {professionalOrgUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
+                    {u.position ? ` · ${u.position}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="ap-card grid grid-cols-3 divide-x divide-slate-100 overflow-hidden dark:divide-[#37394d]">
+        {summaryItems.map(({ label, value, Icon }) => (
+          <div key={label} className="flex min-w-0 items-center gap-3 px-4 py-3">
+            <Icon className="h-4 w-4 shrink-0 text-[#02c0ce]" />
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
+              <p className="truncate text-[14px] font-bold tabular-nums text-slate-800 dark:text-white">{money(value)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className={LAND_TONE.card}>
+        <div className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.header}`}>
+          <div className="flex items-center gap-2">
+            <ReceiptText className={`h-4 w-4 ${LAND_TONE.icon}`} />
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Газрын үнэлгээ</p>
+          </div>
+          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">{money(totals.landTotal)}</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] text-[12px]">
+            <thead>
+              <tr className={`border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.tableHead}`}>
+                {["Үнэлгээ", "Хэлбэр", "Хувь", "Дүн", "Огноо"].map((head) => (
+                  <th key={head} className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">{head}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+              {landComps.length ? (
+                landComps.map((comp) => (
+                  <tr key={comp.id}>
+                    <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{detailLabel(comp)}</td>
+                    <td className="px-4 py-3 text-slate-500">{COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}</td>
+                    <td className="px-4 py-3 text-slate-500 tabular-nums">{comp.coverage_percent}%</td>
+                    <td className="px-4 py-3 font-semibold tabular-nums text-slate-800 dark:text-white">{money(comp.amount)}</td>
+                    <td className="px-4 py-3 text-slate-400">{comp.compensation_date ? formatDate(comp.compensation_date) : "—"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-4 py-7 text-center text-slate-400">Газрын үнэлгээ бүртгэгдээгүй</td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className={`border-t border-slate-200 dark:border-[#37394d] ${LAND_TONE.footer}`}>
+                <td colSpan={3} className="px-4 py-3 text-right font-semibold text-slate-500">Нийт газрын үнэлгээ</td>
+                <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">{money(totals.landTotal)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
       <div className="ap-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4 text-slate-400" />
             <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөрөнгийн мэдээлэл</p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {effectiveParcelCode || parcelId} нэгж талбарын хөрөнгийн мэдээлэл
-              </p>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөрөнгийн бүртгэл</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{effectiveParcelCode || parcelId} нэгж талбар</p>
             </div>
           </div>
-          <button
-            onClick={() => setShowForm((s) => !s)}
-            className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-          >
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? "Болих" : "Хөрөнгийн мэдээлэл оруулах"}
-          </button>
+          {activeSubTab !== "mika" && canEditCurrent && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Хөрөнгө нэмэх
+            </button>
+          )}
         </div>
-
-        {showForm && (
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <p className="text-[11px] text-slate-400 mb-1">Хөрөнгийн төрөл</p>
-                <select value={form.asset_type} onChange={(e) => setForm((f) => ({ ...f, asset_type: e.target.value as Asset["asset_type"] }))} className={INP}>
-                  <option value="real_state">Үл хөдлөх хөрөнгө</option>
-                  <option value="property">Эд хөрөнгө</option>
-                </select>
-              </div>
-              {([
-                ["asset_number", "Дугаар", "text", "1"],
-                ["asset_name", "Төрөл", "text", "Амины орон сууц"],
-                ["floor_count", "Давхар", "number", "2"],
-                ["area_m2", "Талбай (м²)", "number", "60"],
-                ["owner_name", "Эзэмшигч", "text", "Овог Нэр"],
-                ["address", "Хаяг", "text", "Хаяг..."],
-                ["notes", "Тайлбар", "text", "Тайлбар..."],
-              ] as [keyof typeof form, string, string, string][]).map(([field, label, type, placeholder]) => (
-                <div key={field}>
-                  <p className="text-[11px] text-slate-400 mb-1">{label}</p>
-                  <input type={type} value={form[field] as string}
-                    onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
-                    placeholder={placeholder} className={INP} />
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-3">
-              <button
-                onClick={() => createMutation.mutate()}
-                disabled={createMutation.isPending}
-                className="flex items-center gap-2 h-9 px-5 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
-              >
-                {createMutation.isPending ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" /> : <Plus className="h-4 w-4" />}
-                Хадгалах
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {assetsLoading ? (
         <div className="space-y-3 animate-pulse">
-          {[...Array(2)].map((_, i) => <div key={i} className="h-32 rounded-xl bg-slate-100 dark:bg-[#252630]" />)}
-        </div>
-      ) : !parcelAssets.length ? (
-        <div className="ap-card flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
-          <Building2 className="h-7 w-7 mb-2 opacity-30" />
-          <p className="text-[13px]">Хөрөнгийн мэдээлэл байхгүй</p>
+          <div className="h-36 rounded-xl bg-slate-100 dark:bg-[#252630]" />
+          <div className="h-36 rounded-xl bg-slate-100 dark:bg-[#252630]" />
         </div>
       ) : (
-        parcelAssets.map((asset) => {
-          const assetComps = compsByAsset[asset.id] ?? [];
-          return (
-            <div key={asset.id} className="ap-card overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/60 dark:bg-[#1a1d20]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-50 dark:bg-cyan-500/10">
-                    <Building2 className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-                  </div>
-                  <div>
-                    <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                      {asset.asset_name || ASSET_TYPE_LABELS[asset.asset_type] || "Хөрөнгө"}
-                      {asset.asset_number ? ` №${asset.asset_number}` : ""}
-                    </p>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                      {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type} · {asset.address || "—"}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { if (confirm("Хөрөнгө устгах уу?")) deleteMutation.mutate(asset.id); }}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+        <>
+          {renderAssetTable("Үл хөдлөх хөрөнгийн үнэлгээ", realStateRows, "Үл хөдлөх хөрөнгө бүртгэгдээгүй", REAL_ESTATE_TONE)}
+          {renderAssetTable("Эд хөрөнгийн үнэлгээ", propertyRows, "Эд хөрөнгө бүртгэгдээгүй", PROPERTY_TONE)}
+        </>
+      )}
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-slate-100 dark:bg-[#37394d]">
+      {showForm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && !createAssetMutation.isPending) closeAssetModal();
+          }}
+        >
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div>
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Хөрөнгө нэмэх</p>
+                <p className="mt-0.5 text-[11px] text-slate-400">Хөрөнгийн мэдээлэл болон үнэлгээний задаргааг хамт бүртгэнэ</p>
+              </div>
+              <button
+                onClick={closeAssetModal}
+                disabled={createAssetMutation.isPending}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 dark:hover:bg-[#252630] dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div>
+                  <p className="mb-1 text-[11px] text-slate-400">Хөрөнгийн төрөл</p>
+                  <select
+                    value={form.asset_type}
+                    onChange={(e) => setForm((f) => ({ ...f, asset_type: e.target.value as Asset["asset_type"] }))}
+                    className={INP}
+                  >
+                    <option value="real_state">Үл хөдлөх хөрөнгө</option>
+                    <option value="property">Эд хөрөнгө</option>
+                  </select>
+                </div>
                 {([
-                  ["Хөрөнгийн төрөл", ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type],
-                  ["Давхар", asset.floor_count || "—"],
-                  ["Талбай", formatArea(asset.area_m2)],
-                  ["Эзэмшигч", asset.owner_name || "—"],
-                  ["Тайлбар", asset.notes || "—"],
-                ] as [string, string | number][]).map(([label, value]) => (
-                  <div key={label} className="bg-white dark:bg-[#1e1f27] px-4 py-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
-                    <p className="text-[13px] text-slate-700 dark:text-slate-200 font-medium truncate">{value}</p>
+                  ["asset_number", "Дугаар", "text", "1"],
+                  ["asset_name", "Нэр", "text", "Амины орон сууц"],
+                  ["floor_count", "Давхар", "number", "2"],
+                  ["area_m2", "Талбай (м²)", "number", "60"],
+                  ["owner_name", "Эзэмшигч", "text", "Овог Нэр"],
+                  ["address", "Хаяг", "text", "Хаяг..."],
+                  ["notes", "Тайлбар", "text", "Тайлбар..."],
+                ] as [keyof typeof form, string, string, string][]).map(([field, label, type, placeholder]) => (
+                  <div key={field}>
+                    <p className="mb-1 text-[11px] text-slate-400">{label}</p>
+                    <input
+                      type={type}
+                      value={form[field] as string}
+                      onChange={(e) => setForm((f) => ({ ...f, [field]: e.target.value }))}
+                      placeholder={placeholder}
+                      className={INP}
+                    />
                   </div>
                 ))}
               </div>
 
-              {assetComps.length > 0 ? (
-                <div>
-                  <div className="flex items-center gap-2 px-5 py-2.5 border-t border-slate-100 dark:border-[#37394d] bg-slate-50/60 dark:bg-[#1a1d20]">
-                    <ReceiptText className="h-3.5 w-3.5 text-slate-400" />
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Нөхөн төлбөр</p>
+              {/* Зургийн upload хэсэг */}
+              <div className={`mt-4 overflow-hidden rounded-lg border ${photoError ? "border-red-400" : "border-slate-200 dark:border-white/[0.08]"}`}>
+                <div className="flex items-center justify-between bg-slate-50/80 px-4 py-3 dark:bg-[#1a1d20]">
+                  <div className="flex items-center gap-2">
+                    <Camera className="h-4 w-4 text-slate-400" />
+                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+                      Зурагнууд
+                      <span className="ml-1 text-red-500">*</span>
+                    </p>
+                    {photoError && (
+                      <span className="text-[11px] text-red-500">— дор хаяж 1 зураг оруулна уу</span>
+                    )}
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[12px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                          {["Нөхөн төлбөрийн төрөл", "Хэлбэр", "Хувь", "Дүн", "Огноо"].map((h) => (
-                            <th key={h} className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                        {assetComps.map((comp) => (
-                          <tr key={comp.id} className="hover:bg-slate-50/40 dark:hover:bg-[#252630]/50 transition-colors">
-                            <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">{TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type}</td>
-                            <td className="px-4 py-2.5">
-                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${comp.compensation_type === "cash" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400" : "bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400"}`}>
-                                {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5 text-slate-500 tabular-nums">{comp.coverage_percent}%</td>
-                            <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200 tabular-nums whitespace-nowrap">{comp.amount.toLocaleString()}₮</td>
-                            <td className="px-4 py-2.5 text-slate-400 whitespace-nowrap">{comp.compensation_date ? formatDate(comp.compensation_date) : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-300 dark:hover:bg-[#252630]">
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    Зураг нэмэх
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) {
+                          setPhotos((prev) => [...prev, ...files]);
+                          setPhotoError(false);
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
+                {photos.length === 0 ? (
+                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 px-4 py-8 text-slate-400 hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
+                    <Camera className="h-8 w-8 opacity-40" />
+                    <p className="text-[12px]">Зураг сонгохын тулд дарна уу</p>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length > 0) {
+                          setPhotos(files);
+                          setPhotoError(false);
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                ) : (
+                  <div className="flex flex-wrap gap-2 px-4 py-3">
+                    {photos.map((file, idx) => (
+                      <div key={idx} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <p className="absolute bottom-0 left-0 right-0 truncate bg-slate-900/50 px-1 py-0.5 text-[9px] text-white">
+                          {file.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                <div className="flex items-center justify-between bg-slate-50/80 px-4 py-3 dark:bg-[#1a1d20]">
+                  <div className="flex items-center gap-2">
+                    <ReceiptText className="h-4 w-4 text-slate-400" />
+                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Үнэлгээний задаргаа</p>
+                  </div>
+                  <button
+                    onClick={() => setModalValuations((rows) => [...rows, { ...EMPTY_VALUATION }])}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-300 dark:hover:bg-[#252630]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Мөр нэмэх
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[780px] text-[12px]">
+                    <thead>
+                      <tr className="border-y border-slate-100 bg-slate-50/50 dark:border-[#37394d] dark:bg-[#1a1d20]">
+                        {["Үнэлсэн хэсэг", "Хэлбэр", "Хувь", "Дүн", "Огноо", ""].map((head) => (
+                          <th key={head} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                            {head}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                      {modalValuations.map((row, index) => (
+                        <tr key={index}>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.note}
+                              onChange={(e) =>
+                                setModalValuations((rows) =>
+                                  rows.map((item, i) => (i === index ? { ...item, note: e.target.value } : item)),
+                                )
+                              }
+                              placeholder="Жишээ: Суурь, хана, дээвэр"
+                              className={INP}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={row.compensation_type}
+                              onChange={(e) =>
+                                setModalValuations((rows) =>
+                                  rows.map((item, i) =>
+                                    i === index
+                                      ? { ...item, compensation_type: e.target.value as Compensation["compensation_type"] }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              className={INP}
+                            >
+                              <option value="cash">Мөнгө</option>
+                              <option value="land_grant">Дүйцүүлсэн</option>
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.coverage_percent}
+                              onChange={(e) =>
+                                setModalValuations((rows) =>
+                                  rows.map((item, i) => (i === index ? { ...item, coverage_percent: e.target.value } : item)),
+                                )
+                              }
+                              type="number"
+                              className={INP}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.amount}
+                              onChange={(e) =>
+                                setModalValuations((rows) =>
+                                  rows.map((item, i) => (i === index ? { ...item, amount: e.target.value } : item)),
+                                )
+                              }
+                              type="number"
+                              placeholder="Дүн"
+                              className={INP}
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              value={row.compensation_date}
+                              onChange={(e) =>
+                                setModalValuations((rows) =>
+                                  rows.map((item, i) => (i === index ? { ...item, compensation_date: e.target.value } : item)),
+                                )
+                              }
+                              type="date"
+                              className={INP}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              onClick={() =>
+                                setModalValuations((rows) =>
+                                  rows.length === 1 ? [{ ...EMPTY_VALUATION }] : rows.filter((_, i) => i !== index),
+                                )
+                              }
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <button
+                onClick={closeAssetModal}
+                disabled={createAssetMutation.isPending}
+                className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+              >
+                Болих
+              </button>
+              <button
+                onClick={() => {
+                  if (photos.length === 0) {
+                    setPhotoError(true);
+                    return;
+                  }
+                  createAssetMutation.mutate();
+                }}
+                disabled={createAssetMutation.isPending}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+              >
+                {createAssetMutation.isPending ? (
+                  <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Хадгалах
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Зөвшөөрөх modal */}
+      {approveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Үнэлгээ зөвшөөрөх</p>
+              </div>
+              <button
+                onClick={() => setApproveModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="mb-2 text-[11px] text-slate-400">Шалгасан тайлбар</p>
+              <textarea
+                value={approveModal.note}
+                onChange={(e) => setApproveModal((prev) => prev ? { ...prev, note: e.target.value } : null)}
+                rows={3}
+                placeholder="Жишээ: Үнэлгээний дүн зөв тооцоолсон байна. Зөвшөөрөв."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#252630] dark:text-slate-100"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <button
+                onClick={() => setApproveModal(null)}
+                className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+              >
+                Болих
+              </button>
+              <button
+                onClick={() => approveCompMutation.mutate({ compId: approveModal.compId, note: approveModal.note })}
+                disabled={approveCompMutation.isPending}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-5 text-[13px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {approveCompMutation.isPending && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                <CheckCircle className="h-4 w-4" />
+                Зөвшөөрөх
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Татгалзах modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Үнэлгээ татгалзах</p>
+              <button
+                onClick={() => setRejectModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="mb-2 text-[11px] text-slate-400">Татгалзах шалтгаан (заавал биш)</p>
+              <textarea
+                value={rejectModal.note}
+                onChange={(e) => setRejectModal((prev) => prev ? { ...prev, note: e.target.value } : null)}
+                rows={3}
+                placeholder="Жишээ: Үнэлгээний дүн буруу тооцоолсон..."
+                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-800 placeholder-slate-400 outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#252630] dark:text-slate-100"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <button
+                onClick={() => setRejectModal(null)}
+                className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+              >
+                Болих
+              </button>
+              <button
+                onClick={() => rejectCompMutation.mutate({ compId: rejectModal.compId, note: rejectModal.note })}
+                disabled={rejectCompMutation.isPending}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-red-600 px-5 text-[13px] font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {rejectCompMutation.isPending && <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                Татгалзах
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Түүх харах modal */}
+      {historyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-slate-400" />
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Татгалзсан түүх</p>
+              </div>
+              <button
+                onClick={() => setHistoryModal(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-4">
+              {historyModal.list.length === 0 ? (
+                <p className="py-8 text-center text-[13px] text-slate-400">Татгалзсан түүх байхгүй</p>
               ) : (
-                <div className="flex items-center gap-2 px-5 py-3 border-t border-dashed border-slate-200 dark:border-[#37394d] text-slate-400 dark:text-slate-500">
-                  <ReceiptText className="h-3.5 w-3.5 opacity-50" />
-                  <p className="text-[11px]">Нөхөн төлбөр бүртгэгдээгүй</p>
+                <div className="space-y-3">
+                  {historyModal.list.map((h) => {
+                    const isApproved = h.status === "approved";
+                    return (
+                    <div key={h.id} className={`rounded-lg border p-4 ${isApproved ? "border-emerald-100 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/5" : "border-red-100 bg-red-50/50 dark:border-red-500/20 dark:bg-red-500/5"}`}>
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {isApproved
+                            ? <CheckCircle className="h-4 w-4 text-emerald-500" />
+                            : <XCircle className="h-4 w-4 text-red-500" />}
+                          <span className={`text-[12px] font-semibold ${isApproved ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                            {isApproved ? "Зөвшөөрсөн" : "Татгалзсан"}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400">{h.reviewed_at ? formatDate(h.reviewed_at) : formatDate(h.archived_at)}</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[12px]">
+                        <div>
+                          <p className="text-slate-400">Дүн</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-100">{money(h.amount)}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Хэлбэр</p>
+                          <p className="text-slate-600 dark:text-slate-300">{COMP_TYPE_LABELS[h.compensation_type as Compensation["compensation_type"]] ?? h.compensation_type}</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-400">Хувь</p>
+                          <p className="text-slate-600 dark:text-slate-300">{h.coverage_percent}%</p>
+                        </div>
+                      </div>
+                      {h.review_note && (
+                        <div className="mt-2 rounded-md bg-red-100 px-3 py-2 dark:bg-red-500/10">
+                          <p className="text-[11px] text-slate-400">Татгалзсан шалтгаан:</p>
+                          <p className="text-[12px] text-red-700 dark:text-red-400">{h.review_note}</p>
+                        </div>
+                      )}
+                      {h.reviewed_by && (
+                        <p className="mt-1.5 text-[10px] text-slate-400">Хянасан: {h.reviewed_by}</p>
+                      )}
+                    </div>
+                  )})}
                 </div>
               )}
             </div>
-          );
-        })
+          </div>
+        </div>
       )}
     </div>
   );

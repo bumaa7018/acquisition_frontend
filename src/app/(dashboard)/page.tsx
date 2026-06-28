@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import { useQuery } from "@tanstack/react-query";
@@ -372,15 +372,18 @@ function YearMultiSelect({
           {label}
         </span>
         {value.length > 0 ? (
-          <button
-            onClick={(e) => {
+          <span
+            role="button"
+            aria-label="Clear"
+            onMouseDown={(e) => {
               e.stopPropagation();
+              e.preventDefault();
               onChange([]);
             }}
-            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </span>
         ) : (
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         )}
@@ -500,27 +503,41 @@ export default function DashboardPage() {
   const [inAcqName,  setInAcqName]  = useState("");
   const [inPlanCode, setInPlanCode] = useState("");
   const [inYears,    setInYears]    = useState<string[]>([String(CURRENT_YEAR)]);
+  const [inGenCatId, setInGenCatId] = useState(0);
+  const [inSubCatId, setInSubCatId] = useState(0);
+
+  const { data: dashGenCats = [] } = useQuery({
+    queryKey: ["acquisition-categories"],
+    queryFn: () => landApi.listCategories(),
+  });
+  const { data: dashSubCats = [] } = useQuery({
+    queryKey: ["acquisition-categories", inGenCatId],
+    queryFn: () => landApi.listCategories(inGenCatId),
+    enabled: !!inGenCatId,
+  });
 
   /* Applied filter — хуудас нээгдэхэд одоогийн он автоматаар сонгогдоно */
   const [appliedFilter, setAppliedFilter] = useState({
-    acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)],
+    acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0,
   });
 
   const handleView = () => {
-    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears });
+    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId });
   };
   const handleReset = () => {
-    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]);
-    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)] });
+    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0);
+    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0 });
   };
 
   /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
   const { data: dashData, isLoading } = useQuery({
     queryKey: ["dashboard", appliedFilter],
     queryFn: () => dashboardApi.get({
-      acquisition_id: appliedFilter.acqId || undefined,
-      plan_code:      appliedFilter.planCode || undefined,
-      years:          appliedFilter.years.map(Number).filter(Boolean),
+      acquisition_id:     appliedFilter.acqId || undefined,
+      plan_code:          appliedFilter.planCode || undefined,
+      years:              appliedFilter.years.map(Number).filter(Boolean),
+      general_category_id: appliedFilter.genCatId || undefined,
+      sub_category_id:    appliedFilter.subCatId || undefined,
     }),
     staleTime: 60_000,
   });
@@ -548,11 +565,48 @@ export default function DashboardPage() {
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
   const maxArea  = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.area))  : 1;
 
-  /* Map: шүүлт идэвхтэй үед acquisition ID-уудыг дамжуулна */
-  const hasFilter = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0);
-  const mapAcquisitionIds = hasFilter
-    ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
-    : undefined;
+  /* Map: API дуусахад л шинэчлэгдэх committed state */
+  const [mapCommit, setMapCommit] = useState<{
+    key: number;
+    acqIds: string[] | undefined;
+    parcelIds: string[] | undefined;
+    au1Codes: string[] | undefined;
+    au2Codes: string[] | undefined;
+    au3Codes: string[] | undefined;
+  } | null>(null);
+  const mapCommitKeyRef = useRef(0);
+  const prevIsLoadingRef = useRef<boolean | null>(null);
+
+  const commitMap = useCallback(() => {
+    const hasF = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0);
+    const acqIds = hasF
+      ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
+      : undefined;
+
+    // parcelIds: on шүүлтүүр идэвхтэй үед нэгж талбарын parcel_id кодуудыг дамжуулна
+    let parcelIds: string[] | undefined;
+    if (appliedFilter.years.length > 0) {
+      const ids = dashData?.filtered_parcel_ids ?? [];
+      parcelIds = ids.length > 0 ? ids : ["__none__"];
+    }
+
+    const au1Codes = dashData?.filtered_au1_codes?.length ? dashData.filtered_au1_codes : undefined;
+    const au2Codes = dashData?.filtered_au2_codes?.length ? dashData.filtered_au2_codes : undefined;
+    const au3Codes = dashData?.filtered_au3_codes?.length ? dashData.filtered_au3_codes : undefined;
+
+    mapCommitKeyRef.current += 1;
+    setMapCommit({ key: mapCommitKeyRef.current, acqIds, parcelIds, au1Codes, au2Codes, au3Codes });
+  }, [appliedFilter, filteredAcqs, dashData]);
+
+  useEffect(() => {
+    const prevLoading = prevIsLoadingRef.current;
+    prevIsLoadingRef.current = isLoading;
+
+    // Commit when: first render with data (null→false) OR API just finished (true→false)
+    if (!isLoading && dashData && (prevLoading === null || prevLoading === true)) {
+      commitMap();
+    }
+  }, [isLoading, dashData, commitMap]);
 
   /* Filter display label */
   const filterLabel = useMemo(() => {
@@ -596,6 +650,45 @@ export default function DashboardPage() {
             </label>
             <YearMultiSelect value={inYears} onChange={setInYears} />
           </div>
+
+          {/* General category */}
+          <div className="flex flex-col gap-1 min-w-[180px]">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Ерөнхий ангилал
+            </label>
+            <select
+              value={inGenCatId}
+              onChange={(e) => {
+                setInGenCatId(Number(e.target.value));
+                setInSubCatId(0);
+              }}
+              className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+            >
+              <option value={0}>Бүгд</option>
+              {dashGenCats.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sub category */}
+          {!!inGenCatId && (
+            <div className="flex flex-col gap-1 min-w-[180px]">
+              <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+                Дэд ангилал
+              </label>
+              <select
+                value={inSubCatId}
+                onChange={(e) => setInSubCatId(Number(e.target.value))}
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+              >
+                <option value={0}>Бүгд</option>
+                {dashSubCats.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="flex gap-2 shrink-0">
@@ -796,7 +889,21 @@ export default function DashboardPage() {
         {/* CENTER: map + timeline */}
         <div className="flex flex-col gap-4">
           <div className="ap-card overflow-hidden" style={{ height: 320 }}>
-            <MapView acquisitionIds={mapAcquisitionIds} filterPending={isLoading && hasFilter} />
+            {(!mapCommit || isLoading) ? (
+              <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-[#252630] animate-pulse">
+                <MapIcon className="h-8 w-8 text-slate-300 dark:text-slate-600" />
+              </div>
+            ) : (
+              <MapView
+                key={mapCommit.key}
+                acquisitionIds={mapCommit.acqIds}
+                parcelIds={mapCommit.parcelIds}
+                au1Codes={mapCommit.au1Codes}
+                au2Codes={mapCommit.au2Codes}
+                au3Codes={mapCommit.au3Codes}
+                filterPending={false}
+              />
+            )}
           </div>
 
           <div className="ap-card p-4">
