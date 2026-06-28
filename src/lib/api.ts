@@ -326,7 +326,7 @@ export const landApi = {
   getBoundaryHistory: (id: string) =>
     api.get<ApiResponse<BoundaryHistory[]>>(`/land-acquisitions/${id}/boundary-history`).then(r => r.data.data ?? []),
   getAvailableStatuses: (id: string) =>
-    api.get<ApiResponse<StatusOption[]>>(`/land-acquisitions/${id}/available-statuses`).then(r => r.data.data),
+    api.get<ApiResponse<StatusOption[]>>(`/land-acquisitions/${id}/available-statuses`).then(r => r.data.data ?? []),
   advanceStatus: (id: string, toStatus: number, note?: string, decreeNumber?: string, decreeDate?: string) =>
     api.post<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}/advance`, {
       to_status: toStatus,
@@ -572,6 +572,16 @@ export const parcelStatusApi = {
   update: (id: number, body: { code?: string; name?: string; sort_order?: number }) =>
     api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
+}
+
+export const acquisitionWorkflowApi = {
+  list: () =>
+    api.get<ApiResponse<import('@/types').AcquisitionWorkflow[]>>('/acquisition-workflow').then(r => r.data.data ?? []),
+  listStatuses: () =>
+    api.get<ApiResponse<import('@/types').AcquisitionStatusItem[]>>('/acquisition-workflow/statuses').then(r => r.data.data ?? []),
+  create: (body: { from_status_id: number | null; to_status_id: number; sort_order?: number }) =>
+    api.post<{ code: number; data: import('@/types').AcquisitionWorkflow }>('/acquisition-workflow', body).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/acquisition-workflow/${id}`),
 }
 
 export const acquisitionCategoryApi = {

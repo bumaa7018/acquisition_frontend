@@ -10,7 +10,7 @@ function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function DocumentsTab({ parcelId }: { parcelId: string }) {
+export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -89,13 +89,15 @@ export function DocumentsTab({ parcelId }: { parcelId: string }) {
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
             <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
           </div>
-          <button
-            onClick={openModal}
-            className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-          >
-            <Upload className="h-4 w-4" />
-            Нэмэх
-          </button>
+          {!isLocked && (
+            <button
+              onClick={openModal}
+              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+            >
+              <Upload className="h-4 w-4" />
+              Нэмэх
+            </button>
+          )}
         </div>
 
         {isLoading ? (
@@ -130,12 +132,14 @@ export function DocumentsTab({ parcelId }: { parcelId: string }) {
                     >
                       <Download className="h-3.5 w-3.5" />
                     </a>
-                    <button
-                      onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {!isLocked && (
+                      <button
+                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

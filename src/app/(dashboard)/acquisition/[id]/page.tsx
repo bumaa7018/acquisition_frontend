@@ -1838,29 +1838,17 @@ function ParcelsTab({
                   const cashAmt = comps
                     .filter((c) => c.compensation_type === "cash")
                     .reduce((s, c) => s + c.amount, 0);
+                  const landGrantAmt = comps
+                    .filter((c) => c.compensation_type === "land_grant")
+                    .reduce((s, c) => s + c.amount, 0);
+                  const landGrantCount = comps.filter((c) => c.compensation_type === "land_grant").length;
 
                   return (
                     <React.Fragment key={p.id}>
                       <tr
                         className={`border-b border-slate-100 dark:border-[#37394d] transition-colors ${isOpen ? "bg-slate-50/80 dark:bg-[#1a1d20]" : "hover:bg-slate-50/60 dark:hover:bg-[#252630]"}`}
                       >
-                        {/* Expand toggle */}
-                        <td className="pl-3 pr-1 py-2.5 w-8">
-                          {comps.length > 0 && (
-                            <button
-                              onClick={() =>
-                                setExpandedParcel(isOpen ? null : p.id)
-                              }
-                              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-[#37394d] hover:text-[#02c0ce] transition-colors"
-                            >
-                              {isOpen ? (
-                                <ChevronUp className="h-3.5 w-3.5" />
-                              ) : (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          )}
-                        </td>
+                        <td className="pl-3 pr-1 py-2.5 w-8" />
                         <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                           {p.parcel_id}
                         </td>
@@ -1882,16 +1870,19 @@ function ParcelsTab({
                           {formatArea(p.acquisition_area_m2)}
                         </td>
                         <td className="px-4 py-2.5">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex flex-col gap-1">
                             {cashAmt > 0 && (
-                              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                {cashAmt.toLocaleString()}₮
+                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400 tabular-nums w-fit">
+                                Мөнгөн&nbsp;{cashAmt.toLocaleString()}₮
                               </span>
                             )}
-                            {comps.length > 0 && (
-                              <span className="text-[10px] text-slate-400">
-                                {comps.length} бүртгэл
+                            {landGrantCount > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400 w-fit">
+                                Газраар{landGrantAmt > 0 ? <>&nbsp;{landGrantAmt.toLocaleString()}₮</> : <>&nbsp;{landGrantCount}</>}
                               </span>
+                            )}
+                            {comps.length === 0 && (
+                              <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </div>
                         </td>
@@ -1920,198 +1911,6 @@ function ParcelsTab({
                           </div>
                         </td>
                       </tr>
-
-                      {/* ── Compensation sub-row ─────────────────────── */}
-                      {isOpen && comps.length > 0 && (
-                        <tr
-                          key={`${p.id}-comp`}
-                          className="bg-slate-50/50 dark:bg-[#181a22]"
-                        >
-                          <td colSpan={9} className="px-0 py-0">
-                            <div className="border-b border-slate-200 dark:border-[#37394d]">
-                              {/* Sub-header */}
-                              <div className="flex items-center gap-2 px-8 py-2 border-b border-slate-100 dark:border-[#37394d]">
-                                <ReceiptText className="h-3.5 w-3.5 text-[#02c0ce]" />
-                                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#02c0ce]">
-                                  Нөхөн төлбөрийн дэлгэрэнгүй
-                                </p>
-                              </div>
-
-                              {/* Comp rows */}
-                              {comps.map((comp) => (
-                                <div key={comp.id}>
-                                  <div className="flex items-center gap-3 px-8 py-2.5 border-b border-slate-100/60 dark:border-[#2a2c38] last:border-0">
-                                    <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
-                                      <span className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                                        {TARGET_TYPE_LABELS[comp.target_type] ??
-                                          comp.target_type}
-                                      </span>
-                                      <span
-                                        className={`inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold ${comp.compensation_type === "cash" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400" : "bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400"}`}
-                                      >
-                                        {COMP_TYPE_LABELS[
-                                          comp.compensation_type
-                                        ] ?? comp.compensation_type}
-                                      </span>
-                                      <span className="text-[12px] text-slate-500 tabular-nums">
-                                        {comp.coverage_percent}%
-                                      </span>
-                                      <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
-                                        {comp.amount.toLocaleString()}₮
-                                      </span>
-                                      <span className="text-[11px] text-slate-400">
-                                        {comp.compensation_date
-                                          ? formatDate(comp.compensation_date)
-                                          : "—"}
-                                      </span>
-                                    </div>
-                                    {comp.grant && (
-                                      <button
-                                        onClick={() =>
-                                          setExpandedGrant(
-                                            expandedGrant === comp.id
-                                              ? null
-                                              : comp.id,
-                                          )
-                                        }
-                                        className="flex items-center gap-1 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20 px-2 py-1 text-[11px] font-medium transition-colors shrink-0"
-                                      >
-                                        Газар{" "}
-                                        {expandedGrant === comp.id ? (
-                                          <ChevronUp className="h-3 w-3" />
-                                        ) : (
-                                          <ChevronDown className="h-3 w-3" />
-                                        )}
-                                      </button>
-                                    )}
-                                  </div>
-                                  {expandedGrant === comp.id && comp.grant && (
-                                    <div className="px-8 py-3 bg-sky-50/60 dark:bg-sky-900/15 border-b border-sky-100 dark:border-sky-800/30">
-                                      <div className="grid grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-2">
-                                        {(
-                                          [
-                                            [
-                                              "Дүн",
-                                              `${comp.grant.amount.toLocaleString()}₮`,
-                                            ],
-                                            [
-                                              "Олгосон огноо",
-                                              comp.grant.grant_date
-                                                ? formatDate(
-                                                    comp.grant.grant_date,
-                                                  )
-                                                : "—",
-                                            ],
-                                            [
-                                              "Талбай",
-                                              formatArea(
-                                                comp.grant.land_area_m2,
-                                              ),
-                                            ],
-                                            [
-                                              "Газрын үнэ",
-                                              `${comp.grant.land_price.toLocaleString()}₮/м²`,
-                                            ],
-                                            [
-                                              "Байршил",
-                                              comp.grant.land_location || "—",
-                                            ],
-                                            [
-                                              "Зориулалт",
-                                              comp.grant.land_purpose || "—",
-                                            ],
-                                            [
-                                              "Ашиглалтын төрөл",
-                                              comp.grant.land_use_type || "—",
-                                            ],
-                                            [
-                                              "НТ дугаар",
-                                              comp.grant.parcel_number || "—",
-                                            ],
-                                            [
-                                              "Тогтоолын дугаар",
-                                              comp.grant.decree_number || "—",
-                                            ],
-                                          ] as [string, string][]
-                                        ).map(([label, value]) => (
-                                          <div key={label}>
-                                            <p className="text-[10px] text-sky-500">
-                                              {label}
-                                            </p>
-                                            <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-                                              {value}
-                                            </p>
-                                          </div>
-                                        ))}
-                                      </div>
-                                      {comp.grant.note && (
-                                        <div className="mt-2 pt-2 border-t border-sky-100 dark:border-sky-800/30">
-                                          <p className="text-[10px] text-sky-500">
-                                            Тайлбар
-                                          </p>
-                                          <p className="text-[12px] text-slate-600 dark:text-slate-300">
-                                            {comp.grant.note}
-                                          </p>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-
-                              {/* Parcel compensation totals */}
-                              {comps.length > 1 && (
-                                <div className="flex items-center gap-6 px-8 py-2 bg-slate-100/60 dark:bg-[#1a1d20]">
-                                  {comps
-                                    .filter(
-                                      (c) => c.compensation_type === "cash",
-                                    )
-                                    .reduce((s, c) => s + c.amount, 0) > 0 && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[11px] text-slate-400">
-                                        Мөнгөн дүн нийт:
-                                      </span>
-                                      <span className="text-[12px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                                        {comps
-                                          .filter(
-                                            (c) =>
-                                              c.compensation_type === "cash",
-                                          )
-                                          .reduce((s, c) => s + c.amount, 0)
-                                          .toLocaleString()}
-                                        ₮
-                                      </span>
-                                    </div>
-                                  )}
-                                  {comps
-                                    .filter(
-                                      (c) =>
-                                        c.compensation_type === "land_grant",
-                                    )
-                                    .reduce((s, c) => s + c.amount, 0) > 0 && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[11px] text-slate-400">
-                                        Газрын олговор нийт:
-                                      </span>
-                                      <span className="text-[12px] font-bold text-sky-600 dark:text-sky-400 tabular-nums">
-                                        {comps
-                                          .filter(
-                                            (c) =>
-                                              c.compensation_type ===
-                                              "land_grant",
-                                          )
-                                          .reduce((s, c) => s + c.amount, 0)
-                                          .toLocaleString()}
-                                        ₮
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })}
@@ -2408,7 +2207,7 @@ function FinancingTab({ id }: { id: string }) {
           <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
             <ReceiptText className="h-7 w-7 mb-2 opacity-30" />
             <p className="text-[13px]">Санхүүжилтын эх үүсвэр бүртгэгдээгүй</p>
-            {isSenior && <p className="text-[12px] mt-1 text-slate-400">"Нэмэх" товч дарж бүртгэнэ үү</p>}
+            {isSenior && <p className="text-[12px] mt-1 text-slate-400">&ldquo;Нэмэх&rdquo; товч дарж бүртгэнэ үү</p>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -2958,7 +2757,7 @@ export default function AcquisitionDetailPage() {
     setTab(key);
     setTabKey((k) => k + 1);
   }
-  const canEdit = hasPermission("acquisition.create");
+  const canEditBase = hasPermission("acquisition.create");
 
   const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],
@@ -3048,6 +2847,9 @@ export default function AcquisitionDetailPage() {
       </div>
     );
 
+  const isAcqLocked = acq?.status === 3;
+  const canEdit = canEditBase && !isAcqLocked;
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     {
       key: "general",
@@ -3065,17 +2867,17 @@ export default function AcquisitionDetailPage() {
       icon: <MapPin className="h-4 w-4" />,
     },
     {
-      key: "assignees",
-      label: "Ажилтнууд",
-      icon: <Users className="h-4 w-4" />,
-    },
-    {
       key: "financing",
       label: "Санхүүжилт",
       icon: <Calculator className="h-4 w-4" />,
     },
-    { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
+    {
+      key: "assignees",
+      label: "Ажилтнууд",
+      icon: <Users className="h-4 w-4" />,
+    },
+    { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
   ];
   const visibleTabs = isExternal
     ? TABS.filter((item) => item.key === "general" || item.key === "parcels")

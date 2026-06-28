@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { RIGHT_TYPE_LABELS } from "@/types";
-import { ArrowLeft, Info, Paperclip, Wallet, MapPin, Building2, Printer, Activity } from "lucide-react";
+import { ArrowLeft, Info, Paperclip, MapPin, Building2, Printer, Activity } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { type Tab } from "./_components/constants";
@@ -12,7 +12,6 @@ import { GeneralTab } from "./_components/general_tab";
 import { ProgressTab } from "./_components/progress_tab";
 import { RealEstateTab } from "./_components/real_estate_tab";
 import { DocumentsTab } from "./_components/documents_tab";
-import { PaymentTab } from "./_components/payment_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
 import { canAccessParcel, isExternalSpecialRole } from "@/lib/role-utils";
 import { Users } from "lucide-react";
@@ -51,14 +50,16 @@ export default function ParcelDetailPage() {
     enabled: !!acqId,
   });
 
+  const PARCEL_FINAL_STATUSES = ["Чөлөөлсөн", "Татгалзсан", "Нөлөөллөөс гарсан"];
+  const isParcelLocked = PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "general", label: "Ерөнхий мэдээлэл", icon: <Info className="h-4 w-4" /> },
-    { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
     { key: "realEstate", label: "Нөхөх олговор", icon: <Building2 className="h-4 w-4" /> },
     { key: "documents", label: "Баримт бичиг", icon: <Paperclip className="h-4 w-4" /> },
-    { key: "payment", label: "Санхүүжилт", icon: <Wallet className="h-4 w-4" /> },
-    { key: "map", label: "Байршил", icon: <MapPin className="h-4 w-4" /> },
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
+    { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
+    { key: "map", label: "Байршил", icon: <MapPin className="h-4 w-4" /> }, 
   ];
   const visibleTabs = isExternal
     ? TABS.filter((item) => item.key === "general" || item.key === "realEstate")
@@ -144,11 +145,10 @@ export default function ParcelDetailPage() {
       </div>
 
       {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
-      {activeTab === "general" && <GeneralTab key={tabKey} acqId={acqId} parcelId={id} />}
-      {activeTab === "progress" && <ProgressTab key={tabKey} acqId={acqId} parcelId={id} />}
-      {activeTab === "realEstate" && <RealEstateTab key={tabKey} acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} />}
-      {activeTab === "documents" && <DocumentsTab key={tabKey} parcelId={id} />}
-      {activeTab === "payment" && <PaymentTab key={tabKey} parcelId={id} acqId={acqId} parcelCode={parcel?.parcel_id ?? ""} />}
+      {activeTab === "general" && <GeneralTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "progress" && <ProgressTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "realEstate" && <RealEstateTab key={tabKey} acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
+      {activeTab === "documents" && <DocumentsTab key={tabKey} parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "print" && <PrintTemplatesTab key={tabKey} parcel={parcel} />}
       {activeTab === "map" && (
         <div key={tabKey} className="ap-card p-5">

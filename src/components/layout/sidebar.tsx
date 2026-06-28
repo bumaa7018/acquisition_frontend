@@ -69,6 +69,11 @@ const NAV_CONFIG = [
     label: "Нэгж ажлын урсгал",
     icon: GitBranch,
   },
+  {
+    href: "/acquisition_workflow",
+    label: "Чөлөөлөлтийн ажлын урсгал",
+    icon: SlidersHorizontal,
+  },
 ];
 
 function NavItem({

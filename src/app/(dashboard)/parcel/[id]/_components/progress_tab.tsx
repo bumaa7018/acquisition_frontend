@@ -10,7 +10,7 @@ import type { ParcelStatus } from "@/types";
 
 type ModalState = "closed" | "picking" | "confirming";
 
-export function ProgressTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
+export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>("closed");
   const [selected, setSelected] = useState<ParcelStatus | null>(null);
@@ -82,7 +82,7 @@ export function ProgressTab({ acqId, parcelId }: { acqId: string; parcelId: stri
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Одоогийн статус
             </p>
-            {availableStatuses.length > 0 && (
+            {!isLocked && availableStatuses.length > 0 && (
               <button
                 onClick={openPicker}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"

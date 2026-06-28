@@ -262,6 +262,20 @@ export interface ParcelWorkflow {
   sort_order: number;
 }
 
+export interface AcquisitionWorkflow {
+  id: number;
+  from_status_id: number | null;
+  to_status_id: number;
+  from_status_name: string;
+  to_status_name: string;
+  sort_order: number;
+}
+
+export interface AcquisitionStatusItem {
+  id: number;
+  name: string;
+}
+
 export interface ParcelFull extends Parcel {
   acquisition_id: string;
   old_parcel_id?: string;
@@ -332,12 +346,17 @@ export interface GlobalParcel {
   acquisition_area_m2: number;
   compensation_paid: boolean;
   status: number;
+  status_id: number;
+  status_name: string;
   acquisition_id: string;
   acquisition_name: string;
   plan_code: string;
   acquisition_status: number;
   start_date?: string;
   end_date?: string;
+  cash_amount: number;
+  land_grant_amount: number;
+  land_grant_count: number;
 }
 
 export interface ReportParcelRow {

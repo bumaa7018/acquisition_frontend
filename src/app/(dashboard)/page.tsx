@@ -543,7 +543,7 @@ export default function DashboardPage() {
   });
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
-  const filteredAcqs     = dashData?.acquisitions    ?? [];
+  const filteredAcqs     = useMemo(() => dashData?.acquisitions ?? [], [dashData?.acquisitions]);
   const parcelStatusList = dashData?.parcel_statuses ?? [];
   const totalParcels     = dashData?.total_parcels   ?? 0;
   const freedParcels     = dashData?.freed_parcels   ?? 0;

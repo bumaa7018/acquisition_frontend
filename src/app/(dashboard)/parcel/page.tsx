@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { parcelApi } from "@/lib/api";
-import { STATUS_LABELS, RIGHT_TYPE_LABELS } from "@/types";
+import { STATUS_LABELS, RIGHT_TYPE_LABELS, getParcelStatusStyle } from "@/types";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
@@ -216,6 +216,7 @@ export default function ParcelListPage() {
                     "Газрын зориулалт",
                     "Талбай",
                     "Нөхөн төлбөр",
+                    "Төлөв",
                     "",
                   ].map((h) => (
                     <th
@@ -267,16 +268,33 @@ export default function ParcelListPage() {
                         {formatArea(p.area_m2)}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                          style={
-                            p.compensation_paid
-                              ? { color: "#0acf97", background: "#0acf9718" }
-                              : { color: "#94a3b8", background: "#f1f5f9" }
-                          }
-                        >
-                          {p.compensation_paid ? "✓ Төлсөн" : "Төлөөгүй"}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          {p.cash_amount > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400 tabular-nums w-fit">
+                              Мөнгөн&nbsp;{p.cash_amount.toLocaleString()}₮
+                            </span>
+                          )}
+                          {p.land_grant_count > 0 && (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400 w-fit">
+                              Газраар{p.land_grant_amount > 0 ? <>&nbsp;{p.land_grant_amount.toLocaleString()}₮</> : <>&nbsp;{p.land_grant_count}</>}
+                            </span>
+                          )}
+                          {p.cash_amount === 0 && p.land_grant_count === 0 && (
+                            <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.status_name ? (
+                          <span
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+                            style={getParcelStatusStyle(p.status_id, p.status_name)}
+                          >
+                            {p.status_name}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <Link

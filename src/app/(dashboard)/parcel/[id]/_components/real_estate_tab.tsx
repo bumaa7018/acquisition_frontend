@@ -104,10 +104,12 @@ export function RealEstateTab({
   acqId,
   parcelId,
   parcelCode,
+  isLocked = false,
 }: {
   acqId: string;
   parcelId: string;
   parcelCode: string;
+  isLocked?: boolean;
 }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
@@ -312,7 +314,7 @@ export function RealEstateTab({
   const activeSubTab = visibleSubTabs.some((item) => item.key === subTab)
     ? subTab
     : visibleSubTabs[0]?.key ?? "asset";
-  const canEditCurrent = canEditValuationSubTab(activeSubTab, parcelData, acquisition);
+  const canEditCurrent = !isLocked && canEditValuationSubTab(activeSubTab, parcelData, acquisition);
   const selectedIndependentOrgName =
     parcelData?.independent_org_name ||
     professionalOrgUsers.find((u) => u.id === parcelData?.independent_org_id)?.email ||
@@ -811,6 +813,7 @@ export function RealEstateTab({
                   <div className="flex flex-wrap gap-2 px-4 py-3">
                     {photos.map((file, idx) => (
                       <div key={idx} className="group relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={URL.createObjectURL(file)}
                           alt={file.name}

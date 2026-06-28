@@ -61,7 +61,7 @@ function highlightArea(value: string) {
   );
 }
 
-export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: string }) {
+export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
   const { data, isLoading } = useQuery({
@@ -308,7 +308,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
               Талбарын мэдээлэл
             </p>
             <div className="flex items-center gap-2">
-              {!isExternal && (editingMeta ? (
+              {!isExternal && !isLocked && (editingMeta ? (
                 <>
                   <button
                     onClick={() => {
@@ -332,7 +332,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
                   Засах
                 </button>
               ))}
-              {!isExternal && !editingMeta && (
+              {!isExternal && !isLocked && !editingMeta && (
                 <button
                   onClick={() => setConfirmOpen(true)}
                   disabled={!acqId || syncOpen || confirmOpen}
@@ -500,7 +500,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
               Итгэмжлэгдсэн төлөөлөгч
             </p>
           </div>
-          {!isExternal && (
+          {!isExternal && !isLocked && (
             <button
               onClick={() => { setRepModalOpen(true); setRepFormErrors({}); }}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
@@ -539,7 +539,7 @@ export function GeneralTab({ acqId, parcelId }: { acqId: string; parcelId: strin
                     <p className="text-[11px] italic text-slate-400 dark:text-slate-500">{rep.note}</p>
                   )}
                 </div>
-                {!isExternal && (
+                {!isExternal && !isLocked && (
                   repDeleteConfirm === rep.id ? (
                     <div className="flex shrink-0 items-center gap-1.5">
                       <span className="text-[11px] text-slate-500">Устгах уу?</span>
