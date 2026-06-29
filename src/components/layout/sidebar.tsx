@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
-import { isExternalSpecialRole } from "@/lib/role-utils";
+import { isExternalSpecialRole, hasPermission } from "@/lib/role-utils";
 import {
   LayoutDashboard,
   Map,
@@ -32,10 +32,10 @@ import { notifyNavStart } from "@/lib/blocking-loader-state";
 const NAV_MAIN = [
   { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
   { href: "/acquisition", label: "Газар чөлөөлөлт", icon: FileText },
-  { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
-  { href: "/map", label: "Газрын зураг", icon: Map },
-  { href: "/compensation", label: "Нөхөн төлбөр", icon: Receipt },
   { href: "/report", label: "Тайлан", icon: BarChart3 },
+  { href: "/map", label: "Газрын зураг", icon: Map },
+  { href: "/parcel", label: "Нэгж талбарын түүх", icon: Grid2x2 },
+  { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
 ];
 
 const NAV_ADMIN = [
@@ -122,6 +122,7 @@ export function Sidebar() {
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
   const [isExternal, setIsExternal] = useState(false);
+  const [canViewConfig, setCanViewConfig] = useState(false);
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_CONFIG].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
@@ -135,6 +136,7 @@ export function Sidebar() {
   useEffect(() => {
     setUser(authStorage.getUser());
     setIsExternal(isExternalSpecialRole());
+    setCanViewConfig(hasPermission("admin:read"));
   }, []);
 
   useEffect(() => {
@@ -248,8 +250,8 @@ export function Sidebar() {
                 ))}
               </nav>
 
-              {/* Тохиргоо nested dropdown */}
-              <div className="mt-0.5">
+              {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
+              {canViewConfig && <div className="mt-0.5">
                 <button
                   onClick={() => setConfigOpen((v) => !v)}
                   title={collapsed ? "Тохиргоо" : undefined}
@@ -294,7 +296,7 @@ export function Sidebar() {
                     </nav>
                   </div>
                 </div>
-              </div>
+              </div>}
             </div>
           </div>
         </div>}

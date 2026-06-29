@@ -547,11 +547,13 @@ export default function ReportPage() {
   const { data: reportGenCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
+    staleTime: Infinity,
   });
   const { data: reportSubCats = [] } = useQuery({
     queryKey: ["acquisition-categories", inGenCatId],
     queryFn: () => landApi.listCategories(inGenCatId),
     enabled: !!inGenCatId,
+    staleTime: Infinity,
   });
 
   const hasActiveFilter = !!(

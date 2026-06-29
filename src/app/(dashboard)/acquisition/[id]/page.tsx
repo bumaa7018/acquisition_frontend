@@ -241,6 +241,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
+    staleTime: Infinity,
   });
   const { data: parcelsData } = useQuery({
     queryKey: ["land-parcels-summary", id],
@@ -268,6 +269,7 @@ function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["acquisition-categories", generalCategoryId],
     queryFn: () => landApi.listCategories(generalCategoryId!),
     enabled: !!generalCategoryId,
+    staleTime: Infinity,
   });
   const [areaM2, setAreaM2] = useState<string>("");
   const [areaAutoCalc, setAreaAutoCalc] = useState(false);

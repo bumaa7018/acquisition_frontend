@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
-import { landApi, planApi } from "@/lib/api";
+import { landApi, planApi, authApi } from "@/lib/api";
 import { STATUS_LABELS } from "@/types";
 import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
@@ -33,6 +33,9 @@ const STATUS_CFG: Record<number, { color: string; bg: string }> = {
 const PAGE_SIZE = 15;
 
 import { hasPermission, hasRole, isProfessionalOrg, isExternalSpecialRole, getCurrentUserId } from "@/lib/role-utils";
+import { EmployeeSelect } from "@/components/ui/employee-select";
+import { PlanSelect } from "../parcel/_components/plan_select";
+import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 
 // ── Plan combobox ─────────────────────────────────────────────────────────────
 function PlanCombobox({ onSelect }: { onSelect: (plan: Plan) => void }) {
@@ -155,11 +158,13 @@ function CreateModal({ onClose }: CreateModalProps) {
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
+    staleTime: Infinity,
   });
   const { data: subCategories = [] } = useQuery({
     queryKey: ["acquisition-categories", generalCategoryId],
     queryFn: () => landApi.listCategories(generalCategoryId!),
     enabled: !!generalCategoryId,
+    staleTime: Infinity,
   });
 
   const createMutation = useMutation({
@@ -518,11 +523,26 @@ function CreateModal({ onClose }: CreateModalProps) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+const EMPTY_DRAFT = {
+  planCode: "",
+  acqId: "",
+  acqName: "",
+  status: 0,
+  genCat: 0,
+  subCat: 0,
+  employeeId: "",
+  employeeName: "",
+  year: 0,
+};
+type AcqDraft = typeof EMPTY_DRAFT;
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 2019 + 1 }, (_, i) => CURRENT_YEAR - i);
+
 export default function LandPage() {
+  const [draft, setDraft] = useState<AcqDraft>(EMPTY_DRAFT);
+  const [filter, setFilter] = useState<AcqDraft>(EMPTY_DRAFT);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [filterGenCat, setFilterGenCat] = useState<number | undefined>(undefined);
-  const [filterSubCat, setFilterSubCat] = useState<number | undefined>(undefined);
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
 
@@ -530,26 +550,64 @@ export default function LandPage() {
   const isExternal = isExternalSpecialRole();
   const currentUserId = getCurrentUserId();
   const isProfOrg = isProfessionalOrg();
+  const isEmployee = hasRole("employee", "Энгийн ажилтан");
 
-  const { data: filterGenCats = [] } = useQuery({
+  // Энгийн ажилтан эрхтэй бол өөрийгөө автоматаар сонгоно
+  const { data: meData } = useQuery({
+    queryKey: ["users-me"],
+    queryFn: () => authApi.me(),
+    staleTime: Infinity,
+    enabled: isEmployee,
+  });
+  useEffect(() => {
+    if (isEmployee && meData) {
+      const id = meData.id ?? currentUserId ?? "";
+      const label = `${meData.last_name ?? ""} ${meData.first_name ?? ""}`.trim();
+      if (id) setDraft(d => ({ ...d, employeeId: id, employeeName: label }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meData]);
+
+  const { data: genCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
+    staleTime: Infinity,
   });
-  const { data: filterSubCats = [] } = useQuery({
-    queryKey: ["acquisition-categories", filterGenCat],
-    queryFn: () => landApi.listCategories(filterGenCat!),
-    enabled: !!filterGenCat,
+  const { data: subCats = [] } = useQuery({
+    queryKey: ["acquisition-categories", draft.genCat],
+    queryFn: () => landApi.listCategories(draft.genCat),
+    enabled: draft.genCat > 0,
+    staleTime: Infinity,
   });
 
+  function applySearch() {
+    setFilter({ ...draft });
+    setPage(1);
+  }
+
+  function clearAll() {
+    setDraft(EMPTY_DRAFT);
+    setFilter(EMPTY_DRAFT);
+    setPage(1);
+  }
+
+  const hasFilter = !!(
+    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.year
+  );
+
   const { data: rawData, isLoading } = useQuery({
-    queryKey: ["land", page, search, filterGenCat, filterSubCat],
+    queryKey: ["land", page, filter],
     queryFn: () =>
       landApi.list({
         page,
-        page_size: isProfOrg ? 200 : PAGE_SIZE, // fetch all for client-side filter
-        plan_code: search || undefined,
-        general_category_id: filterGenCat,
-        sub_category_id: filterSubCat,
+        page_size: isProfOrg ? 200 : PAGE_SIZE,
+        plan_code: filter.planCode || undefined,
+        acquisition_name: filter.acqName || undefined,
+        status: filter.status || undefined,
+        general_category_id: filter.genCat || undefined,
+        sub_category_id: filter.subCat || undefined,
+        assigned_user_id: filter.employeeId || undefined,
+        years: filter.year ? [filter.year] : undefined,
       }),
   });
 
@@ -628,59 +686,77 @@ export default function LandPage() {
       </div>
 
       <div className="ap-card overflow-hidden">
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div className="relative flex-1 min-w-52">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Төлөвлөгөөний дугаараар хайх..."
-              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-9 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setPage(1);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+        {/* Filters */}
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <PlanSelect
+            value={draft.planCode}
+            onChange={(code) => setDraft(d => ({ ...d, planCode: code }))}
+            className="flex-1 min-w-0"
+          />
+          <AcquisitionSelect
+            selectedId={draft.acqId}
+            onSelect={(id, label) => setDraft(d => ({ ...d, acqId: id, acqName: label }))}
+            onClear={() => setDraft(d => ({ ...d, acqId: "", acqName: "" }))}
+            className="flex-1 min-w-0"
+          />
           <select
-            value={filterGenCat ?? ""}
-            onChange={(e) => {
-              setFilterGenCat(e.target.value ? Number(e.target.value) : undefined);
-              setFilterSubCat(undefined);
-              setPage(1);
-            }}
-            className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+            value={draft.genCat}
+            onChange={(e) => setDraft(d => ({ ...d, genCat: Number(e.target.value), subCat: 0 }))}
+            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
           >
-            <option value="">Бүх ерөнхий ангилал</option>
-            {filterGenCats.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
+            <option value={0}>Ерөнхий ангилал</option>
+            {genCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          {filterGenCat && (
-            <select
-              value={filterSubCat ?? ""}
-              onChange={(e) => {
-                setFilterSubCat(e.target.value ? Number(e.target.value) : undefined);
-                setPage(1);
-              }}
-              className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+          <select
+            value={draft.subCat}
+            onChange={(e) => setDraft(d => ({ ...d, subCat: Number(e.target.value) }))}
+            disabled={draft.genCat === 0}
+            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all disabled:opacity-50"
+          >
+            <option value={0}>Дэд ангилал</option>
+            {subCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select
+            value={draft.status}
+            onChange={(e) => setDraft(d => ({ ...d, status: Number(e.target.value) }))}
+            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+          >
+            <option value={0}>Бүх төлөв</option>
+            <option value={1}>Шинэ</option>
+            <option value={2}>Хээрийн судалгаа</option>
+            <option value={3}>Баталгаажсан</option>
+            <option value={4}>Цуцлагдсан</option>
+          </select>
+          <EmployeeSelect
+            selectedId={draft.employeeId}
+            selectedLabel={draft.employeeName}
+            onSelect={(id, label) => setDraft(d => ({ ...d, employeeId: id, employeeName: label }))}
+            onClear={() => setDraft(d => ({ ...d, employeeId: "", employeeName: "" }))}
+            placeholder="Ажилтан сонгох…"
+            className="flex-1 min-w-0"
+          />
+          <select
+            value={draft.year}
+            onChange={(e) => setDraft(d => ({ ...d, year: Number(e.target.value) }))}
+            className="w-24 shrink-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+          >
+            <option value={0}>Бүх он</option>
+            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <button
+            onClick={applySearch}
+            className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors shrink-0"
+          >
+            <Search className="h-3.5 w-3.5" />
+            Хайх
+          </button>
+          {hasFilter && (
+            <button
+              onClick={clearAll}
+              className="flex items-center gap-1 h-9 px-3 rounded-lg border border-rose-300 dark:border-rose-400/40 bg-rose-50 dark:bg-rose-400/10 text-[12px] font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-400/20 transition-colors shrink-0"
             >
-              <option value="">Бүх дэд ангилал</option>
-              {filterSubCats.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+              <X className="h-3.5 w-3.5" /> Цэвэрлэх
+            </button>
           )}
         </div>
 

@@ -12,7 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { dashboardApi, landApi } from "@/lib/api";
+import { dashboardApi, landApi, usersApi } from "@/lib/api";
 import type { GlobalParcel } from "@/types";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
@@ -188,6 +188,141 @@ function AcquisitionSelect({
                   {acq.plan_code && (
                     <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500">
                       {acq.plan_code}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Employee select ─────────────────────────────────── */
+function EmployeeSelect({
+  selectedId,
+  onSelect,
+  onClear,
+  className,
+}: {
+  selectedId: string;
+  onSelect: (id: string, label: string) => void;
+  onClear: () => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [displayLabel, setDisplayLabel] = useState("");
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ["employee-suggest", debounced],
+    queryFn: () => usersApi.list({ search: debounced.trim(), page_size: 30 }),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const results = data?.data ?? [];
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  function select(user: { id: string; first_name: string; last_name: string; position?: string }) {
+    const label = `${user.last_name} ${user.first_name}`;
+    setQuery("");
+    setDisplayLabel(label);
+    onSelect(user.id, label);
+    setOpen(false);
+  }
+
+  function clear(e: React.MouseEvent) {
+    e.stopPropagation();
+    setQuery("");
+    setDisplayLabel("");
+    onClear();
+    setOpen(false);
+  }
+
+  return (
+    <div ref={wrapRef} className={`relative ${className ?? ""}`}>
+      <div
+        className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
+        onClick={() => setOpen(true)}
+      >
+        {selectedId && !open ? (
+          <span
+            title={displayLabel}
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate"
+          >
+            {displayLabel}
+          </span>
+        ) : (
+          <input
+            type="text"
+            placeholder="Ажилтан хайх…"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            autoFocus={open}
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
+          />
+        )}
+        {selectedId ? (
+          <button
+            onClick={clear}
+            className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-72 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+          <div className="max-h-56 overflow-y-auto">
+            {isFetching ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайж байна…
+              </div>
+            ) : results.length === 0 ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Олдсонгүй
+              </div>
+            ) : (
+              results.map((user) => (
+                <button
+                  key={user.id}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    select(user);
+                  }}
+                  className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
+                >
+                  <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200 block">
+                    <Highlight text={`${user.last_name} ${user.first_name}`} query={query} />
+                  </span>
+                  {user.position && (
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                      {user.position}
                     </span>
                   )}
                 </button>
@@ -499,34 +634,39 @@ export default function DashboardPage() {
   };
 
   /* Input state — хэрэглэгч сонгож буй утга */
-  const [inAcqId,    setInAcqId]    = useState("");
-  const [inAcqName,  setInAcqName]  = useState("");
-  const [inPlanCode, setInPlanCode] = useState("");
-  const [inYears,    setInYears]    = useState<string[]>([String(CURRENT_YEAR)]);
-  const [inGenCatId, setInGenCatId] = useState(0);
-  const [inSubCatId, setInSubCatId] = useState(0);
+  const [inAcqId,        setInAcqId]        = useState("");
+  const [inAcqName,      setInAcqName]      = useState("");
+  const [inPlanCode,     setInPlanCode]     = useState("");
+  const [inYears,        setInYears]        = useState<string[]>([String(CURRENT_YEAR)]);
+  const [inGenCatId,     setInGenCatId]     = useState(0);
+  const [inSubCatId,     setInSubCatId]     = useState(0);
+  const [inEmployeeId,   setInEmployeeId]   = useState("");
+  const [inEmployeeName, setInEmployeeName] = useState("");
 
   const { data: dashGenCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
+    staleTime: Infinity,
   });
   const { data: dashSubCats = [] } = useQuery({
     queryKey: ["acquisition-categories", inGenCatId],
     queryFn: () => landApi.listCategories(inGenCatId),
     enabled: !!inGenCatId,
+    staleTime: Infinity,
   });
 
   /* Applied filter — хуудас нээгдэхэд одоогийн он автоматаар сонгогдоно */
   const [appliedFilter, setAppliedFilter] = useState({
     acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0,
+    employeeId: "", employeeName: "",
   });
 
   const handleView = () => {
-    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId });
+    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId, employeeId: inEmployeeId, employeeName: inEmployeeName });
   };
   const handleReset = () => {
-    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0);
-    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0 });
+    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0); setInEmployeeId(""); setInEmployeeName("");
+    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0, employeeId: "", employeeName: "" });
   };
 
   /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
@@ -538,6 +678,7 @@ export default function DashboardPage() {
       years:              appliedFilter.years.map(Number).filter(Boolean),
       general_category_id: appliedFilter.genCatId || undefined,
       sub_category_id:    appliedFilter.subCatId || undefined,
+      assigned_user_id:   appliedFilter.employeeId || undefined,
     }),
     staleTime: 60_000,
   });
@@ -573,12 +714,13 @@ export default function DashboardPage() {
     au1Codes: string[] | undefined;
     au2Codes: string[] | undefined;
     au3Codes: string[] | undefined;
+    employeeId: string | undefined;
   } | null>(null);
   const mapCommitKeyRef = useRef(0);
   const prevIsLoadingRef = useRef<boolean | null>(null);
 
   const commitMap = useCallback(() => {
-    const hasF = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0);
+    const hasF = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0 || appliedFilter.employeeId);
     const acqIds = hasF
       ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
       : undefined;
@@ -589,8 +731,10 @@ export default function DashboardPage() {
     const au2Codes = dashData?.filtered_au2_codes?.length ? dashData.filtered_au2_codes : undefined;
     const au3Codes = dashData?.filtered_au3_codes?.length ? dashData.filtered_au3_codes : undefined;
 
+    const employeeId = appliedFilter.employeeId || undefined;
+
     mapCommitKeyRef.current += 1;
-    setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes });
+    setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes, employeeId });
   }, [appliedFilter, filteredAcqs, dashData]);
 
   useEffect(() => {
@@ -609,6 +753,7 @@ export default function DashboardPage() {
     if (appliedFilter.acqName)          parts.push(appliedFilter.acqName);
     if (appliedFilter.planCode)         parts.push(`Төлөвлөгөө: ${appliedFilter.planCode}`);
     if (appliedFilter.years.length > 0) parts.push(`${appliedFilter.years.join(", ")} он`);
+    if (appliedFilter.employeeName)     parts.push(`Ажилтан: ${appliedFilter.employeeName}`);
     return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
   }, [appliedFilter]);
 
@@ -644,6 +789,18 @@ export default function DashboardPage() {
               Он
             </label>
             <YearMultiSelect value={inYears} onChange={setInYears} />
+          </div>
+
+          {/* Employee select */}
+          <div className="flex flex-col gap-1 min-w-[200px] flex-1">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Хариуцсан ажилтан
+            </label>
+            <EmployeeSelect
+              selectedId={inEmployeeId}
+              onSelect={(id, label) => { setInEmployeeId(id); setInEmployeeName(label); }}
+              onClear={() => { setInEmployeeId(""); setInEmployeeName(""); }}
+            />
           </div>
 
           {/* General category */}
@@ -896,6 +1053,7 @@ export default function DashboardPage() {
                 au1Codes={mapCommit.au1Codes}
                 au2Codes={mapCommit.au2Codes}
                 au3Codes={mapCommit.au3Codes}
+                employeeId={mapCommit.employeeId}
                 filterPending={false}
               />
             )}

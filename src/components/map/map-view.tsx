@@ -77,6 +77,7 @@ interface MapViewProps {
   au2Codes?: string[]
   au3Codes?: string[]
   filterPending?: boolean
+  employeeId?: string
 }
 
 function buildAcqCql(acquisitionIds?: string[]): string {
@@ -86,12 +87,14 @@ function buildAcqCql(acquisitionIds?: string[]): string {
     : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
 }
 
-function buildParcelStatusCql(acquisitionIds?: string[], years?: number[]): string {
+function buildParcelStatusCql(acquisitionIds?: string[], years?: number[], employeeId?: string): string {
   const parts: string[] = []
   const acqPart = buildAcqCql(acquisitionIds)
   if (acqPart) parts.push(acqPart)
   if (years && years.length > 0)
     parts.push(years.length === 1 ? `status_year = ${years[0]}` : `status_year IN (${years.join(',')})`)
+  if (employeeId)
+    parts.push(`assignee_user_ids LIKE '%,${employeeId},%'`)
   return parts.join(' AND ')
 }
 
@@ -102,7 +105,7 @@ function buildCodeCql(codes: string[], col: string): string {
     : `${col} IN (${codes.map(c => `'${c}'`).join(',')})`
 }
 
-export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending }: MapViewProps) {
+export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
   const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
@@ -112,7 +115,6 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
-  const [loading, setLoading] = useState(false)
 
   const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') =>
     new ImageLayer({
@@ -173,7 +175,6 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         .map(d => d.id)
 
       if (!visibleIds.length) return
-      setLoading(true)
       setPopup(null)
 
       for (const id of visibleIds) {
@@ -200,7 +201,6 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           }
         } catch { /* skip layer */ }
       }
-      setLoading(false)
     })
 
     olMap.current = map
@@ -220,7 +220,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     if (filterPending || !olMap.current) return
 
     const acqCql    = buildAcqCql(acquisitionIds)
-    const parcelCql = buildParcelStatusCql(acquisitionIds, years)
+    const parcelCql = buildParcelStatusCql(acquisitionIds, years, employeeId)
     const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
 
     const getCql = (id: string): string => {
@@ -265,7 +265,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         maxZoom: 16,
       })
     }
-  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, makeWmsLayer])
+  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {
@@ -307,11 +307,6 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           position={popup.position}
           onClose={() => setPopup(null)}
         />
-      )}
-      {loading && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-background/90 backdrop-blur text-sm px-3 py-1.5 rounded-full shadow border">
-          Мэдээлэл ачааллаж байна...
-        </div>
       )}
     </div>
   )

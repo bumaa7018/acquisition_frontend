@@ -218,7 +218,7 @@ export const authApi = {
 
 // ── Users ────────────────────────────────────────────
 export const usersApi = {
-  list: (params?: { page?: number; page_size?: number }) =>
+  list: (params?: { page?: number; page_size?: number; search?: string }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
   create: (body: { email: string; password: string; first_name: string; last_name: string; position?: string; role_names?: string[] }) =>
@@ -259,8 +259,20 @@ export const landApi = {
     api.get<ApiResponse<AcquisitionCategory[]>>('/acquisition-categories', {
       params: parentId !== undefined ? { parent_id: parentId } : undefined,
     }).then(r => r.data.data ?? []),
-  list: (filter?: LandAcquisitionFilter) =>
-    api.get<PaginatedResponse<LandAcquisition>>('/land-acquisitions', { params: filter }).then(r => r.data),
+  list: (filter?: LandAcquisitionFilter) => {
+    const p = new URLSearchParams()
+    if (filter?.plan_code)           p.set('plan_code', filter.plan_code)
+    if (filter?.acquisition_name)    p.set('acquisition_name', filter.acquisition_name)
+    if (filter?.status)              p.set('status', String(filter.status))
+    if (filter?.au3_code)            p.set('au3_code', filter.au3_code)
+    if (filter?.general_category_id) p.set('general_category_id', String(filter.general_category_id))
+    if (filter?.sub_category_id)     p.set('sub_category_id', String(filter.sub_category_id))
+    if (filter?.assigned_user_id)    p.set('assigned_user_id', filter.assigned_user_id)
+    if (filter?.page)                p.set('page', String(filter.page))
+    if (filter?.page_size)           p.set('page_size', String(filter.page_size))
+    filter?.years?.forEach(y => p.append('year', String(y)))
+    return api.get<PaginatedResponse<LandAcquisition>>(`/land-acquisitions?${p}`).then(r => r.data)
+  },
   suggest: (q: string) =>
     api.get<ApiResponse<{ id: string; acquisition_name: string; plan_code: string }[]>>(
       '/land-acquisitions/suggest', { params: { q } }
@@ -543,6 +555,7 @@ export type DashboardFilter = {
   years?:               number[]
   general_category_id?: number
   sub_category_id?:     number
+  assigned_user_id?:    string
 }
 
 export const dashboardApi = {
@@ -552,6 +565,7 @@ export const dashboardApi = {
     if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
     if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
+    if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)
     filter?.years?.forEach(y => params.append('year', String(y)))
     return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
   },

@@ -491,10 +491,13 @@ export interface ParcelPayment {
 
 export interface LandAcquisitionFilter {
   plan_code?: string;
+  acquisition_name?: string;
   status?: number;
   au3_code?: string;
   general_category_id?: number;
   sub_category_id?: number;
+  assigned_user_id?: string;
+  years?: number[];
   page?: number;
   page_size?: number;
 }
