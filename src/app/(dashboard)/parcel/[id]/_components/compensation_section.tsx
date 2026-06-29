@@ -1,12 +1,12 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi } from "@/lib/api";
 import { type Compensation } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import {
   X, Plus, ChevronDown, ChevronUp, Trash2,
-  ReceiptText, Building2, Wallet,
+  ReceiptText, Building2, Wallet, Upload, FileText, CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TARGET_TYPE_LABELS, COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
@@ -116,6 +116,20 @@ export function CompensationSection({
       queryClient.invalidateQueries({ queryKey: ["compensations", acqId] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
+  });
+
+  const [uploadingReportId, setUploadingReportId] = useState<string | null>(null);
+  const reportFileRef = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const reportMutation = useMutation({
+    mutationFn: ({ compId, file }: { compId: string; file: File }) =>
+      landApi.uploadCompensationReport(acqId, compId, file),
+    onSuccess: () => {
+      toast.success("Үнэлгээний тайлан амжилттай хавсаргагдлаа");
+      setUploadingReportId(null);
+      queryClient.invalidateQueries({ queryKey: ["compensations", acqId] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Тайлан хавсаргахад алдаа гарлаа")),
   });
 
   const cashTotal = compensations
@@ -333,6 +347,65 @@ export function CompensationSection({
                                 </div>
                               )}
                             </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {comp.status === "approved" && (
+                      <tr>
+                        <td colSpan={6} className="px-0 py-0">
+                          <div className="mx-4 mb-3 mt-1 rounded-xl border px-4 py-3
+                            border-amber-100 dark:border-amber-800/30
+                            bg-amber-50/60 dark:bg-amber-900/10">
+                            <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-2">
+                              Үнэлгээний тайлан
+                            </p>
+                            {comp.valuation_report_url ? (
+                              <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                                <a
+                                  href={comp.valuation_report_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-[13px] font-medium text-[#02c0ce] hover:underline"
+                                >
+                                  <FileText className="h-3.5 w-3.5" />
+                                  {comp.valuation_report_name || "Үнэлгээний тайлан"}
+                                </a>
+                                <span className="text-[11px] text-emerald-600 dark:text-emerald-400">— Тайлан хавсаргагдсан</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                <p className="text-[12px] text-amber-600 dark:text-amber-400">
+                                  Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө үнэлгээний тайлан хавсаргах шаардлагатай.
+                                </p>
+                                <input
+                                  type="file"
+                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                  className="hidden"
+                                  ref={(el) => { reportFileRef.current[comp.id] = el; }}
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    setUploadingReportId(comp.id);
+                                    reportMutation.mutate({ compId: comp.id, file });
+                                    e.target.value = "";
+                                  }}
+                                />
+                                <button
+                                  onClick={() => reportFileRef.current[comp.id]?.click()}
+                                  disabled={uploadingReportId === comp.id && reportMutation.isPending}
+                                  className="inline-flex shrink-0 items-center gap-1.5 h-8 px-3 rounded-lg bg-amber-500 text-white text-[12px] font-semibold hover:bg-amber-600 disabled:opacity-60 transition-colors"
+                                >
+                                  {uploadingReportId === comp.id && reportMutation.isPending ? (
+                                    <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                  ) : (
+                                    <Upload className="h-3.5 w-3.5" />
+                                  )}
+                                  Тайлан хавсаргах
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

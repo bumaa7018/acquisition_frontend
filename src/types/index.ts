@@ -433,8 +433,19 @@ export interface Compensation {
   review_note?: string;
   reviewed_by?: string;
   reviewed_at?: string;
+  valuation_report_url?: string;
+  valuation_report_name?: string;
   created_at: string;
+  created_by?: string;
   updated_at: string;
+}
+
+export interface GlobalCompensation extends Compensation {
+  acquisition_name: string;
+  holder_name: string;
+  holder_last_name: string;
+  holder_register_no: string;
+  holder_phone: string;
 }
 
 export interface CompensationHistory {

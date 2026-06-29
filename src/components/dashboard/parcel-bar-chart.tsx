@@ -8,8 +8,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { STATUSES } from "./mock-data";
-
 const CustomLabel = (props: {
   x?: number;
   y?: number;
@@ -31,14 +29,23 @@ const CustomLabel = (props: {
   );
 };
 
-interface Props {
-  mode: "count" | "area";
+interface StatusItem {
+  key?: string;
+  label: string;
+  color: string;
+  count: number;
+  area: number;
 }
 
-export function ParcelBarChart({ mode }: Props) {
-  const data = [...STATUSES]
+interface Props {
+  mode: "count" | "area";
+  statuses: StatusItem[];
+}
+
+export function ParcelBarChart({ mode, statuses }: Props) {
+  const data = [...statuses]
     .sort((a, b) => (mode === "count" ? b.count - a.count : b.area - a.area))
-    .map((s) => ({ ...s, value: mode === "count" ? s.count : s.area }));
+    .map((s, i) => ({ ...s, key: s.key ?? String(i), value: mode === "count" ? s.count : s.area }));
 
   return (
     <ResponsiveContainer width="100%" height={data.length * 38 + 20}>

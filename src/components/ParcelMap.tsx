@@ -4,33 +4,60 @@ import OLMap from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
+import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
+import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
-import { fromLonLat, transformExtent } from "ol/proj";
+import { fromLonLat } from "ol/proj";
+import WKT from "ol/format/WKT";
+import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./map/layer-panel";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./map/layers";
+import { landApi } from "@/lib/api";
+import { PARCEL_STATUS_STYLES } from "@/types";
 
 const GS_WMS = "/geoserver/land/wms";
 const GS_WFS = "/geoserver/land/ows";
 
-const LAYER_DEFS: (MapLayerDef & {
+// GeoServer WMS: зөвхөн au, plan, acquisition boundary, building
+const WMS_LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
-  filter?: "parcel" | "acquisition";
+  cqlType?: "acquisition" | "parcel";
 })[] = [
   { ...layerDef("au1"), defaultVisible: false },
   { ...layerDef("au2"), defaultVisible: false },
   { ...layerDef("au3"), defaultVisible: true },
-  { ...layerDef("v_acquisition_plan"), defaultVisible: true },
-  {
-    ...layerDef("v_acquisition_boundary"),
-    defaultVisible: true,
-    filter: "acquisition",
-  },
-  { ...layerDef("parcel"), defaultVisible: true, filter: "parcel" },
-  { ...layerDef("building"), defaultVisible: true, filter: "parcel" },
+  { ...layerDef("v_acquisition_plan"),     defaultVisible: true,  cqlType: "acquisition" },
+  { ...layerDef("v_acquisition_boundary"), defaultVisible: true,  cqlType: "acquisition" },
+  { ...layerDef("building"),               defaultVisible: true,  cqlType: "parcel" },
 ];
+
+// Backend API-аас геометр авч зурдаг vector layers
+const VECTOR_LAYER_DEFS: MapLayerDef[] = [
+  layerDef("v_parcel_acquisition"),
+  layerDef("parcel"),
+];
+
+const ALL_LAYER_DEFS = [...WMS_LAYER_DEFS, ...VECTOR_LAYER_DEFS];
+
+function parcelStyle(feature: { get: (k: string) => unknown }): Style {
+  const sid = (feature.get("status_id") as number) ?? 0;
+  const s = PARCEL_STATUS_STYLES[sid] ?? PARCEL_STATUS_STYLES[0];
+  return new Style({
+    stroke: new Stroke({ color: s.color, width: 1.5 }),
+    fill:   new Fill({ color: `${s.color}22` }),
+  });
+}
+
+const VECTOR_STYLES: Record<string, Style | ((f: { get: (k: string) => unknown }) => Style)> = {
+  v_parcel_acquisition: parcelStyle,
+  parcel: new Style({
+    stroke: new Stroke({ color: "#22c55e", width: 2.5 }),
+    fill:   new Fill({ color: "rgba(34,197,94,0.2)" }),
+  }),
+};
 
 interface Props {
   parcelId: string;
@@ -38,22 +65,23 @@ interface Props {
 }
 
 export function ParcelMap({ parcelId, acquisitionId }: Props) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const olMap = useRef<OLMap | null>(null);
-  const wmsLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  const mapRef      = useRef<HTMLDivElement>(null);
+  const olMap       = useRef<OLMap | null>(null);
+  const wmsLayers   = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  const vectorLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
+  const wktFormat   = useRef(new WKT());
+
+  const acqCql    = acquisitionId ? `acquisition_id='${acquisitionId}'` : undefined;
+  const parcelCql = parcelId      ? `parcel_id='${parcelId}'`            : undefined;
 
   const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map((d) => ({
+    ALL_LAYER_DEFS.map((d) => ({
       id: d.id,
       label: d.label,
       color: d.color,
-      visible: d.defaultVisible,
+      visible: ("defaultVisible" in d ? d.defaultVisible : true) as boolean,
     })),
   );
-  const parcelFilter = `parcel_id='${parcelId}'`;
-  const acquisitionFilter = acquisitionId
-    ? `acquisition_id='${acquisitionId}'`
-    : undefined;
 
   const handleToggle = useCallback(
     (id: string) => {
@@ -61,19 +89,18 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
         prev.map((l) => {
           if (l.id !== id) return l;
           const next = { ...l, visible: !l.visible };
+          if (vectorLayers.current[id]) {
+            vectorLayers.current[id].setVisible(next.visible);
+            return next;
+          }
           wmsLayers.current[id]?.setVisible(next.visible);
-          const def = LAYER_DEFS.find((d) => d.id === id);
+          const def = WMS_LAYER_DEFS.find((d) => d.id === id);
           if (next.visible && def && olMap.current) {
             void fitLayerToMap({
               map: olMap.current,
               wfsUrl: GS_WFS,
               layerId: def.id,
-              cqlFilter:
-                def.filter === "parcel"
-                  ? parcelFilter
-                  : def.filter === "acquisition"
-                    ? acquisitionFilter
-                    : undefined,
+              cqlFilter: def.cqlType === "acquisition" ? acqCql : def.cqlType === "parcel" ? parcelCql : undefined,
               padding: [60, 60, 60, 60],
               maxZoom: 18,
             });
@@ -82,15 +109,16 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
         }),
       );
     },
-    [acquisitionFilter, parcelFilter],
+    [acqCql, parcelCql],
   );
 
+  // Map init
   useEffect(() => {
     if (!mapRef.current || olMap.current || !parcelId) return;
 
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {};
-
-    LAYER_DEFS.forEach((d) => {
+    WMS_LAYER_DEFS.forEach((d) => {
+      const cql = d.cqlType === "acquisition" ? acqCql : d.cqlType === "parcel" ? parcelCql : undefined;
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
         opacity: 0.85,
@@ -101,10 +129,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
             LAYERS: `land:${d.id}`,
             FORMAT: "image/png",
             TRANSPARENT: true,
-            ...(d.filter === "parcel" ? { CQL_FILTER: parcelFilter } : {}),
-            ...(d.filter === "acquisition" && acquisitionFilter
-              ? { CQL_FILTER: acquisitionFilter }
-              : {}),
+            ...(cql ? { CQL_FILTER: cql } : {}),
           },
           ratio: 1,
           serverType: "geoserver",
@@ -112,6 +137,20 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
       });
     });
     wmsLayers.current = wmsRecord;
+
+    const vRecord: Record<string, VectorLayer<VectorSource>> = {};
+    VECTOR_LAYER_DEFS.forEach((d) => {
+      const src   = new VectorSource();
+      const zIdx  = d.id === "parcel" ? 50 : d.zIndex; // highlight parcel on top
+      const layer = new VectorLayer({
+        source: src,
+        visible: true,
+        zIndex: zIdx,
+        style: VECTOR_STYLES[d.id],
+      });
+      vRecord[d.id] = layer;
+    });
+    vectorLayers.current = vRecord;
 
     const map = new OLMap({
       target: mapRef.current,
@@ -128,7 +167,8 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
             crossOrigin: "anonymous",
           }),
         }),
-        ...LAYER_DEFS.map((d) => wmsRecord[d.id]),
+        ...WMS_LAYER_DEFS.map((d) => wmsRecord[d.id]),
+        ...VECTOR_LAYER_DEFS.map((d) => vRecord[d.id]),
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -140,40 +180,66 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
 
     olMap.current = map;
 
-    // Fit to the parcel's bbox via WFS
-    const params = new URLSearchParams({
-      service: "WFS",
-      version: "1.1.0",
-      request: "GetFeature",
-      typeName: "land:parcel",
-      CQL_FILTER: parcelFilter,
-      outputFormat: "application/json",
-      propertyName: "geometry",
-      maxFeatures: "1",
-    });
-    fetch(`${GS_WFS}?${params}`)
-      .then((r) => r.json())
-      .then((json) => {
-        const bbox: number[] | undefined =
-          json?.features?.[0]?.geometry?.bbox ?? json?.bbox;
-        if (bbox?.length === 4) {
-          const ext = transformExtent(bbox, "EPSG:4326", "EPSG:3857");
-          map.getView().fit(ext, {
-            padding: [60, 60, 60, 60],
-            maxZoom: 18,
-            duration: 1000,
-          });
-        }
-      })
-      .catch(() => {
-        /* keep default view */
-      });
-
     return () => {
       map.setTarget(undefined);
       olMap.current = null;
+      vectorLayers.current = {};
     };
-  }, [acquisitionFilter, acquisitionId, parcelFilter, parcelId]);
+  }, [acqCql, acquisitionId, parcelCql, parcelId]);
+
+  // Fetch parcel geometries from backend API — no GeoServer WFS
+  useEffect(() => {
+    if (!acquisitionId) return;
+
+    const fmt = wktFormat.current;
+
+    ;(async () => {
+      try {
+        const resp    = await landApi.getParcels(acquisitionId, { page_size: 500 });
+        const parcels = resp?.data ?? [];
+
+        // Both layers show only the current parcel (not the entire acquisition)
+        const thisParcel = parcels.find((p) => p.parcel_id === parcelId);
+
+        const makeFeature = (wkt: string, statusId?: number) => {
+          try {
+            const feat = fmt.readFeature(wkt, {
+              dataProjection: "EPSG:4326",
+              featureProjection: "EPSG:3857",
+            });
+            if (statusId !== undefined) feat.set("status_id", statusId);
+            return feat;
+          } catch { return null; }
+        };
+
+        const wkt = thisParcel?.geometry_wkt;
+        const acqFeat    = wkt ? makeFeature(wkt, thisParcel!.status) : null;
+        const parcelFeat = wkt ? makeFeature(wkt) : null;
+
+        const vAllSrc = vectorLayers.current["v_parcel_acquisition"]?.getSource();
+        if (vAllSrc) { vAllSrc.clear(); if (acqFeat) vAllSrc.addFeature(acqFeat); }
+
+        const vParcelSrc = vectorLayers.current["parcel"]?.getSource();
+        if (vParcelSrc) { vParcelSrc.clear(); if (parcelFeat) vParcelSrc.addFeature(parcelFeat); }
+
+        const parcelFeatures = parcelFeat ? [parcelFeat] : [];
+
+        // Fit view to this parcel's extent
+        if (parcelFeatures.length && olMap.current) {
+          const extent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
+          if (extent) {
+            olMap.current.getView().fit(extent, {
+              padding: [60, 60, 60, 60],
+              maxZoom: 18,
+              duration: 1000,
+            });
+          }
+        }
+      } catch {
+        // Geometry fetch failed — layers stay empty
+      }
+    })();
+  }, [acquisitionId, parcelId]);
 
   return (
     <div

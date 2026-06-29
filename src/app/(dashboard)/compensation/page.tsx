@@ -1,271 +1,286 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { landApi } from "@/lib/api";
 import {
-  FileText,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  Plus,
-  Search,
-  Download,
-  Eye,
-  Printer,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  X,
+  FileText, CheckCircle2, Clock, AlertCircle,
+  Search, X, ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import {
-  INVOICES,
-  STATUS_CONFIG,
-  invoiceTotal,
-  fmtMoney,
-  type InvoiceStatus,
-} from "./mock-data";
+import { cn, formatDate } from "@/lib/utils";
+import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 
-const PAGE_SIZE = 8;
+type CompStatus = "pending" | "approved" | "rejected" | "";
+type CompType   = "cash" | "land_grant" | "";
 
-export default function InvoicesPage() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<InvoiceStatus | "all">("all");
-  const [page, setPage] = useState(1);
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  pending:  { label: "Хүлээгдэж буй", color: "#f9bc0b", bg: "#f9bc0b1a" },
+  approved: { label: "Батлагдсан",    color: "#0acf97", bg: "#0acf971a" },
+  rejected: { label: "Татгалзсан",    color: "#f1556c", bg: "#f1556c1a" },
+};
 
-  const filtered = INVOICES.filter((inv) => {
-    const q = search.toLowerCase();
-    const matchQ =
-      !q ||
-      inv.number.toLowerCase().includes(q) ||
-      inv.client.name.toLowerCase().includes(q);
-    const matchS = filter === "all" || inv.status === filter;
-    return matchQ && matchS;
+const COMP_TYPE_LABELS: Record<string, string> = {
+  cash:       "Мөнгөн",
+  land_grant: "Газраар",
+};
+
+function fmtMoney(n: number) {
+  return new Intl.NumberFormat("mn-MN").format(Math.round(n)) + "₮";
+}
+
+const PAGE_SIZE = 20;
+
+const EMPTY = { search: "", acquisition_id: "", type: "" as CompType, status: "" as CompStatus };
+
+export default function CompensationsPage() {
+  const [draft, setDraft]       = useState(EMPTY);
+  const [filter, setFilter]     = useState(EMPTY);
+  const [page, setPage]         = useState(1);
+  const [searchTick, setSearchTick] = useState(0);
+
+  const inp =
+    "h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+
+  function applySearch() {
+    setFilter({ ...draft });
+    setPage(1);
+    setSearchTick((t) => t + 1);
+  }
+
+  function clearAll() {
+    setDraft(EMPTY);
+    setFilter(EMPTY);
+    setPage(1);
+    setSearchTick((t) => t + 1);
+  }
+
+  const hasFilter = !!(draft.search || draft.acquisition_id || draft.type || draft.status);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["global-compensations", filter, page, searchTick],
+    queryFn: () =>
+      landApi.listAllCompensations({
+        status:         filter.status || undefined,
+        search:         filter.search || undefined,
+        acquisition_id: filter.acquisition_id || undefined,
+        page,
+        page_size: PAGE_SIZE,
+      }),
+    placeholderData: (prev) => prev,
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const rows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const stats = {
-    all: INVOICES.length,
-    paid: INVOICES.filter((i) => i.status === "paid").length,
-    pending: INVOICES.filter((i) => i.status === "pending").length,
-    overdue: INVOICES.filter((i) => i.status === "overdue").length,
-    paidAmt: INVOICES.filter((i) => i.status === "paid").reduce(
-      (s, i) => s + invoiceTotal(i),
-      0,
-    ),
-    pendAmt: INVOICES.filter((i) => i.status === "pending").reduce(
-      (s, i) => s + invoiceTotal(i),
-      0,
-    ),
+  const countParams = {
+    search:         filter.search || undefined,
+    acquisition_id: filter.acquisition_id || undefined,
+    page: 1,
+    page_size: 1,
   };
 
-  const FILTER_TABS = [
-    ["all", "Бүгд"],
-    ["paid", STATUS_CONFIG.paid.label],
-    ["pending", STATUS_CONFIG.pending.label],
-    ["overdue", STATUS_CONFIG.overdue.label],
-  ] as const;
+  const { data: approvedData } = useQuery({
+    queryKey: ["comp-count", "approved", filter, searchTick],
+    queryFn: () => landApi.listAllCompensations({ ...countParams, status: "approved" }),
+  });
+  const { data: pendingData } = useQuery({
+    queryKey: ["comp-count", "pending", filter, searchTick],
+    queryFn: () => landApi.listAllCompensations({ ...countParams, status: "pending" }),
+  });
+  const { data: rejectedData } = useQuery({
+    queryKey: ["comp-count", "rejected", filter, searchTick],
+    queryFn: () => landApi.listAllCompensations({ ...countParams, status: "rejected" }),
+  });
+  const { data: allData } = useQuery({
+    queryKey: ["comp-count", "all", filter, searchTick],
+    queryFn: () => landApi.listAllCompensations({ ...countParams }),
+  });
+
+  const rows       = data?.data ?? [];
+  const total      = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const stats = {
+    all:      allData?.total ?? 0,
+    approved: approvedData?.total ?? 0,
+    pending:  pendingData?.total ?? 0,
+    rejected: rejectedData?.total ?? 0,
+  };
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Page header */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Нөхөн төлбөрийн нэхэмжлэл
-          </h1>
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Газар чөлөөлтийн нэхэмжлэлийн бүртгэл
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white">Нөхөн төлбөр</h1>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
+            Нийт{" "}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">{total}</span>
+            {" "}нөхөн төлбөрийн бүртгэл
           </p>
         </div>
-        <Link
-          href="/compensation/create"
-          className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Шинээр нэмэх
-        </Link>
       </div>
 
-      {/* Stats cards */}
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          {
-            label: "Нийт нэхэмжлэл",
-            value: stats.all,
-            icon: FileText,
-            color: "#02c0ce",
-          },
-          {
-            label: "Төлөгдсөн",
-            value: stats.paid,
-            sub: fmtMoney(stats.paidAmt),
-            icon: CheckCircle2,
-            color: "#0acf97",
-          },
-          {
-            label: "Хүлээгдэж буй",
-            value: stats.pending,
-            sub: fmtMoney(stats.pendAmt),
-            icon: Clock,
-            color: "#f9bc0b",
-          },
-          {
-            label: "Хугацаа хэтэрсэн",
-            value: stats.overdue,
-            icon: AlertCircle,
-            color: "#f1556c",
-          },
-        ].map(({ label, value, sub, icon: Icon, color }) => (
-          <div
-            key={label}
-            className="ap-card px-5 py-4 flex items-center gap-4"
-          >
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-              style={{ background: `${color}18` }}
-            >
-              <Icon className="h-5 w-5" style={{ color }} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium leading-tight">
-                {label}
-              </p>
-              <p className="text-2xl font-bold tabular-nums text-slate-800 dark:text-white leading-tight mt-0.5">
-                {value}
-              </p>
-              {sub && (
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight truncate">
-                  {sub}
+        {([
+          { label: "Нийт",          value: stats.all,      icon: FileText,     color: "#02c0ce" },
+          { label: "Батлагдсан",    value: stats.approved, icon: CheckCircle2, color: "#0acf97" },
+          { label: "Хүлээгдэж буй", value: stats.pending,  icon: Clock,        color: "#f9bc0b" },
+          { label: "Татгалзсан",    value: stats.rejected, icon: AlertCircle,  color: "#f1556c" },
+        ] as { label: string; value: number; icon: React.ElementType; color: string }[]).map(
+          ({ label, value, icon: Icon, color }) => (
+            <div key={label} className="ap-card px-5 py-4 flex items-center gap-4">
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+                style={{ background: `${color}18` }}
+              >
+                <Icon className="h-5 w-5" style={{ color }} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">
+                  {label}
                 </p>
-              )}
+                <p className="text-2xl font-bold tabular-nums text-slate-800 dark:text-white">{value}</p>
+              </div>
             </div>
+          )
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="ap-card p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[160px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Талбарын дугаар, эзэмшигч"
+              value={draft.search}
+              onChange={(e) => setDraft((f) => ({ ...f, search: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && applySearch()}
+              className={`${inp} pl-8 w-full`}
+            />
           </div>
-        ))}
+
+          <AcquisitionSelect
+            selectedId={draft.acquisition_id}
+            onSelect={(id) => setDraft((f) => ({ ...f, acquisition_id: id }))}
+            onClear={() => setDraft((f) => ({ ...f, acquisition_id: "" }))}
+            className="flex-1 min-w-[180px]"
+          />
+
+          <select
+            value={draft.type}
+            onChange={(e) => setDraft((f) => ({ ...f, type: e.target.value as CompType }))}
+            className={`${inp} w-36`}
+          >
+            <option value="">Олговорын хэлбэр</option>
+            <option value="cash">Мөнгөн</option>
+            <option value="land_grant">Газраар</option>
+          </select>
+
+          <select
+            value={draft.status}
+            onChange={(e) => setDraft((f) => ({ ...f, status: e.target.value as CompStatus }))}
+            className={`${inp} w-44`}
+          >
+            <option value="">Нөхөн төлбөрийн төлөв</option>
+            <option value="pending">Хүлээгдэж буй</option>
+            <option value="approved">Батлагдсан</option>
+            <option value="rejected">Татгалзсан</option>
+          </select>
+
+          <button
+            onClick={applySearch}
+            className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+          >
+            <Search className="h-3.5 w-3.5" />
+            Хайх
+          </button>
+
+          {hasFilter && (
+            <button
+              onClick={clearAll}
+              className="flex items-center gap-1 h-9 px-3 rounded-lg border border-rose-300 dark:border-rose-400/40 bg-rose-50 dark:bg-rose-400/10 text-[12px] font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-400/20 hover:border-rose-400 dark:hover:border-rose-400/60 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" /> Цэвэрлэх
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table card */}
       <div className="ap-card overflow-hidden">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div className="relative flex-1 min-w-52">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Нэхэмжлэл, иргэн хайх..."
-              className="h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] pl-9 pr-9 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-            />
-            {search && (
-              <button
-                onClick={() => {
-                  setSearch("");
-                  setPage(1);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] p-1">
-            {FILTER_TABS.map(([s, label]) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setFilter(s);
-                  setPage(1);
-                }}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-[12px] font-medium transition-all whitespace-nowrap",
-                  filter === s
-                    ? "bg-[#02c0ce] text-white shadow-sm"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-white dark:hover:bg-white/[0.06]",
-                )}
-              >
-                {label}
-              </button>
+        {isLoading ? (
+          <div className="p-5 space-y-3 animate-pulse">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-10 rounded bg-slate-100 dark:bg-[#252630]" />
             ))}
           </div>
-
-          <button className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 h-9 text-[13px] font-medium text-slate-600 dark:text-slate-400 hover:border-slate-300 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
-            <Download className="h-4 w-4" />
-            Excel
-          </button>
-        </div>
-
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                {[
-                  "Нэхэмжлэлийн №",
-                  "Иргэн",
-                  "Огноо",
-                  "Дуусах огноо",
-                  "Дүн",
-                  "Төлөв",
-                  "",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-              {rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
-                  >
-                    Нэхэмжлэл олдсонгүй
-                  </td>
+        ) : rows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
+            <p className="text-[13px]">Нөхөн төлбөр олдсонгүй</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
+                  {["Нэгж талбар", "Эзэмшигч", "Регистр", "Олборлолт", "Хэлбэр", "Дүн", "Огноо", "Төлөв"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ) : (
-                rows.map((inv) => {
-                  const sc = STATUS_CONFIG[inv.status];
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
+                {rows.map((comp) => {
+                  const sc = STATUS_CONFIG[comp.status] ?? STATUS_CONFIG.pending;
+                  const holderName =
+                    [comp.holder_last_name, comp.holder_name].filter(Boolean).join(" ") || "—";
                   return (
                     <tr
-                      key={inv.id}
+                      key={comp.id}
                       className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
                       <td className="px-5 py-3.5">
                         <Link
-                          href={`/compensation/${inv.id}`}
-                          className="font-semibold text-[#02c0ce] hover:underline underline-offset-2"
+                          href={`/compensation/${comp.id}`}
+                          className="font-semibold text-[#02c0ce] hover:underline underline-offset-2 font-mono text-[12px]"
                         >
-                          {inv.number}
+                          {comp.parcel_id || "—"}
                         </Link>
                       </td>
                       <td className="px-5 py-3.5">
-                        <div>
-                          <p className="font-medium text-slate-800 dark:text-white">
-                            {inv.client.name}
-                          </p>
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                            {inv.parcelId}
-                          </p>
-                        </div>
+                        <p className="font-medium text-slate-800 dark:text-white">{holderName}</p>
+                        <p className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                          {comp.acquisition_name}
+                        </p>
                       </td>
-                      <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">
-                        {inv.date}
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
+                        {comp.holder_register_no || "—"}
                       </td>
-                      <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">
-                        {inv.due}
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 max-w-[160px] truncate">
+                        {comp.acquisition_name || "—"}
                       </td>
-                      <td className="px-5 py-3.5 font-semibold tabular-nums text-slate-800 dark:text-white">
-                        {fmtMoney(invoiceTotal(inv))}
+                      <td className="px-5 py-3.5">
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                            comp.compensation_type === "cash"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400"
+                              : "bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400",
+                          )}
+                        >
+                          {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 font-semibold tabular-nums text-slate-800 dark:text-white whitespace-nowrap">
+                        {fmtMoney(comp.amount)}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">
+                        {comp.compensation_date ? formatDate(comp.compensation_date) : "—"}
                       </td>
                       <td className="px-5 py-3.5">
                         <span
@@ -275,67 +290,53 @@ export default function InvoicesPage() {
                           {sc.label}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1">
-                          <Link href={`/compensation/${inv.id}`}>
-                            <button className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors">
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
-                          </Link>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0acf97]/10 text-[#0acf97] hover:bg-[#0acf97]/20 transition-colors">
-                            <Printer className="h-3.5 w-3.5" />
-                          </button>
-                          <button className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Pagination */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
-          <p className="text-[12px] text-slate-400 dark:text-slate-500">
-            {filtered.length === 0
-              ? "Бичлэг олдсонгүй"
-              : `Нийт ${filtered.length} бичлэгийн ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)}-г харуулж байна`}
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+        {total > 0 && (
+          <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
+            <p className="text-[12px] text-slate-400 dark:text-slate-500">
+              Нийт {total} бичлэгийн {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, total)}-г харуулж байна
+            </p>
+            <div className="flex items-center gap-1">
               <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={cn(
-                  "flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-medium border transition-colors",
-                  page === p
-                    ? "bg-[#02c0ce] text-white border-[#02c0ce]"
-                    : "border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce]",
-                )}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                {p}
+                <ChevronLeft className="h-4 w-4" />
               </button>
-            ))}
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-lg text-[13px] font-medium border transition-colors",
+                    page === p
+                      ? "bg-[#02c0ce] text-white border-[#02c0ce]"
+                      : "border-slate-200 dark:border-white/[0.08] text-slate-600 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce]",
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-white/[0.08] text-slate-500 hover:border-[#02c0ce] hover:text-[#02c0ce] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

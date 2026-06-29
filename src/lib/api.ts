@@ -8,7 +8,7 @@ import type {
   User, Role, Permission,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
-  GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
+  GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative,
@@ -300,6 +300,13 @@ export const landApi = {
     api.post(`/land-acquisitions/${acqId}/compensations/${compId}/approve`, { note }),
   rejectCompensation: (acqId: string, compId: string, note: string) =>
     api.post(`/land-acquisitions/${acqId}/compensations/${compId}/reject`, { note }),
+  uploadCompensationReport: (acqId: string, compId: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}/report`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
   listCompensationHistory: (acqId: string, compId: string) =>
     api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
@@ -310,6 +317,10 @@ export const landApi = {
     api.delete(`/land-acquisitions/${acqId}/compensations/${compId}/grant`),
   setParcelCompensation: (acqId: string, parcelId: string, paid: boolean) =>
     api.put(`/land-acquisitions/${acqId}/parcels/${parcelId}/compensation`, { paid }).then(r => r.data),
+  listAllCompensations: (params?: { status?: string; search?: string; acquisition_id?: string; page?: number; page_size?: number }) =>
+    api.get<PaginatedResponse<GlobalCompensation>>('/compensations', { params }).then(r => r.data),
+  getGlobalCompensation: (id: string) =>
+    api.get<ApiResponse<GlobalCompensation>>(`/compensations/${id}`).then(r => r.data.data),
   getParcel: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string) =>

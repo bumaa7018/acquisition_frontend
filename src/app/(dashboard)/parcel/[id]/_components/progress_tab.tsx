@@ -21,6 +21,17 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
     enabled: !!acqId && !!parcelId,
   });
 
+  const parcelCode = parcelFull?.parcel_id ?? "";
+  const { data: allComps = [] } = useQuery({
+    queryKey: ["compensations", acqId],
+    queryFn: () => landApi.listCompensations(acqId),
+    enabled: !!acqId && !!parcelCode,
+  });
+  const parcelComps = parcelCode ? allComps.filter((c) => c.parcel_id === parcelCode) : [];
+  const hasApprovedReport = parcelComps.some(
+    (c) => c.status === "approved" && !!c.valuation_report_url,
+  );
+
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["parcel-available-statuses", acqId, parcelId],
     queryFn: () => parcelApi.getAvailableStatuses(acqId, parcelId),
@@ -299,6 +310,15 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 })()}
               </div>
 
+              {selected.name === "Чөлөөлсөн" && !hasApprovedReport && (
+                <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                    Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө зөвшөөрөгдсөн нөхөн төлбөрт үнэлгээний тайлан хавсаргасан байх шаардлагатай.
+                  </p>
+                </div>
+              )}
+
               <div className="px-5 pb-5 flex gap-2">
                 <button
                   onClick={handleBackToPicker}
@@ -309,7 +329,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 </button>
                 <button
                   onClick={handleConfirm}
-                  disabled={updateStatusMutation.isPending}
+                  disabled={updateStatusMutation.isPending || (selected.name === "Чөлөөлсөн" && !hasApprovedReport)}
                   className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updateStatusMutation.isPending ? "Хадгалж байна..." : "Тийм, хадгалах"}

@@ -1,38 +1,66 @@
 "use client";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { landApi } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
 import {
-  ArrowLeft,
-  Printer,
-  Download,
-  Building2,
-  MapPin,
-  Phone,
-  Hash,
-  Calendar,
-  CreditCard,
+  ArrowLeft, Printer, Building2, MapPin, Phone, Hash, Calendar, CreditCard,
+  FileText, CheckCircle2, Clock, AlertCircle,
 } from "lucide-react";
-import {
-  INVOICES,
-  STATUS_CONFIG,
-  ISSUER,
-  invoiceTotal,
-  fmtMoney,
-} from "../mock-data";
-import { cn } from "@/lib/utils";
 
-export default function InvoiceDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const inv = INVOICES.find((i) => i.id === params.id);
-  if (!inv) notFound();
+type CompStatus = "pending" | "approved" | "rejected";
 
-  const sc = STATUS_CONFIG[inv.status];
-  const subtotal = invoiceTotal(inv);
-  const vat = Math.round(subtotal * 0.1);
-  const total = subtotal + vat;
+const STATUS_CONFIG: Record<CompStatus, { label: string; color: string; bg: string; icon: React.ElementType }> = {
+  pending:  { label: "Хүлээгдэж буй", color: "#f9bc0b", bg: "#f9bc0b1a", icon: Clock },
+  approved: { label: "Батлагдсан",    color: "#0acf97", bg: "#0acf971a", icon: CheckCircle2 },
+  rejected: { label: "Татгалзсан",    color: "#f1556c", bg: "#f1556c1a", icon: AlertCircle },
+};
+
+const COMP_TYPE_LABELS: Record<string, string> = {
+  cash:       "Мөнгөн дүнгээр",
+  land_grant: "Газраар дүйцүүлэх",
+};
+
+const TARGET_TYPE_LABELS: Record<string, string> = {
+  parcel: "Нэгж талбар",
+  asset:  "Хөрөнгө",
+};
+
+function fmtMoney(n: number) {
+  return new Intl.NumberFormat("mn-MN").format(Math.round(n)) + "₮";
+}
+
+export default function CompensationDetailPage({ params }: { params: { id: string } }) {
+  const { data: comp, isLoading, isError } = useQuery({
+    queryKey: ["global-compensation", params.id],
+    queryFn: () => landApi.getGlobalCompensation(params.id),
+    enabled: !!params.id,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-5 animate-pulse">
+        <div className="h-9 w-48 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+        <div className="ap-card h-96" />
+      </div>
+    );
+  }
+
+  if (isError || !comp) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <AlertCircle className="h-8 w-8 text-slate-300" />
+        <p className="text-[13px] text-slate-400">Нөхөн төлбөр олдсонгүй</p>
+        <Link href="/compensation" className="text-[13px] text-[#02c0ce] hover:underline">
+          Буцах
+        </Link>
+      </div>
+    );
+  }
+
+  const sc = STATUS_CONFIG[comp.status as CompStatus] ?? STATUS_CONFIG.pending;
+  const StatusIcon = sc.icon;
+  const holderName = [comp.holder_last_name, comp.holder_name].filter(Boolean).join(" ") || "—";
 
   return (
     <>
@@ -40,7 +68,7 @@ export default function InvoiceDetailPage({
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
-          .invoice-doc { box-shadow: none !important; border-left-color: #02c0ce !important; }
+          .comp-doc { box-shadow: none !important; border-left-color: #02c0ce !important; }
         }
       `}</style>
 
@@ -54,65 +82,43 @@ export default function InvoiceDetailPage({
             <ArrowLeft className="h-4 w-4" />
             Жагсаалт руу буцах
           </Link>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-slate-300 transition-colors"
-            >
-              <Printer className="h-4 w-4" />
-              Хэвлэх
-            </button>
-            <button className="flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors">
-              <Download className="h-4 w-4" />
-              PDF татах
-            </button>
-          </div>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:border-slate-300 transition-colors"
+          >
+            <Printer className="h-4 w-4" />
+            Хэвлэх
+          </button>
         </div>
 
-        {/* Invoice document — left accent stripe is the aesthetic signature */}
-        <div
-          className="invoice-doc ap-card overflow-hidden"
-          style={{ borderLeft: "4px solid #02c0ce" }}
-        >
-          {/* Document header */}
-          <div className="px-10 py-8 border-b border-slate-100">
+        <div className="comp-doc ap-card overflow-hidden" style={{ borderLeft: "4px solid #02c0ce" }}>
+          {/* Header */}
+          <div className="px-10 py-8 border-b border-slate-100 dark:border-[#37394d]">
             <div className="flex items-start justify-between gap-8">
-              {/* Issuer identity */}
               <div className="flex items-start gap-4">
-                <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white text-xl font-black"
-                  style={{ background: "#02c0ce" }}
-                >
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: "#02c0ce" }}>
                   <Building2 className="h-7 w-7" />
                 </div>
                 <div>
-                  <p className="text-[15px] font-bold text-slate-800 leading-tight">
-                    {ISSUER.name}
+                  <p className="text-[15px] font-bold text-slate-800 dark:text-white leading-tight">
+                    {comp.acquisition_name || "Газар чөлөөлөлт"}
                   </p>
-                  <p className="text-[12px] text-slate-500 mt-1.5 flex items-center gap-1.5">
-                    <MapPin className="h-3 w-3 shrink-0" />
-                    {ISSUER.address}
-                  </p>
-                  <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-                    <Phone className="h-3 w-3 shrink-0" />
-                    {ISSUER.phone}
+                  <p className="text-[12px] text-slate-500 mt-1">
+                    Нөхөн төлбөрийн бүртгэл
                   </p>
                 </div>
               </div>
-
-              {/* Invoice number + status */}
               <div className="text-right shrink-0">
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">
-                  НЭХЭМЖЛЭЛ
-                </p>
-                <p className="text-2xl font-black text-slate-800 mt-0.5 tabular-nums">
-                  {inv.number}
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">НӨХӨН ТӨЛБӨР</p>
+                <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 font-mono">
+                  {comp.parcel_id || comp.id.slice(0, 8).toUpperCase()}
                 </p>
                 <div className="mt-2">
                   <span
-                    className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold"
+                    className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold"
                     style={{ color: sc.color, background: sc.bg }}
                   >
+                    <StatusIcon className="h-3.5 w-3.5" />
                     {sc.label}
                   </span>
                 </div>
@@ -120,185 +126,157 @@ export default function InvoiceDetailPage({
             </div>
           </div>
 
-          {/* Meta + recipient row */}
-          <div className="grid grid-cols-2 gap-8 px-10 py-8 border-b border-slate-100 bg-slate-50/40">
-            {/* Document metadata */}
+          {/* Meta + recipient */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-10 py-8 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/40 dark:bg-[#1a1d20]">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
-                Нөхөн төлбөрийн нэхэмжлэлийн мэдээлэл
+                Нөхөн төлбөрийн мэдээлэл
               </p>
               <div className="grid grid-cols-2 gap-4">
-                {[
-                  { icon: Hash, label: "Нэгж талбарын №", value: inv.parcelId },
-                  {
-                    icon: CreditCard,
-                    label: "Нэхэмжлэлийн №",
-                    value: inv.number,
-                  },
-                  { icon: Calendar, label: "Гаргасан огноо", value: inv.date },
-                  { icon: Calendar, label: "Дуусах огноо", value: inv.due },
-                ].map(({ icon: Icon, label, value }) => (
+                {([
+                  { icon: Hash,     label: "Нэгж талбарын №", value: comp.parcel_id || "—" },
+                  { icon: FileText, label: "Төрөл",           value: TARGET_TYPE_LABELS[comp.target_type] ?? comp.target_type },
+                  { icon: CreditCard, label: "Олгох хэлбэр", value: COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type },
+                  { icon: Calendar,  label: "Огноо",          value: comp.compensation_date ? formatDate(comp.compensation_date) : "—" },
+                ] as { icon: React.ElementType; label: string; value: string }[]).map(({ icon: Icon, label, value }) => (
                   <div key={label}>
                     <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium flex items-center gap-1">
                       <Icon className="h-3 w-3" />
                       {label}
                     </p>
-                    <p className="text-[13px] font-semibold text-slate-700 mt-0.5 tabular-nums">
-                      {value}
-                    </p>
+                    <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{value}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Recipient */}
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
-                Нэхэмжлэл хүлээн авагч
+                Газар эзэмшигч
               </p>
-              <div className="flex items-start gap-3">
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
-                  style={{ background: "#02c0ce" }}
-                >
-                  {inv.client.name[0]}
+              {comp.holder_name || comp.holder_last_name ? (
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" style={{ background: "#02c0ce" }}>
+                    {(comp.holder_name || comp.holder_last_name)[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 dark:text-white">{holderName}</p>
+                    {comp.holder_register_no && (
+                      <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1">
+                        <CreditCard className="h-3 w-3 shrink-0" />
+                        РД: {comp.holder_register_no}
+                      </p>
+                    )}
+                    {comp.holder_phone && (
+                      <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        {comp.holder_phone}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-slate-800">{inv.client.name}</p>
-                  <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1">
-                    <MapPin className="h-3 w-3 shrink-0" />
-                    {inv.client.address}
-                  </p>
-                  <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1">
-                    <Phone className="h-3 w-3 shrink-0" />
-                    {inv.client.phone}
-                  </p>
-                  <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-1">
-                    <CreditCard className="h-3 w-3 shrink-0" />
-                    РД: {inv.client.register}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Line items */}
-          <div className="px-10 py-6">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
-              Нэхэмжлэлийн зүйлс
-            </p>
-            <div className="rounded-xl overflow-hidden border border-slate-100">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100">
-                    {[
-                      "#",
-                      "Тайлбар",
-                      "Нэгж",
-                      "Тоо хэмжээ",
-                      "Нэгжийн үнэ",
-                      "Нийт",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        className={cn(
-                          "px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400",
-                          h === "Нийт" && "text-right",
-                        )}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {inv.items.map((item, idx) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-slate-50/50 transition-colors"
-                    >
-                      <td className="px-4 py-3.5 text-slate-400 tabular-nums">
-                        {idx + 1}
-                      </td>
-                      <td className="px-4 py-3.5 font-medium text-slate-800">
-                        {item.description}
-                      </td>
-                      <td className="px-4 py-3.5 text-slate-500">
-                        {item.unit}
-                      </td>
-                      <td className="px-4 py-3.5 tabular-nums text-slate-700">
-                        {item.qty.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3.5 tabular-nums text-slate-700">
-                        {fmtMoney(item.unitPrice)}
-                      </td>
-                      <td className="px-4 py-3.5 tabular-nums font-semibold text-slate-800 text-right">
-                        {fmtMoney(item.qty * item.unitPrice)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Notes + Totals */}
-          <div className="grid grid-cols-2 gap-8 px-10 pb-8 items-start">
-            {/* Notes */}
-            <div>
-              {inv.notes && (
-                <>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
-                    Тэмдэглэл
-                  </p>
-                  <p className="text-[13px] text-slate-600 leading-relaxed">
-                    {inv.notes}
-                  </p>
-                </>
+              ) : (
+                <p className="text-[13px] text-slate-400">Мэдээлэл байхгүй</p>
               )}
             </div>
+          </div>
 
-            {/* Totals */}
-            <div className="space-y-3">
+          {/* Amount section */}
+          <div className="px-10 py-8 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
+              Дүн
+            </p>
+            <div className="max-w-xs space-y-3">
               <div className="flex items-center justify-between text-[13px]">
-                <span className="text-slate-500">Дэд нийт</span>
-                <span className="font-semibold text-slate-800 tabular-nums">
-                  {fmtMoney(subtotal)}
-                </span>
+                <span className="text-slate-500">Хамрах хувь</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{comp.coverage_percent}%</span>
               </div>
-              <div className="flex items-center justify-between text-[13px]">
-                <span className="text-slate-500">НӨАТ (10%)</span>
-                <span className="font-semibold text-slate-800 tabular-nums">
-                  {fmtMoney(vat)}
-                </span>
-              </div>
-              <div className="h-px bg-slate-200" />
+              <div className="h-px bg-slate-100 dark:bg-[#37394d]" />
               <div className="flex items-center justify-between">
-                <span className="text-[14px] font-bold text-slate-800">
-                  Нийт дүн
-                </span>
-                <span
-                  className="text-[20px] font-black tabular-nums"
-                  style={{ color: "#02c0ce" }}
-                >
-                  {fmtMoney(total)}
+                <span className="text-[14px] font-bold text-slate-800 dark:text-white">Нөхөн төлбөрийн дүн</span>
+                <span className="text-[20px] font-black tabular-nums" style={{ color: "#02c0ce" }}>
+                  {fmtMoney(comp.amount)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Document footer */}
-          <div
-            className="px-10 py-4 border-t border-slate-100 flex items-center justify-between"
-            style={{ background: "#02c0ce08" }}
-          >
-            <p className="text-[11px] text-slate-400">
-              Энэхүү баримт бичиг нь автоматаар үүссэн бөгөөд гарын үсэг
-              шаардахгүй.
-            </p>
-            <p className="text-[11px] font-semibold text-[#02c0ce] tabular-nums">
-              {inv.number}
-            </p>
+          {/* Grant detail */}
+          {comp.grant && (
+            <div className="px-10 py-8 border-b border-slate-100 dark:border-[#37394d]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-4">
+                Газрын нөхөн олговрын дэлгэрэнгүй
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {([
+                  ["Дүн",                   fmtMoney(comp.grant.amount)],
+                  ["Олгосон огноо",         comp.grant.grant_date ? formatDate(comp.grant.grant_date) : "—"],
+                  ["Талбай",                `${comp.grant.land_area_m2.toLocaleString()} м²`],
+                  ["Газрын үнэ",            `${comp.grant.land_price.toLocaleString()}₮/м²`],
+                  ["Байршил",               comp.grant.land_location || "—"],
+                  ["Зориулалт",             comp.grant.land_purpose || "—"],
+                  ["Ашиглалтын төрөл",      comp.grant.land_use_type || "—"],
+                  ["Нэгж талбарын дугаар",  comp.grant.parcel_number || "—"],
+                  ["Тогтоолын дугаар",      comp.grant.decree_number || "—"],
+                ] as [string, string][]).map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium">{label}</p>
+                    <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Valuation report */}
+          {comp.valuation_report_url && (
+            <div className="px-10 py-6 border-b border-slate-100 dark:border-[#37394d]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-3">
+                Үнэлгээний тайлан
+              </p>
+              <a
+                href={comp.valuation_report_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-[13px] font-medium text-[#02c0ce] hover:underline"
+              >
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                {comp.valuation_report_name || "Үнэлгээний тайлан"}
+              </a>
+            </div>
+          )}
+
+          {/* Review note */}
+          {comp.review_note && (
+            <div className="px-10 py-6 border-b border-slate-100 dark:border-[#37394d]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                {comp.status === "rejected" ? "Татгалзсан шалтгаан" : "Тайлбар"}
+              </p>
+              <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">{comp.review_note}</p>
+            </div>
+          )}
+
+          {/* Note */}
+          {comp.note && (
+            <div className="px-10 py-6 border-b border-slate-100 dark:border-[#37394d]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 mb-2">Тэмдэглэл</p>
+              <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">{comp.note}</p>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="px-10 py-4 border-t border-slate-100 dark:border-[#37394d] flex items-center justify-between" style={{ background: "#02c0ce08" }}>
+            <div className="flex items-center gap-4 text-[11px] text-slate-400">
+              <span>Үүсгэсэн: {comp.created_by || "—"}</span>
+              <span>{formatDate(comp.created_at)}</span>
+            </div>
+            {comp.reviewed_by && (
+              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <span className="font-semibold" style={{ color: sc.color }}>{sc.label}</span>
+                <span>— {comp.reviewed_by}</span>
+                {comp.reviewed_at && <span>{formatDate(comp.reviewed_at)}</span>}
+              </div>
+            )}
           </div>
         </div>
       </div>

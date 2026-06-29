@@ -9,11 +9,18 @@ import {
   ResponsiveContainer,
   Area,
 } from "recharts";
-import { TIMELINE } from "./mock-data";
+interface TimelinePoint {
+  date: string;
+  count: number;
+}
 
-export function AcquisitionTimeline() {
+interface Props {
+  timeline: TimelinePoint[];
+}
+
+export function AcquisitionTimeline({ timeline }: Props) {
   let sum = 0;
-  const data = TIMELINE.map((d) => {
+  const data = timeline.map((d) => {
     sum += d.count;
     return { ...d, cumulative: sum };
   });
