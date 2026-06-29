@@ -5,7 +5,7 @@ export const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   4: { color: "#f1556c", bg: "#f1556c18" },
 };
 
-export type Tab = "general" | "progress" | "realEstate" | "documents" | "map" | "print";
+export type Tab = "general" | "holder" | "progress" | "realEstate" | "documents" | "print";
 
 export const ASSET_TYPE_LABELS: Record<string, string> = {
   real_state: "Үл хөдлөх хөрөнгө",

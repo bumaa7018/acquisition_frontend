@@ -569,7 +569,7 @@ export default function DashboardPage() {
   const [mapCommit, setMapCommit] = useState<{
     key: number;
     acqIds: string[] | undefined;
-    parcelIds: string[] | undefined;
+    years: number[] | undefined;
     au1Codes: string[] | undefined;
     au2Codes: string[] | undefined;
     au3Codes: string[] | undefined;
@@ -583,19 +583,14 @@ export default function DashboardPage() {
       ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
       : undefined;
 
-    // parcelIds: on шүүлтүүр идэвхтэй үед нэгж талбарын parcel_id кодуудыг дамжуулна
-    let parcelIds: string[] | undefined;
-    if (appliedFilter.years.length > 0) {
-      const ids = dashData?.filtered_parcel_ids ?? [];
-      parcelIds = ids.length > 0 ? ids : ["__none__"];
-    }
+    const years = appliedFilter.years.length > 0 ? appliedFilter.years.map(Number) : undefined;
 
     const au1Codes = dashData?.filtered_au1_codes?.length ? dashData.filtered_au1_codes : undefined;
     const au2Codes = dashData?.filtered_au2_codes?.length ? dashData.filtered_au2_codes : undefined;
     const au3Codes = dashData?.filtered_au3_codes?.length ? dashData.filtered_au3_codes : undefined;
 
     mapCommitKeyRef.current += 1;
-    setMapCommit({ key: mapCommitKeyRef.current, acqIds, parcelIds, au1Codes, au2Codes, au3Codes });
+    setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes });
   }, [appliedFilter, filteredAcqs, dashData]);
 
   useEffect(() => {
@@ -897,7 +892,7 @@ export default function DashboardPage() {
               <MapView
                 key={mapCommit.key}
                 acquisitionIds={mapCommit.acqIds}
-                parcelIds={mapCommit.parcelIds}
+                years={mapCommit.years}
                 au1Codes={mapCommit.au1Codes}
                 au2Codes={mapCommit.au2Codes}
                 au3Codes={mapCommit.au3Codes}

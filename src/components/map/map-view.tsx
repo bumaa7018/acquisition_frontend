@@ -5,6 +5,7 @@ import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
+import type ImageWrapper from "ol/Image";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
 import type { Coordinate } from "ol/coordinate";
@@ -15,8 +16,27 @@ import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import FeaturePopup from './feature-popup'
 import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
 
-const GS_BASE = '/geoserver/land/wms'
-const GS_WFS  = '/geoserver/land/ows'
+const GS_BASE = '/api/geoserver/land/wms'
+const GS_WFS  = '/api/geoserver/land/ows'
+
+function wmsPostLoad(image: ImageWrapper, src: string) {
+  const qIdx = src.indexOf('?')
+  const img = image.getImage() as HTMLImageElement
+  if (qIdx === -1) { img.src = src; return }
+  fetch(src.slice(0, qIdx), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: src.slice(qIdx + 1),
+  })
+    .then(r => r.blob())
+    .then(blob => {
+      const objectUrl = URL.createObjectURL(blob)
+      img.onload  = () => URL.revokeObjectURL(objectUrl)
+      img.onerror = () => URL.revokeObjectURL(objectUrl)
+      img.src = objectUrl
+    })
+    .catch(() => { img.src = '' })
+}
 
 const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -24,7 +44,6 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au3'),
   layerDef('v_acquisition_plan'),
   layerDef('v_acquisition_boundary'),
-  layerDef('building'),
   layerDef('v_parcel_s0'),
   layerDef('v_parcel_s1'),
   layerDef('v_parcel_s2'),
@@ -53,7 +72,7 @@ interface PopupState {
 
 interface MapViewProps {
   acquisitionIds?: string[]
-  parcelIds?: string[]
+  years?: number[]
   au1Codes?: string[]
   au2Codes?: string[]
   au3Codes?: string[]
@@ -67,11 +86,13 @@ function buildAcqCql(acquisitionIds?: string[]): string {
     : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
 }
 
-function buildParcelCql(parcelIds: string[]): string {
-  if (parcelIds.length === 0) return `parcel_id = '__none__'`
-  return parcelIds.length === 1
-    ? `parcel_id = '${parcelIds[0]}'`
-    : `parcel_id IN (${parcelIds.map(id => `'${id}'`).join(',')})`
+function buildParcelStatusCql(acquisitionIds?: string[], years?: number[]): string {
+  const parts: string[] = []
+  const acqPart = buildAcqCql(acquisitionIds)
+  if (acqPart) parts.push(acqPart)
+  if (years && years.length > 0)
+    parts.push(years.length === 1 ? `status_year = ${years[0]}` : `status_year IN (${years.join(',')})`)
+  return parts.join(' AND ')
 }
 
 function buildCodeCql(codes: string[], col: string): string {
@@ -81,7 +102,7 @@ function buildCodeCql(codes: string[], col: string): string {
     : `${col} IN (${codes.map(c => `'${c}'`).join(',')})`
 }
 
-export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes, au3Codes, filterPending }: MapViewProps) {
+export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
   const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
@@ -108,6 +129,7 @@ export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes,
         },
         ratio: 1,
         serverType: 'geoserver',
+        imageLoadFunction: wmsPostLoad,
       }),
     }), [])
 
@@ -162,7 +184,14 @@ export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes,
         })
         if (!url) continue
         try {
-          const res  = await fetch(url)
+          const qIdx   = url.indexOf('?')
+          const res    = qIdx === -1
+            ? await fetch(url)
+            : await fetch(url.slice(0, qIdx), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: url.slice(qIdx + 1),
+              })
           const json = await res.json()
           const features: { properties: Record<string, unknown> }[] = json.features ?? []
           if (features.length > 0) {
@@ -191,7 +220,7 @@ export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes,
     if (filterPending || !olMap.current) return
 
     const acqCql    = buildAcqCql(acquisitionIds)
-    const parcelCql = parcelIds !== undefined ? buildParcelCql(parcelIds) : acqCql
+    const parcelCql = buildParcelStatusCql(acquisitionIds, years)
     const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
 
     const getCql = (id: string): string => {
@@ -236,7 +265,7 @@ export default function MapView({ acquisitionIds, parcelIds, au1Codes, au2Codes,
         maxZoom: 16,
       })
     }
-  }, [acquisitionIds, parcelIds, au1Codes, au2Codes, au3Codes, filterPending, makeWmsLayer])
+  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, makeWmsLayer])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {

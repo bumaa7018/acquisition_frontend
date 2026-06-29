@@ -30,8 +30,8 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   au1: { label: 'Аймаг/Нийслэл', color: '#6366f1', zIndex: 1 },
   au2: { label: 'Сум/Дүүрэг', color: '#8b5cf6', zIndex: 2 },
   au3: { label: 'Баг/Хороо', color: '#a78bfa', zIndex: 3 },
-  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#ef4444', zIndex: 10 },
-  v_acquisition_boundary: { label: 'Чөлөөлөх бүсийн хил', color: '#f59e0b', zIndex: 20 },
+  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#a855f7', zIndex: 10 },
+  v_acquisition_boundary: { label: 'Чөлөөлөх бүсийн хил', color: '#3b82f6', zIndex: 20 },
   parcel:                 { label: 'Чөлөөлөх талбай',      color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },
   v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40 },
@@ -76,7 +76,11 @@ export async function fitLayerToMap({
   if (cqlFilter) params.set("CQL_FILTER", cqlFilter)
 
   try {
-    const res = await fetch(`${wfsUrl}?${params}`)
+    const res = await fetch(wfsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    })
     const json = await res.json()
 
     const format = new GeoJSON()

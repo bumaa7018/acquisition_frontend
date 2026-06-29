@@ -6,6 +6,7 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
+import type ImageWrapper from "ol/Image";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
@@ -18,8 +19,27 @@ import { fitLayerToMap, layerDef, type MapLayerDef } from "./map/layers";
 import { landApi } from "@/lib/api";
 import { PARCEL_STATUS_STYLES } from "@/types";
 
-const GS_WMS = "/geoserver/land/wms";
-const GS_WFS = "/geoserver/land/ows";
+const GS_WMS = "/api/geoserver/land/wms";
+const GS_WFS = "/api/geoserver/land/ows";
+
+function wmsPostLoad(image: ImageWrapper, src: string) {
+  const qIdx = src.indexOf('?')
+  const img = image.getImage() as HTMLImageElement
+  if (qIdx === -1) { img.src = src; return }
+  fetch(src.slice(0, qIdx), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: src.slice(qIdx + 1),
+  })
+    .then(r => r.blob())
+    .then(blob => {
+      const objectUrl = URL.createObjectURL(blob)
+      img.onload  = () => URL.revokeObjectURL(objectUrl)
+      img.onerror = () => URL.revokeObjectURL(objectUrl)
+      img.src = objectUrl
+    })
+    .catch(() => { img.src = '' })
+}
 
 // GeoServer WMS: зөвхөн au, plan, acquisition boundary, building
 const WMS_LAYER_DEFS: (MapLayerDef & {
@@ -133,6 +153,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
           },
           ratio: 1,
           serverType: "geoserver",
+          imageLoadFunction: wmsPostLoad,
         }),
       });
     });
