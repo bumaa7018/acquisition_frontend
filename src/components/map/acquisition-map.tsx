@@ -7,7 +7,6 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
-import type ImageWrapper from "ol/Image";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
@@ -17,30 +16,9 @@ import { Fill, Stroke, Style } from "ol/style";
 import "ol/ol.css";
 import type { AU, BoundaryHistory } from "@/types";
 import { landApi } from "@/lib/api";
-import LayerPanel, { type LayerConfig } from "./map/layer-panel";
-import { fitLayerToMap, layerDef, type MapLayerDef } from "./map/layers";
-
-const GS_WMS = "/api/geoserver/land/wms";
-const GS_WFS = "/api/geoserver/land/ows";
-
-function wmsPostLoad(image: ImageWrapper, src: string) {
-  const qIdx = src.indexOf('?')
-  const img = image.getImage() as HTMLImageElement
-  if (qIdx === -1) { img.src = src; return }
-  fetch(src.slice(0, qIdx), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: src.slice(qIdx + 1),
-  })
-    .then(r => r.blob())
-    .then(blob => {
-      const objectUrl = URL.createObjectURL(blob)
-      img.onload  = () => URL.revokeObjectURL(objectUrl)
-      img.onerror = () => URL.revokeObjectURL(objectUrl)
-      img.src = objectUrl
-    })
-    .catch(() => { img.src = '' })
-}
+import LayerPanel, { type LayerConfig } from "./layer-panel";
+import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
+import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 
 const LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
@@ -50,11 +28,7 @@ const LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("au2"), defaultVisible: false },
   { ...layerDef("au3"), defaultVisible: true },
   { ...layerDef("v_acquisition_plan"), defaultVisible: true },
-  {
-    ...layerDef("v_acquisition_boundary"),
-    defaultVisible: true,
-    filtered: true,
-  },
+  { ...layerDef("v_acquisition_boundary"), defaultVisible: true, filtered: true },
   { ...layerDef("parcel"), defaultVisible: false },
   { ...layerDef("building"), defaultVisible: true, filtered: true },
 ];
@@ -65,11 +39,11 @@ interface Props {
 }
 
 export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const olMap = useRef<OLMap | null>(null);
-  const wmsLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  const mapRef      = useRef<HTMLDivElement>(null);
+  const olMap       = useRef<OLMap | null>(null);
+  const wmsLayers   = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const wktFormat = useRef(new WKT());
+  const wktFormat   = useRef(new WKT());
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map((d) => ({
@@ -79,14 +53,14 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
       visible: d.defaultVisible,
     })),
   );
-  const [visibleHistoryIds, setVisibleHistoryIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [visibleHistoryIds, setVisibleHistoryIds] = useState<Set<string>>(() => new Set());
+
   const { data: boundaryHistory = [] } = useQuery({
     queryKey: ["land-boundary-history", acquisitionId],
     queryFn: () => landApi.getBoundaryHistory(acquisitionId),
     enabled: !!acquisitionId,
   });
+
   const acqFilter = `acquisition_id='${acquisitionId}'`;
 
   const makeHistoryLayer = useCallback((history: BoundaryHistory) => {
@@ -150,11 +124,7 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
 
       const extent = layer.getSource()?.getExtent();
       if (extent) {
-        map.getView().fit(extent, {
-          padding: [56, 56, 56, 56],
-          maxZoom: 17,
-          duration: 500,
-        });
+        map.getView().fit(extent, { padding: [56, 56, 56, 56], maxZoom: 17, duration: 500 });
       }
     },
     [makeHistoryLayer],
@@ -189,7 +159,6 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
     if (!mapRef.current || olMap.current || !acquisitionId) return;
 
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {};
-
     LAYER_DEFS.forEach((d) => {
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
@@ -238,7 +207,6 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
 
     olMap.current = map;
 
-    // Fit view via WFS bbox
     const params = new URLSearchParams({
       service: "WFS",
       version: "1.1.0",
@@ -256,20 +224,13 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
     })
       .then((r) => r.json())
       .then((json) => {
-        const bbox: number[] | undefined =
-          json?.features?.[0]?.geometry?.bbox ?? json?.bbox;
+        const bbox: number[] | undefined = json?.features?.[0]?.geometry?.bbox ?? json?.bbox;
         if (bbox?.length === 4) {
           const ext = transformExtent(bbox, "EPSG:4326", "EPSG:3857");
-          map.getView().fit(ext, {
-            padding: [48, 48, 48, 48],
-            maxZoom: 17,
-            duration: 1000,
-          });
+          map.getView().fit(ext, { padding: [48, 48, 48, 48], maxZoom: 17, duration: 1000 });
         }
       })
-      .catch(() => {
-        /* keep default view */
-      });
+      .catch(() => { /* keep default view */ });
 
     return () => {
       map.setTarget(undefined);
@@ -331,7 +292,6 @@ export function AcquisitionMap({ acquisitionId, aus = [] }: Props) {
             </div>
           </div>
         )}
-
         <div className="flex-1 min-h-0">
           <div
             className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"

@@ -83,7 +83,7 @@ import React, { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 
 const AcquisitionMap = dynamic(
-  () => import("@/components/AcquisitionMap").then((m) => m.AcquisitionMap),
+  () => import("@/components/map/acquisition-map").then((m) => m.AcquisitionMap),
   {
     ssr: false,
     loading: () => (

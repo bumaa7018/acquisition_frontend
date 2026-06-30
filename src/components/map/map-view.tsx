@@ -5,7 +5,6 @@ import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
-import type ImageWrapper from "ol/Image";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
 import type { Coordinate } from "ol/coordinate";
@@ -15,28 +14,7 @@ import "ol/ol.css";
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import FeaturePopup from './feature-popup'
 import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
-
-const GS_BASE = '/api/geoserver/land/wms'
-const GS_WFS  = '/api/geoserver/land/ows'
-
-function wmsPostLoad(image: ImageWrapper, src: string) {
-  const qIdx = src.indexOf('?')
-  const img = image.getImage() as HTMLImageElement
-  if (qIdx === -1) { img.src = src; return }
-  fetch(src.slice(0, qIdx), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: src.slice(qIdx + 1),
-  })
-    .then(r => r.blob())
-    .then(blob => {
-      const objectUrl = URL.createObjectURL(blob)
-      img.onload  = () => URL.revokeObjectURL(objectUrl)
-      img.onerror = () => URL.revokeObjectURL(objectUrl)
-      img.src = objectUrl
-    })
-    .catch(() => { img.src = '' })
-}
+import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql } from '@/lib/geoserver'
 
 const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -80,30 +58,6 @@ interface MapViewProps {
   employeeId?: string
 }
 
-function buildAcqCql(acquisitionIds?: string[]): string {
-  if (!acquisitionIds || acquisitionIds.length === 0) return ''
-  return acquisitionIds.length === 1
-    ? `acquisition_id = '${acquisitionIds[0]}'`
-    : `acquisition_id IN (${acquisitionIds.map(id => `'${id}'`).join(',')})`
-}
-
-function buildParcelStatusCql(acquisitionIds?: string[], years?: number[], employeeId?: string): string {
-  const parts: string[] = []
-  const acqPart = buildAcqCql(acquisitionIds)
-  if (acqPart) parts.push(acqPart)
-  if (years && years.length > 0)
-    parts.push(years.length === 1 ? `status_year = ${years[0]}` : `status_year IN (${years.join(',')})`)
-  if (employeeId)
-    parts.push(`assignee_user_ids LIKE '%,${employeeId},%'`)
-  return parts.join(' AND ')
-}
-
-function buildCodeCql(codes: string[], col: string): string {
-  if (codes.length === 0) return `${col} = '__none__'`
-  return codes.length === 1
-    ? `${col} = '${codes[0]}'`
-    : `${col} IN (${codes.map(c => `'${c}'`).join(',')})`
-}
 
 export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
@@ -122,7 +76,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       opacity: 0.75,
       zIndex: LAYER_DEFS.find(l => l.id === id)?.zIndex ?? 0,
       source: new ImageWMS({
-        url: GS_BASE,
+        url: GS_WMS,
         params: {
           LAYERS: `land:${id}`,
           FORMAT: 'image/png',

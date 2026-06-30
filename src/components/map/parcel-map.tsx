@@ -6,7 +6,6 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
-import type ImageWrapper from "ol/Image";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat } from "ol/proj";
@@ -14,34 +13,12 @@ import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import LayerPanel, { type LayerConfig } from "./map/layer-panel";
-import { fitLayerToMap, layerDef, type MapLayerDef } from "./map/layers";
+import LayerPanel, { type LayerConfig } from "./layer-panel";
+import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
+import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { landApi } from "@/lib/api";
 import { PARCEL_STATUS_STYLES } from "@/types";
 
-const GS_WMS = "/api/geoserver/land/wms";
-const GS_WFS = "/api/geoserver/land/ows";
-
-function wmsPostLoad(image: ImageWrapper, src: string) {
-  const qIdx = src.indexOf('?')
-  const img = image.getImage() as HTMLImageElement
-  if (qIdx === -1) { img.src = src; return }
-  fetch(src.slice(0, qIdx), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: src.slice(qIdx + 1),
-  })
-    .then(r => r.blob())
-    .then(blob => {
-      const objectUrl = URL.createObjectURL(blob)
-      img.onload  = () => URL.revokeObjectURL(objectUrl)
-      img.onerror = () => URL.revokeObjectURL(objectUrl)
-      img.src = objectUrl
-    })
-    .catch(() => { img.src = '' })
-}
-
-// GeoServer WMS: зөвхөн au, plan, acquisition boundary, building
 const WMS_LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
   cqlType?: "acquisition" | "parcel";
@@ -54,7 +31,6 @@ const WMS_LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("building"),               defaultVisible: true,  cqlType: "parcel" },
 ];
 
-// Backend API-аас геометр авч зурдаг vector layers
 const VECTOR_LAYER_DEFS: MapLayerDef[] = [
   layerDef("v_parcel_acquisition"),
   layerDef("parcel"),
@@ -85,11 +61,11 @@ interface Props {
 }
 
 export function ParcelMap({ parcelId, acquisitionId }: Props) {
-  const mapRef      = useRef<HTMLDivElement>(null);
-  const olMap       = useRef<OLMap | null>(null);
-  const wmsLayers   = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  const mapRef       = useRef<HTMLDivElement>(null);
+  const olMap        = useRef<OLMap | null>(null);
+  const wmsLayers    = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const vectorLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const wktFormat   = useRef(new WKT());
+  const wktFormat    = useRef(new WKT());
 
   const acqCql    = acquisitionId ? `acquisition_id='${acquisitionId}'` : undefined;
   const parcelCql = parcelId      ? `parcel_id='${parcelId}'`            : undefined;
@@ -132,7 +108,6 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
     [acqCql, parcelCql],
   );
 
-  // Map init
   useEffect(() => {
     if (!mapRef.current || olMap.current || !parcelId) return;
 
@@ -162,7 +137,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
     const vRecord: Record<string, VectorLayer<VectorSource>> = {};
     VECTOR_LAYER_DEFS.forEach((d) => {
       const src   = new VectorSource();
-      const zIdx  = d.id === "parcel" ? 50 : d.zIndex; // highlight parcel on top
+      const zIdx  = d.id === "parcel" ? 50 : d.zIndex;
       const layer = new VectorLayer({
         source: src,
         visible: true,
@@ -208,7 +183,6 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
     };
   }, [acqCql, acquisitionId, parcelCql, parcelId]);
 
-  // Fetch parcel geometries from backend API — no GeoServer WFS
   useEffect(() => {
     if (!acquisitionId) return;
 
@@ -219,7 +193,6 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
         const resp    = await landApi.getParcels(acquisitionId, { page_size: 500 });
         const parcels = resp?.data ?? [];
 
-        // Both layers show only the current parcel (not the entire acquisition)
         const thisParcel = parcels.find((p) => p.parcel_id === parcelId);
 
         const makeFeature = (wkt: string, statusId?: number) => {
@@ -243,10 +216,7 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
         const vParcelSrc = vectorLayers.current["parcel"]?.getSource();
         if (vParcelSrc) { vParcelSrc.clear(); if (parcelFeat) vParcelSrc.addFeature(parcelFeat); }
 
-        const parcelFeatures = parcelFeat ? [parcelFeat] : [];
-
-        // Fit view to this parcel's extent
-        if (parcelFeatures.length && olMap.current) {
+        if (parcelFeat && olMap.current) {
           const extent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
           if (extent) {
             olMap.current.getView().fit(extent, {

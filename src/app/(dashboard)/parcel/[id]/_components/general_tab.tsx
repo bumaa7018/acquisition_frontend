@@ -11,7 +11,7 @@ import { isExternalSpecialRole } from "@/lib/role-utils";
 import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
 
 const ParcelMap = dynamic(
-  () => import("@/components/ParcelMap").then((m) => m.ParcelMap),
+  () => import("@/components/map/parcel-map").then((m) => m.ParcelMap),
   {
     ssr: false,
     loading: () => <div className="h-[420px] rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />,
