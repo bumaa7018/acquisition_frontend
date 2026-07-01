@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rolesApi, permissionsApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
-import { Shield, Plus, X, Trash2 } from "lucide-react";
+import { Shield, Plus, X, Trash2, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export default function RolesPage() {
@@ -11,6 +11,9 @@ export default function RolesPage() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
   const queryClient = useQueryClient();
 
   const { data: rolesData, isLoading } = useQuery({
@@ -41,6 +44,23 @@ export default function RolesPage() {
       setNewName("");
       setNewDesc("");
     },
+  });
+  const updateRoleMutation = useMutation({
+    mutationFn: ({
+      id,
+      name,
+      description,
+    }: {
+      id: string;
+      name: string;
+      description?: string;
+    }) => rolesApi.update(id, { name, description }),
+    onSuccess: () => {
+      toast.success("Хадгалагдлаа");
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      setEditingId(null);
+    },
+    onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
   const deleteRoleMutation = useMutation({
     mutationFn: (id: string) => rolesApi.delete(id),
@@ -168,42 +188,101 @@ export default function RolesPage() {
               {rolesData.data.map((r) => (
                 <div
                   key={r.id}
-                  onClick={() =>
-                    setSelectedRole(r.id === selectedRole ? null : r.id)
-                  }
-                  className={`w-full flex items-center justify-between p-3.5 rounded-lg cursor-pointer transition-all ${
+                  className={`w-full rounded-lg border transition-all ${
                     r.id === selectedRole
-                      ? "bg-[#02c0ce]/10 border border-[#02c0ce]/30"
-                      : "bg-slate-50 dark:bg-[#252630] border border-transparent hover:border-slate-200 dark:hover:border-[#37394d]"
+                      ? "bg-[#02c0ce]/10 border-[#02c0ce]/30"
+                      : "bg-slate-50 dark:bg-[#252630] border-transparent hover:border-slate-200 dark:hover:border-[#37394d]"
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Shield
-                      className={`h-4 w-4 shrink-0 ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-400 dark:text-slate-500"}`}
-                    />
-                    <div className="min-w-0">
-                      <p
-                        className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
-                      >
-                        {r.name}
-                      </p>
-                      {r.permissions?.length > 0 && (
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                          {r.permissions.length} эрх
-                        </p>
-                      )}
+                  {editingId === r.id ? (
+                    <div className="p-3" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 mb-2"
+                        placeholder="Ролийн нэр *"
+                      />
+                      <input
+                        value={editDesc}
+                        onChange={(e) => setEditDesc(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 mb-2"
+                        placeholder="Тайлбар (заавал биш)"
+                      />
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() =>
+                            editName.trim() &&
+                            updateRoleMutation.mutate({
+                              id: r.id,
+                              name: editName.trim(),
+                              description: editDesc.trim() || undefined,
+                            })
+                          }
+                          disabled={updateRoleMutation.isPending}
+                          className="flex items-center gap-1 rounded-md bg-[#02c0ce] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
+                        >
+                          <Check className="h-3 w-3" />
+                          Хадгалах
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-2.5 py-1 text-[11px] text-slate-500 dark:text-slate-400 hover:border-slate-300 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                          Болих
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm("Устгах уу?"))
-                        deleteRoleMutation.mutate(r.id);
-                    }}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-red-50 dark:bg-red-500/10 text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+                  ) : (
+                    <div
+                      className="flex items-center justify-between p-3.5 cursor-pointer"
+                      onClick={() =>
+                        setSelectedRole(r.id === selectedRole ? null : r.id)
+                      }
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Shield
+                          className={`h-4 w-4 shrink-0 ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-400 dark:text-slate-500"}`}
+                        />
+                        <div className="min-w-0">
+                          <p
+                            className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
+                          >
+                            {r.name}
+                          </p>
+                          {r.permissions?.length > 0 && (
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                              {r.permissions.length} эрх
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(r.id);
+                            setEditName(r.name);
+                            setEditDesc(r.description ?? "");
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-[#37394d] text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#444] transition-colors"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Устгах уу?"))
+                              deleteRoleMutation.mutate(r.id);
+                          }}
+                          className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 dark:bg-red-500/10 text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
