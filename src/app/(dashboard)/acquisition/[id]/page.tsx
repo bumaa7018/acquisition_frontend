@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, documentTypeApi, usersApi, parcelStatusApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
-import { STATUS_LABELS } from "@/types";
+import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import {
   canAccessAcquisition,
@@ -30,10 +30,7 @@ import {
   Paperclip,
   Activity,
   Map,
-  Building2,
   ReceiptText,
-  ChevronDown,
-  ChevronUp,
   Plus,
   FileDown,
   Calculator,
@@ -1020,7 +1017,7 @@ function AdvanceModal({
     onError: (err) => toast.error(getApiError(err, "Явц шинэчлэхэд алдаа гарлаа")),
   });
 
-  const needsDecree = selectedStatus === 3;
+  const needsDecree = selectedStatus === ACQ_STATUS.CONFIRMED;
 
   return (
     <div
@@ -2283,7 +2280,7 @@ export default function AcquisitionDetailPage() {
       </div>
     );
 
-  const isAcqLocked = acq?.status === 3;
+  const isAcqLocked = acq?.status === ACQ_STATUS.CONFIRMED;
 
   // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгуулгуудын хандалтыг хаана
   if (isExternal && isAcqLocked)

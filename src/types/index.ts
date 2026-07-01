@@ -297,20 +297,12 @@ export interface ParcelFull extends Parcel {
   independent_org_name?: string;
 }
 
-// Role constants for role-based access control
-export const ROLE_CODES = {
-  PROFESSIONAL_ORG: "professional_org",
-  MIKA: "mika",
-  FINANCE_SPECIALIST: "finance_specialist",
-  SENIOR_SPECIALIST: "senior_specialist",
+// Чөлөөлөлтийн (acquisition) статусын ID-ууд.
+// Role тогтмолуудыг lib/access-policy.ts (ACCESS_ROLE_CODES / ACCESS_ROLE_NAMES)-д
+// төвлөрүүлсэн тул энд давхардуулахгүй — тэндээс import хийж ашиглана.
+export const ACQ_STATUS = {
+  CONFIRMED: 3, // Баталгаажсан — цаашид засвар/устгал хийх боломжгүй (locked)
 } as const;
-
-export const ROLE_DISPLAY_NAMES: Record<string, string> = {
-  professional_org: "Мэргэжлийн байгуулл...",
-  mika: "МИКА",
-  finance_specialist: "Санхүүгийн мэргэжилтэн",
-  senior_specialist: "Ахлах мэргэжилтэн",
-};
 
 export interface ParcelDetail {
   right_type: number;
@@ -395,6 +387,54 @@ export interface Asset {
   owner_name: string;
   address: string;
   notes: string;
+  unit: string;
+  capacity: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetSpec {
+  id: string;
+  asset_id: string;
+  spec_type_id: number;
+  spec_code: string;
+  spec_name: string;
+  value: string;
+}
+
+export interface AssetCalculation {
+  id: string;
+  asset_id: string;
+  calc_type_id: number;
+  calc_code: string;
+  calc_name: string;
+  unit: string;
+  value: number;
+}
+
+export interface AssetSpecType {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+}
+
+export interface AssetCalcType {
+  id: number;
+  code: string;
+  name: string;
+  default_unit: string;
+  sort_order: number;
+}
+
+export interface LandValuation {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  land_area_m2: number;
+  base_price_per_m2: number;
+  total_value: number;
   created_at: string;
   updated_at: string;
 }
