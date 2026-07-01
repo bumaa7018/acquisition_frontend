@@ -298,11 +298,11 @@ export default function RolesPage() {
             <div className="ap-card overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
                 <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                  {role?.name}
+                  {role?.description}
                 </p>
-                <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
+                {/* <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
                   Дарж эрх нэмэх / хасах
-                </p>
+                </p> */}
               </div>
               <div className="p-5">
                 <div className="grid grid-cols-2 gap-2">

@@ -231,12 +231,22 @@ export const usersApi = {
 // ── Roles ─────────────────────────────────────────────
 // Backend returns Go PascalCase fields; normalize to frontend camelCase
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizePermission(p: any): Permission {
+  return {
+    id: p.ID ?? p.id,
+    name: p.Name ?? p.name,
+    description: p.Description ?? p.description,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeRole(r: any): Role {
+  const rawPerms: unknown[] = r.Permissions ?? r.permissions ?? []
   return {
     id: r.ID ?? r.id,
     name: r.Name ?? r.name,
     description: r.Description ?? r.description,
-    permissions: (r.Permissions ?? r.permissions ?? []) as Permission[],
+    permissions: rawPerms.map(normalizePermission),
   }
 }
 
@@ -261,9 +271,13 @@ export const rolesApi = {
 
 // ── Permissions ───────────────────────────────────────
 export const permissionsApi = {
-  list: () => api.get<PaginatedResponse<Permission>>('/permissions').then(r => r.data),
+  list: () =>
+    api.get<PaginatedResponse<Permission>>('/permissions').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizePermission),
+    })),
   create: (body: { name: string; description?: string }) =>
-    api.post<ApiResponse<Permission>>('/permissions', body).then(r => r.data.data),
+    api.post<ApiResponse<Permission>>('/permissions', body).then(r => normalizePermission(r.data.data)),
   delete: (id: string) => api.delete(`/permissions/${id}`),
 }
 
