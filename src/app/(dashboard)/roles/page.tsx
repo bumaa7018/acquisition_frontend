@@ -85,6 +85,16 @@ export default function RolesPage() {
 
   const assignedIds = new Set(roleDetail?.permissions?.map((p) => p.id) ?? []);
 
+  const groupedPerms = Object.entries(
+    (permsData?.data ?? []).reduce<Record<string, NonNullable<typeof permsData>["data"]>>((acc, perm) => {
+      const sep = perm.name.includes(":") ? ":" : perm.name.includes(".") ? "." : null;
+      const key = sep ? perm.name.split(sep)[0] : "бусад";
+      if (!acc[key]) acc[key] = [];
+      acc[key]!.push(perm);
+      return acc;
+    }, {})
+  );
+
   const submit = () => {
     if (newName.trim())
       createRoleMutation.mutate({
@@ -322,44 +332,65 @@ export default function RolesPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {permsData?.data?.map((perm) => {
-                      const has = assignedIds.has(perm.id);
-                      return (
-                        <button
-                          key={perm.id}
-                          onClick={() => {
-                            if (has)
-                              removePermMutation.mutate({
-                                roleId: selectedRole,
-                                permId: perm.id,
-                              });
-                            else
-                              assignPermMutation.mutate({
-                                roleId: selectedRole,
-                                permId: perm.id,
-                              });
-                          }}
-                          className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                            has
-                              ? "border-[#02c0ce]/40 bg-[#02c0ce]/5"
-                              : "border-slate-200 dark:border-[#37394d] hover:border-[#02c0ce]/30 hover:bg-[#02c0ce]/5"
-                          }`}
-                        >
-                          <span className="font-mono text-[12px] text-slate-600 dark:text-slate-300">
-                            {perm.description}
-                          </span>
-                          {has && (
-                            <span
-                              className="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                              style={{ background: "#02c0ce" }}
-                            >
-                              ✓
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-col gap-4">
+                    {groupedPerms.map(([resource, perms]) => (
+                      <div key={resource}>
+                        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
+                          {resource}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {perms!.map((perm) => {
+                            const has = assignedIds.has(perm.id);
+                            const action = perm.name.includes(":")
+                              ? perm.name.split(":").slice(1).join(":")
+                              : perm.name.includes(".")
+                              ? perm.name.split(".").slice(1).join(".")
+                              : perm.name;
+                            return (
+                              <button
+                                key={perm.id}
+                                onClick={() => {
+                                  if (has)
+                                    removePermMutation.mutate({
+                                      roleId: selectedRole,
+                                      permId: perm.id,
+                                    });
+                                  else
+                                    assignPermMutation.mutate({
+                                      roleId: selectedRole,
+                                      permId: perm.id,
+                                    });
+                                }}
+                                className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
+                                  has
+                                    ? "border-[#02c0ce]/40 bg-[#02c0ce]/5"
+                                    : "border-slate-200 dark:border-[#37394d] hover:border-[#02c0ce]/30 hover:bg-[#02c0ce]/5"
+                                }`}
+                              >
+                                <div className="min-w-0">
+                                  <p className="font-mono text-[12px] text-slate-600 dark:text-slate-300 truncate">
+                                    {action}
+                                  </p>
+                                  {perm.description && (
+                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                                      {perm.description}
+                                    </p>
+                                  )}
+                                </div>
+                                {has && (
+                                  <span
+                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ml-2"
+                                    style={{ background: "#02c0ce" }}
+                                  >
+                                    ✓
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
