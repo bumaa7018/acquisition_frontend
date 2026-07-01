@@ -2,8 +2,8 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, documentTypeApi, usersApi, parcelStatusApi } from "@/lib/api";
-import { authStorage } from "@/lib/auth";
 import { ConfirmDialog, type PendingConfirm } from "./_components/confirm-dialog";
+import { STATUS_CFG, hasPermission, isSeniorSpecialist } from "./_components/shared";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import {
@@ -57,42 +57,6 @@ const AcquisitionMap = dynamic(
     ),
   },
 );
-
-const STATUS_CFG: Record<number, { color: string; bg: string }> = {
-  1: { color: "#02c0ce", bg: "#02c0ce18" },
-  2: { color: "#f59e0b", bg: "#f59e0b18" },
-  3: { color: "#0acf97", bg: "#0acf9718" },
-  4: { color: "#f1556c", bg: "#f1556c18" },
-};
-
-function hasPermission(name: string): boolean {
-  const token = authStorage.getAccessToken();
-  if (!token) return false;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return (
-      Array.isArray(payload.permissions) && payload.permissions.includes(name)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function isSeniorSpecialist(): boolean {
-  const token = authStorage.getAccessToken();
-  if (!token) return false;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return (
-      Array.isArray(payload.roles) &&
-      payload.roles.some((r: string) =>
-        r === "senior_specialist" || r === "Ахлах мэргэжилтэн"
-      )
-    );
-  } catch {
-    return false;
-  }
-}
 
 type Tab =
   | "general"
