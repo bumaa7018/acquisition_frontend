@@ -229,13 +229,29 @@ export const usersApi = {
 }
 
 // ── Roles ─────────────────────────────────────────────
+// Backend returns Go PascalCase fields; normalize to frontend camelCase
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeRole(r: any): Role {
+  return {
+    id: r.ID ?? r.id,
+    name: r.Name ?? r.name,
+    description: r.Description ?? r.description,
+    permissions: (r.Permissions ?? r.permissions ?? []) as Permission[],
+  }
+}
+
 export const rolesApi = {
-  list: () => api.get<PaginatedResponse<Role>>('/roles').then(r => r.data),
-  getById: (id: string) => api.get<ApiResponse<Role>>(`/roles/${id}`).then(r => r.data.data),
+  list: () =>
+    api.get<PaginatedResponse<Role>>('/roles').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeRole),
+    })),
+  getById: (id: string) =>
+    api.get<ApiResponse<Role>>(`/roles/${id}`).then(r => normalizeRole(r.data.data)),
   create: (body: { name: string; description?: string }) =>
-    api.post<ApiResponse<Role>>('/roles', body).then(r => r.data.data),
+    api.post<ApiResponse<Role>>('/roles', body).then(r => normalizeRole(r.data.data)),
   update: (id: string, body: { name?: string; description?: string }) =>
-    api.put<ApiResponse<Role>>(`/roles/${id}`, body).then(r => r.data.data),
+    api.put<ApiResponse<Role>>(`/roles/${id}`, body).then(r => normalizeRole(r.data.data)),
   delete: (id: string) => api.delete(`/roles/${id}`),
   assignPermission: (roleId: string, permissionId: string) =>
     api.post(`/roles/${roleId}/permissions`, { permission_id: permissionId }),

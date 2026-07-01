@@ -18,11 +18,7 @@ export default function RolesPage() {
 
   const { data: rolesData, isLoading } = useQuery({
     queryKey: ["roles"],
-    queryFn: async () => {
-      const res = await rolesApi.list();
-      console.log("roles response:", JSON.stringify(res, null, 2));
-      return res;
-    },
+    queryFn: () => rolesApi.list(),
   });
   const { data: permsData } = useQuery({
     queryKey: ["permissions"],
@@ -81,8 +77,6 @@ export default function RolesPage() {
       rolesApi.removePermission(roleId, permId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles"] }),
   });
-
-  console.log({ rolesData });
 
   const role = rolesData?.data.find((r) => r.id === selectedRole);
   const assignedIds = new Set(role?.permissions?.map((p) => p.id) ?? []);
@@ -249,7 +243,7 @@ export default function RolesPage() {
                           <p
                             className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
                           >
-                            {r.name}
+                            {r.Name}
                           </p>
                           {r.permissions?.length > 0 && (
                             <p className="text-[11px] text-slate-400 dark:text-slate-500">
