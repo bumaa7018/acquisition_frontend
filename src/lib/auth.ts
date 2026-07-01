@@ -10,7 +10,9 @@ function userFromAccessToken(token: string | null) {
       .replace(/-/g, "+")
       .replace(/_/g, "/")
       .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
-    const payload = JSON.parse(atob(normalizedPayload));
+    const binary = atob(normalizedPayload);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
     return {
       id: payload.user_id,
       username: payload.username,
