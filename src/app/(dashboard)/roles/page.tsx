@@ -164,7 +164,7 @@ export default function RolesPage() {
                       <p
                         className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
                       >
-                        {r.Name}
+                        {r.name}
                       </p>
                       {r.permissions?.length > 0 && (
                         <p className="text-[11px] text-slate-400 dark:text-slate-500">
