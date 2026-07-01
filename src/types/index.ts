@@ -74,7 +74,7 @@ export interface DocumentType {
   id: number;
   type: string;
   name: string;
-  target: 'acquisition' | 'parcel' | 'both';
+  target: "acquisition" | "parcel" | "both";
   description?: string;
   created_at: string;
   updated_at: string;
