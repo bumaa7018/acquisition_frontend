@@ -139,30 +139,32 @@ export default function RolesPage() {
           ) : (
             <div className="space-y-1.5">
               {rolesData.data.map((r) => (
-                <button
+                <div
                   key={r.id}
                   onClick={() =>
                     setSelectedRole(r.id === selectedRole ? null : r.id)
                   }
-                  className={`w-full flex items-center justify-between p-3.5 rounded-lg text-left transition-all ${
+                  className={`w-full flex items-center justify-between p-3.5 rounded-lg cursor-pointer transition-all ${
                     r.id === selectedRole
                       ? "bg-[#02c0ce]/10 border border-[#02c0ce]/30"
                       : "bg-slate-50 dark:bg-[#252630] border border-transparent hover:border-slate-200 dark:hover:border-[#37394d]"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Shield
                       className={`h-4 w-4 shrink-0 ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-400 dark:text-slate-500"}`}
                     />
-                    <div>
+                    <div className="min-w-0">
                       <p
-                        className={`text-[13px] font-medium ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
+                        className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
                       >
                         {r.name}
                       </p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                        {r.permissions?.length} эрх
-                      </p>
+                      {r.permissions?.length > 0 && (
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                          {r.permissions.length} эрх
+                        </p>
+                      )}
                     </div>
                   </div>
                   <button
@@ -175,7 +177,7 @@ export default function RolesPage() {
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
-                </button>
+                </div>
               ))}
             </div>
           )}

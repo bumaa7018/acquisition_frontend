@@ -21,6 +21,7 @@ const createSchema = z
     email: z.string().email("Имэйл буруу"),
     password: z.string().min(6, "Нууц үг хамгийн багадаа 6 тэмдэгт"),
     confirm_password: z.string().min(1, "Нууц үгийг давтана уу"),
+    is_active: z.boolean().default(true),
   })
   .refine((d) => d.password === d.confirm_password, {
     message: "Нууц үг таарахгүй байна",
@@ -35,7 +36,7 @@ export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["users"],
     queryFn: () => usersApi.list({ page: 1, page_size: 50 }),
   });
@@ -68,6 +69,7 @@ export default function UsersPage() {
     formState: { errors },
   } = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
+    defaultValues: { is_active: true },
   });
 
   const fields: [keyof CreateForm, string, string][] = [
@@ -76,11 +78,17 @@ export default function UsersPage() {
     ["username", "Хэрэглэгчийн нэр (username)", "text"],
     ["position", "Албан тушаал", "text"],
     ["email", "Имэйл", "email"],
-    ["password", "Нууц үг", "password"],
-    ["confirm_password", "Нууц үг давтах", "password"],
   ];
 
-  const HEADERS = ["Хэрэглэгч", "Хэрэглэгчийн нэр", "Албан тушаал", "Имэйл", "Роль", ""];
+  const HEADERS = [
+    "Хэрэглэгч",
+    "Хэрэглэгчийн нэр",
+    "Албан тушаал",
+    "Имэйл",
+    "Роль",
+    "Идэвхитэй",
+    "",
+  ];
 
   return (
     <div className="flex flex-col gap-5">
@@ -130,6 +138,50 @@ export default function UsersPage() {
                 )}
               </div>
             ))}
+            <div className="col-span-2 border-t border-slate-100 dark:border-[#37394d]" />
+            <div>
+              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Нууц үг
+              </label>
+              <input
+                type="password"
+                {...register("password")}
+                className={inputCls}
+              />
+              {errors.password && (
+                <p className="mt-1 text-[11px] text-[#f1556c]">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                Нууц үг давтах
+              </label>
+              <input
+                type="password"
+                {...register("confirm_password")}
+                className={inputCls}
+              />
+              {errors.confirm_password && (
+                <p className="mt-1 text-[11px] text-[#f1556c]">
+                  {errors.confirm_password.message}
+                </p>
+              )}
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-3 cursor-pointer select-none w-fit">
+                <input
+                  type="checkbox"
+                  {...register("is_active")}
+                  className="sr-only peer"
+                />
+                <div className="relative h-5 w-9 rounded-full bg-slate-200 dark:bg-[#37394d] transition-colors peer-checked:bg-[#02c0ce] after:absolute after:top-0.5 after:left-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+                <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                  Идэвхитэй
+                </span>
+              </label>
+            </div>
             <div className="col-span-2 flex gap-2 pt-1">
               <button
                 type="submit"
@@ -180,10 +232,21 @@ export default function UsersPage() {
                     ))}
                   </tr>
                 ))
+              ) : isError ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-5 py-12 text-center text-[13px] text-[#f1556c]"
+                  >
+                    Алдаа гарлаа:{" "}
+                    {(error as { message?: string })?.message ??
+                      "Сервертэй холбогдож чадсангүй"}
+                  </td>
+                </tr>
               ) : !data?.data.length ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     <Users className="mx-auto mb-2 h-8 w-8 opacity-30" />
@@ -233,6 +296,23 @@ export default function UsersPage() {
                           </span>
                         ))}
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      {user.is_active !== false ? (
+                        <span
+                          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ color: "#02c0ce", background: "#02c0ce18" }}
+                        >
+                          Идэвхитэй
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ color: "#f1556c", background: "#f1556c18" }}
+                        >
+                          Идэвхгүй
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <button

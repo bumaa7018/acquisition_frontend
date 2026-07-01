@@ -221,7 +221,7 @@ export const usersApi = {
   list: (params?: { page?: number; page_size?: number; search?: string }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; role_names?: string[] }) =>
+  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_names?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
   update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string; position: string }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),

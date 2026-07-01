@@ -23,6 +23,7 @@ export interface User {
   first_name: string;
   last_name: string;
   position?: string;
+  is_active?: boolean;
   roles: Role[];
 }
 
