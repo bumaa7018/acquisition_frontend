@@ -39,39 +39,7 @@ import {
   UserMinus,
 } from "lucide-react";
 
-function calcAreaFromWkt(wkt: string): number | null {
-  try {
-    const cleaned = wkt.replace(/^SRID=\d+;/i, "");
-    const coordStr = cleaned.replace(/^[A-Z\s]+\(\(/, "").replace(/\)\).*$/, "");
-    const coords = coordStr.split(",").map((p) => {
-      const [x, y] = p.trim().split(/\s+/).map(Number);
-      return [x, y] as [number, number];
-    });
-    if (coords.length < 3) return null;
-    const isGeographic = coords.every(([x, y]) => x >= -180 && x <= 180 && y >= -90 && y <= 90);
-    if (isGeographic) {
-      const R = 6378137;
-      const toRad = (d: number) => (d * Math.PI) / 180;
-      let area = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [lon1, lat1] = coords[i];
-        const [lon2, lat2] = coords[(i + 1) % coords.length];
-        area += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
-      }
-      return Math.abs((area * R * R) / 2);
-    } else {
-      let area = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [x1, y1] = coords[i];
-        const [x2, y2] = coords[(i + 1) % coords.length];
-        area += x1 * y2 - x2 * y1;
-      }
-      return Math.abs(area / 2);
-    }
-  } catch {
-    return null;
-  }
-}
+import { calcAreaFromWkt } from "@/lib/geometry-utils";
 import type { Compensation, AcquisitionAssignee, ParcelStatus } from "@/types";
 import { getParcelStatusStyle } from "@/types";
 import { toast } from "sonner";
