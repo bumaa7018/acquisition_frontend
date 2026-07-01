@@ -9,6 +9,7 @@ import { toast } from "sonner";
 export default function RolesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -26,12 +27,14 @@ export default function RolesPage() {
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: (name: string) => rolesApi.create({ name }),
+    mutationFn: ({ name, description }: { name: string; description?: string }) =>
+      rolesApi.create({ name, description }),
     onSuccess: () => {
       toast.success("Роль үүслээ");
       queryClient.invalidateQueries({ queryKey: ["roles"] });
       setShowCreate(false);
       setNewName("");
+      setNewDesc("");
     },
   });
   const deleteRoleMutation = useMutation({
@@ -60,7 +63,11 @@ export default function RolesPage() {
   const assignedIds = new Set(role?.permissions?.map((p) => p.id) ?? []);
 
   const submit = () => {
-    if (newName.trim()) createRoleMutation.mutate(newName.trim());
+    if (newName.trim())
+      createRoleMutation.mutate({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+      });
   };
 
   return (
