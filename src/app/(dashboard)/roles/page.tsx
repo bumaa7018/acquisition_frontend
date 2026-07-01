@@ -27,8 +27,13 @@ export default function RolesPage() {
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: ({ name, description }: { name: string; description?: string }) =>
-      rolesApi.create({ name, description }),
+    mutationFn: ({
+      name,
+      description,
+    }: {
+      name: string;
+      description?: string;
+    }) => rolesApi.create({ name, description }),
     onSuccess: () => {
       toast.success("Роль үүслээ");
       queryClient.invalidateQueries({ queryKey: ["roles"] });
@@ -101,30 +106,39 @@ export default function RolesPage() {
           <p className="text-[13px] font-semibold text-slate-700 dark:text-white mb-3">
             Шинэ роль
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 max-w-md">
             <input
-              placeholder="Ролийн нэр"
+              placeholder="Ролийн нэр *"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && submit()}
-              className="flex-1 max-w-xs rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+              className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             />
-            <button
-              onClick={submit}
-              disabled={createRoleMutation.isPending}
-              className="rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
-            >
-              Үүсгэх
-            </button>
-            <button
-              onClick={() => {
-                setShowCreate(false);
-                setNewName("");
-              }}
-              className="rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-slate-300 transition-colors"
-            >
-              Болих
-            </button>
+            <input
+              placeholder="Тайлбар (заавал биш)"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={submit}
+                disabled={createRoleMutation.isPending}
+                className="rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
+              >
+                Үүсгэх
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreate(false);
+                  setNewName("");
+                  setNewDesc("");
+                }}
+                className="rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-slate-300 transition-colors"
+              >
+                Болих
+              </button>
+            </div>
           </div>
         </div>
       )}
