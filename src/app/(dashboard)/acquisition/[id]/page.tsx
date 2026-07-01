@@ -137,19 +137,6 @@ type Tab =
   | "map"
   | "financing";
 
-const ASSET_TYPE_LABELS: Record<string, string> = {
-  real_state: "Үл хөдлөх хөрөнгө",
-  property: "Эд хөрөнгө",
-};
-const TARGET_TYPE_LABELS: Record<string, string> = {
-  parcel: "Нэгж талбарын нөхөн төлбөр",
-  asset: "Хөрөнгийн нөхөн төлбөр",
-};
-const COMP_TYPE_LABELS: Record<string, string> = {
-  cash: "Мөнгөн дүн",
-  land_grant: "Газрын нөхөн олговор",
-};
-
 // ─── Confirm dialog ───────────────────────────────────────────────────────────
 function ConfirmDialog({
   open, title, description, confirmLabel = "Тийм", confirmColor = "#f1556c",
@@ -1305,9 +1292,9 @@ function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
 // ─── Assignees tab ────────────────────────────────────────────────────────────
 type UserOption = { id: string; first_name: string; last_name: string; email: string; position?: string };
 
-function AssigneesTab({ id }: { id: string }) {
+function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
-  const canManage = isSeniorSpecialist();
+  const canManage = isSeniorSpecialist() && canEdit;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<"select" | "confirm">("select");
@@ -1630,12 +1617,16 @@ const RIGHT_TYPE_OPTIONS = [
 function ParcelsTab({
   id,
   acquisitionProfOrgId,
+  isAcqLocked = false,
 }: {
   id: string;
   acquisitionProfOrgId?: string | null;
+  isAcqLocked?: boolean;
 }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
+  const currentUserId = getCurrentUserId();
+  const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [filterForm, setFilterForm] = useState({
     parcel_id: "",
@@ -1902,14 +1893,20 @@ function ParcelsTab({
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
-                            <Link
-                              href={`/parcel/${p.id}?acq=${id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
-                            >
-                              <Info className="h-3 w-3" /> Дэлгэрэнгүй
-                            </Link>
+                            {isMainProfOrg && isAcqLocked ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 px-2.5 py-1 text-[11px] font-medium cursor-not-allowed select-none">
+                                🔒 Хаалттай
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/parcel/${p.id}?acq=${id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
+                              >
+                                <Info className="h-3 w-3" /> Дэлгэрэнгүй
+                              </Link>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1934,136 +1931,10 @@ function ParcelsTab({
   );
 }
 
-// ─── Assets tab ───────────────────────────────────────────────────────────────
-function AssetsTab({ id }: { id: string }) {
-  const [filter, setFilter] = useState({ parcel_id: "" });
-
-  const { data: assets, isLoading } = useQuery({
-    queryKey: ["land-assets", id, filter],
-    queryFn: () =>
-      landApi.getAssets(id, { page: 1, page_size: 100, ...filter }),
-  });
-
-  const inp =
-    "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
-
-  return (
-    <div className="ap-card overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              Хөрөнгийн мэдээлэл
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-              {assets?.total ?? 0} хөрөнгө
-            </p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="text"
-              placeholder="Нэгж талбарын дугаар"
-              value={filter.parcel_id}
-              onChange={(e) => setFilter({ parcel_id: e.target.value })}
-              className={`${inp} w-48`}
-            />
-            {filter.parcel_id && (
-              <button
-                onClick={() => setFilter({ parcel_id: "" })}
-                className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors"
-              >
-                Цэвэрлэх
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-      {isLoading ? (
-        <div className="p-5 space-y-3 animate-pulse">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="h-10 rounded bg-slate-100 dark:bg-[#252630]"
-            />
-          ))}
-        </div>
-      ) : !assets?.data.length ? (
-        <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
-          <Building2 className="h-8 w-8 mb-2 opacity-30" />
-          <p className="text-[13px]">Хөрөнгийн мэдээлэл байхгүй</p>
-        </div>
-      ) : (
-        <div className="overflow-auto">
-          <table className="w-full text-[13px]">
-            <thead className="sticky top-0">
-              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                {[
-                  "Дугаар",
-                  "Нэгж талбар",
-                  "Хөрөнгийн төрөл",
-                  "Нэр/Төрөл",
-                  "Давхар",
-                  "Талбай",
-                  "Эзэмшигч",
-                  "Хаяг",
-                  "Огноо",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-              {assets.data.map((b) => (
-                <tr
-                  key={b.id}
-                  className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-                >
-                  <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
-                    {b.asset_number || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600 dark:text-slate-300">
-                    {b.parcel_id}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                    {ASSET_TYPE_LABELS[b.asset_type] ?? b.asset_type}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                    {b.asset_name || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 tabular-nums">
-                    {b.floor_count || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                    {formatArea(b.area_m2)}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                    {b.owner_name || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 min-w-[180px]">
-                    {b.address || b.notes || "—"}
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {formatDate(b.updated_at || b.created_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Financing tab ────────────────────────────────────────────────────────────
-function FinancingTab({ id }: { id: string }) {
+function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
-  const isSenior = isSeniorSpecialist();
+  const isSenior = isSeniorSpecialist() && canEdit;
 
   const EMPTY_FORM = { organization_name: "", source_type: "", amount: "", currency: "MNT", note: "" };
   const [showForm, setShowForm] = useState(false);
@@ -2282,443 +2153,6 @@ function FinancingTab({ id }: { id: string }) {
   );
 }
 
-// ─── Compensation tab ─────────────────────────────────────────────────────────
-function GrantPanel({ grant }: { grant: NonNullable<Compensation["grant"]> }) {
-  return (
-    <div className="mb-3 mx-5 rounded-xl bg-sky-50/70 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-800/30 px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400 mb-2">
-        Газрын нөхөн олговрын дэлгэрэнгүй
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2">
-        {(
-          [
-            ["Дүн", `${grant.amount.toLocaleString()}₮`],
-            [
-              "Олгосон огноо",
-              grant.grant_date ? formatDate(grant.grant_date) : "—",
-            ],
-            ["Талбай", formatArea(grant.land_area_m2)],
-            ["Газрын үнэ", `${grant.land_price.toLocaleString()}₮/м²`],
-            ["Байршил", grant.land_location || "—"],
-            ["Зориулалт", grant.land_purpose || "—"],
-            ["Ашиглалтын төрөл", grant.land_use_type || "—"],
-            ["НТ дугаар", grant.parcel_number || "—"],
-            ["Тогтоолын дугаар", grant.decree_number || "—"],
-          ] as [string, string][]
-        ).map(([label, value]) => (
-          <div key={label}>
-            <p className="text-[10px] text-sky-500">{label}</p>
-            <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-      {grant.note && (
-        <div className="mt-2 pt-2 border-t border-sky-100 dark:border-sky-800/30">
-          <p className="text-[10px] text-sky-500">Тайлбар</p>
-          <p className="text-[12px] text-slate-600 dark:text-slate-300">
-            {grant.note}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CompensationTab({ id }: { id: string }) {
-  const queryClient = useQueryClient();
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const [expandedParcels, setExpandedParcels] = useState<Set<string>>(
-    new Set(),
-  );
-  const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
-
-  const { data: parcelsResult, isLoading: parcelsLoading } = useQuery({
-    queryKey: ["land-parcels", id, { page: 1, page_size: 1000 }],
-    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
-    enabled: !!id,
-  });
-  const { data: allComps = [], isLoading: compsLoading } = useQuery({
-    queryKey: ["compensations", id],
-    queryFn: () => landApi.listCompensations(id),
-    enabled: !!id,
-  });
-  const { data: assetsResult } = useQuery({
-    queryKey: ["land-assets", id, { page: 1, page_size: 1000 }],
-    queryFn: () => landApi.getAssets(id, { page: 1, page_size: 1000 }),
-    enabled: !!id,
-  });
-
-  const parcels = parcelsResult?.data ?? [];
-  const allAssets = assetsResult?.data ?? [];
-
-  const compsByParcel = allComps.reduce<Record<string, Compensation[]>>(
-    (acc, c) => {
-      const k = c.parcel_id || "";
-      (acc[k] ??= []).push(c);
-      return acc;
-    },
-    {},
-  );
-  const assetsByParcel = allAssets.reduce<Record<string, typeof allAssets>>(
-    (acc, b) => {
-      (acc[b.parcel_id] ??= []).push(b);
-      return acc;
-    },
-    {},
-  );
-
-  const toggleParcel = (pid: string) =>
-    setExpandedParcels((prev) => {
-      const next = new Set(prev);
-      next.has(pid) ? next.delete(pid) : next.add(pid);
-      return next;
-    });
-
-  const deleteMutation = useMutation({
-    mutationFn: (compId: string) => landApi.deleteCompensation(id, compId),
-    onSuccess: () => {
-      toast.success("Нөхөн төлбөр устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["compensations", id] });
-    },
-    onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
-  });
-
-  const activeParcels = parcels.filter(
-    (p) =>
-      (compsByParcel[p.parcel_id]?.length ?? 0) > 0 ||
-      (assetsByParcel[p.parcel_id]?.length ?? 0) > 0,
-  );
-  const cashTotal = allComps
-    .filter((c) => c.compensation_type === "cash")
-    .reduce((s, c) => s + c.amount, 0);
-  const landGrantTotal = allComps
-    .filter((c) => c.compensation_type === "land_grant")
-    .reduce((s, c) => s + c.amount, 0);
-  const isLoading = parcelsLoading || compsLoading;
-
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {(
-          [
-            ["Нийт бүртгэл", allComps.length, "#02c0ce"],
-            [
-              "Мөнгөн дүн",
-              cashTotal > 0 ? `${cashTotal.toLocaleString()}₮` : "—",
-              "#0acf97",
-            ],
-            [
-              "Газрын олговор",
-              allComps.filter((c) => c.compensation_type === "land_grant")
-                .length,
-              "#6366f1",
-            ],
-            [
-              "Хөрөнгийн нөхөн төлбөр",
-              allComps.filter((c) => c.target_type === "asset").length,
-              "#f59e0b",
-            ],
-          ] as [string, string | number, string][]
-        ).map(([label, value, color]) => (
-          <div
-            key={label}
-            className="ap-card px-5 py-4 flex items-center gap-3"
-          >
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
-              style={{ background: `${color}18` }}
-            >
-              <ReceiptText className="h-5 w-5" style={{ color }} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium truncate">
-                {label}
-              </p>
-              <p className="text-[18px] font-bold tabular-nums text-slate-800 dark:text-white truncate">
-                {value}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {isLoading ? (
-        <div className="flex flex-col gap-3">
-          {[...Array(3)].map((_, i) => (
-            <div
-              key={i}
-              className="ap-card h-16 animate-pulse bg-slate-100 dark:bg-[#252630]"
-            />
-          ))}
-        </div>
-      ) : activeParcels.length === 0 ? (
-        <div className="ap-card flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
-          <ReceiptText className="h-8 w-8 mb-2 opacity-30" />
-          <p className="text-[13px]">Нөхөн төлбөрийн бүртгэл байхгүй</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {activeParcels.map((parcel) => {
-            const comps = compsByParcel[parcel.parcel_id] ?? [];
-            const assets = assetsByParcel[parcel.parcel_id] ?? [];
-            const isOpen = expandedParcels.has(parcel.id);
-            const parcelCash = comps
-              .filter((c) => c.compensation_type === "cash")
-              .reduce((s, c) => s + c.amount, 0);
-            const parcelGrant = comps
-              .filter((c) => c.compensation_type === "land_grant")
-              .reduce((s, c) => s + c.amount, 0);
-
-            return (
-              <div key={parcel.id} className="ap-card overflow-hidden">
-                {/* Parcel header accordion */}
-                <button
-                  onClick={() => toggleParcel(parcel.id)}
-                  className="w-full flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/70 dark:hover:bg-[#252630] transition-colors text-left"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
-                    <MapPin className="h-4 w-4 text-[#02c0ce]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="font-mono text-[13px] font-semibold text-slate-800 dark:text-white">
-                        {parcel.parcel_id}
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        {parcel.au3_code}
-                      </span>
-                      {comps.length > 0 && (
-                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <ReceiptText className="h-3 w-3" />
-                          {comps.length} нөхөн төлбөр
-                        </span>
-                      )}
-                      {assets.length > 0 && (
-                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
-                          <Building2 className="h-3 w-3" />
-                          {assets.length} хөрөнгө
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      {parcelCash > 0 && (
-                        <span className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
-                          {parcelCash.toLocaleString()}₮
-                        </span>
-                      )}
-                      {parcelGrant > 0 && (
-                        <span className="text-[12px] font-semibold text-sky-600 dark:text-sky-400">
-                          {parcelGrant.toLocaleString()}₮ (газар)
-                        </span>
-                      )}
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${parcel.compensation_paid ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400" : "bg-slate-100 text-slate-500 dark:bg-slate-700/40 dark:text-slate-400"}`}
-                      >
-                        {parcel.compensation_paid ? "✓ Төлсөн" : "Төлөөгүй"}
-                      </span>
-                    </div>
-                  </div>
-                  {isOpen ? (
-                    <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
-                  )}
-                </button>
-
-                {isOpen && (
-                  <div className="border-t border-slate-100 dark:border-[#37394d]">
-                    {/* ── Compensations ─────────────────────────────── */}
-                    {comps.length > 0 && (
-                      <>
-                        <div className="px-5 py-2 bg-slate-50/80 dark:bg-[#1a1d20] flex items-center gap-2">
-                          <ReceiptText className="h-3.5 w-3.5 text-slate-400" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            Нөхөн төлбөр
-                          </p>
-                        </div>
-                        <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                          {comps.map((comp) => (
-                            <div key={comp.id}>
-                              <div className="flex items-center gap-3 px-5 py-3">
-                                <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2 items-center">
-                                  <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                                    {TARGET_TYPE_LABELS[comp.target_type] ??
-                                      comp.target_type}
-                                  </span>
-                                  <span
-                                    className={`inline-flex w-fit rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${comp.compensation_type === "cash" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400" : "bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400"}`}
-                                  >
-                                    {COMP_TYPE_LABELS[comp.compensation_type] ??
-                                      comp.compensation_type}
-                                  </span>
-                                  <span className="text-[13px] text-slate-500 dark:text-slate-400 tabular-nums">
-                                    {comp.coverage_percent}%
-                                  </span>
-                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
-                                    {comp.amount.toLocaleString()}₮
-                                  </span>
-                                  <span className="text-[12px] text-slate-400">
-                                    {comp.compensation_date
-                                      ? formatDate(comp.compensation_date)
-                                      : "—"}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {comp.grant && (
-                                    <button
-                                      onClick={() =>
-                                        setExpandedGrant(
-                                          expandedGrant === comp.id
-                                            ? null
-                                            : comp.id,
-                                        )
-                                      }
-                                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors"
-                                      title="Газрын олговрын дэлгэрэнгүй"
-                                    >
-                                      {expandedGrant === comp.id ? (
-                                        <ChevronUp className="h-3.5 w-3.5" />
-                                      ) : (
-                                        <ChevronDown className="h-3.5 w-3.5" />
-                                      )}
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => setPendingConfirm({
-                                      title: "Нөхөн төлбөр устгах уу?",
-                                      confirmLabel: "Тийм, устгах",
-                                      onConfirm: () => deleteMutation.mutate(comp.id),
-                                    })}
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                              {expandedGrant === comp.id && comp.grant && (
-                                <GrantPanel grant={comp.grant} />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {/* ── Assets ─────────────────────────────────────── */}
-                    {assets.length > 0 && (
-                      <div className="border-t border-slate-100 dark:border-[#37394d]">
-                        <div className="px-5 py-2 bg-slate-50/80 dark:bg-[#1a1d20] flex items-center gap-2">
-                          <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                            Хөрөнгө
-                          </p>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-[12px]">
-                            <thead>
-                              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                                {[
-                                  "Дугаар",
-                                  "Хөрөнгийн төрөл",
-                                  "Нэр/Төрөл",
-                                  "Давхар",
-                                  "Талбай",
-                                  "Эзэмшигч",
-                                  "Хаяг",
-                                ].map((h) => (
-                                  <th
-                                    key={h}
-                                    className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap"
-                                  >
-                                    {h}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                              {assets.map((b) => (
-                                <tr
-                                  key={b.id}
-                                  className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-                                >
-                                  <td className="px-4 py-2.5 font-mono font-medium text-slate-700 dark:text-slate-200">
-                                    {b.asset_number || "—"}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                                    {ASSET_TYPE_LABELS[b.asset_type] ??
-                                      b.asset_type}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                                    {b.asset_name || "—"}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-500 tabular-nums">
-                                    {b.floor_count || "—"}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">
-                                    {formatArea(b.area_m2)}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                                    {b.owner_name || "—"}
-                                  </td>
-                                  <td className="px-4 py-2.5 text-slate-500 min-w-[160px]">
-                                    {b.address || "—"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Grand totals */}
-      {allComps.length > 0 && (
-        <div className="ap-card px-5 divide-y divide-slate-100 dark:divide-[#37394d]">
-          {cashTotal > 0 && (
-            <div className="flex items-center justify-between py-3">
-              <span className="text-[13px] text-slate-500 dark:text-slate-400">
-                Нийт мөнгөн дүн
-              </span>
-              <span className="text-[15px] font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
-                {cashTotal.toLocaleString()}₮
-              </span>
-            </div>
-          )}
-          {landGrantTotal > 0 && (
-            <div className="flex items-center justify-between py-3">
-              <span className="text-[13px] text-slate-500 dark:text-slate-400">
-                Нийт газрын нөхөн олговор
-              </span>
-              <span className="text-[15px] font-bold text-sky-600 dark:text-sky-400 tabular-nums">
-                {landGrantTotal.toLocaleString()}₮
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      <ConfirmDialog
-        open={!!pendingConfirm}
-        title={pendingConfirm?.title ?? ""}
-        description={pendingConfirm?.description}
-        confirmLabel={pendingConfirm?.confirmLabel}
-        confirmColor={pendingConfirm?.confirmColor}
-        onConfirm={() => pendingConfirm?.onConfirm()}
-        onClose={() => setPendingConfirm(null)}
-      />
-    </div>
-  );
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 async function generateReport(acqId: string) {
   const { authStorage } = await import("@/lib/auth");
@@ -2850,6 +2284,33 @@ export default function AcquisitionDetailPage() {
     );
 
   const isAcqLocked = acq?.status === 3;
+
+  // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгуулгуудын хандалтыг хаана
+  if (isExternal && isAcqLocked)
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">
+          <svg className="h-8 w-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Дэлгэрэнгүй мэдээлэл хаалттай
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+            Энэ чөлөөлөлт <strong className="text-slate-600 dark:text-slate-300">Баталгаажсан</strong> төлөвтэй тул зөвхөн систем администратор харах боломжтой.
+          </p>
+        </div>
+        <Link
+          href="/acquisition"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Жагсаалт руу буцах
+        </Link>
+      </div>
+    );
+
   const canEdit = canEditBase && !isAcqLocked;
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
@@ -2975,6 +2436,14 @@ export default function AcquisitionDetailPage() {
       </div>
 
       {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
+      {isAcqLocked && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 px-4 py-3">
+          <span className="text-amber-500 shrink-0">🔒</span>
+          <p className="text-[13px] text-amber-700 dark:text-amber-400 font-medium">
+            Энэ чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй байгаа тул ямар нэгэн засвар хийх боломжгүй.
+          </p>
+        </div>
+      )}
       {activeTab === "general" && <GeneralTab key={tabKey} id={id} canEdit={canEdit && !isExternal} />}
       {activeTab === "attachments" && <AttachmentsTab key={tabKey} id={id} canEdit={canEdit} />}
       {activeTab === "progress" && <ProgressTab key={tabKey} id={id} canEdit={canEdit} />}
@@ -2983,10 +2452,11 @@ export default function AcquisitionDetailPage() {
           key={tabKey}
           id={id}
           acquisitionProfOrgId={acq.professional_org_id}
+          isAcqLocked={isAcqLocked}
         />
       )}
-      {activeTab === "assignees" && <AssigneesTab key={tabKey} id={id} />}
-      {activeTab === "financing" && <FinancingTab key={tabKey} id={id} />}
+      {activeTab === "assignees" && <AssigneesTab key={tabKey} id={id} canEdit={canEdit} />}
+      {activeTab === "financing" && <FinancingTab key={tabKey} id={id} canEdit={canEdit} />}
       {activeTab === "map" && (
         <div key={tabKey} className="ap-card p-5">
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />
