@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
-import { type Asset, type Compensation, type CompensationHistory, type LandValuation, type ParcelFull } from "@/types";
+import { type Asset, type Compensation, type CompensationHistory, type LandValuation, type ParcelFull, type User } from "@/types";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import {
   X,
@@ -117,6 +117,11 @@ function detailLabel(comp: Compensation) {
   return comp.note?.trim() || COMP_TYPE_LABELS[comp.compensation_type] || comp.compensation_type;
 }
 
+function orgUserName(user?: User) {
+  if (!user) return "";
+  return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+}
+
 export function RealEstateTab({
   acqId,
   parcelId,
@@ -138,6 +143,8 @@ export function RealEstateTab({
     ? {
         getParcel: (a: string, p: string) => profApi.profGetParcel(a, p),
         getById: (a: string) => profApi.profGetAcquisition(a),
+        listParcels: (a: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+          profApi.profListParcels(a, params),
         getAssets: (a: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
           profApi.profListAssets(a, params),
         listCompensations: (a: string, p?: string) => profApi.profListCompensations(a, p),
@@ -161,6 +168,8 @@ export function RealEstateTab({
     : {
         getParcel: (a: string, p: string) => landApi.getParcel(a, p),
         getById: (a: string) => landApi.getById(a),
+        listParcels: (a: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+          landApi.getParcels(a, params),
         getAssets: (a: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
           landApi.getAssets(a, params),
         listCompensations: (a: string, p?: string) => landApi.listCompensations(a, p),
@@ -200,6 +209,7 @@ export function RealEstateTab({
   const [rejectModal, setRejectModal] = useState<{ compId: string; note: string } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ compId: string; list: CompensationHistory[] } | null>(null);
   const [independentSelect, setIndependentSelect] = useState("");
+  const [assignedIndependentOrg, setAssignedIndependentOrg] = useState<{ id: string; name?: string } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: specTypes = [] } = useQuery({
@@ -220,11 +230,6 @@ export function RealEstateTab({
     enabled: !!acqId && !!parcelId,
   });
 
-  // Сонгогчийг одоо холбогдсон байгууллагаар үргэлж эхлүүлж/тааруулна
-  useEffect(() => {
-    setIndependentSelect(parcelData?.independent_org_id ?? "");
-  }, [parcelData?.independent_org_id]);
-
   const effectiveParcelCode = parcelData?.parcel_id ?? parcelCode;
 
   const { data: acquisition } = useQuery({
@@ -239,6 +244,35 @@ export function RealEstateTab({
     enabled: !isExternal,
     staleTime: 60_000,
   });
+
+  const { data: parcelListFallback } = useQuery({
+    queryKey: ["land-parcels-independent-org", acqId, effectiveParcelCode],
+    queryFn: () => svc.listParcels(acqId, { page: 1, page_size: 20, parcel_id: effectiveParcelCode }),
+    enabled: !!acqId && !!effectiveParcelCode && !parcelData?.independent_org_id,
+    staleTime: 30_000,
+  });
+
+  const fallbackParcel = parcelListFallback?.data?.find(
+    (item) => item.id === parcelId || item.parcel_id === effectiveParcelCode,
+  );
+
+  // Сонгогчийг backend-ээс ирсэн холболтоор эхлүүлнэ. Detail response дээр
+  // independent_org_id байхгүй ирвэл жагсаалтын endpoint-оос авсан тухайн parcel-ээр сэргээнэ.
+  useEffect(() => {
+    const orgId = parcelData?.independent_org_id || fallbackParcel?.independent_org_id;
+    if (!orgId) return;
+
+    const user = professionalOrgUsers.find((x) => x.id === orgId);
+    const name = parcelData?.independent_org_name || fallbackParcel?.independent_org_name || orgUserName(user);
+    setAssignedIndependentOrg({ id: orgId, name });
+    setIndependentSelect(orgId);
+  }, [
+    fallbackParcel?.independent_org_id,
+    fallbackParcel?.independent_org_name,
+    parcelData?.independent_org_id,
+    parcelData?.independent_org_name,
+    professionalOrgUsers,
+  ]);
 
   const { data: assets, isLoading: assetsLoading } = useQuery({
     queryKey: ["parcel-assets", acqId, effectiveParcelCode],
@@ -430,9 +464,9 @@ export function RealEstateTab({
       svc.setParcelIndependentOrg(acqId, parcelId, orgUserId),
     onSuccess: (_data, orgUserId) => {
       const u = orgUserId ? professionalOrgUsers.find((x) => x.id === orgUserId) : undefined;
-      const orgName = u
-        ? [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email
-        : undefined;
+      const orgName = orgUserName(u) || undefined;
+      setAssignedIndependentOrg(orgUserId ? { id: orgUserId, name: orgName } : null);
+      setIndependentSelect(orgUserId ?? "");
       // Холбогдсон төлөвийг шууд тусгана — getParcel эдгээр талбарыг буцаахгүй байсан ч
       // холболт харагдахгүй байхаас сэргийлж optimistic-оор кэшийг шинэчилнэ.
       queryClient.setQueryData<ParcelFull>(["parcel-full", acqId, parcelId], (old) =>
@@ -472,15 +506,13 @@ export function RealEstateTab({
     ? subTab
     : visibleSubTabs[0]?.key ?? "asset";
   const canEditCurrent = !isLocked && canEditValuationSubTab(activeSubTab, parcelData, acquisition);
+  const orgDisplayName = (id: string) => orgUserName(professionalOrgUsers.find((x) => x.id === id));
+  const currentIndependentOrgId = assignedIndependentOrg?.id || parcelData?.independent_org_id || "";
   const selectedIndependentOrgName =
+    assignedIndependentOrg?.name ||
     parcelData?.independent_org_name ||
-    professionalOrgUsers.find((u) => u.id === parcelData?.independent_org_id)?.email ||
+    orgDisplayName(currentIndependentOrgId) ||
     "—";
-  const orgDisplayName = (id: string) => {
-    const u = professionalOrgUsers.find((x) => x.id === id);
-    return u ? [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email : "";
-  };
-  const currentIndependentOrgId = parcelData?.independent_org_id ?? "";
   const summaryItems: { label: string; value: number; Icon: LucideIcon }[] = [
     { label: "Газрын үнэлгээ", value: totals.landTotal, Icon: Calculator },
     { label: "Хөрөнгийн үнэлгээ", value: totals.assetTotal, Icon: Building2 },
@@ -764,7 +796,7 @@ export function RealEstateTab({
                   <option value="">— Сонгоно уу —</option>
                   {professionalOrgUsers.map((u) => (
                     <option key={u.id} value={u.id}>
-                      {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
+                      {orgUserName(u)}
                       {u.position ? ` · ${u.position}` : ""}
                     </option>
                   ))}
