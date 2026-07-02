@@ -251,21 +251,49 @@ export const usersApi = {
   list: (params?: { page?: number; page_size?: number; search?: string }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { email: string; password: string; first_name: string; last_name: string; position?: string; role_names?: string[] }) =>
+  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_names?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
-  update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string; position: string }>) =>
+  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean; role_names: string[] }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
+  changePassword: (id: string, password: string) =>
+    api.put(`/users/${id}/password`, { password }),
   delete: (id: string) => api.delete(`/users/${id}`),
 }
 
 // ── Roles ─────────────────────────────────────────────
+// Backend returns Go PascalCase fields; normalize to frontend camelCase
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizePermission(p: any): Permission {
+  return {
+    id: p.ID ?? p.id,
+    name: p.Name ?? p.name,
+    description: p.Description ?? p.description,
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeRole(r: any): Role {
+  const rawPerms: unknown[] = r.Permissions ?? r.permissions ?? []
+  return {
+    id: r.ID ?? r.id,
+    name: r.Name ?? r.name,
+    description: r.Description ?? r.description,
+    permissions: rawPerms.map(normalizePermission),
+  }
+}
+
 export const rolesApi = {
-  list: () => api.get<PaginatedResponse<Role>>('/roles').then(r => r.data),
-  getById: (id: string) => api.get<ApiResponse<Role>>(`/roles/${id}`).then(r => r.data.data),
+  list: () =>
+    api.get<PaginatedResponse<Role>>('/roles').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeRole),
+    })),
+  getById: (id: string) =>
+    api.get<ApiResponse<Role>>(`/roles/${id}`).then(r => normalizeRole(r.data.data)),
   create: (body: { name: string; description?: string }) =>
-    api.post<ApiResponse<Role>>('/roles', body).then(r => r.data.data),
+    api.post<ApiResponse<Role>>('/roles', body).then(r => normalizeRole(r.data.data)),
   update: (id: string, body: { name?: string; description?: string }) =>
-    api.put<ApiResponse<Role>>(`/roles/${id}`, body).then(r => r.data.data),
+    api.put<ApiResponse<Role>>(`/roles/${id}`, body).then(r => normalizeRole(r.data.data)),
   delete: (id: string) => api.delete(`/roles/${id}`),
   assignPermission: (roleId: string, permissionId: string) =>
     api.post(`/roles/${roleId}/permissions`, { permission_id: permissionId }),
@@ -275,9 +303,13 @@ export const rolesApi = {
 
 // ── Permissions ───────────────────────────────────────
 export const permissionsApi = {
-  list: () => api.get<PaginatedResponse<Permission>>('/permissions').then(r => r.data),
+  list: () =>
+    api.get<PaginatedResponse<Permission>>('/permissions').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizePermission),
+    })),
   create: (body: { name: string; description?: string }) =>
-    api.post<ApiResponse<Permission>>('/permissions', body).then(r => r.data.data),
+    api.post<ApiResponse<Permission>>('/permissions', body).then(r => normalizePermission(r.data.data)),
   delete: (id: string) => api.delete(`/permissions/${id}`),
 }
 

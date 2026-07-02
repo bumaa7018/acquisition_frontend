@@ -13,7 +13,23 @@ export function decodeJwtPayload(token: string | null): Record<string, unknown> 
       .replace(/-/g, "+")
       .replace(/_/g, "/")
       .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
-    return JSON.parse(atob(normalizedPayload));
+    const binary = atob(normalizedPayload);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return {
+      id: payload.user_id,
+      username: payload.username,
+      email: payload.email,
+      full_name: payload.full_name,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+      position: payload.position,
+      roles: (payload.roles ?? []).map((name: string) => ({
+        id: name,
+        name,
+        permissions: [],
+      })),
+    };
   } catch {
     return null;
   }

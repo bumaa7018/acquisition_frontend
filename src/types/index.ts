@@ -23,6 +23,7 @@ export interface User {
   first_name: string;
   last_name: string;
   position?: string;
+  is_active?: boolean;
   roles: Role[];
 }
 
@@ -37,6 +38,7 @@ export interface Permission {
   id: string;
   name: string;
   description?: string;
+  resource?: string;
 }
 
 export interface Plan {
@@ -73,7 +75,7 @@ export interface DocumentType {
   id: number;
   type: string;
   name: string;
-  target: 'acquisition' | 'parcel' | 'both';
+  target: "acquisition" | "parcel" | "both";
   description?: string;
   created_at: string;
   updated_at: string;
