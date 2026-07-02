@@ -3,7 +3,8 @@ import React, { useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
-import { RIGHT_TYPE_LABELS } from "@/types";
+import { profApi } from "@/lib/prof-api";
+import { RIGHT_TYPE_LABELS, ACQ_STATUS } from "@/types";
 import { ArrowLeft, Info, Paperclip, Building2, Printer, Activity, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { type Tab } from "./_components/constants";
@@ -13,7 +14,7 @@ import { ProgressTab } from "./_components/progress_tab";
 import { RealEstateTab } from "./_components/real_estate_tab";
 import { DocumentsTab } from "./_components/documents_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
-import { canAccessParcel, isExternalSpecialRole } from "@/lib/role-utils";
+import { canAccessParcel, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { Users } from "lucide-react";
 
 export default function ParcelDetailPage() {
@@ -22,26 +23,41 @@ export default function ParcelDetailPage() {
   const acqId = searchParams.get("acq") ?? "";
   const [tab, setTab] = useState<Tab>("general");
   const [tabKey, setTabKey] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const isExternal = isExternalSpecialRole();
+  const isProfOrg = isProfessionalOrg();
+
+  React.useEffect(() => setMounted(true), []);
 
   function handleTabClick(key: Tab) {
     setTab(key);
     setTabKey((k) => k + 1);
   }
 
-  const { data: parcel } = useQuery({
+  const { data: parcel, isLoading: parcelLoading, error: parcelError } = useQuery({
     queryKey: ["parcel-full", acqId, id],
-    queryFn: () => landApi.getParcel(acqId, id),
+    queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, id) : landApi.getParcel(acqId, id)),
     enabled: !!acqId,
+    retry: (failCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failCount < 2;
+    },
   });
-  const { data: acquisition } = useQuery({
+  const { data: acquisition, isLoading: acquisitionLoading, error: acquisitionError } = useQuery({
     queryKey: ["land", acqId],
-    queryFn: () => landApi.getById(acqId),
+    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
     enabled: !!acqId,
+    retry: (failCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failCount < 2;
+    },
   });
 
   const PARCEL_FINAL_STATUSES = ["Чөлөөлсөн", "Татгалзсан", "Нөлөөллөөс гарсан"];
-  const isParcelLocked = PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+  const isAcqConfirmed = acquisition?.status === ACQ_STATUS.CONFIRMED;
+  const isParcelLocked = isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "general", label: "Ерөнхий мэдээлэл", icon: <Info className="h-4 w-4" /> },
@@ -51,12 +67,52 @@ export default function ParcelDetailPage() {
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
   ];
-  const visibleTabs = isExternal
-    ? TABS.filter((item) => item.key === "general" || item.key === "realEstate")
-    : TABS;
+  const visibleTabs = !mounted
+    ? []
+    : isExternal
+      ? TABS.filter((item) => item.key === "general" || item.key === "realEstate")
+      : TABS;
   const activeTab = visibleTabs.some((item) => item.key === tab)
     ? tab
     : "general";
+
+  const parcelErrorStatus = (parcelError as { response?: { status?: number } } | null)?.response?.status;
+  const acquisitionErrorStatus = (acquisitionError as { response?: { status?: number } } | null)?.response?.status;
+  const accessErrorStatus = parcelErrorStatus ?? acquisitionErrorStatus;
+
+  if (parcelLoading || acquisitionLoading) {
+    return (
+      <div className="flex flex-col gap-5 animate-pulse">
+        <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
+        <div className="h-12 w-full rounded-lg bg-slate-100 dark:bg-[#252630]" />
+        <div className="h-64 w-full rounded-lg bg-slate-100 dark:bg-[#252630]" />
+      </div>
+    );
+  }
+
+  if (accessErrorStatus === 403) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <Users className="h-8 w-8 text-red-400" />
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Хандах эрх байхгүй
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1">
+            Энэ нэгж талбар таны байгууллагад нээлттэй биш байна.
+          </p>
+        </div>
+        <Link
+          href={acqId ? `/acquisition/${acqId}` : "/acquisition"}
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Буцах
+        </Link>
+      </div>
+    );
+  }
 
   if (
     isExternal &&
@@ -86,6 +142,33 @@ export default function ParcelDetailPage() {
           className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Чөлөөлөлт рүү буцах
+        </Link>
+      </div>
+    );
+  }
+
+  // Баталгаажсан чөлөөлөлтийн нэгж талбарт бүх гадаад хэрэглэгчид хандах боломжгүй
+  if (isExternal && isAcqConfirmed && parcel && acquisition) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">
+          <svg className="h-8 w-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Дэлгэрэнгүй мэдээлэл хаалттай
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+            Чөлөөлөлт <strong className="text-slate-600 dark:text-slate-300">Баталгаажсан</strong> төлөвтэй тул нэгж талбарын дэлгэрэнгүй мэдээлэлд хандах боломжгүй.
+          </p>
+        </div>
+        <Link
+          href="/acquisition"
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Жагсаалт руу буцах
         </Link>
       </div>
     );
@@ -133,6 +216,16 @@ export default function ParcelDetailPage() {
           );
         })}
       </div>
+
+      {/* Acquisition баталгаажсан — засвар хориглох анхааруулга */}
+      {isAcqConfirmed && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 px-4 py-3">
+          <span className="text-amber-500 shrink-0">🔒</span>
+          <p className="text-[13px] text-amber-700 dark:text-amber-400 font-medium">
+            Чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй тул нэгж талбар дээр ямар нэгэн засвар хийх боломжгүй.
+          </p>
+        </div>
+      )}
 
       {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
       {activeTab === "general" && <GeneralTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}

@@ -24,3 +24,4 @@ export const COMP_TYPE_LABELS: Record<string, string> = {
 
 export const INP =
   "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+

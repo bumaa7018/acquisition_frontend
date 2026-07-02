@@ -1,59 +1,48 @@
 "use client";
-import { useRef, useState } from "react";
+import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parcelApi, documentTypeApi } from "@/lib/api";
-import { profApi } from "@/lib/prof-api";
-import { isProfessionalOrg } from "@/lib/role-utils";
-import { formatDate, getApiError } from "@/lib/utils";
-import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
+import { FileText, Upload, Trash2, Download, X, Paperclip } from "lucide-react";
+import { landApi, documentTypeApi } from "@/lib/api";
+import { formatDate, getApiError } from "@/lib/utils";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
-function formatSize(b: number) {
-  return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
+export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const isProfOrg = isProfessionalOrg();
-
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
 
   const { data: docs = [], isLoading } = useQuery({
-    queryKey: ["parcel-documents", parcelId],
-    queryFn: () => (isProfOrg ? profApi.profListParcelDocuments(parcelId) : parcelApi.listDocuments(parcelId)),
+    queryKey: ["acq-documents", id],
+    queryFn: () => landApi.listDocuments(id),
   });
 
   const { data: docTypes = [] } = useQuery({
-    queryKey: ["document-types", "parcel"],
-    queryFn: () => documentTypeApi.list("parcel"),
+    queryKey: ["document-types", "acquisition"],
+    queryFn: () => documentTypeApi.list("acquisition"),
     staleTime: 60_000,
   });
 
   const uploadMutation = useMutation({
     mutationFn: ({ file, typeId, name }: { file: File; typeId: number; name: string }) =>
-      isProfOrg
-        ? profApi.profUploadParcelDocument(parcelId, file, typeId, name)
-        : parcelApi.uploadDocument(parcelId, file, typeId, name),
+      landApi.uploadDocument(id, file, typeId, name),
     onSuccess: () => {
       toast.success("Баримт бичиг хавсаргагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      queryClient.invalidateQueries({ queryKey: ["acq-documents", id] });
       closeModal();
     },
     onError: (err) => toast.error(getApiError(err, "Файл хавсаргахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (docId: string) =>
-      isProfOrg
-        ? profApi.profDeleteParcelDocument(parcelId, docId)
-        : parcelApi.deleteDocument(parcelId, docId).then(() => undefined),
+    mutationFn: (docId: string) => landApi.deleteDocument(id, docId),
     onSuccess: () => {
       toast.success("Баримт бичиг устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      queryClient.invalidateQueries({ queryKey: ["acq-documents", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
@@ -77,7 +66,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
-    if (f.size > 10 * 1024 * 1024) { toast.error("10MB хэтэрлээ"); e.target.value = ""; return; }
+    if (f.size > 10 * 1024 * 1024) { toast.error("Файлын хэмжээ 10MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
     setSelectedFile(f);
     setFileName(f.name.replace(/\.pdf$/i, ""));
   }
@@ -89,15 +78,18 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
     uploadMutation.mutate({ file: selectedFile, typeId: documentTypeId as number, name: fileName });
   }
 
+  const formatSize = (bytes: number) =>
+    bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+
   return (
     <>
       <div className="ap-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <div>
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
           </div>
-          {!isLocked && (
+          {canEdit && (
             <button
               onClick={openModal}
               className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
@@ -110,7 +102,9 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
         {isLoading ? (
           <div className="p-5 space-y-3 animate-pulse">
-            {[...Array(3)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+            ))}
           </div>
         ) : !docs.length ? (
           <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
@@ -128,7 +122,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                       {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
                       {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
                     </p>
@@ -140,9 +134,9 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     >
                       <Download className="h-3.5 w-3.5" />
                     </a>
-                    {!isLocked && (
+                    {canEdit && (
                       <button
-                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Тийм, устгах", onConfirm: () => deleteMutation.mutate(doc.id) })}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -230,6 +224,15 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }

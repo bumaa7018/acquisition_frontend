@@ -1,8 +1,31 @@
 import axios from 'axios'
+import { toast } from 'sonner'
 import { authStorage } from './auth'
 import { notifyRequestStart, notifyRequestEnd } from './blocking-loader-state'
-import { canCallApiEndpointForActor } from './access-policy'
-import { getCurrentActor } from './role-utils'
+
+// Нэг дор олон 401/403 toast гарахаас сэргийлнэ
+let _authAlertPending = false
+function showAccessDenied(title: string, description: string, withLoginBtn = false) {
+  if (_authAlertPending) return
+  _authAlertPending = true
+  const opts = withLoginBtn
+    ? {
+        description,
+        duration: Infinity as number,
+        action: {
+          label: 'Нэвтрэх',
+          onClick: () => { window.location.href = '/login' },
+        },
+        onDismiss: () => { _authAlertPending = false },
+      }
+    : {
+        description,
+        duration: 7000,
+        onDismiss: () => { _authAlertPending = false },
+        onAutoClose: () => { _authAlertPending = false },
+      }
+  toast.error(title, opts)
+}
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
@@ -11,7 +34,8 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, AuthorizedRepresentative,
+  CompensationHistory, AuthorizedRepresentative, LandValuation, AssetSpec, AssetCalculation,
+  AssetSpecType, AssetCalcType,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -163,21 +187,9 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
 api.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
-  if (
-    token &&
-    config.url &&
-    !canCallApiEndpointForActor(getCurrentActor(), config.method, config.url)
-  ) {
-    return Promise.reject(
-      Object.assign(new Error('Энэ API хүсэлтэд хандах эрхгүй'), {
-        config,
-        response: {
-          status: 403,
-          data: { message: 'Энэ API хүсэлтэд хандах эрхгүй' },
-        },
-      }),
-    )
-  }
+  // Эрхийн шалгалтыг backend (/prof group + middleware) дээр төвлөрүүлсэн.
+  // Frontend талд урьдчилсан allowlist хийхгүй — false 403 (Хандах эрхгүй)
+  // toast гарахаас сэргийлж, backend-тэй зөрчилдөхөөс зайлсхийнэ.
   notifyRequestStart()
   return config
 })
@@ -190,20 +202,38 @@ api.interceptors.response.use(
   async (error) => {
     notifyRequestEnd()
     console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
+
+    const status = error.response?.status
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
-    if (error.response?.status === 401 && !error.config._retry && !isAuthRoute) {
-      error.config._retry = true
-      try {
-        const refresh = authStorage.getRefreshToken()
-        const { data } = await axios.post('/api/v1/auth/refresh', { refresh_token: refresh })
-        authStorage.setTokens(data.data.access_token, data.data.refresh_token)
-        error.config.headers.Authorization = `Bearer ${data.data.access_token}`
-        return api(error.config)
-      } catch {
-        authStorage.clear()
-        window.location.href = '/login'
-      }
+
+    // ── 403: хандах эрхгүй (backend эсвэл frontend access-policy) ──────────
+    if (status === 403 && !isAuthRoute) {
+      showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+      return Promise.reject(error)
     }
+
+    // ── 401: нэвтрэх шаардлагатай ──────────────────────────────────────────
+    if (status === 401 && !isAuthRoute) {
+      if (!error.config?._retry) {
+        // Нэг удаа token refresh хийж үзнэ
+        error.config._retry = true
+        try {
+          const refresh = authStorage.getRefreshToken()
+          const { data } = await axios.post('/api/v1/auth/refresh', { refresh_token: refresh })
+          authStorage.setTokens(data.data.access_token, data.data.refresh_token)
+          error.config.headers.Authorization = `Bearer ${data.data.access_token}`
+          return api(error.config)
+        } catch {
+          // Refresh амжилтгүй → session дууссан гэж үзнэ
+          authStorage.clear()
+          showAccessDenied('Сессийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
+          return Promise.reject(error)
+        }
+      }
+      // Retry хийсний дараа ч 401 → хандах эрхгүй
+      showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+    }
+
     return Promise.reject(error)
   },
 )
@@ -320,7 +350,7 @@ export const landApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
-  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; right_type?: number; landuse?: string; status_id?: number }) =>
+  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
   getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
@@ -330,6 +360,18 @@ export const landApi = {
     api.put<ApiResponse<Asset>>(`/land-acquisitions/${acqId}/assets/${assetId}`, body).then(r => r.data.data),
   deleteAsset: (acqId: string, assetId: string) =>
     api.delete(`/land-acquisitions/${acqId}/assets/${assetId}`),
+  listAssetSpecs: (acqId: string, assetId: string) =>
+    api.get<ApiResponse<AssetSpec[]>>(`/land-acquisitions/${acqId}/assets/${assetId}/specs`).then(r => r.data.data ?? []),
+  upsertAssetSpecs: (acqId: string, assetId: string, specs: { spec_type_id: number; value: string }[]) =>
+    api.post(`/land-acquisitions/${acqId}/assets/${assetId}/specs`, { specs }),
+  listAssetCalculations: (acqId: string, assetId: string) =>
+    api.get<ApiResponse<AssetCalculation[]>>(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`).then(r => r.data.data ?? []),
+  upsertAssetCalculations: (acqId: string, assetId: string, calculations: { calc_type_id: number; unit: string; value: number }[]) =>
+    api.post(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`, { calculations }),
+  getLandValuation: (acqId: string, parcelId: string) =>
+    api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(r => r.data.data ?? null),
+  upsertLandValuation: (acqId: string, body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number }) =>
+    api.post<ApiResponse<LandValuation>>(`/land-acquisitions/${acqId}/land-valuation`, body).then(r => r.data.data),
   listCompensations: (acqId: string, parcelId?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
       params: parcelId ? { parcel_id: parcelId } : undefined,
@@ -424,21 +466,15 @@ export const landApi = {
       .then(r => r.data.data ?? []),
 
   // Set the professional org user for an acquisition
-  setProfessionalOrg: (acquisitionId: string, orgUserId: string | null) => {
-    const fd = new FormData()
-    if (orgUserId) fd.append('professional_org_id', orgUserId)
-    else fd.append('clear_professional_org', 'true')
-    return api.put<ApiResponse<import('@/types').LandAcquisition>>(`/land-acquisitions/${acquisitionId}`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
-  },
+  setProfessionalOrg: (acquisitionId: string, orgUserId: string | null) =>
+    api.put(`/land-acquisitions/${acquisitionId}/professional-org`, { org_user_id: orgUserId }),
 
   // Set the independent org user for a specific parcel
   setParcelIndependentOrg: (acqId: string, parcelId: string, orgUserId: string | null) =>
-    api.patch<ApiResponse<import('@/types').ParcelFull>>(
+    api.patch(
       `/land-acquisitions/${acqId}/parcels/${parcelId}/independent-org`,
-      { independent_org_id: orgUserId }
-    ).then(r => r.data.data),
+      { org_user_id: orgUserId }
+    ),
 
   // Funding sources
   listFundingSources: (acqId: string) =>
@@ -468,6 +504,22 @@ export const landApi = {
           return user.roles.some(role => role.name === 'professional_org' || role.id === 'professional_org')
         })
       }),
+}
+
+// ── Professional Org: own acquisitions ────────────────────────────────────
+export const myLandApi = {
+  list: (filter?: { plan_code?: string; acquisition_name?: string; status?: number; au3_code?: string; page?: number; page_size?: number }) => {
+    const p = new URLSearchParams()
+    if (filter?.plan_code)        p.set('plan_code', filter.plan_code)
+    if (filter?.acquisition_name) p.set('acquisition_name', filter.acquisition_name)
+    if (filter?.status)           p.set('status', String(filter.status))
+    if (filter?.au3_code)         p.set('au3_code', filter.au3_code)
+    if (filter?.page)             p.set('page', String(filter.page))
+    if (filter?.page_size)        p.set('page_size', String(filter.page_size))
+    return api
+      .get<PaginatedResponse<import('@/types').LandAcquisition>>(`/land-acquisitions/my?${p.toString()}`)
+      .then(r => r.data)
+  },
 }
 
 // ── Global Parcels ────────────────────────────────────
@@ -549,6 +601,30 @@ export const planApi = {
     api.get<ApiResponse<Plan>>('/plans/search', { params: { code } }).then(r => r.data.data),
   suggest: (q: string) =>
     api.get<ApiResponse<Plan[]>>('/plans/suggest', { params: { q } }).then(r => r.data.data ?? []),
+}
+
+// ── Asset Spec Types (admin) ──────────────────────────
+export const assetSpecTypeApi = {
+  list: () =>
+    api.get<ApiResponse<AssetSpecType[]>>('/asset-spec-types').then(r => r.data.data ?? []),
+  create: (body: { code: string; name: string; sort_order: number }) =>
+    api.post<AssetSpecType>('/asset-spec-types', body).then(r => r.data),
+  update: (id: number, body: { code: string; name: string; sort_order: number }) =>
+    api.put<ApiResponse<AssetSpecType>>(`/asset-spec-types/${id}`, body).then(r => r.data.data),
+  delete: (id: number) =>
+    api.delete(`/asset-spec-types/${id}`),
+}
+
+// ── Asset Calc Types (admin) ──────────────────────────
+export const assetCalcTypeApi = {
+  list: () =>
+    api.get<ApiResponse<AssetCalcType[]>>('/asset-calc-types').then(r => r.data.data ?? []),
+  create: (body: { code: string; name: string; default_unit: string; sort_order: number }) =>
+    api.post<AssetCalcType>('/asset-calc-types', body).then(r => r.data),
+  update: (id: number, body: { code: string; name: string; default_unit: string; sort_order: number }) =>
+    api.put<ApiResponse<AssetCalcType>>(`/asset-calc-types/${id}`, body).then(r => r.data.data),
+  delete: (id: number) =>
+    api.delete(`/asset-calc-types/${id}`),
 }
 
 // ── Dashboard (aggregated) ────────────────────────────

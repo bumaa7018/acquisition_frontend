@@ -1,5 +1,5 @@
 "use client";
-import { authStorage } from "./auth";
+import { authStorage, decodeJwtPayload } from "./auth";
 import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
@@ -18,18 +18,7 @@ import {
 } from "./access-policy";
 
 function getTokenPayload(): Record<string, unknown> | null {
-  const token = authStorage.getAccessToken();
-  if (!token) return null;
-  try {
-    const rawPayload = token.split(".")[1];
-    const normalizedPayload = rawPayload
-      .replace(/-/g, "+")
-      .replace(/_/g, "/")
-      .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
-    return JSON.parse(atob(normalizedPayload));
-  } catch {
-    return null;
-  }
+  return decodeJwtPayload(authStorage.getAccessToken());
 }
 
 export function getCurrentActor(): AccessActor {
@@ -132,8 +121,8 @@ export function canEditMikaValuation(
   );
 }
 
-export function canViewValuationSubTab(subTab: ValuationSubTabKey): boolean {
-  return canViewValuationSubTabForActor(getCurrentActor(), subTab);
+export function canViewValuationSubTab(subTab: ValuationSubTabKey, parcel?: AccessParcel | null, acquisition?: AccessAcquisition | null): boolean {
+  return canViewValuationSubTabForActor(getCurrentActor(), subTab, parcel, acquisition);
 }
 
 export function canEditValuationSubTab(

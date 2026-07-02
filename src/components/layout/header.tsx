@@ -49,10 +49,12 @@ export function Header() {
   const router = useRouter();
   const [user, setUser] =
     useState<ReturnType<typeof authStorage.getUser>>(null);
+  const [ready, setReady] = useState(false);
   const [isExternal, setIsExternal] = useState(false);
   useEffect(() => {
     setUser(authStorage.getUser());
     setIsExternal(isExternalSpecialRole());
+    setReady(true);
   }, []);
   const { greeting, crumb } = resolveTitle(pathname);
   const { resolvedTheme, setTheme } = useTheme();
@@ -201,7 +203,7 @@ export function Header() {
                   <UserCircle className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                   Хувийн мэдээлэл
                 </Link>
-                {!isExternal && (
+                {ready && !isExternal && (
                   <Link
                     href="/roles"
                     onClick={() => setProfileOpen(false)}

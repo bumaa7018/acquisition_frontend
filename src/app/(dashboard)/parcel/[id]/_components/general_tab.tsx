@@ -3,11 +3,12 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { landApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
 import { RIGHT_TYPE_LABELS, type AU } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
-import { isExternalSpecialRole } from "@/lib/role-utils";
+import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
 
 const ParcelMap = dynamic(
@@ -72,14 +73,16 @@ function highlightArea(value: string) {
 export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
+  const isProfOrg = isProfessionalOrg();
+  // Мэргэжлийн байгууллага бол /prof маршрутаар уншина
   const { data, isLoading } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
-    queryFn: () => landApi.getParcel(acqId, parcelId),
+    queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, parcelId) : landApi.getParcel(acqId, parcelId)),
     enabled: !!acqId,
   });
   const { data: acquisition } = useQuery({
     queryKey: ["land", acqId],
-    queryFn: () => landApi.getById(acqId),
+    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
     enabled: !!acqId,
   });
   const [editingMeta, setEditingMeta] = useState(false);
@@ -425,7 +428,12 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             <MapPin className="h-3.5 w-3.5 text-[#02c0ce]" />
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Байршил</p>
           </div>
-          <ParcelMap parcelId={data.parcel_id} acquisitionId={acqId} />
+          <ParcelMap
+            parcelId={data.parcel_id}
+            acquisitionId={acqId}
+            geometryWkt={data.geometry_wkt}
+            statusId={data.status_id ?? data.status}
+          />
         </div>
       </div>
 

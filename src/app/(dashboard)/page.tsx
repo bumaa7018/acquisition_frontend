@@ -13,6 +13,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
+import { isProfessionalOrg } from "@/lib/role-utils";
+import Link from "next/link";
 import type { GlobalParcel } from "@/types";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
@@ -619,7 +622,73 @@ function HBar({
 }
 
 /* ── Page ────────────────────────────────────────────── */
+function ProfOrgDashboard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ["my-land-dashboard"],
+    queryFn: () => profApi.profListMyAcquisitions({ page: 1, page_size: 5 }),
+    staleTime: 60_000,
+  });
+
+  const items = data?.data ?? [];
+  const total = data?.total ?? 0;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <h1 className="text-xl font-bold text-slate-800 dark:text-white">Хяналтын самбар</h1>
+        <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+          Танд нийт {total} чөлөөлөлт хуваарилагдсан байна
+        </p>
+      </div>
+      <div className="rounded-xl border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+            Сүүлийн чөлөөлөлтүүд
+          </p>
+          <Link
+            href="/my_acquisitions"
+            className="text-[12px] font-medium text-[#02c0ce] hover:underline"
+          >
+            Бүгдийг харах →
+          </Link>
+        </div>
+        {isLoading ? (
+          <div className="px-5 py-8 text-center text-[13px] text-slate-400">Ачааллаж байна...</div>
+        ) : !items.length ? (
+          <div className="px-5 py-8 text-center text-[13px] text-slate-400">
+            Танд холбоотой чөлөөлөлт олдсонгүй
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50 dark:divide-[#2a2c38]">
+            {items.map((land) => (
+              <div key={land.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-white/[0.03] transition-colors">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
+                    {land.acquisition_name || land.plan_code}
+                  </p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    {land.plan_code} · {land.parcel_count ?? 0} нэгж талбар
+                  </p>
+                </div>
+                <Link
+                  href={`/acquisition/${land.id}`}
+                  className="shrink-0 ml-4 inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
+                >
+                  Нэвтрэх
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const [isProfOrg, setIsProfOrg] = useState(false);
+  useEffect(() => { setIsProfOrg(isProfessionalOrg()); }, []);
+
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
   const tickColor  = isDark ? "#8391a2" : "#94a3b8";
@@ -681,6 +750,7 @@ export default function DashboardPage() {
       assigned_user_id:   appliedFilter.employeeId || undefined,
     }),
     staleTime: 60_000,
+    enabled: !isProfOrg,
   });
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
@@ -756,6 +826,8 @@ export default function DashboardPage() {
     if (appliedFilter.employeeName)     parts.push(`Ажилтан: ${appliedFilter.employeeName}`);
     return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
   }, [appliedFilter]);
+
+  if (isProfOrg) return <ProfOrgDashboard />;
 
   return (
     <div className="flex flex-col gap-4">
