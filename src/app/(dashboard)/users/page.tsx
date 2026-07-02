@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { usersApi } from "@/lib/api";
+import { usersApi, rolesApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { UserPlus, Trash2, X, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -34,20 +34,26 @@ const inputCls =
 
 export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["users"],
     queryFn: () => usersApi.list({ page: 1, page_size: 50 }),
   });
+  const { data: rolesData } = useQuery({
+    queryKey: ["roles"],
+    queryFn: () => rolesApi.list(),
+  });
 
   const createMutation = useMutation({
     mutationFn: ({ confirm_password: _, ...body }: CreateForm) =>
-      usersApi.create(body),
+      usersApi.create({ ...body, role_names: selectedRoles.length ? selectedRoles : undefined }),
     onSuccess: () => {
       toast.success("Хэрэглэгч үүслээ");
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setShowCreate(false);
+      setSelectedRoles([]);
       reset();
     },
     onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
@@ -182,6 +188,36 @@ export default function UsersPage() {
                 </span>
               </label>
             </div>
+            {rolesData?.data?.length ? (
+              <div className="col-span-2">
+                <label className="block text-[12px] font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                  Роль
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {rolesData.data.map((r) => {
+                    const active = selectedRoles.includes(r.name);
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedRoles((prev) =>
+                            active ? prev.filter((n) => n !== r.name) : [...prev, r.name]
+                          )
+                        }
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-[12px] font-semibold transition-all border ${
+                          active
+                            ? "border-[#02c0ce] bg-[#02c0ce]/10 text-[#02c0ce]"
+                            : "border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce]/50"
+                        }`}
+                      >
+                        {r.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="col-span-2 flex gap-2 pt-1">
               <button
                 type="submit"
@@ -194,6 +230,7 @@ export default function UsersPage() {
                 type="button"
                 onClick={() => {
                   setShowCreate(false);
+                  setSelectedRoles([]);
                   reset();
                 }}
                 className="rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-500 transition-colors"

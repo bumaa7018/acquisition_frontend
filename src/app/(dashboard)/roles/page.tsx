@@ -86,13 +86,19 @@ export default function RolesPage() {
   const assignedIds = new Set(roleDetail?.permissions?.map((p) => p.id) ?? []);
 
   const groupedPerms = Object.entries(
-    (permsData?.data ?? []).reduce<Record<string, NonNullable<typeof permsData>["data"]>>((acc, perm) => {
-      const sep = perm.name.includes(":") ? ":" : perm.name.includes(".") ? "." : null;
+    (permsData?.data ?? []).reduce<
+      Record<string, NonNullable<typeof permsData>["data"]>
+    >((acc, perm) => {
+      const sep = perm.name.includes(":")
+        ? ":"
+        : perm.name.includes(".")
+          ? "."
+          : null;
       const key = sep ? perm.name.split(sep)[0] : "бусад";
       if (!acc[key]) acc[key] = [];
       acc[key]!.push(perm);
       return acc;
-    }, {})
+    }, {}),
   );
 
   const submit = () => {
@@ -344,8 +350,8 @@ export default function RolesPage() {
                             const action = perm.name.includes(":")
                               ? perm.name.split(":").slice(1).join(":")
                               : perm.name.includes(".")
-                              ? perm.name.split(".").slice(1).join(".")
-                              : perm.name;
+                                ? perm.name.split(".").slice(1).join(".")
+                                : perm.name;
                             return (
                               <button
                                 key={perm.id}
