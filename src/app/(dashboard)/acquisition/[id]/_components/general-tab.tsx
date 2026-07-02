@@ -27,13 +27,6 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
   });
-  const { data: parcelsData } = useQuery({
-    queryKey: ["land-parcels-summary", id],
-    queryFn: () =>
-      isProfOrg
-        ? profApi.profListParcels(id, { page: 1, page_size: 1000 })
-        : landApi.getParcels(id, { page: 1, page_size: 1000 }),
-  });
   const { data: professionalOrgUsers = [] } = useQuery({
     queryKey: ["professional-org-users"],
     queryFn: () => landApi.listProfessionalOrgUsers(),
@@ -112,7 +105,6 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setAreaAutoCalc(false);
       setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
-      queryClient.invalidateQueries({ queryKey: ["land-parcels-summary", id] });
       queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
@@ -120,11 +112,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
 
   if (!acq) return null;
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
-  const parcelCount = parcelsData?.total ?? acq.parcel_count ?? 0;
-  const totalAcqAreaM2 = (parcelsData?.data ?? []).reduce(
-    (sum, p) => sum + (p.acquisition_area_m2 || 0),
-    0,
-  );
+  const parcelCount = acq.parcel_count ?? 0;
+  const totalAcqAreaM2 = Number(acq.area_m2) || 0;
   const inp =
     "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
   const resetForm = () => {
@@ -355,22 +344,18 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                     <span className="text-[11px] font-normal text-slate-400">нэгж талбар</span>
                   </span>
                 ) : (
-                  parcelsData ? "0 нэгж талбар" : <span className="inline-block h-3.5 w-16 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
+                  "0 нэгж талбар"
                 )}
               </span>
             </div>
             <div className="flex items-center gap-3 py-2.5">
               <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Нийт нөлөөлөлд өртсөн талбай</span>
               <span className="text-[13px] font-semibold">
-                {parcelsData ? (
-                  totalAcqAreaM2 > 0 ? (
-                    <span className="inline-flex rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
-                      {formatArea(totalAcqAreaM2)}
-                    </span>
-                  ) : "—"
-                ) : (
-                  <span className="inline-block h-3.5 w-24 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
-                )}
+                {totalAcqAreaM2 > 0 ? (
+                  <span className="inline-flex rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
+                    {formatArea(totalAcqAreaM2)}
+                  </span>
+                ) : "—"}
               </span>
             </div>
           </div>

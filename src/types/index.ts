@@ -201,6 +201,9 @@ export interface Parcel {
   landuse: string;
   area_m2: number;
   acquisition_area_m2: number;
+  cash_amount?: number;
+  land_grant_amount?: number;
+  land_grant_count?: number;
   remaining_area_m2?: number;
   compensation_paid: boolean;
   db_changed: boolean;

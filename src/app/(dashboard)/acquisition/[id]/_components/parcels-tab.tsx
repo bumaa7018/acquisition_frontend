@@ -9,7 +9,7 @@ import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
 import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle } from "@/types";
-import type { Compensation, ParcelStatus } from "@/types";
+import type { ParcelStatus } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const RIGHT_TYPE_OPTIONS = [
@@ -88,12 +88,6 @@ export function ParcelsTab({
         : landApi.getParcels(id, parcelListParams(filter, page)),
   });
 
-  const { data: allComps = [] } = useQuery({
-    queryKey: ["compensations", id],
-    queryFn: () => (isProfOrg ? profApi.profListCompensations(id) : landApi.listCompensations(id)),
-    enabled: !!id,
-  });
-
   const syncMutation = useMutation({
     mutationFn: (parcelId: string) => landApi.syncParcel(id, parcelId),
     onSuccess: () => {
@@ -113,14 +107,6 @@ export function ParcelsTab({
     },
     onError: (err) => toast.error(getApiError(err, "Нөхөн төлбөр шинэчлэхэд алдаа гарлаа")),
   });
-
-  const compsByParcel = allComps.reduce<Record<string, Compensation[]>>(
-    (acc, c) => {
-      (acc[c.parcel_id || ""] ??= []).push(c);
-      return acc;
-    },
-    {},
-  );
 
   const inp =
     "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -305,15 +291,10 @@ export function ParcelsTab({
                     </td>
                   </tr>
                 ) : visibleParcels.map((p) => {
-                  const comps = compsByParcel[p.parcel_id] ?? [];
                   const isOpen = expandedParcel === p.id;
-                  const cashAmt = comps
-                    .filter((c) => c.compensation_type === "cash")
-                    .reduce((s, c) => s + c.amount, 0);
-                  const landGrantAmt = comps
-                    .filter((c) => c.compensation_type === "land_grant")
-                    .reduce((s, c) => s + c.amount, 0);
-                  const landGrantCount = comps.filter((c) => c.compensation_type === "land_grant").length;
+                  const cashAmt = Number(p.cash_amount) || 0;
+                  const landGrantAmt = Number(p.land_grant_amount) || 0;
+                  const landGrantCount = Number(p.land_grant_count) || 0;
 
                   return (
                     <React.Fragment key={p.id}>
@@ -353,7 +334,7 @@ export function ParcelsTab({
                                 Газраар{landGrantAmt > 0 ? <>&nbsp;{landGrantAmt.toLocaleString()}₮</> : <>&nbsp;{landGrantCount}</>}
                               </span>
                             )}
-                            {comps.length === 0 && (
+                            {cashAmt === 0 && landGrantCount === 0 && (
                               <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </div>

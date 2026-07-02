@@ -70,7 +70,11 @@ export default function ParcelDetailPage() {
   const visibleTabs = !mounted
     ? []
     : isExternal
-      ? TABS.filter((item) => item.key === "general" || item.key === "realEstate")
+      ? TABS.filter((item) =>
+          isProfOrg
+            ? item.key === "general" || item.key === "holder" || item.key === "realEstate"
+            : item.key === "general" || item.key === "realEstate",
+        )
       : TABS;
   const activeTab = visibleTabs.some((item) => item.key === tab)
     ? tab

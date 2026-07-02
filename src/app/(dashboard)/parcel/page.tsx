@@ -8,6 +8,7 @@ import { Search, X } from "lucide-react";
 import Link from "next/link";
 import { AcquisitionSelect } from "./_components/acquisition_select";
 import { PlanSelect } from "./_components/plan_select";
+import { notifyNavStart } from "@/lib/blocking-loader-state";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -231,6 +232,9 @@ export default function ParcelListPage() {
               <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
                 {data.data.map((p) => {
                   const sc = STATUS_CFG[p.acquisition_status] ?? STATUS_CFG[1];
+                  const cashAmt = Number(p.cash_amount) || 0;
+                  const landGrantAmt = Number(p.land_grant_amount) || 0;
+                  const landGrantCount = Number(p.land_grant_count) || 0;
                   return (
                     <tr
                       key={p.id}
@@ -269,17 +273,17 @@ export default function ParcelListPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
-                          {p.cash_amount > 0 && (
+                          {cashAmt > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400 tabular-nums w-fit">
-                              Мөнгөн&nbsp;{p.cash_amount.toLocaleString()}₮
+                              Мөнгөн&nbsp;{cashAmt.toLocaleString()}₮
                             </span>
                           )}
-                          {p.land_grant_count > 0 && (
+                          {landGrantCount > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-400/15 dark:text-sky-400 w-fit">
-                              Газраар{p.land_grant_amount > 0 ? <>&nbsp;{p.land_grant_amount.toLocaleString()}₮</> : <>&nbsp;{p.land_grant_count}</>}
+                              Газраар{landGrantAmt > 0 ? <>&nbsp;{landGrantAmt.toLocaleString()}₮</> : <>&nbsp;{landGrantCount}</>}
                             </span>
                           )}
-                          {p.cash_amount === 0 && p.land_grant_count === 0 && (
+                          {cashAmt === 0 && landGrantCount === 0 && (
                             <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                           )}
                         </div>
@@ -299,6 +303,7 @@ export default function ParcelListPage() {
                       <td className="px-4 py-3">
                         <Link
                           href={`/parcel/${p.id}?acq=${p.acquisition_id}`}
+                          onClick={notifyNavStart}
                           className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                         >
                           Дэлгэрэнгүй

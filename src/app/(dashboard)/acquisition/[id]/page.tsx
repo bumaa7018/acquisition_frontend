@@ -12,7 +12,6 @@ import { ParcelsTab } from "./_components/parcels-tab";
 import { FinancingTab } from "./_components/financing-tab";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import {
-  canAccessAcquisition,
   isExternalSpecialRole,
   isProfessionalOrg,
 } from "@/lib/role-utils";
@@ -104,13 +103,7 @@ export default function AcquisitionDetailPage() {
     },
   });
 
-  const { data: accessParcels, isLoading: accessParcelsLoading } = useQuery({
-    queryKey: ["land-parcels-access", id],
-    queryFn: () => profApi.profListParcels(id, { page: 1, page_size: 1000 }),
-    enabled: isExternal && isProfOrg && !!acq,
-  });
-
-  if (isLoading || accessParcelsLoading)
+  if (isLoading)
     return (
       <div className="flex flex-col gap-5 animate-pulse">
         <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
@@ -154,34 +147,6 @@ export default function AcquisitionDetailPage() {
     );
 
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
-  const canAccessCurrentAcquisition = canAccessAcquisition(
-    acq.professional_org_id,
-    accessParcels?.data,
-  );
-
-  if (!canAccessCurrentAcquisition)
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
-          <Users className="h-8 w-8 text-red-400" />
-        </div>
-        <div className="text-center">
-          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
-            Хандах эрх байхгүй
-          </p>
-          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1">
-            Энэ чөлөөлөлтөд таны байгууллага холбогдоогүй байна.
-          </p>
-        </div>
-        <Link
-          href="/acquisition"
-          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" /> Жагсаалт руу буцах
-        </Link>
-      </div>
-    );
-
   const isAcqLocked = acq?.status === ACQ_STATUS.CONFIRMED;
 
   // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгуулгуудын хандалтыг хаана

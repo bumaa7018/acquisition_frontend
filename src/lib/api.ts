@@ -158,9 +158,9 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
       end_date: acq.end_date,
       status_id: parcel.status ?? 0,
       status_name: parcel.status_name ?? "",
-      cash_amount: 0,
-      land_grant_amount: 0,
-      land_grant_count: 0,
+      cash_amount: parcel.cash_amount ?? 0,
+      land_grant_amount: parcel.land_grant_amount ?? 0,
+      land_grant_count: parcel.land_grant_count ?? 0,
     }))
   }))
 

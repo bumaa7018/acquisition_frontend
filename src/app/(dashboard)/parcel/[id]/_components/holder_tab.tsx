@@ -2,10 +2,11 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { UserCheck, UserPlus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
-import { isExternalSpecialRole } from "@/lib/role-utils";
+import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import type { AuthorizedRepresentative } from "@/types";
 
 function row(label: string, value?: React.ReactNode) {
@@ -19,10 +20,27 @@ function row(label: string, value?: React.ReactNode) {
 
 export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
   const isExternal = isExternalSpecialRole();
+  const isProfOrg = isProfessionalOrg();
+  const svc = isProfOrg
+    ? {
+        getParcel: (a: string, p: string) => profApi.profGetParcel(a, p),
+        listRepresentatives: (a: string, p: string) => profApi.profListRepresentatives(a, p),
+        createRepresentative: (a: string, p: string, body: Omit<AuthorizedRepresentative, "id" | "acquisition_id" | "parcel_id" | "created_at" | "created_by">) =>
+          profApi.profCreateRepresentative(a, p, body),
+        deleteRepresentative: (a: string, p: string, id: string) => profApi.profDeleteRepresentative(a, p, id),
+      }
+    : {
+        getParcel: (a: string, p: string) => landApi.getParcel(a, p),
+        listRepresentatives: (a: string, p: string) => landApi.listRepresentatives(a, p),
+        createRepresentative: (a: string, p: string, body: Omit<AuthorizedRepresentative, "id" | "acquisition_id" | "parcel_id" | "created_at" | "created_by">) =>
+          landApi.createRepresentative(a, p, body),
+        deleteRepresentative: (a: string, p: string, id: string) =>
+          landApi.deleteRepresentative(a, p, id).then(() => undefined),
+      };
 
   const { data, isLoading } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
-    queryFn: () => landApi.getParcel(acqId, parcelId),
+    queryFn: () => svc.getParcel(acqId, parcelId),
     enabled: !!acqId,
   });
 
@@ -33,12 +51,12 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
 
   const { data: representatives = [], refetch: refetchReps } = useQuery<AuthorizedRepresentative[]>({
     queryKey: ["representatives", acqId, parcelId],
-    queryFn: () => landApi.listRepresentatives(acqId, parcelId),
+    queryFn: () => svc.listRepresentatives(acqId, parcelId),
     enabled: !!acqId && !!parcelId,
   });
 
   const createRepMutation = useMutation({
-    mutationFn: () => landApi.createRepresentative(acqId, parcelId, repForm),
+    mutationFn: () => svc.createRepresentative(acqId, parcelId, repForm),
     onSuccess: () => {
       toast.success("Итгэмжлэгдсэн төлөөлөгч бүртгэгдлээ");
       setRepModalOpen(false);
@@ -50,7 +68,7 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
   });
 
   const deleteRepMutation = useMutation({
-    mutationFn: (repId: string) => landApi.deleteRepresentative(acqId, parcelId, repId),
+    mutationFn: (repId: string) => svc.deleteRepresentative(acqId, parcelId, repId),
     onSuccess: () => {
       toast.success("Устгагдлаа");
       setRepDeleteConfirm(null);
