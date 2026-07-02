@@ -15,21 +15,10 @@ export function decodeJwtPayload(token: string | null): Record<string, unknown> 
       .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
     const binary = atob(normalizedPayload);
     const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    return {
-      id: payload.user_id,
-      username: payload.username,
-      email: payload.email,
-      full_name: payload.full_name,
-      first_name: payload.first_name,
-      last_name: payload.last_name,
-      position: payload.position,
-      roles: (payload.roles ?? []).map((name: string) => ({
-        id: name,
-        name,
-        permissions: [],
-      })),
-    };
+    // Түүхий JWT payload-г буцаана (user_id, roles: string[], permissions: string[]).
+    // getCurrentActor() энэ түүхий бүтцээс role/permission уншдаг тул
+    // энд User хэлбэрт хувиргаж БОЛОХГҮЙ (тэр хувиргалт нь userFromAccessToken-д).
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
   }
