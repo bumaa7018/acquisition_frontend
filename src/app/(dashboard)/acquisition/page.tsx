@@ -1,8 +1,9 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, planApi, authApi } from "@/lib/api";
-import { STATUS_LABELS } from "@/types";
+import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -540,6 +541,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 2019 + 1 }, (_, i) => CURRENT_YEAR - i);
 
 export default function LandPage() {
+  const router = useRouter();
   const [draft, setDraft] = useState<AcqDraft>(EMPTY_DRAFT);
   const [filter, setFilter] = useState<AcqDraft>(EMPTY_DRAFT);
   const [page, setPage] = useState(1);
@@ -551,6 +553,11 @@ export default function LandPage() {
   const currentUserId = getCurrentUserId();
   const isProfOrg = isProfessionalOrg();
   const isEmployee = hasRole("employee", "Энгийн ажилтан");
+
+  // Мэргэжлийн байгууллага /my_acquisitions руу redirect хийнэ
+  useEffect(() => {
+    if (isProfOrg) router.replace("/my_acquisitions");
+  }, [isProfOrg, router]);
 
   // Энгийн ажилтан эрхтэй бол өөрийгөө автоматаар сонгоно
   const { data: meData } = useQuery({
@@ -600,7 +607,7 @@ export default function LandPage() {
     queryFn: () =>
       landApi.list({
         page,
-        page_size: isProfOrg ? 200 : PAGE_SIZE,
+        page_size: PAGE_SIZE,
         plan_code: filter.planCode || undefined,
         acquisition_name: filter.acqName || undefined,
         status: filter.status || undefined,
@@ -609,31 +616,10 @@ export default function LandPage() {
         assigned_user_id: filter.employeeId || undefined,
         years: filter.year ? [filter.year] : undefined,
       }),
+    enabled: !isProfOrg,
   });
 
-  const profOrgParcelQueries = useQueries({
-    queries: isProfOrg && currentUserId
-      ? (rawData?.data ?? []).map((acq) => ({
-          queryKey: ["land-parcels-access", acq.id],
-          queryFn: () => landApi.getParcels(acq.id, { page: 1, page_size: 1000 }),
-          enabled: !!rawData?.data,
-        }))
-      : [],
-  });
-
-  // professional_org users see only acquisitions assigned to them
-  const filteredAcquisitions: LandAcquisition[] = (() => {
-    const all = rawData?.data ?? [];
-    if (isProfOrg && currentUserId) {
-      return all.filter((a, index) => {
-        if (a.professional_org_id === currentUserId) return true;
-        const parcels = profOrgParcelQueries[index]?.data?.data ?? [];
-        return parcels.some((p) => p.independent_org_id === currentUserId);
-      });
-    }
-    // МИКА and Санхүүгийн мэргэжилтэн see all acquisitions (no filter)
-    return all;
-  })();
+  const filteredAcquisitions: LandAcquisition[] = rawData?.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => landApi.delete(id),
@@ -644,10 +630,8 @@ export default function LandPage() {
     onError: (err) => toast.error(getApiError(err, "Устгах боломжгүй (зөвхөн NEW статустай)")),
   });
 
-  const total = isProfOrg ? filteredAcquisitions.length : (rawData?.total ?? 0);
-  const displayData = isProfOrg
-    ? filteredAcquisitions.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : filteredAcquisitions;
+  const total = rawData?.total ?? 0;
+  const displayData = filteredAcquisitions;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const HEADERS = [
     "Төлөвлөгөө",
@@ -660,6 +644,8 @@ export default function LandPage() {
     "Нэгж талбар",
     "",
   ];
+
+  if (isProfOrg) return null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -857,12 +843,21 @@ export default function LandPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1">
-                          <Link
-                            href={`/acquisition/${land.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
-                          >
-                            Дэлгэрэнгүй
-                          </Link>
+                          {isExternal && land.status === ACQ_STATUS.CONFIRMED ? (
+                            <span
+                              title="Баталгаажсан чөлөөлөлтийн дэлгэрэнгүй мэдээлэлд хандах боломжгүй"
+                              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap cursor-not-allowed select-none"
+                            >
+                              🔒 Хаалттай
+                            </span>
+                          ) : (
+                            <Link
+                              href={`/acquisition/${land.id}`}
+                              className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
+                            >
+                              Дэлгэрэнгүй
+                            </Link>
+                          )}
                           {!isExternal && (
                             <button
                               onClick={() => {
