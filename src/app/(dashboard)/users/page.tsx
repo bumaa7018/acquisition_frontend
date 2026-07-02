@@ -75,11 +75,13 @@ export default function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: ({ confirm_password: _, role, ...body }: CreateForm & { role: string | null }) =>
-      usersApi.create({
-        ...body,
-        role_names: role ? [role] : undefined,
-      }),
+    mutationFn: async ({ confirm_password: _, role, ...body }: CreateForm & { role: string | null }) => {
+      const user = await usersApi.create({ ...body });
+      if (role && user?.id) {
+        await usersApi.update(user.id, { role_ids: [role] });
+      }
+      return user;
+    },
     onSuccess: () => {
       toast.success("Хэрэглэгч үүслээ");
       queryClient.invalidateQueries({ queryKey: ["users"] });
@@ -115,7 +117,7 @@ export default function UsersPage() {
     mutationFn: ({ role, ...body }: EditForm & { role: string | null }) =>
       usersApi.update(editingUser!.id, {
         ...body,
-        role_names: role ? [role] : [],
+        role_ids: role ? [role] : [],
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
@@ -157,7 +159,7 @@ export default function UsersPage() {
 
   function openEdit(user: User) {
     setEditingUser(user);
-    setEditRole(user.roles?.[0]?.name ?? null);
+    setEditRole(user.roles?.[0]?.id ?? null);
     setShowCreate(false);
     editReset({
       first_name: user.first_name,
@@ -255,7 +257,7 @@ export default function UsersPage() {
               >
                 <option value="">— Роль сонгох —</option>
                 {rolesData?.data?.map((r) => (
-                  <option key={r.id} value={r.name}>
+                  <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
                 ))}
@@ -368,7 +370,7 @@ export default function UsersPage() {
               >
                 <option value="">— Роль сонгох —</option>
                 {rolesData?.data?.map((r) => (
-                  <option key={r.id} value={r.name}>
+                  <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
                 ))}
