@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { authStorage } from "@/lib/auth";
-import { isExternalSpecialRole } from "@/lib/role-utils";
+import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { BlockingLoaderProvider } from "@/lib/blocking-loader";
@@ -22,10 +22,19 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!authStorage.getAccessToken()) return;
-    const allowed =
-      pathname.startsWith("/acquisition") ||
-      /^\/parcel\/[^/]+$/.test(pathname);
-    if (isExternalSpecialRole() && !allowed) router.replace("/acquisition");
+    if (!isExternalSpecialRole()) return;
+    const profOrgAllowed =
+      isProfessionalOrg() &&
+      (pathname === "/my_acquisitions" ||
+        pathname.startsWith("/acquisition") ||
+        /^\/parcel\/[^/]+$/.test(pathname));
+    const otherExternalAllowed =
+      !isProfessionalOrg() &&
+      (pathname.startsWith("/acquisition") ||
+        /^\/parcel\/[^/]+$/.test(pathname));
+    if (!profOrgAllowed && !otherExternalAllowed) {
+      router.replace(isProfessionalOrg() ? "/my_acquisitions" : "/acquisition");
+    }
   }, [pathname, router]);
 
   return (

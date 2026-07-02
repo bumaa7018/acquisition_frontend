@@ -23,6 +23,29 @@ async function backendFetch(url: string, token: string) {
 
 type AnyRow = any;
 
+async function fetchAllParcels(acquisitionId: string, token: string): Promise<AnyRow[]> {
+  const pageSize = 1000;
+  const first = await backendFetch(
+    `/api/v1/land-acquisitions/${acquisitionId}/parcels?page=1&page_size=${pageSize}`,
+    token,
+  );
+  const rows: AnyRow[] = first.data ?? [];
+  const totalPages = first.total_pages ?? 1;
+
+  if (totalPages <= 1) return rows;
+
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      backendFetch(
+        `/api/v1/land-acquisitions/${acquisitionId}/parcels?page=${i + 2}&page_size=${pageSize}`,
+        token,
+      ),
+    ),
+  );
+
+  return rows.concat(rest.flatMap((page) => page.data ?? []));
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -39,19 +62,19 @@ export async function GET(
 
   try {
     // 1. Бүх мэдээллийг зэрэг татах
-    const [acqRes, compsRes, assetsRes] = await Promise.all([
+    const [acqRes, compsRes, assetsRes, parcels] = await Promise.all([
       backendFetch(`/api/v1/land-acquisitions/${id}`, token),
       backendFetch(`/api/v1/land-acquisitions/${id}/compensations`, token),
       backendFetch(
         `/api/v1/land-acquisitions/${id}/assets?page=1&page_size=1000`,
         token,
       ),
+      fetchAllParcels(id, token),
     ]);
 
     const acq: AnyRow = acqRes.data;
     const compensations: AnyRow[] = compsRes.data ?? [];
     const assets: AnyRow[] = assetsRes.data ?? [];
-    const parcels: AnyRow[] = acq.parcels ?? [];
 
     // 2. Нэгж талбар бүрийн эзэмшигчийн мэдээлэл татах
     const parcelDetailResults = await Promise.all(

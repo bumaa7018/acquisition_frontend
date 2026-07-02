@@ -16,9 +16,6 @@ import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./layer-panel";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
-import { landApi } from "@/lib/api";
-import { profApi } from "@/lib/prof-api";
-import { isProfessionalOrg } from "@/lib/role-utils";
 import { PARCEL_STATUS_STYLES } from "@/types";
 
 const WMS_LAYER_DEFS: (MapLayerDef & {
@@ -60,9 +57,11 @@ const VECTOR_STYLES: Record<string, Style | ((f: { get: (k: string) => unknown }
 interface Props {
   parcelId: string;
   acquisitionId?: string;
+  geometryWkt?: string | null;
+  statusId?: number | null;
 }
 
-export function ParcelMap({ parcelId, acquisitionId }: Props) {
+export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Props) {
   const mapRef       = useRef<HTMLDivElement>(null);
   const olMap        = useRef<OLMap | null>(null);
   const wmsLayers    = useRef<Record<string, ImageLayer<ImageWMS>>>({});
@@ -186,55 +185,48 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
   }, [acqCql, acquisitionId, parcelCql, parcelId]);
 
   useEffect(() => {
-    if (!acquisitionId) return;
-
     const fmt = wktFormat.current;
 
-    ;(async () => {
+    const makeFeature = (wkt: string, featureStatusId?: number | null) => {
       try {
-        const resp    = await (isProfessionalOrg()
-          ? profApi.profListParcels(acquisitionId, { page_size: 500 })
-          : landApi.getParcels(acquisitionId, { page_size: 500 }));
-        const parcels = resp?.data ?? [];
-
-        const thisParcel = parcels.find((p) => p.parcel_id === parcelId);
-
-        const makeFeature = (wkt: string, statusId?: number) => {
-          try {
-            const feat = fmt.readFeature(wkt, {
-              dataProjection: "EPSG:4326",
-              featureProjection: "EPSG:3857",
-            });
-            if (statusId !== undefined) feat.set("status_id", statusId);
-            return feat;
-          } catch { return null; }
-        };
-
-        const wkt = thisParcel?.geometry_wkt;
-        const acqFeat    = wkt ? makeFeature(wkt, thisParcel!.status) : null;
-        const parcelFeat = wkt ? makeFeature(wkt) : null;
-
-        const vAllSrc = vectorLayers.current["v_parcel_acquisition"]?.getSource();
-        if (vAllSrc) { vAllSrc.clear(); if (acqFeat) vAllSrc.addFeature(acqFeat); }
-
-        const vParcelSrc = vectorLayers.current["parcel"]?.getSource();
-        if (vParcelSrc) { vParcelSrc.clear(); if (parcelFeat) vParcelSrc.addFeature(parcelFeat); }
-
-        if (parcelFeat && olMap.current) {
-          const extent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
-          if (extent) {
-            olMap.current.getView().fit(extent, {
-              padding: [60, 60, 60, 60],
-              maxZoom: 18,
-              duration: 1000,
-            });
-          }
-        }
+        const feat = fmt.readFeature(wkt, {
+          dataProjection: "EPSG:4326",
+          featureProjection: "EPSG:3857",
+        });
+        if (featureStatusId != null) feat.set("status_id", featureStatusId);
+        return feat;
       } catch {
-        // Geometry fetch failed — layers stay empty
+        return null;
       }
-    })();
-  }, [acquisitionId, parcelId]);
+    };
+
+    const wkt = geometryWkt?.trim();
+    const acqFeat = wkt ? makeFeature(wkt, statusId) : null;
+    const parcelFeat = wkt ? makeFeature(wkt) : null;
+
+    const vAllSrc = vectorLayers.current["v_parcel_acquisition"]?.getSource();
+    if (vAllSrc) {
+      vAllSrc.clear();
+      if (acqFeat) vAllSrc.addFeature(acqFeat);
+    }
+
+    const vParcelSrc = vectorLayers.current["parcel"]?.getSource();
+    if (vParcelSrc) {
+      vParcelSrc.clear();
+      if (parcelFeat) vParcelSrc.addFeature(parcelFeat);
+    }
+
+    if (parcelFeat && olMap.current) {
+      const extent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
+      if (extent) {
+        olMap.current.getView().fit(extent, {
+          padding: [60, 60, 60, 60],
+          maxZoom: 18,
+          duration: 1000,
+        });
+      }
+    }
+  }, [geometryWkt, statusId]);
 
   return (
     <div

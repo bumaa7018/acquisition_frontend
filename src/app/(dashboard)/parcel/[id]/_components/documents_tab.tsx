@@ -2,6 +2,8 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelApi, documentTypeApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
+import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
 import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
@@ -13,6 +15,7 @@ function formatSize(b: number) {
 export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const isProfOrg = isProfessionalOrg();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -21,7 +24,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["parcel-documents", parcelId],
-    queryFn: () => parcelApi.listDocuments(parcelId),
+    queryFn: () => (isProfOrg ? profApi.profListParcelDocuments(parcelId) : parcelApi.listDocuments(parcelId)),
   });
 
   const { data: docTypes = [] } = useQuery({
@@ -32,7 +35,9 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
   const uploadMutation = useMutation({
     mutationFn: ({ file, typeId, name }: { file: File; typeId: number; name: string }) =>
-      parcelApi.uploadDocument(parcelId, file, typeId, name),
+      isProfOrg
+        ? profApi.profUploadParcelDocument(parcelId, file, typeId, name)
+        : parcelApi.uploadDocument(parcelId, file, typeId, name),
     onSuccess: () => {
       toast.success("Баримт бичиг хавсаргагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
@@ -42,7 +47,10 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (docId: string) => parcelApi.deleteDocument(parcelId, docId),
+    mutationFn: (docId: string) =>
+      isProfOrg
+        ? profApi.profDeleteParcelDocument(parcelId, docId)
+        : parcelApi.deleteDocument(parcelId, docId).then(() => undefined),
     onSuccess: () => {
       toast.success("Баримт бичиг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });

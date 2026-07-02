@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Upload, Pencil, Save, X, Calculator } from "lucide-react";
 import { landApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
+import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { calcAreaFromWkt } from "@/lib/geometry-utils";
 import { STATUS_LABELS } from "@/types";
@@ -11,13 +13,14 @@ import { STATUS_CFG } from "./shared";
 
 export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const isProfOrg = isProfessionalOrg();
   const { data: acq } = useQuery({
     queryKey: ["land", id],
-    queryFn: () => landApi.getById(id),
+    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
   });
   const { data: fundingSources = [] } = useQuery({
     queryKey: ["funding-sources", id],
-    queryFn: () => landApi.listFundingSources(id),
+    queryFn: () => (isProfOrg ? profApi.profListFundingSources(id) : landApi.listFundingSources(id)),
   });
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
@@ -26,7 +29,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
   const { data: parcelsData } = useQuery({
     queryKey: ["land-parcels-summary", id],
-    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+    queryFn: () =>
+      isProfOrg
+        ? profApi.profListParcels(id, { page: 1, page_size: 1000 })
+        : landApi.getParcels(id, { page: 1, page_size: 1000 }),
   });
   const { data: professionalOrgUsers = [] } = useQuery({
     queryKey: ["professional-org-users"],

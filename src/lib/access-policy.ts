@@ -52,7 +52,6 @@ export type ParcelTabKey =
   | "print";
 
 export type ValuationSubTabKey = "asset" | "independent" | "mika";
-export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 function roles(actor: AccessActor): AccessRole[] {
   return actor.roles ?? [];
@@ -156,16 +155,36 @@ export function canViewParcelTabForActor(
 export function canViewValuationSubTabForActor(
   actor: AccessActor,
   subTab: ValuationSubTabKey,
+  parcel?: AccessParcel | null,
+  acquisition?: AccessAcquisition | null,
 ): boolean {
   if (subTab === "mika") {
     return isMikaActor(actor) || isFinanceSpecialistActor(actor);
   }
 
-  return (
-    isProfessionalOrgActor(actor) ||
-    isMikaActor(actor) ||
-    isFinanceSpecialistActor(actor)
-  );
+  if (subTab === "independent") {
+    // MIKA / санхүү — харах эрхтэй (хяналт шалгалт)
+    if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
+    // Мэргэжлийн байгуулл... — зөвхөн тухайн парцелийн independent_org-оор томилогдсон бол
+    if (isProfessionalOrgActor(actor)) {
+      return !!actor.userId && !!parcel?.independent_org_id &&
+        parcel.independent_org_id === actor.userId;
+    }
+    return false;
+  }
+
+  // "asset" — MIKA / санхүү эсвэл үндсэн мэргэжлийн байгуулга (professional_org_id) л харна
+  if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
+  if (isProfessionalOrgActor(actor)) {
+    if (!actor.userId) return false;
+    // Acquisition мэдээлэл байвал professional_org_id-тэй тулгана
+    if (acquisition !== undefined && acquisition !== null) {
+      return acquisition.professional_org_id === actor.userId;
+    }
+    // Мэдээлэл байхгүй бол зөвшөөрнө (graceful fallback)
+    return true;
+  }
+  return false;
 }
 
 export function canEditValuationSubTabForActor(
@@ -193,73 +212,4 @@ export function canEditValuationSubTabForActor(
   }
 
   return isMikaActor(actor);
-}
-
-function cleanApiPath(path: string): string {
-  const withoutOrigin = path.replace(/^https?:\/\/[^/]+/i, "");
-  return withoutOrigin.split("?")[0].replace(/\/+$/, "") || "/";
-}
-
-function matches(path: string, pattern: RegExp): boolean {
-  return pattern.test(cleanApiPath(path));
-}
-
-export function canCallApiEndpointForActor(
-  actor: AccessActor,
-  method: ApiMethod | string | undefined,
-  path: string,
-): boolean {
-  const apiMethod = (method ?? "GET").toUpperCase() as ApiMethod;
-  const apiPath = cleanApiPath(path);
-
-  // Asset and compensation mutations are restricted to professional_org only.
-  // This check runs before the internal-user bypass so admins cannot mutate these.
-  if (["POST", "PUT", "DELETE"].includes(apiMethod)) {
-    if (
-      matches(apiPath, /^\/land-acquisitions\/[^/]+\/assets(\/[^/]+)?$/) ||
-      matches(apiPath, /^\/land-acquisitions\/[^/]+\/compensations(\/[^/]+(\/grant)?)?$/)
-    ) {
-      return isProfessionalOrgActor(actor);
-    }
-    // Funding source mutations: only senior_specialist
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/funding-sources(\/[^/]+)?$/)) {
-      return isSeniorSpecialistActor(actor);
-    }
-  }
-
-  if (!isExternalSpecialActor(actor)) return true;
-
-  if (matches(apiPath, /^\/auth\/(login|logout|refresh)$/)) return true;
-  if (apiMethod === "GET" && apiPath === "/users/me") return true;
-
-  if (apiMethod === "GET") {
-    if (apiPath === "/acquisition-categories") return true;
-    if (apiPath === "/land-acquisitions") return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+$/)) return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/parcels$/)) return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/parcels\/[^/]+$/)) return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/parcels\/[^/]+\/representatives$/)) return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/assets$/)) return true;
-    if (matches(apiPath, /^\/land-acquisitions\/[^/]+\/compensations$/)) return true;
-  }
-
-  if (isProfessionalOrgActor(actor)) {
-    if (
-      ["POST", "PUT", "DELETE"].includes(apiMethod) &&
-      matches(apiPath, /^\/land-acquisitions\/[^/]+\/assets(\/[^/]+)?$/)
-    ) {
-      return true;
-    }
-  }
-
-  if (isMikaActor(actor)) {
-    if (
-      apiMethod === "PATCH" &&
-      matches(apiPath, /^\/land-acquisitions\/[^/]+\/parcels\/[^/]+\/valuation$/)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
 }

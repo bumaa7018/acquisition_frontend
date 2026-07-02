@@ -34,15 +34,25 @@ export default function ParcelDetailPage() {
     setTabKey((k) => k + 1);
   }
 
-  const { data: parcel } = useQuery({
+  const { data: parcel, isLoading: parcelLoading, error: parcelError } = useQuery({
     queryKey: ["parcel-full", acqId, id],
     queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, id) : landApi.getParcel(acqId, id)),
     enabled: !!acqId,
+    retry: (failCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failCount < 2;
+    },
   });
-  const { data: acquisition } = useQuery({
+  const { data: acquisition, isLoading: acquisitionLoading, error: acquisitionError } = useQuery({
     queryKey: ["land", acqId],
     queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
     enabled: !!acqId,
+    retry: (failCount, err) => {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403 || status === 404) return false;
+      return failCount < 2;
+    },
   });
 
   const PARCEL_FINAL_STATUSES = ["Чөлөөлсөн", "Татгалзсан", "Нөлөөллөөс гарсан"];
@@ -65,6 +75,44 @@ export default function ParcelDetailPage() {
   const activeTab = visibleTabs.some((item) => item.key === tab)
     ? tab
     : "general";
+
+  const parcelErrorStatus = (parcelError as { response?: { status?: number } } | null)?.response?.status;
+  const acquisitionErrorStatus = (acquisitionError as { response?: { status?: number } } | null)?.response?.status;
+  const accessErrorStatus = parcelErrorStatus ?? acquisitionErrorStatus;
+
+  if (parcelLoading || acquisitionLoading) {
+    return (
+      <div className="flex flex-col gap-5 animate-pulse">
+        <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
+        <div className="h-12 w-full rounded-lg bg-slate-100 dark:bg-[#252630]" />
+        <div className="h-64 w-full rounded-lg bg-slate-100 dark:bg-[#252630]" />
+      </div>
+    );
+  }
+
+  if (accessErrorStatus === 403) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-50 dark:bg-red-500/10">
+          <Users className="h-8 w-8 text-red-400" />
+        </div>
+        <div className="text-center">
+          <p className="text-[15px] font-semibold text-slate-700 dark:text-white">
+            Хандах эрх байхгүй
+          </p>
+          <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1">
+            Энэ нэгж талбар таны байгууллагад нээлттэй биш байна.
+          </p>
+        </div>
+        <Link
+          href={acqId ? `/acquisition/${acqId}` : "/acquisition"}
+          className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Буцах
+        </Link>
+      </div>
+    );
+  }
 
   if (
     isExternal &&

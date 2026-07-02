@@ -126,7 +126,7 @@ export interface LandAcquisition {
   created_by: string;
   parcel_count: number;
   aus: AU[];
-  parcels: Parcel[];
+  parcels?: Parcel[];
   assigned_users?: AcquisitionAssignee[];
   // Professional org assigned to perform the primary valuation
   professional_org_id?: string;

@@ -18,6 +18,42 @@ const RIGHT_TYPE_OPTIONS = [
   { value: 3, label: "Өмчлөх" },
 ];
 
+type ParcelFilter = {
+  parcel_id: string;
+  au1_code: string;
+  au2_code: string;
+  au3_code: string;
+  right_type: number;
+  landuse: string;
+  status_id: number;
+};
+
+const PAGE_SIZE = 20;
+
+const EMPTY_FILTER: ParcelFilter = {
+  parcel_id: "",
+  au1_code: "",
+  au2_code: "",
+  au3_code: "",
+  right_type: 0,
+  landuse: "",
+  status_id: 0,
+};
+
+function parcelListParams(filter: ParcelFilter, page: number) {
+  return {
+    page,
+    page_size: PAGE_SIZE,
+    ...(filter.parcel_id.trim() ? { parcel_id: filter.parcel_id.trim() } : {}),
+    ...(filter.au1_code.trim() ? { au1_code: filter.au1_code.trim() } : {}),
+    ...(filter.au2_code.trim() ? { au2_code: filter.au2_code.trim() } : {}),
+    ...(filter.au3_code.trim() ? { au3_code: filter.au3_code.trim() } : {}),
+    ...(filter.right_type ? { right_type: filter.right_type } : {}),
+    ...(filter.landuse.trim() ? { landuse: filter.landuse.trim() } : {}),
+    ...(filter.status_id ? { status_id: filter.status_id } : {}),
+  };
+}
+
 export function ParcelsTab({
   id,
   acquisitionProfOrgId,
@@ -33,18 +69,9 @@ export function ParcelsTab({
   const currentUserId = getCurrentUserId();
   const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const [filterForm, setFilterForm] = useState({
-    parcel_id: "",
-    right_type: 0,
-    landuse: "",
-    status_id: 0,
-  });
-  const [filter, setFilter] = useState({
-    parcel_id: "",
-    right_type: 0,
-    landuse: "",
-    status_id: 0,
-  });
+  const [page, setPage] = useState(1);
+  const [filterForm, setFilterForm] = useState<ParcelFilter>(EMPTY_FILTER);
+  const [filter, setFilter] = useState<ParcelFilter>(EMPTY_FILTER);
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
 
@@ -54,11 +81,11 @@ export function ParcelsTab({
   });
 
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
-    queryKey: ["land-parcels", id, filter],
+    queryKey: ["land-parcels", id, filter, page],
     queryFn: () =>
       isProfOrg
-        ? profApi.profListParcels(id, { page: 1, page_size: 100, ...filter })
-        : landApi.getParcels(id, { page: 1, page_size: 100, ...filter }),
+        ? profApi.profListParcels(id, parcelListParams(filter, page))
+        : landApi.getParcels(id, parcelListParams(filter, page)),
   });
 
   const { data: allComps = [] } = useQuery({
@@ -97,6 +124,15 @@ export function ParcelsTab({
 
   const inp =
     "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+  const hasFilter = !!(
+    filter.parcel_id ||
+    filter.au1_code ||
+    filter.au2_code ||
+    filter.au3_code ||
+    filter.right_type !== 0 ||
+    filter.landuse ||
+    filter.status_id !== 0
+  );
   const visibleParcels = (parcels?.data ?? []).filter((parcel) =>
     canAccessParcel(
       parcel.status_name,
@@ -115,7 +151,7 @@ export function ParcelsTab({
                 Нэгж талбарууд
               </p>
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {isExternal ? visibleParcels.length : (parcels?.total ?? 0)} нэгж талбар
+                {parcels?.total ?? 0} нэгж талбар
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -127,6 +163,33 @@ export function ParcelsTab({
                   setFilterForm((f) => ({ ...f, parcel_id: e.target.value }))
                 }
                 className={`${inp} w-40`}
+              />
+              <input
+                type="text"
+                placeholder="Аймаг/Нийслэл"
+                value={filterForm.au1_code}
+                onChange={(e) =>
+                  setFilterForm((f) => ({ ...f, au1_code: e.target.value }))
+                }
+                className={`${inp} w-32`}
+              />
+              <input
+                type="text"
+                placeholder="Сум/Дүүрэг"
+                value={filterForm.au2_code}
+                onChange={(e) =>
+                  setFilterForm((f) => ({ ...f, au2_code: e.target.value }))
+                }
+                className={`${inp} w-32`}
+              />
+              <input
+                type="text"
+                placeholder="Баг/Хороо"
+                value={filterForm.au3_code}
+                onChange={(e) =>
+                  setFilterForm((f) => ({ ...f, au3_code: e.target.value }))
+                }
+                className={`${inp} w-32`}
               />
               <select
                 value={filterForm.right_type}
@@ -172,20 +235,20 @@ export function ParcelsTab({
                 ))}
               </select>
               <button
-                onClick={() => setFilter({ ...filterForm })}
+                onClick={() => {
+                  setFilter({ ...filterForm });
+                  setPage(1);
+                }}
                 className="h-8 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
               >
                 Хайх
               </button>
-              {(filter.parcel_id ||
-                filter.right_type !== 0 ||
-                filter.landuse ||
-                filter.status_id !== 0) && (
+              {hasFilter && (
                 <button
                   onClick={() => {
-                    const empty = { parcel_id: "", right_type: 0, landuse: "", status_id: 0 };
-                    setFilterForm(empty);
-                    setFilter(empty);
+                    setFilterForm(EMPTY_FILTER);
+                    setFilter(EMPTY_FILTER);
+                    setPage(1);
                   }}
                   className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors"
                 >
@@ -232,7 +295,16 @@ export function ParcelsTab({
                 </tr>
               </thead>
               <tbody>
-                {visibleParcels.map((p) => {
+                {visibleParcels.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
+                    >
+                      Нэгж талбар олдсонгүй
+                    </td>
+                  </tr>
+                ) : visibleParcels.map((p) => {
                   const comps = compsByParcel[p.parcel_id] ?? [];
                   const isOpen = expandedParcel === p.id;
                   const cashAmt = comps
@@ -322,6 +394,33 @@ export function ParcelsTab({
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {parcels && parcels.total_pages > 1 && (
+          <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100 dark:border-[#37394d]">
+            <p className="text-[12px] text-slate-400 dark:text-slate-500">
+              {(parcels.page - 1) * parcels.page_size + 1}–
+              {Math.min(parcels.page * parcels.page_size, parcels.total)} / {parcels.total}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-500 border border-slate-200 dark:border-[#37394d] disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
+              >
+                Өмнөх
+              </button>
+              <span className="text-[12px] text-slate-500 px-2">
+                {parcels.page} / {parcels.total_pages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(parcels.total_pages, p + 1))}
+                disabled={page >= parcels.total_pages}
+                className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-500 border border-slate-200 dark:border-[#37394d] disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
+              >
+                Дараах
+              </button>
+            </div>
           </div>
         )}
       </div>
