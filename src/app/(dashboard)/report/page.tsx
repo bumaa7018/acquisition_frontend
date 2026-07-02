@@ -825,7 +825,9 @@ export default function ReportPage() {
             >
               <option value={0}>Бүх ерөнхий ангилал</option>
               {reportGenCats.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -840,7 +842,9 @@ export default function ReportPage() {
               >
                 <option value={0}>Бүх дэд ангилал</option>
                 {reportSubCats.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -955,10 +959,14 @@ export default function ReportPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
-                        <span className="truncate block">{p.general_category_name || "—"}</span>
+                        <span className="truncate block">
+                          {p.general_category_name || "—"}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
-                        <span className="truncate block">{p.sub_category_name || "—"}</span>
+                        <span className="truncate block">
+                          {p.sub_category_name || "—"}
+                        </span>
                       </td>
                       <td className="px-5 py-3.5">
                         <p
