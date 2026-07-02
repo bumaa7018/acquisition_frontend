@@ -75,10 +75,10 @@ export default function UsersPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: ({ confirm_password: _, ...body }: CreateForm) =>
+    mutationFn: ({ confirm_password: _, role, ...body }: CreateForm & { role: string | null }) =>
       usersApi.create({
         ...body,
-        role_names: selectedRole ? [selectedRole] : undefined,
+        role_names: role ? [role] : undefined,
       }),
     onSuccess: () => {
       toast.success("Хэрэглэгч үүслээ");
@@ -112,10 +112,10 @@ export default function UsersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (body: EditForm) =>
+    mutationFn: ({ role, ...body }: EditForm & { role: string | null }) =>
       usersApi.update(editingUser!.id, {
         ...body,
-        role_names: editRole ? [editRole] : [],
+        role_names: role ? [role] : [],
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
@@ -227,7 +227,7 @@ export default function UsersPage() {
             Шинэ хэрэглэгч
           </p>
           <form
-            onSubmit={handleSubmit((d) => createMutation.mutate(d))}
+            onSubmit={handleSubmit((d) => createMutation.mutate({ ...d, role: selectedRole }))}
             className="grid grid-cols-2 gap-4"
           >
             {fields.map(([field, label, type]) => (
@@ -336,7 +336,7 @@ export default function UsersPage() {
             Хэрэглэгч засах — {editingUser.first_name} {editingUser.last_name}
           </p>
           <form
-            onSubmit={editHandleSubmit((d) => updateMutation.mutate(d))}
+            onSubmit={editHandleSubmit((d) => updateMutation.mutate({ ...d, role: editRole }))}
             className="grid grid-cols-2 gap-4"
           >
             {editFields.map(([field, label, type]) => (
