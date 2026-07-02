@@ -220,68 +220,69 @@ export function Sidebar() {
         )}
 
         {/* Main nav — external special roles see only acquisition menu */}
-        {ready && <div>
-          <nav className="space-y-0.5">
-            {(isExternal
-              ? isProfOrg
-                ? [{ href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText }]
-                : NAV_MAIN.filter((item) => item.href === "/acquisition")
-              : NAV_MAIN
-            ).map((item) => (
-              <NavItem
-                key={item.href}
-                {...item}
-                active={isActive(item.href)}
-                collapsed={collapsed}
-              />
-            ))}
-          </nav>
-        </div>}
+        {ready && (
+          <div>
+            <nav className="space-y-0.5">
+              {(isExternal
+                ? isProfOrg
+                  ? [{ href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText }]
+                  : NAV_MAIN.filter((item) => item.href === "/acquisition")
+                : NAV_MAIN
+              ).map((item) => (
+                <NavItem
+                  key={item.href}
+                  {...item}
+                  active={isActive(item.href)}
+                  collapsed={collapsed}
+                />
+              ))}
+            </nav>
+          </div>
+        )}
 
         {/* Удирдлага dropdown — hidden for external special roles */}
-        {ready && !isExternal && <div>
-          <button
-            onClick={() => setAdminOpen((v) => !v)}
-            className={cn(
-              "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630] py-2",
-              collapsed ? "justify-center px-3 py-2.5" : "px-3",
-            )}
-          >
-            <Settings className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
-            {!collapsed && (
-              <>
-                <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
-                  Удирдлага
-                </p>
-                <ChevronDown
-                  className={cn(
-                    "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
-                    adminOpen ? "rotate-180" : "rotate-0",
-                  )}
-                />
-              </>
-            )}
-          </button>
-
-          <div
-            className={cn(
-              "grid transition-[grid-template-rows] duration-200",
-              adminOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-            )}
-          >
-            <div className="overflow-hidden">
-              <nav className="space-y-0.5">
-                {NAV_ADMIN.map((item) => (
-                  <NavItem
-                    key={item.href}
-                    {...item}
-                    active={isActive(item.href)}
-                    collapsed={collapsed}
+        {ready && !isExternal && (
+          <div>
+            <button
+              onClick={() => setAdminOpen((v) => !v)}
+              className={cn(
+                "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630] py-2",
+                collapsed ? "justify-center px-3 py-2.5" : "px-3",
+              )}
+            >
+              <Settings className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+              {!collapsed && (
+                <>
+                  <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+                    Удирдлага
+                  </p>
+                  <ChevronDown
+                    className={cn(
+                      "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                      adminOpen ? "rotate-180" : "rotate-0",
+                    )}
                   />
-                ))}
-              </nav>
+                </>
+              )}
+            </button>
 
-              {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
+            <div
+              className={cn(
+                "grid transition-[grid-template-rows] duration-200",
+                adminOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+              )}
+            >
+              <div className="overflow-hidden">
+                <nav className="space-y-0.5">
+                  {NAV_ADMIN.map((item) => (
+                    <NavItem
+                      key={item.href}
+                      {...item}
+                      active={isActive(item.href)}
+                      collapsed={collapsed}
+                    />
+                  ))}
+                </nav>
 
                 {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
                 {canViewConfig && (
