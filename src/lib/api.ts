@@ -262,7 +262,6 @@ export const usersApi = {
 
 // ── Roles ─────────────────────────────────────────────
 // Backend returns Go PascalCase fields; normalize to frontend camelCase
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizePermission(p: any): Permission {
   return {
     id: p.ID ?? p.id,
@@ -271,7 +270,6 @@ function normalizePermission(p: any): Permission {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeRole(r: any): Role {
   const rawPerms: unknown[] = r.Permissions ?? r.permissions ?? []
   return {
