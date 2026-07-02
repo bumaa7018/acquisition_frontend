@@ -45,7 +45,11 @@ interface Props {
 export function ParcelBarChart({ mode, statuses }: Props) {
   const data = [...statuses]
     .sort((a, b) => (mode === "count" ? b.count - a.count : b.area - a.area))
-    .map((s, i) => ({ ...s, key: s.key ?? String(i), value: mode === "count" ? s.count : s.area }));
+    .map((s, i) => ({
+      ...s,
+      key: s.key ?? String(i),
+      value: mode === "count" ? s.count : s.area,
+    }));
 
   return (
     <ResponsiveContainer width="100%" height={data.length * 38 + 20}>
