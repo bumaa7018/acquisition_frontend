@@ -223,8 +223,10 @@ export const usersApi = {
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
   create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_names?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
-  update: (id: string, body: Partial<{ email: string; first_name: string; last_name: string; position: string }>) =>
+  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean; role_names: string[] }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
+  changePassword: (id: string, password: string) =>
+    api.put(`/users/${id}/password`, { password }),
   delete: (id: string) => api.delete(`/users/${id}`),
 }
 
