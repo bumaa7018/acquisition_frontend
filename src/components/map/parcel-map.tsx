@@ -17,6 +17,8 @@ import LayerPanel, { type LayerConfig } from "./layer-panel";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { landApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
+import { isProfessionalOrg } from "@/lib/role-utils";
 import { PARCEL_STATUS_STYLES } from "@/types";
 
 const WMS_LAYER_DEFS: (MapLayerDef & {
@@ -190,7 +192,9 @@ export function ParcelMap({ parcelId, acquisitionId }: Props) {
 
     ;(async () => {
       try {
-        const resp    = await landApi.getParcels(acquisitionId, { page_size: 500 });
+        const resp    = await (isProfessionalOrg()
+          ? profApi.profListParcels(acquisitionId, { page_size: 500 })
+          : landApi.getParcels(acquisitionId, { page_size: 500 }));
         const parcels = resp?.data ?? [];
 
         const thisParcel = parcels.find((p) => p.parcel_id === parcelId);
