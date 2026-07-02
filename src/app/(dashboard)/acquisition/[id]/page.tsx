@@ -1,8 +1,8 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
-import { ConfirmDialog, type PendingConfirm } from "./_components/confirm-dialog";
+import { profApi } from "@/lib/prof-api";
 import { STATUS_CFG, hasPermission } from "./_components/shared";
 import { GeneralTab } from "./_components/general-tab";
 import { AttachmentsTab } from "./_components/attachments-tab";
@@ -11,7 +11,6 @@ import { AssigneesTab } from "./_components/assignees-tab";
 import { ParcelsTab } from "./_components/parcels-tab";
 import { FinancingTab } from "./_components/financing-tab";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
-import { formatDate, getApiError } from "@/lib/utils";
 import {
   canAccessAcquisition,
   isExternalSpecialRole,
@@ -20,8 +19,6 @@ import {
 import {
   ArrowLeft,
   MapPin,
-  RefreshCw,
-  X,
   LayoutList,
   Paperclip,
   Activity,
@@ -33,7 +30,7 @@ import {
 
 import { toast } from "sonner";
 import Link from "next/link";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import dynamic from "next/dynamic";
 
 const AcquisitionMap = dynamic(
@@ -99,7 +96,7 @@ export default function AcquisitionDetailPage() {
 
   const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],
-    queryFn: () => landApi.getById(id),
+    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
     retry: (failCount, err) => {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403 || status === 404) return false;
@@ -109,7 +106,7 @@ export default function AcquisitionDetailPage() {
 
   const { data: accessParcels, isLoading: accessParcelsLoading } = useQuery({
     queryKey: ["land-parcels-access", id],
-    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+    queryFn: () => profApi.profListParcels(id, { page: 1, page_size: 1000 }),
     enabled: isExternal && isProfOrg && !!acq,
   });
 

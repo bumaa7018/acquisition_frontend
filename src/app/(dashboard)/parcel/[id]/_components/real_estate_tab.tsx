@@ -3,6 +3,7 @@ import { Fragment, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { type Asset, type Compensation, type CompensationHistory, type LandValuation, type ParcelFull } from "@/types";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import {
@@ -199,6 +200,7 @@ export function RealEstateTab({
   const [rejectModal, setRejectModal] = useState<{ compId: string; note: string } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ compId: string; list: CompensationHistory[] } | null>(null);
   const [independentSelect, setIndependentSelect] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: specTypes = [] } = useQuery({
     queryKey: ["asset-spec-types"],
@@ -776,10 +778,17 @@ export function RealEstateTab({
                   }
                   onClick={() => {
                     const label = orgDisplayName(independentSelect) || "сонгосон байгууллага";
-                    const msg = currentIndependentOrgId
-                      ? `Хөндлөнгийн үнэлгээг "${label}" байгууллагаар солих уу?`
-                      : `Хөндлөнгийн үнэлгээг "${label}" байгууллагад холбох уу?`;
-                    if (window.confirm(msg)) independentOrgMutation.mutate(independentSelect);
+                    setPendingConfirm({
+                      title: currentIndependentOrgId
+                        ? "Хөндлөнгийн байгууллага солих"
+                        : "Хөндлөнгийн байгууллага холбох",
+                      description: currentIndependentOrgId
+                        ? `Хөндлөнгийн үнэлгээг "${label}" байгууллагаар солих уу?`
+                        : `Хөндлөнгийн үнэлгээг "${label}" байгууллагад холбох уу?`,
+                      confirmLabel: currentIndependentOrgId ? "Солих" : "Холбох",
+                      confirmColor: "#02c0ce",
+                      onConfirm: () => independentOrgMutation.mutate(independentSelect),
+                    });
                   }}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -790,8 +799,13 @@ export function RealEstateTab({
                     type="button"
                     disabled={independentOrgMutation.isPending}
                     onClick={() => {
-                      if (window.confirm("Хөндлөнгийн үнэлгээний байгууллагын холболтыг салгах уу?"))
-                        independentOrgMutation.mutate(null);
+                      setPendingConfirm({
+                        title: "Хөндлөнгийн байгууллага салгах",
+                        description: "Хөндлөнгийн үнэлгээний байгууллагын холболтыг салгах уу?",
+                        confirmLabel: "Салгах",
+                        confirmColor: "#f1556c",
+                        onConfirm: () => independentOrgMutation.mutate(null),
+                      });
                     }}
                     className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-500/30 px-3 text-[12px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors disabled:opacity-50"
                   >
@@ -1497,6 +1511,15 @@ export function RealEstateTab({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }

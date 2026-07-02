@@ -7,7 +7,7 @@ import { landApi, usersApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { getCurrentUserId } from "@/lib/role-utils";
 import type { AcquisitionAssignee } from "@/types";
-import { ConfirmDialog, type PendingConfirm } from "./confirm-dialog";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { isSeniorSpecialist } from "./shared";
 
 type UserOption = { id: string; first_name: string; last_name: string; email: string; position?: string };

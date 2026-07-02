@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { FileText, Upload, Trash2, Download, X, Paperclip } from "lucide-react";
 import { landApi, documentTypeApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
-import { ConfirmDialog, type PendingConfirm } from "./confirm-dialog";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();

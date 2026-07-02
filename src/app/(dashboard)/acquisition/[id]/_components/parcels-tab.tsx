@@ -5,11 +5,12 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Info } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
-import { canAccessParcel, getCurrentUserId, isExternalSpecialRole } from "@/lib/role-utils";
+import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle } from "@/types";
 import type { Compensation, ParcelStatus } from "@/types";
-import { ConfirmDialog, type PendingConfirm } from "./confirm-dialog";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
@@ -28,6 +29,7 @@ export function ParcelsTab({
 }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
+  const isProfOrg = isProfessionalOrg();
   const currentUserId = getCurrentUserId();
   const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
@@ -54,12 +56,14 @@ export function ParcelsTab({
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
     queryKey: ["land-parcels", id, filter],
     queryFn: () =>
-      landApi.getParcels(id, { page: 1, page_size: 100, ...filter }),
+      isProfOrg
+        ? profApi.profListParcels(id, { page: 1, page_size: 100, ...filter })
+        : landApi.getParcels(id, { page: 1, page_size: 100, ...filter }),
   });
 
   const { data: allComps = [] } = useQuery({
     queryKey: ["compensations", id],
-    queryFn: () => landApi.listCompensations(id),
+    queryFn: () => (isProfOrg ? profApi.profListCompensations(id) : landApi.listCompensations(id)),
     enabled: !!id,
   });
 
