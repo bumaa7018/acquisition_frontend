@@ -1,10 +1,10 @@
 "use client";
 import { Fragment, useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
-import { type Asset, type Compensation, type CompensationHistory, type LandValuation, type ParcelFull, type User } from "@/types";
+import { type Asset, type AssetCalculation, type Compensation, type CompensationHistory, type LandValuation, type LandValuationUpsert, type ValuationImportPayload, type ParcelFull, type User } from "@/types";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import {
   X,
@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
+import { ValuationExcelImport } from "./valuation_excel_import";
 import type { AssetSpecType, AssetCalcType } from "@/types";
 import {
   canEditValuationSubTab,
@@ -122,6 +123,158 @@ function orgUserName(user?: User) {
   return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 }
 
+// Барилгын өртгийн хандлага — үл хөдлөх хөрөнгө бүрийг ХОЙШ БАГАНА болгож (Excel шиг)
+// нэг хүснэгтэд харуулна. asset_calculation-г хөрөнгө бүрээр татаж, calc төрлөөр эгнээ болгоно.
+function BuildingCostSection({
+  acqId,
+  assets,
+  listCalcs,
+}: {
+  acqId: string;
+  assets: Asset[];
+  listCalcs: (a: string, id: string) => Promise<AssetCalculation[]>;
+}) {
+  const results = useQueries({
+    queries: assets.map((a) => ({
+      queryKey: ["asset-calcs", acqId, a.id],
+      queryFn: () => listCalcs(acqId, a.id),
+    })),
+  });
+  const cols = assets
+    .map((asset, i) => ({ asset, calcs: (results[i]?.data ?? []).filter((c) => Number(c.value) !== 0) }))
+    .filter((x) => x.calcs.length > 0);
+  if (!cols.length) return null;
+
+  // Эгнээний тодорхойлолт: calc төрлүүдийн нэгдэл (эхнийхээс эрэмбэ хадгална)
+  const rowDefs: { name: string; unit: string; group: string }[] = [];
+  const seen = new Set<string>();
+  for (const { calcs } of cols)
+    for (const c of calcs)
+      if (!seen.has(c.calc_name)) {
+        seen.add(c.calc_name);
+        rowDefs.push({ name: c.calc_name, unit: c.unit, group: c.calc_group ?? "" });
+      }
+  const valOf = (calcs: AssetCalculation[], name: string) => {
+    const c = calcs.find((x) => x.calc_name === name);
+    return c ? Number(c.value).toLocaleString() : "—";
+  };
+  // Бүлэг (Итгэлцүүр г.м)-ийн rowspan-г тооцоолно
+  const groupSpan = new Map<number, number>();
+  const groupCovered = new Set<number>();
+  for (let i = 0; i < rowDefs.length; ) {
+    const g = rowDefs[i].group;
+    if (g) {
+      let j = i;
+      while (j + 1 < rowDefs.length && rowDefs[j + 1].group === g) j++;
+      groupSpan.set(i, j - i + 1);
+      for (let k = i + 1; k <= j; k++) groupCovered.add(k);
+      i = j + 1;
+    } else i++;
+  }
+
+  return (
+    <div className={REAL_ESTATE_TONE.card}>
+      <div className={`flex items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${REAL_ESTATE_TONE.header}`}>
+        <Calculator className={`h-4 w-4 ${REAL_ESTATE_TONE.icon}`} />
+        <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Барилгын өртгийн хандлага</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[520px] text-[12px]">
+          <thead>
+            <tr className={`border-b border-slate-100 dark:border-[#37394d] ${REAL_ESTATE_TONE.tableHead}`}>
+              <th colSpan={2} className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Үзүүлэлт</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Хэмжих нэгж</th>
+              {cols.map(({ asset }) => (
+                <th key={asset.id} className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                  {asset.asset_name || "Барилга"}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+            <tr>
+              <td colSpan={2} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">Барилгын талбай</td>
+              <td className="px-4 py-2.5 text-slate-500">м²</td>
+              {cols.map(({ asset }) => (
+                <td key={asset.id} className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">
+                  {formatArea(asset.area_m2)}
+                </td>
+              ))}
+            </tr>
+            {rowDefs.map((rd, idx) => (
+              <tr key={rd.name}>
+                {rd.group ? (
+                  <>
+                    {groupSpan.has(idx) && (
+                      <td rowSpan={groupSpan.get(idx)} className="px-4 py-2.5 align-top font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-[#37394d]">
+                        {rd.group}
+                      </td>
+                    )}
+                    <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{rd.name}</td>
+                  </>
+                ) : (
+                  <td colSpan={2} className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{rd.name}</td>
+                )}
+                <td className="px-4 py-2.5 text-slate-500">{rd.unit}</td>
+                {cols.map(({ asset, calcs }) => (
+                  <td key={asset.id} className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">
+                    {valOf(calcs, rd.name)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Нэгтгэл — үнэлгээний нэгдсэн задаргааг Excel-ийн "нэгтгэл" хүснэгт шиг харуулна.
+function ConsolidationCard({
+  rows,
+  total,
+}: {
+  rows: { label: string; value: number }[];
+  total: number;
+}) {
+  return (
+    <div className="ap-card overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-[#37394d]">
+        <CircleDollarSign className="h-4 w-4 text-[#02c0ce]" />
+        <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Нэгтгэл</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[420px] text-[12px]">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
+              <th className="w-12 px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Д/д</th>
+              <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Үнэлэгдсэн хөрөнгийн төрөл</th>
+              <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Мөнгөн дүн /₮/</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+            {rows.map((r, i) => (
+              <tr key={r.label}>
+                <td className="px-4 py-2.5 text-slate-400">{i + 1}</td>
+                <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{r.label}</td>
+                <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">{money(r.value)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-slate-200 bg-slate-50/70 dark:border-[#37394d] dark:bg-[#1a1d20]">
+              <td />
+              <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">Нөхөн олговрын нийт дүн</td>
+              <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900 dark:text-white">{money(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function RealEstateTab({
   acqId,
   parcelId,
@@ -149,13 +302,17 @@ export function RealEstateTab({
           profApi.profListAssets(a, params),
         listCompensations: (a: string, p?: string) => profApi.profListCompensations(a, p),
         getLandValuation: (a: string, p: string) => profApi.profGetLandValuation(a, p),
-        upsertLandValuation: (a: string, body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number }) =>
+        upsertLandValuation: (a: string, body: LandValuationUpsert) =>
           profApi.profUpsertLandValuation(a, body),
+        importValuation: (a: string, body: ValuationImportPayload) => profApi.profImportValuation(a, body),
+        deleteLandValuation: (a: string, p: string) => profApi.profDeleteLandValuation(a, p),
         createAsset: (a: string, body: Partial<Asset>) => profApi.profCreateAsset(a, body),
         upsertAssetSpecs: (a: string, id: string, specs: { spec_type_id: number; value: string }[]) =>
           profApi.profUpsertAssetSpecs(a, id, specs),
         upsertAssetCalculations: (a: string, id: string, calcs: { calc_type_id: number; unit: string; value: number }[]) =>
           profApi.profUpsertAssetCalculations(a, id, calcs),
+        listAssetCalculations: (a: string, id: string) => profApi.profListAssetCalculations(a, id),
+        listAssetSpecs: (a: string, id: string) => profApi.profListAssetSpecs(a, id),
         createCompensation: (a: string, body: Partial<Compensation>) => profApi.profCreateCompensation(a, body),
         deleteAsset: (a: string, id: string) => profApi.profDeleteAsset(a, id),
         deleteCompensation: (a: string, id: string) => profApi.profDeleteCompensation(a, id),
@@ -174,13 +331,17 @@ export function RealEstateTab({
           landApi.getAssets(a, params),
         listCompensations: (a: string, p?: string) => landApi.listCompensations(a, p),
         getLandValuation: (a: string, p: string) => landApi.getLandValuation(a, p),
-        upsertLandValuation: (a: string, body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number }) =>
+        upsertLandValuation: (a: string, body: LandValuationUpsert) =>
           landApi.upsertLandValuation(a, body),
+        importValuation: (a: string, body: ValuationImportPayload) => landApi.importValuation(a, body),
+        deleteLandValuation: (a: string, p: string) => landApi.deleteLandValuation(a, p),
         createAsset: (a: string, body: Partial<Asset>) => landApi.createAsset(a, body),
         upsertAssetSpecs: (a: string, id: string, specs: { spec_type_id: number; value: string }[]) =>
           landApi.upsertAssetSpecs(a, id, specs),
         upsertAssetCalculations: (a: string, id: string, calcs: { calc_type_id: number; unit: string; value: number }[]) =>
           landApi.upsertAssetCalculations(a, id, calcs),
+        listAssetCalculations: (a: string, id: string) => landApi.listAssetCalculations(a, id),
+        listAssetSpecs: (a: string, id: string) => landApi.listAssetSpecs(a, id),
         createCompensation: (a: string, body: Partial<Compensation>) => landApi.createCompensation(a, body),
         deleteAsset: (a: string, id: string) => landApi.deleteAsset(a, id).then(() => undefined),
         deleteCompensation: (a: string, id: string) => landApi.deleteCompensation(a, id).then(() => undefined),
@@ -206,6 +367,7 @@ export function RealEstateTab({
   const [approveModal, setApproveModal] = useState<{ compId: string; note: string } | null>(null);
   const [landValuationForm, setLandValuationForm] = useState({ land_area_m2: "", base_price_per_m2: "" });
   const [landValuationEdited, setLandValuationEdited] = useState(false);
+  const [landEditing, setLandEditing] = useState(false);
   const [rejectModal, setRejectModal] = useState<{ compId: string; note: string } | null>(null);
   const [historyModal, setHistoryModal] = useState<{ compId: string; list: CompensationHistory[] } | null>(null);
   const [independentSelect, setIndependentSelect] = useState("");
@@ -301,9 +463,23 @@ export function RealEstateTab({
       }),
     onSuccess: () => {
       toast.success("Газрын үнэлгээ хадгалагдлаа");
+      setLandEditing(false);
+      setLandValuationEdited(false);
       queryClient.invalidateQueries({ queryKey: ["land-valuation", acqId, effectiveParcelCode] });
     },
     onError: (err) => toast.error(getApiError(err, "Газрын үнэлгээ хадгалахад алдаа гарлаа")),
+  });
+
+  const deleteLandValuationMutation = useMutation({
+    mutationFn: () => svc.deleteLandValuation(acqId, effectiveParcelCode),
+    onSuccess: () => {
+      toast.success("Газрын үнэлгээ устгагдлаа");
+      setLandEditing(false);
+      setLandValuationEdited(false);
+      setLandValuationForm({ land_area_m2: "", base_price_per_m2: "" });
+      queryClient.invalidateQueries({ queryKey: ["land-valuation", acqId, effectiveParcelCode] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Газрын үнэлгээ устгахад алдаа гарлаа")),
   });
 
   useEffect(() => {
@@ -493,6 +669,10 @@ export function RealEstateTab({
   const lvArea = Number(landValuationForm.land_area_m2) || 0;
   const lvPrice = Number(landValuationForm.base_price_per_m2) || 0;
   const lvTotal = lvArea * lvPrice;
+  // Газрын нийт үнэ нь land_valuation (талбай×суурь үнэ)-ээс гарна — parcel-түвшний
+  // нөхөн олговор (totals.landTotal) ашиглахгүй (импорт нь land-valuation-д хадгалдаг).
+  const landTotalValue = lvTotal || landValuation?.total_value || totals.landTotal;
+  const grandTotalValue = landTotalValue + totals.assetTotal;
 
   const subTabs: { key: ValuationSubTabKey; label: string; description: string }[] = [
     { key: "asset", label: "Хөрөнгийн үнэлгээ", description: "Үндсэн мэргэжлийн байгууллагын үнэлгээ" },
@@ -514,9 +694,9 @@ export function RealEstateTab({
     orgDisplayName(currentIndependentOrgId) ||
     "—";
   const summaryItems: { label: string; value: number; Icon: LucideIcon }[] = [
-    { label: "Газрын үнэлгээ", value: totals.landTotal, Icon: Calculator },
+    { label: "Газрын үнэлгээ", value: landTotalValue, Icon: Calculator },
     { label: "Хөрөнгийн үнэлгээ", value: totals.assetTotal, Icon: Building2 },
-    { label: "Нэгдсэн дүн", value: totals.total, Icon: CircleDollarSign },
+    { label: "Нэгдсэн дүн", value: grandTotalValue, Icon: CircleDollarSign },
   ];
 
   const StatusBadge = ({ status }: { status?: string }) => {
@@ -583,9 +763,15 @@ export function RealEstateTab({
                             </button>
                             {activeSubTab !== "mika" && canEditCurrent && (
                               <button
-                                onClick={() => {
-                                  if (confirm("Хөрөнгө устгах уу?")) deleteAssetMutation.mutate(asset.id);
-                                }}
+                                onClick={() =>
+                                  setPendingConfirm({
+                                    title: "Хөрөнгө устгах уу?",
+                                    description: asset.asset_name || undefined,
+                                    confirmLabel: "Устгах",
+                                    confirmColor: "#f1556c",
+                                    onConfirm: () => deleteAssetMutation.mutate(asset.id),
+                                  })
+                                }
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -661,9 +847,14 @@ export function RealEstateTab({
                                             </button>
                                             {canEditCurrent && comp.status !== "approved" && (
                                               <button
-                                                onClick={() => {
-                                                  if (confirm("Үнэлгээ устгах уу?")) deleteCompensationMutation.mutate(comp.id);
-                                                }}
+                                                onClick={() =>
+                                                  setPendingConfirm({
+                                                    title: "Үнэлгээ устгах уу?",
+                                                    confirmLabel: "Устгах",
+                                                    confirmColor: "#f1556c",
+                                                    onConfirm: () => deleteCompensationMutation.mutate(comp.id),
+                                                  })
+                                                }
                                                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
                                               >
                                                 <Trash2 className="h-3.5 w-3.5" />
@@ -869,7 +1060,7 @@ export function RealEstateTab({
             <ReceiptText className={`h-4 w-4 ${LAND_TONE.icon}`} />
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Газрын үнэлгээ</p>
           </div>
-          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">{money(lvTotal || totals.landTotal)}</p>
+          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">{money(landTotalValue)}</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
@@ -885,7 +1076,7 @@ export function RealEstateTab({
                 <td className="px-4 py-3 text-slate-700 dark:text-slate-200">Чөлөөлөлтөнд өртсөн газрын хэмжээ</td>
                 <td className="px-4 py-3 text-slate-500">м²</td>
                 <td className="px-4 py-3">
-                  {canEditCurrent ? (
+                  {canEditCurrent && landEditing ? (
                     <input
                       type="number"
                       value={landValuationForm.land_area_m2}
@@ -904,7 +1095,7 @@ export function RealEstateTab({
                 <td className="px-4 py-3 text-slate-700 dark:text-slate-200">Газрын 1 м² талбайн суурь үнэ</td>
                 <td className="px-4 py-3 text-slate-500">Төгрөг</td>
                 <td className="px-4 py-3">
-                  {canEditCurrent ? (
+                  {canEditCurrent && landEditing ? (
                     <input
                       type="number"
                       value={landValuationForm.base_price_per_m2}
@@ -929,15 +1120,81 @@ export function RealEstateTab({
             </tfoot>
           </table>
         </div>
+        {/* Excel-ээс импортолсон үнэлгээний тайлангийн мэдээлэл (байгаа бол) */}
+        {landValuation && (landValuation.appraiser_org_name || landValuation.ownership_cert_no || landValuation.source_file_name) && (
+          <div className="grid gap-x-6 gap-y-1.5 border-t border-slate-100 px-5 py-3 text-[12px] dark:border-[#37394d] md:grid-cols-2 lg:grid-cols-3">
+            {landValuation.ownership_cert_no && (
+              <div><span className="text-slate-400">Өмчлөх эрхийн гэрчилгээ: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.ownership_cert_no}</span></div>
+            )}
+            {landValuation.appraiser_org_name && (
+              <div><span className="text-slate-400">Үнэлгээний байгууллага: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.appraiser_org_name}</span></div>
+            )}
+            {landValuation.appraiser_director && (
+              <div><span className="text-slate-400">Захирал: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.appraiser_director}</span></div>
+            )}
+            {landValuation.appraiser_reg_no && (
+              <div><span className="text-slate-400">Регистр: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.appraiser_reg_no}</span></div>
+            )}
+            {landValuation.appraiser_contact && (
+              <div><span className="text-slate-400">Холбоо барих: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.appraiser_contact}</span></div>
+            )}
+            {landValuation.source_file_name && (
+              <div><span className="text-slate-400">Эх файл: </span><span className="text-slate-700 dark:text-slate-200">{landValuation.source_file_name}</span></div>
+            )}
+          </div>
+        )}
         {canEditCurrent && (
           <div className="flex justify-end gap-2 border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
-            <button
-              onClick={() => upsertLandValuationMutation.mutate()}
-              disabled={upsertLandValuationMutation.isPending || (!lvArea && !lvPrice)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
-            >
-              Хадгалах
-            </button>
+            {landEditing ? (
+              <>
+                <button
+                  onClick={() => {
+                    setLandEditing(false);
+                    setLandValuationEdited(false);
+                    setLandValuationForm({
+                      land_area_m2: landValuation?.land_area_m2 ? String(landValuation.land_area_m2) : "",
+                      base_price_per_m2: landValuation?.base_price_per_m2 ? String(landValuation.base_price_per_m2) : "",
+                    });
+                  }}
+                  disabled={upsertLandValuationMutation.isPending}
+                  className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+                >
+                  Болих
+                </button>
+                <button
+                  onClick={() => upsertLandValuationMutation.mutate()}
+                  disabled={upsertLandValuationMutation.isPending || (!lvArea && !lvPrice)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+                >
+                  Хадгалах
+                </button>
+              </>
+            ) : (
+              <>
+                {landValuation && (lvArea > 0 || lvPrice > 0) && (
+                  <button
+                    onClick={() =>
+                      setPendingConfirm({
+                        title: "Газрын үнэлгээ устгах уу?",
+                        confirmLabel: "Устгах",
+                        confirmColor: "#f1556c",
+                        onConfirm: () => deleteLandValuationMutation.mutate(),
+                      })
+                    }
+                    disabled={deleteLandValuationMutation.isPending}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 px-4 text-[12px] font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:hover:bg-red-500/10"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Устгах
+                  </button>
+                )}
+                <button
+                  onClick={() => setLandEditing(true)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90"
+                >
+                  Засах
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -994,13 +1251,30 @@ export function RealEstateTab({
             </div>
           </div>
           {activeSubTab !== "mika" && canEditCurrent && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Хөрөнгө нэмэх
-            </button>
+            <div className="flex items-center gap-2">
+              <ValuationExcelImport
+                acqId={acqId}
+                parcelId={parcelId}
+                parcelCode={effectiveParcelCode}
+                svc={svc}
+                specTypes={specTypes}
+                calcTypes={calcTypes}
+                existingAssets={parcelAssets}
+                existingComps={allComps}
+                onDone={() => {
+                  queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode] });
+                  queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode] });
+                  queryClient.invalidateQueries({ queryKey: ["land-valuation", acqId, effectiveParcelCode] });
+                }}
+              />
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Хөрөнгө нэмэх
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1013,7 +1287,20 @@ export function RealEstateTab({
       ) : (
         <>
           {renderAssetTable("Үл хөдлөх хөрөнгийн үнэлгээ", realStateRows, "Үл хөдлөх хөрөнгө бүртгэгдээгүй", REAL_ESTATE_TONE)}
+          {realStateRows.length > 0 && (
+            <BuildingCostSection acqId={acqId} assets={realStateRows.map((r) => r.asset)} listCalcs={svc.listAssetCalculations} />
+          )}
           {renderAssetTable("Эд хөрөнгийн үнэлгээ", propertyRows, "Эд хөрөнгө бүртгэгдээгүй", PROPERTY_TONE)}
+          {(landTotalValue > 0 || totals.assetTotal > 0) && (
+            <ConsolidationCard
+              rows={[
+                { label: "Газар", value: landTotalValue },
+                { label: "Үл хөдлөх хөрөнгө", value: sumCompensations(realStateRows.flatMap((r) => r.compensations)) },
+                { label: "Эд хөрөнгө", value: sumCompensations(propertyRows.flatMap((r) => r.compensations)) },
+              ]}
+              total={grandTotalValue}
+            />
+          )}
         </>
       )}
 

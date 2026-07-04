@@ -6,6 +6,7 @@ import { getApiError } from "@/lib/utils";
 import { ChevronDown, ChevronRight, FolderOpen, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
 import { toast } from "sonner";
 import type { AcquisitionCategory } from "@/types";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -65,6 +66,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
   const queryClient = useQueryClient();
   const [addingNew, setAddingNew] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ["acq-categories", parent.id],
@@ -110,6 +112,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
   });
 
   return (
+    <>
     <div className="ml-8 mt-2 mb-3 border-l-2 border-slate-100 dark:border-[#37394d] pl-4 space-y-1.5">
       {isLoading && (
         <div className="space-y-1.5 animate-pulse">
@@ -143,9 +146,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
                   <Pencil className="h-3 w-3" />
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm(`"${sub.name}" устгах уу?`)) deleteMutation.mutate(sub.id);
-                  }}
+                  onClick={() => setPendingConfirm({ title: `"${sub.name}" устгах уу?`, confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(sub.id) })}
                   className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -172,6 +173,16 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
         </button>
       )}
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }
 
@@ -180,6 +191,7 @@ export default function AcquisitionCategoryPage() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [addingGeneral, setAddingGeneral] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: generals = [], isLoading } = useQuery({
     queryKey: ["acq-categories", null],
@@ -233,6 +245,7 @@ export default function AcquisitionCategoryPage() {
     });
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -325,8 +338,7 @@ export default function AcquisitionCategoryPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`"${cat.name}" болон түүний дэд ангилалуудыг устгах уу?`))
-                            deleteMutation.mutate(cat.id);
+                          setPendingConfirm({ title: `"${cat.name}" болон түүний дэд ангилалуудыг устгах уу?`, confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(cat.id) });
                         }}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                       >
@@ -351,5 +363,15 @@ export default function AcquisitionCategoryPage() {
         )}
       </div>
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }

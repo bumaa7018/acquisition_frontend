@@ -6,11 +6,13 @@ import { getApiError } from "@/lib/utils";
 import { Layers, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { AssetSpecType } from "@/types";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 export default function AssetSpecTypePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<AssetSpecType | null>(null);
   const [form, setForm] = useState({ code: "", name: "", sort_order: "" });
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
   const { data = [], isLoading } = useQuery({
@@ -87,6 +89,7 @@ export default function AssetSpecTypePage() {
   const isFormOpen = showCreate || editItem !== null;
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
         <div>
@@ -203,7 +206,7 @@ export default function AssetSpecTypePage() {
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => { if (confirm(`"${item.name}" устгах уу?`)) deleteMutation.mutate(item.id); }}
+                    onClick={() => setPendingConfirm({ title: `"${item.name}" устгах уу?`, confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(item.id) })}
                     className="flex h-7 w-7 items-center justify-center rounded-md bg-red-50 dark:bg-red-500/10 text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -215,5 +218,15 @@ export default function AssetSpecTypePage() {
         )}
       </div>
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }

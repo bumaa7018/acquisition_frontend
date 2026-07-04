@@ -21,6 +21,9 @@ import type {
   CompensationHistory,
   CompensationGrant,
   LandValuation,
+  LandValuationUpsert,
+  ValuationImportPayload,
+  ValuationImportResult,
   Document,
   AuthorizedRepresentative,
   FundingSource,
@@ -361,13 +364,31 @@ class ProfApiService {
       .then(r => r.data.data ?? null)
   }
 
+  profDeleteLandValuation(acqId: string, parcelId: string): Promise<void> {
+    return apiClient
+      .delete(`/prof/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } })
+      .then(() => undefined)
+  }
+
   profUpsertLandValuation(
     acqId: string,
-    body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number },
+    body: LandValuationUpsert,
   ): Promise<LandValuation | undefined> {
     return apiClient
       .post<ApiResponse<LandValuation>>(
         `/prof/land-acquisitions/${acqId}/land-valuation`,
+        body,
+      )
+      .then(r => r.data.data)
+  }
+
+  profImportValuation(
+    acqId: string,
+    body: ValuationImportPayload,
+  ): Promise<ValuationImportResult | undefined> {
+    return apiClient
+      .post<ApiResponse<ValuationImportResult>>(
+        `/prof/land-acquisitions/${acqId}/valuation-import`,
         body,
       )
       .then(r => r.data.data)

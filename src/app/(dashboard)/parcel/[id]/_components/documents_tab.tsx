@@ -7,6 +7,7 @@ import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
 import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
@@ -21,6 +22,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["parcel-documents", parcelId],
@@ -142,7 +144,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     </a>
                     {!isLocked && (
                       <button
-                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(doc.id) })}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -230,6 +232,15 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }

@@ -5,6 +5,7 @@ import { rolesApi, permissionsApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { Shield, Plus, X, Trash2, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 export default function RolesPage() {
   const [showCreate, setShowCreate] = useState(false);
@@ -14,6 +15,7 @@ export default function RolesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
   const { data: rolesData, isLoading } = useQuery({
@@ -110,6 +112,7 @@ export default function RolesPage() {
   };
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       {/* Page header */}
       <div className="flex items-center justify-between">
@@ -287,8 +290,12 @@ export default function RolesPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (confirm("Устгах уу?"))
-                              deleteRoleMutation.mutate(r.id);
+                            setPendingConfirm({
+                              title: "Устгах уу?",
+                              confirmLabel: "Устгах",
+                              confirmColor: "#f1556c",
+                              onConfirm: () => deleteRoleMutation.mutate(r.id),
+                            });
                           }}
                           className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 dark:bg-red-500/10 text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                         >
@@ -405,5 +412,15 @@ export default function RolesPage() {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }

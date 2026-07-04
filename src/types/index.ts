@@ -395,8 +395,71 @@ export interface Asset {
   unit: string;
   capacity: string;
   description: string;
+  unit_price: number;
   created_at: string;
   updated_at: string;
+}
+
+// Газрын үнэлгээ upsert хийх body — Excel импортын нэмэлт талбарууд заавал биш.
+export interface LandValuationUpsert {
+  parcel_id: string;
+  land_area_m2: number;
+  base_price_per_m2: number;
+  ownership_cert_no?: string;
+  appraiser_org_name?: string;
+  appraiser_reg_no?: string;
+  appraiser_state_reg_no?: string;
+  appraiser_director?: string;
+  appraiser_license?: string;
+  appraiser_address?: string;
+  appraiser_contact?: string;
+  source_file_name?: string;
+  source_file_hash?: string;
+}
+
+// Excel-ээс бүхэл үнэлгээг нэг хүсэлтээр (нэг транзакц) оруулах payload.
+export interface ValuationImportAssetPayload {
+  asset_number?: string;
+  asset_type: "real_state" | "property";
+  asset_name: string;
+  area_m2: number;
+  unit?: string;
+  capacity?: string;
+  description?: string;
+  owner_name?: string;
+  notes?: string;
+  unit_price?: number;
+  compensation_amount?: number; // >0 бол cash нөхөн олговор үүснэ
+  specs?: { spec_type_id: number; value: string }[];
+  // calc_type_id байвал шууд, байхгүй бол name-ээр backend төрлийг олж/үүсгэнэ. group — бүлгийн нэр.
+  calculations?: { calc_type_id?: number; name?: string; group?: string; unit: string; value: number }[];
+}
+
+export interface ValuationImportPayload {
+  parcel_id: string;
+  replace: boolean; // true бол хуучин хөрөнгө/олговрыг эхлээд устгана
+  land: {
+    land_area_m2: number;
+    base_price_per_m2: number;
+    ownership_cert_no?: string;
+    appraiser_org_name?: string;
+    appraiser_reg_no?: string;
+    appraiser_state_reg_no?: string;
+    appraiser_director?: string;
+    appraiser_license?: string;
+    appraiser_address?: string;
+    appraiser_contact?: string;
+    source_file_name?: string;
+    source_file_hash?: string;
+  };
+  assets: ValuationImportAssetPayload[];
+}
+
+export interface ValuationImportResult {
+  deleted_assets: number;
+  deleted_comps: number;
+  created_assets: number;
+  created_comps: number;
 }
 
 export interface AssetSpec {
@@ -414,6 +477,7 @@ export interface AssetCalculation {
   calc_type_id: number;
   calc_code: string;
   calc_name: string;
+  calc_group?: string;
   unit: string;
   value: number;
 }
@@ -440,6 +504,16 @@ export interface LandValuation {
   land_area_m2: number;
   base_price_per_m2: number;
   total_value: number;
+  ownership_cert_no?: string;
+  appraiser_org_name?: string;
+  appraiser_reg_no?: string;
+  appraiser_state_reg_no?: string;
+  appraiser_director?: string;
+  appraiser_license?: string;
+  appraiser_address?: string;
+  appraiser_contact?: string;
+  source_file_name?: string;
+  source_file_hash?: string;
   created_at: string;
   updated_at: string;
 }

@@ -34,7 +34,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, AuthorizedRepresentative, LandValuation, AssetSpec, AssetCalculation,
+  CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   AssetSpecType, AssetCalcType,
 } from '@/types'
 
@@ -368,8 +368,12 @@ export const landApi = {
     api.post(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`, { calculations }),
   getLandValuation: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(r => r.data.data ?? null),
-  upsertLandValuation: (acqId: string, body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number }) =>
+  upsertLandValuation: (acqId: string, body: LandValuationUpsert) =>
     api.post<ApiResponse<LandValuation>>(`/land-acquisitions/${acqId}/land-valuation`, body).then(r => r.data.data),
+  deleteLandValuation: (acqId: string, parcelId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(() => undefined),
+  importValuation: (acqId: string, body: ValuationImportPayload) =>
+    api.post<ApiResponse<ValuationImportResult>>(`/land-acquisitions/${acqId}/valuation-import`, body).then(r => r.data.data),
   listCompensations: (acqId: string, parcelId?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
       params: parcelId ? { parcel_id: parcelId } : undefined,

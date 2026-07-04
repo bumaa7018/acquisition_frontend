@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const createSchema = z
   .object({
@@ -63,6 +64,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editRole, setEditRole] = useState<string | null>(null);
   const [pwUser, setPwUser] = useState<User | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
@@ -196,6 +198,7 @@ export default function UsersPage() {
   ];
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       {/* Page header */}
       <div className="flex items-center justify-between">
@@ -603,10 +606,14 @@ export default function UsersPage() {
                           <KeyRound className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm("Устгах уу?"))
-                              deleteMutation.mutate(user.id);
-                          }}
+                          onClick={() =>
+                            setPendingConfirm({
+                              title: "Устгах уу?",
+                              confirmLabel: "Устгах",
+                              confirmColor: "#f1556c",
+                              onConfirm: () => deleteMutation.mutate(user.id),
+                            })
+                          }
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -621,5 +628,15 @@ export default function UsersPage() {
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }
