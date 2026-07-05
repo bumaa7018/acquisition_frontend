@@ -236,105 +236,107 @@ export function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         />
       )}
 
-      {/* Progress map */}
-      <div className="ap-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            Явцын зураг
-          </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* Progress table */}
+        <div className="ap-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Явцын түүх
+            </p>
+          </div>
+          {isLoading ? (
+            <div className="p-5 space-y-3 animate-pulse">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-10 rounded bg-slate-100 dark:bg-[#252630]"
+                />
+              ))}
+            </div>
+          ) : !progress.length ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
+              <Clock className="h-7 w-7 mb-2 opacity-30" />
+              <p className="text-[13px]">Явцын бичлэг байхгүй</p>
+            </div>
+          ) : (
+            <div className="overflow-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
+                    {[
+                      "#",
+                      "Өмнөх төлөв",
+                      "Шинэ төлөв",
+                      "Тайлбар",
+                      "Хэрэглэгч",
+                      "Огноо",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
+                  {progress.map((p, i) => {
+                    const from = STATUS_CFG[p.from_status] ?? STATUS_CFG[1];
+                    const to = STATUS_CFG[p.to_status] ?? STATUS_CFG[1];
+                    return (
+                      <tr
+                        key={p.id}
+                        className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                      >
+                        <td className="px-4 py-3 text-[12px] font-mono text-slate-400 dark:text-slate-500">
+                          {i + 1}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+                            style={{ color: from.color, background: from.bg }}
+                          >
+                            {STATUS_LABELS[p.from_status] ?? p.from_status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
+                            style={{ color: to.color, background: to.bg }}
+                          >
+                            {STATUS_LABELS[p.to_status] ?? p.to_status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-[200px] truncate">
+                          {p.note || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {p.changed_by}
+                        </td>
+                        <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {formatDate(p.changed_at)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-        <div className="p-5">
-          <ProgressMap acquisitionId={id} />
-        </div>
-      </div>
 
-      {/* Progress table */}
-      <div className="ap-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            Явцын түүх
-          </p>
+        {/* Progress map */}
+        <div className="ap-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Явцын зураг
+            </p>
+          </div>
+          <div className="p-5">
+            <ProgressMap acquisitionId={id} />
+          </div>
         </div>
-        {isLoading ? (
-          <div className="p-5 space-y-3 animate-pulse">
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="h-10 rounded bg-slate-100 dark:bg-[#252630]"
-              />
-            ))}
-          </div>
-        ) : !progress.length ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400 dark:text-slate-500">
-            <Clock className="h-7 w-7 mb-2 opacity-30" />
-            <p className="text-[13px]">Явцын бичлэг байхгүй</p>
-          </div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                  {[
-                    "#",
-                    "Өмнөх төлөв",
-                    "Шинэ төлөв",
-                    "Тайлбар",
-                    "Хэрэглэгч",
-                    "Огноо",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                {progress.map((p, i) => {
-                  const from = STATUS_CFG[p.from_status] ?? STATUS_CFG[1];
-                  const to = STATUS_CFG[p.to_status] ?? STATUS_CFG[1];
-                  return (
-                    <tr
-                      key={p.id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-                    >
-                      <td className="px-4 py-3 text-[12px] font-mono text-slate-400 dark:text-slate-500">
-                        {i + 1}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                          style={{ color: from.color, background: from.bg }}
-                        >
-                          {STATUS_LABELS[p.from_status] ?? p.from_status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                          style={{ color: to.color, background: to.bg }}
-                        >
-                          {STATUS_LABELS[p.to_status] ?? p.to_status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-[200px] truncate">
-                        {p.note || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {p.changed_by}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                        {formatDate(p.changed_at)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );
