@@ -1,6 +1,7 @@
 export { default as MapView } from './map-view'
 export { ParcelMap } from './parcel-map'
 export { AcquisitionMap } from './acquisition-map'
+export { ProgressMap } from './progress-map'
 export type { LayerConfig, LayerGroupConfig } from './layer-panel'
 export type { MapLayerId, MapLayerDef } from './layers'
 export { layerDef, fitLayerToMap, MAP_LAYER_STYLES } from './layers'
