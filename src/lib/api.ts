@@ -35,8 +35,21 @@ import type {
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
 } from '@/types'
+
+// Backend алдаа/timeout үед НЭГ л удаа алдааны хуудас руу шилжинэ (давхар дуудлага зогсоно)
+let _serverErrorRedirecting = false
+function redirectToServerError() {
+  if (typeof window === 'undefined' || _serverErrorRedirecting) return
+  const path = window.location.pathname
+  // Аль хэдийн алдааны/нэвтрэх хуудсанд байвал дахин шилжүүлэхгүй (loop-оос сэргийлнэ)
+  if (path === '/server-error' || path.startsWith('/login')) return
+  _serverErrorRedirecting = true
+  const from = window.location.pathname + window.location.search
+  window.location.href = `/server-error?from=${encodeURIComponent(from)}`
+}
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
 
@@ -206,6 +219,20 @@ api.interceptors.response.use(
     const status = error.response?.status
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
 
+    // ── Хүсэлт цуцлагдсан (компонент unmount, шинэ хайлт) — алдаа биш, чимээгүй өнгөрөөнө ──
+    if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error)
+    }
+
+    // ── Backend алдаа (5xx) / timeout / холбогдож чадсангүй ──────────────────
+    // Дахин API дуудахгүйгээр алдааны хуудас руу шилжиж зогсоно.
+    const noResponse = !error.response // network error эсвэл timeout (ECONNABORTED)
+    const isServerError = typeof status === 'number' && status >= 500
+    if (!isAuthRoute && (noResponse || isServerError)) {
+      redirectToServerError()
+      return Promise.reject(error)
+    }
+
     // ── 403: хандах эрхгүй (backend эсвэл frontend access-policy) ──────────
     if (status === 403 && !isAuthRoute) {
       showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
@@ -350,7 +377,7 @@ export const landApi = {
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
-  getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+  getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; valuation_type?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
   createAsset: (acqId: string, body: Partial<Asset>) =>
     api.post<ApiResponse<Asset>>(`/land-acquisitions/${acqId}/assets`, body).then(r => r.data.data),
@@ -366,17 +393,17 @@ export const landApi = {
     api.get<ApiResponse<AssetCalculation[]>>(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`).then(r => r.data.data ?? []),
   upsertAssetCalculations: (acqId: string, assetId: string, calculations: { calc_type_id: number; unit: string; value: number }[]) =>
     api.post(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`, { calculations }),
-  getLandValuation: (acqId: string, parcelId: string) =>
-    api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(r => r.data.data ?? null),
+  getLandValuation: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(r => r.data.data ?? null),
   upsertLandValuation: (acqId: string, body: LandValuationUpsert) =>
     api.post<ApiResponse<LandValuation>>(`/land-acquisitions/${acqId}/land-valuation`, body).then(r => r.data.data),
-  deleteLandValuation: (acqId: string, parcelId: string) =>
-    api.delete(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(() => undefined),
+  deleteLandValuation: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.delete(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(() => undefined),
   importValuation: (acqId: string, body: ValuationImportPayload) =>
     api.post<ApiResponse<ValuationImportResult>>(`/land-acquisitions/${acqId}/valuation-import`, body).then(r => r.data.data),
-  listCompensations: (acqId: string, parcelId?: string) =>
+  listCompensations: (acqId: string, parcelId?: string, valuationType?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
-      params: parcelId ? { parcel_id: parcelId } : undefined,
+      params: { parcel_id: parcelId || undefined, valuation_type: valuationType || undefined },
     }).then(r => r.data.data ?? []),
   createCompensation: (acqId: string, body: Partial<Compensation>) =>
     api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations`, body).then(r => r.data.data),
@@ -395,8 +422,23 @@ export const landApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data)
   },
+  uploadAssetPhoto: (acqId: string, assetId: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<ApiResponse<{ photo_pdf_url: string; photo_pdf_name: string }>>(
+      `/land-acquisitions/${acqId}/assets/${assetId}/photos`, fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    ).then(r => r.data.data)
+  },
   listCompensationHistory: (acqId: string, compId: string) =>
     api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
+  // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв
+  getValuationSubmission: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { params: { valuation_type: valuationType } }).then(r => r.data.data),
+  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return", note: string, valuationType?: string) =>
+    api.post<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { action, note, valuation_type: valuationType }).then(r => r.data.data),
+  listValuationSubmissionHistory: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSubmissionHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`, { params: { valuation_type: valuationType } }).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
     api.post<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
   updateCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
@@ -478,9 +520,7 @@ export const landApi = {
       { org_user_id: orgUserId }
     ),
 
-  // Funding sources
-  listFundingSources: (acqId: string) =>
-    api.get<ApiResponse<FundingSource[]>>(`/land-acquisitions/${acqId}/funding-sources`).then(r => r.data.data ?? []),
+  // Funding sources — жагсаалт нь getById-ийн funding_sources талбараар ирдэг (тусдаа GET байхгүй)
   createFundingSource: (acqId: string, body: Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>) =>
     api.post<ApiResponse<FundingSource>>(`/land-acquisitions/${acqId}/funding-sources`, body).then(r => r.data.data),
   updateFundingSource: (acqId: string, srcId: string, body: Partial<Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>>) =>

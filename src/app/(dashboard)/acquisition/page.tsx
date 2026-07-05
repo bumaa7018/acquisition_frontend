@@ -554,6 +554,9 @@ export default function LandPage() {
   const isExternal = isExternalSpecialRole();
   const currentUserId = getCurrentUserId();
   const isProfOrg = isProfessionalOrg();
+  // Гадаад ролиудад (санхүү, МИКА; мэрг. байгууллага /my_acquisitions руу шилжинэ)
+  // зөвхөн "Хээрийн судалгаа" төлөвтэй чөлөөлөлт харагдана — backend ч мөн шүүнэ.
+  const onlyFieldSurvey = isExternal;
   const isEmployee = hasRole("employee", "Энгийн ажилтан");
 
   // Мэргэжлийн байгууллага /my_acquisitions руу redirect хийнэ
@@ -612,7 +615,7 @@ export default function LandPage() {
         page_size: PAGE_SIZE,
         plan_code: filter.planCode || undefined,
         acquisition_name: filter.acqName || undefined,
-        status: filter.status || undefined,
+        status: onlyFieldSurvey ? ACQ_STATUS.FIELD_SURVEY : filter.status || undefined,
         general_category_id: filter.genCat || undefined,
         sub_category_id: filter.subCat || undefined,
         assigned_user_id: filter.employeeId || undefined,
@@ -705,17 +708,19 @@ export default function LandPage() {
             <option value={0}>Дэд ангилал</option>
             {subCats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select
-            value={draft.status}
-            onChange={(e) => setDraft(d => ({ ...d, status: Number(e.target.value) }))}
-            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
-          >
-            <option value={0}>Бүх төлөв</option>
-            <option value={1}>Шинэ</option>
-            <option value={2}>Хээрийн судалгаа</option>
-            <option value={3}>Баталгаажсан</option>
-            <option value={4}>Цуцлагдсан</option>
-          </select>
+          {!onlyFieldSurvey && (
+            <select
+              value={draft.status}
+              onChange={(e) => setDraft(d => ({ ...d, status: Number(e.target.value) }))}
+              className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+            >
+              <option value={0}>Бүх төлөв</option>
+              <option value={1}>Шинэ</option>
+              <option value={2}>Хээрийн судалгаа</option>
+              <option value={3}>Баталгаажсан</option>
+              <option value={4}>Цуцлагдсан</option>
+            </select>
+          )}
           <EmployeeSelect
             selectedId={draft.employeeId}
             selectedLabel={draft.employeeName}

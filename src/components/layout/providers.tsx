@@ -8,7 +8,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
-        defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+        defaultOptions: {
+          queries: {
+            staleTime: 30_000,
+            // Сервер алдаа (5xx), холболтгүй/timeout, эрхийн алдаа (401/403) үед
+            // дахин оролдохгүй — interceptor алдааны хуудас руу шилжүүлнэ.
+            retry: (failureCount, error) => {
+              const status = (error as { response?: { status?: number } })?.response?.status;
+              if (!status || status >= 500 || status === 401 || status === 403) return false;
+              return failureCount < 1;
+            },
+            refetchOnWindowFocus: false,
+          },
+        },
       }),
   );
   return (

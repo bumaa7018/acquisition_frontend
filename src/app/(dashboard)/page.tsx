@@ -14,7 +14,8 @@ import {
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { isProfessionalOrg } from "@/lib/role-utils";
+import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { GlobalParcel } from "@/types";
 import { cn } from "@/lib/utils";
@@ -686,8 +687,18 @@ function ProfOrgDashboard() {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [isProfOrg, setIsProfOrg] = useState(false);
-  useEffect(() => { setIsProfOrg(isProfessionalOrg()); }, []);
+  // МИКА/санхүүгийн мэргэжилтэн — дотоод дашбоардын API эрхгүй (compensation:*-д
+  // шилжсэн) тул чөлөөлөлтийн жагсаалт руу шилжүүлнэ.
+  const [isOtherExternal, setIsOtherExternal] = useState(false);
+  useEffect(() => {
+    setIsProfOrg(isProfessionalOrg());
+    setIsOtherExternal(isExternalSpecialRole() && !isProfessionalOrg());
+  }, []);
+  useEffect(() => {
+    if (isOtherExternal) router.replace("/acquisition");
+  }, [isOtherExternal, router]);
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -750,7 +761,7 @@ export default function DashboardPage() {
       assigned_user_id:   appliedFilter.employeeId || undefined,
     }),
     staleTime: 60_000,
-    enabled: !isProfOrg,
+    enabled: !isProfOrg && !isOtherExternal,
   });
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
@@ -828,6 +839,7 @@ export default function DashboardPage() {
   }, [appliedFilter]);
 
   if (isProfOrg) return <ProfOrgDashboard />;
+  if (isOtherExternal) return null;
 
   return (
     <div className="flex flex-col gap-4">

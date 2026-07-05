@@ -32,10 +32,12 @@ export function PaymentTab({
   });
 
   const effectiveCode = parcelData?.parcel_id ?? parcelCode;
+  // Төлбөрт зөвхөн санхүү баталгаажуулсан үндсэн урсгалын олговрыг ашиглана.
+  const selectedType = parcelData?.selected_valuation_type ?? "asset";
 
   const { data: compensations = [] } = useQuery({
-    queryKey: ["compensations", acqId, effectiveCode],
-    queryFn: () => landApi.listCompensations(acqId, effectiveCode),
+    queryKey: ["compensations", acqId, effectiveCode, selectedType],
+    queryFn: () => landApi.listCompensations(acqId, effectiveCode, selectedType),
     enabled: !!acqId && !!effectiveCode,
   });
 

@@ -54,6 +54,7 @@ interface Props {
   acqId: string;
   parcelId: string;
   parcelCode: string;
+  valuationType?: "asset" | "independent" | "mika";
   svc: ValuationImportSvc;
   specTypes: AssetSpecType[];
   calcTypes: AssetCalcType[];
@@ -119,6 +120,7 @@ export function ValuationExcelImport({
   acqId,
   parcelId,
   parcelCode,
+  valuationType = "asset",
   svc,
   specTypes,
   calcTypes,
@@ -275,6 +277,7 @@ export function ValuationExcelImport({
 
     const payload: ValuationImportPayload = {
       parcel_id: parcelCode,
+      valuation_type: valuationType,
       replace: true, // хуучин хөрөнгө/олговрыг backend дээр нэг транзакцаар эхлээд устгана
       land: {
         land_area_m2: data.land.affectedAreaM2 ?? 0,

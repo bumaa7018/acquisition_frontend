@@ -7,7 +7,7 @@ import { Info } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
-import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle } from "@/types";
 import type { ParcelStatus } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
@@ -66,6 +66,7 @@ export function ParcelsTab({
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
+  const isFinance = isFinanceSpecialist();
   const currentUserId = getCurrentUserId();
   const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
@@ -119,13 +120,24 @@ export function ParcelsTab({
     filter.landuse ||
     filter.status_id !== 0
   );
-  const visibleParcels = (parcels?.data ?? []).filter((parcel) =>
-    canAccessParcel(
-      parcel.status_name,
-      acquisitionProfOrgId,
-      parcel.independent_org_id,
-    ),
-  );
+  const visibleParcels = (parcels?.data ?? []).filter((parcel) => {
+    if (
+      !canAccessParcel(
+        parcel.status_name,
+        acquisitionProfOrgId,
+        parcel.independent_org_id,
+      )
+    )
+      return false;
+    // Санхүүгийн мэргэжилтэнд зөвхөн санхүүд илгээсэн (эсвэл аль хэдийн
+    // баталгаажсан) үнэлгээний урсгалтай нэгж талбар харагдана.
+    if (isFinance) {
+      return Object.values(parcel.valuation_statuses ?? {}).some(
+        (status) => status === "submitted" || status === "approved",
+      );
+    }
+    return true;
+  });
 
   return (
     <>

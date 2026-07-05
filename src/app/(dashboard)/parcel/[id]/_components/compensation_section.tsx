@@ -50,18 +50,27 @@ export function CompensationSection({
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
+  // Санхүү баталгаажуулсан үндсэн урсгал — зөвхөн түүний хөрөнгө/олговрыг харуулна.
+  const { data: parcelData } = useQuery({
+    queryKey: ["parcel-full", acqId, parcelId],
+    queryFn: () => landApi.getParcel(acqId, parcelId),
+    enabled: !!acqId && !!parcelId,
+  });
+  const selectedType = parcelData?.selected_valuation_type ?? "asset";
+
   const { data: allComps = [], isLoading } = useQuery({
     queryKey: ["compensations", acqId],
     queryFn: () => landApi.listCompensations(acqId),
     enabled: !!acqId,
   });
-  const compensations = parcelCode
+  const compensations = (parcelCode
     ? allComps.filter((c) => c.parcel_id === parcelCode)
-    : allComps;
+    : allComps
+  ).filter((c) => (c.valuation_type ?? "asset") === selectedType);
 
   const { data: assetsResult } = useQuery({
-    queryKey: ["parcel-assets", acqId, parcelCode],
-    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: parcelCode }),
+    queryKey: ["parcel-assets", acqId, parcelCode, selectedType],
+    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: parcelCode, valuation_type: selectedType }),
     enabled: !!acqId && !!parcelCode,
   });
 

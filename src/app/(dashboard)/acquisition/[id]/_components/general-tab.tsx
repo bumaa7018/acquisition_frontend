@@ -18,10 +18,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["land", id],
     queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
   });
-  const { data: fundingSources = [] } = useQuery({
-    queryKey: ["funding-sources", id],
-    queryFn: () => (isProfOrg ? profApi.profListFundingSources(id) : landApi.listFundingSources(id)),
-  });
+  // Санхүүжилтийн эх үүсвэр дэлгэрэнгүй API-тай хамт ирдэг — тусдаа дуудлага хийхгүй
+  const fundingSources = acq?.funding_sources ?? [];
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
@@ -400,7 +398,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               )}
             </div>
           ))}
-          {/* Санхүүжилтийн эх үүсвэр — funding-sources API-аас авна */}
+          {/* Санхүүжилтийн эх үүсвэр — дэлгэрэнгүй API-ийн funding_sources талбараас */}
           <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-0.5">
               Санхүүжилтийн эх үүсвэр

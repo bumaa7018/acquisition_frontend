@@ -18,10 +18,13 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
   const [form, setForm] = useState(EMPTY_FORM);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
-  const { data: sources = [], isLoading } = useQuery({
-    queryKey: ["funding-sources", id],
-    queryFn: () => landApi.listFundingSources(id),
+  // Санхүүжилтийн эх үүсвэр чөлөөлөлтийн дэлгэрэнгүй API-тай хамт ирдэг —
+  // тусдаа жагсаалтын API байхгүй. Энэ таб зөвхөн дотоод хэрэглэгчид харагдана.
+  const { data: acq, isLoading } = useQuery({
+    queryKey: ["land", id],
+    queryFn: () => landApi.getById(id),
   });
+  const sources = acq?.funding_sources ?? [];
 
   const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); };
 
@@ -40,7 +43,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     },
     onSuccess: () => {
       toast.success(editId ? "Мэдээлэл шинэчлэгдлээ" : "Санхүүжилтын эх үүсвэр нэмэгдлээ");
-      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+      queryClient.invalidateQueries({ queryKey: ["land", id] });
       closeForm();
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
@@ -50,7 +53,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     mutationFn: (srcId: string) => landApi.deleteFundingSource(id, srcId),
     onSuccess: () => {
       toast.success("Устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+      queryClient.invalidateQueries({ queryKey: ["land", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });

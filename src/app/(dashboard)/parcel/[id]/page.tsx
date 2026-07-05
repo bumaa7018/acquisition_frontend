@@ -14,7 +14,7 @@ import { ProgressTab } from "./_components/progress_tab";
 import { RealEstateTab } from "./_components/real_estate_tab";
 import { DocumentsTab } from "./_components/documents_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
-import { canAccessParcel, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import { canAccessParcel, canViewParcelTab, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { Users } from "lucide-react";
 
 export default function ParcelDetailPage() {
@@ -22,7 +22,6 @@ export default function ParcelDetailPage() {
   const searchParams = useSearchParams();
   const acqId = searchParams.get("acq") ?? "";
   const [tab, setTab] = useState<Tab>("general");
-  const [tabKey, setTabKey] = useState(0);
   const [mounted, setMounted] = useState(false);
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
@@ -31,7 +30,6 @@ export default function ParcelDetailPage() {
 
   function handleTabClick(key: Tab) {
     setTab(key);
-    setTabKey((k) => k + 1);
   }
 
   const { data: parcel, isLoading: parcelLoading, error: parcelError } = useQuery({
@@ -67,15 +65,11 @@ export default function ParcelDetailPage() {
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
   ];
+  // Таб бүр хандах эрхийн бодлогоор (access-policy) харагдана.
+  // mounted шалгалт — SSR/hydration үед localStorage-ийн токен байхгүй тул хойшлуулна.
   const visibleTabs = !mounted
     ? []
-    : isExternal
-      ? TABS.filter((item) =>
-          isProfOrg
-            ? item.key === "general" || item.key === "holder" || item.key === "realEstate"
-            : item.key === "general" || item.key === "realEstate",
-        )
-      : TABS;
+    : TABS.filter((item) => canViewParcelTab(item.key));
   const activeTab = visibleTabs.some((item) => item.key === tab)
     ? tab
     : "general";
@@ -231,13 +225,12 @@ export default function ParcelDetailPage() {
         </div>
       )}
 
-      {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
-      {activeTab === "general" && <GeneralTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "holder" && <HolderTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "progress" && <ProgressTab key={tabKey} acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "realEstate" && <RealEstateTab key={tabKey} acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
-      {activeTab === "documents" && <DocumentsTab key={tabKey} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "print" && <PrintTemplatesTab key={tabKey} parcel={parcel} />}
+      {activeTab === "general" && <GeneralTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "holder" && <HolderTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
+      {activeTab === "documents" && <DocumentsTab parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "print" && <PrintTemplatesTab parcel={parcel} />}
     </div>
   );
 }

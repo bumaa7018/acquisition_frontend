@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
 
 type ModalState = "closed" | "picking" | "confirming";
+const EVALUATION_STATUS_NAME = "Үнэлгээ хийх";
+const RELEASED_STATUS_NAME = "Чөлөөлсөн";
 
 export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
@@ -27,7 +29,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
     queryFn: () => landApi.listCompensations(acqId),
     enabled: !!acqId && !!parcelCode,
   });
-  const parcelComps = parcelCode ? allComps.filter((c) => c.parcel_id === parcelCode) : [];
+  // Нөхөх олговрын үндсэн (санхүү сонгосон) урсгал — түүнийхээ олговрыг л тооцно.
+  const selectedType = parcelFull?.selected_valuation_type ?? null;
+  const parcelComps = parcelCode
+    ? allComps.filter((c) => c.parcel_id === parcelCode && c.valuation_type === (selectedType ?? "asset"))
+    : [];
   const hasApprovedReport = parcelComps.some(
     (c) => c.status === "approved" && !!c.valuation_report_url,
   );
@@ -37,6 +43,9 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
     queryFn: () => parcelApi.getAvailableStatuses(acqId, parcelId),
     enabled: !!acqId && !!parcelId,
   });
+
+  // Нөхөх олговор баталгаажсан = санхүү аль нэг урсгалыг зөвшөөрч үндсэн болгосон.
+  const compApproved = !!selectedType;
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
     queryKey: ["parcel-status-history", acqId, parcelId],
@@ -83,6 +92,9 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   const currentStatusId = parcelFull?.status_id ?? parcelFull?.status;
   const currentStatusName = parcelFull?.status_name;
   const currentStyle = getParcelStatusStyle(currentStatusId, currentStatusName ?? "");
+  const isMovingFromEvaluationToReleased =
+    currentStatusName === EVALUATION_STATUS_NAME && selected?.name === RELEASED_STATUS_NAME;
+  const blocksForUnapprovedCompensation = isMovingFromEvaluationToReleased && !compApproved;
 
   return (
     <>
@@ -310,7 +322,17 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 })()}
               </div>
 
-              {selected.name === "Чөлөөлсөн" && !hasApprovedReport && (
+              {blocksForUnapprovedCompensation && (
+                <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                    Нөхөх олговрын үнэлгээ хараахан <strong>баталгаажаагүй</strong> байна. Дараагийн явц руу шилжихийн өмнө
+                    санхүүгийн мэргэжилтэн нөхөх олговрыг зөвшөөрч баталгаажуулах шаардлагатай.
+                  </p>
+                </div>
+              )}
+
+              {selected.name === RELEASED_STATUS_NAME && !hasApprovedReport && (
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
@@ -329,7 +351,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 </button>
                 <button
                   onClick={handleConfirm}
-                  disabled={updateStatusMutation.isPending || (selected.name === "Чөлөөлсөн" && !hasApprovedReport)}
+                  disabled={
+                    updateStatusMutation.isPending ||
+                    blocksForUnapprovedCompensation ||
+                    (selected.name === RELEASED_STATUS_NAME && !hasApprovedReport)
+                  }
                   className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {updateStatusMutation.isPending ? "Хадгалж байна..." : "Тийм, хадгалах"}

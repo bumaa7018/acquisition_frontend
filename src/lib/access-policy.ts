@@ -32,23 +32,23 @@ export type AccessParcel = {
   independent_org_id?: string | null;
 };
 
+// Чөлөөлөлтийн дэлгэрэнгүйн табууд — acquisition/[id]/page.tsx-ийн Tab-тай ижил
 export type AcquisitionTabKey =
   | "general"
   | "attachments"
-  | "progress"
   | "parcels"
-  | "assets"
-  | "compensation"
+  | "financing"
+  | "progress"
   | "assignees"
   | "map";
 
+// Нэгж талбарын дэлгэрэнгүйн табууд — parcel/[id]/_components/constants Tab-тай ижил
 export type ParcelTabKey =
   | "general"
+  | "holder"
   | "progress"
   | "realEstate"
   | "documents"
-  | "payment"
-  | "map"
   | "print";
 
 export type ValuationSubTabKey = "asset" | "independent" | "mika";
@@ -149,6 +149,8 @@ export function canViewParcelTabForActor(
   tab: ParcelTabKey,
 ): boolean {
   if (!isExternalSpecialActor(actor)) return true;
+  // Мэргэжлийн байгууллага эзэмшигчийн мэдээллийг нэмж харна
+  if (isProfessionalOrgActor(actor) && tab === "holder") return true;
   return tab === "general" || tab === "realEstate";
 }
 
