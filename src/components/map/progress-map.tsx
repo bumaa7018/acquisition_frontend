@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import OLMap from "ol/Map";
 import View from "ol/View";
@@ -7,6 +7,7 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
+import ImageStatic from "ol/source/ImageStatic";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
@@ -15,12 +16,14 @@ import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
-import { landApi } from "@/lib/api";
+import { landApi, droneImageApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import type { BoundaryHistory } from "@/types";
-import LayerPanel, { type LayerConfig } from "./layer-panel";
+import type { BoundaryHistory, DroneImage } from "@/types";
+import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 
 const PLAN_LAYER_ID = "plan";
+const HISTORY_GROUP: LayerGroupConfig = { id: "boundary_history", label: "Хилийн өөрчлөлт", color: "#02c0ce" };
+const DRONE_GROUP: LayerGroupConfig = { id: "drone_images", label: "Дрон зураг", color: "#f59e0b" };
 
 interface Props {
   acquisitionId: string;
@@ -31,6 +34,8 @@ export function ProgressMap({ acquisitionId }: Props) {
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
+  const droneLayers = useRef<Record<string, ImageLayer<ImageStatic>>>({});
+  const droneExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
   const acqFilter = `acquisition_id='${acquisitionId}'`;
@@ -41,9 +46,26 @@ export function ProgressMap({ acquisitionId }: Props) {
     enabled: !!acquisitionId,
   });
 
+  const { data: droneImages = [] } = useQuery({
+    queryKey: ["drone-images"],
+    queryFn: () => droneImageApi.list(),
+  });
+
   const sortedHistory = [...boundaryHistory].sort(
     (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
   );
+
+  // Only "acquisition"-type drone images tied to this specific acquisition.
+  const relevantDroneImages = useMemo(() => {
+    return droneImages
+      .filter(
+        (img): img is DroneImage & { geometry_wkt: string } =>
+          !!img.geometry_wkt && img.type === "acquisition" && img.acquisition_id === acquisitionId,
+      )
+      .sort(
+        (a, b) => new Date(a.captured_at ?? 0).getTime() - new Date(b.captured_at ?? 0).getTime(),
+      );
+  }, [droneImages, acquisitionId]);
 
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: PLAN_LAYER_ID, label: "Төлөвлөгөөний хил", color: "#a855f7", visible: true },
@@ -55,11 +77,19 @@ export function ProgressMap({ acquisitionId }: Props) {
       ...sortedHistory.map((h, i) => ({
         id: h.id,
         label: `${i + 1}. ${formatDate(h.changed_at)}`,
-        color: "#02c0ce",
+        color: HISTORY_GROUP.color,
         visible: false,
+        group: HISTORY_GROUP.id,
+      })),
+      ...relevantDroneImages.map((img, i) => ({
+        id: String(img.id),
+        label: `${i + 1}. ${formatDate(img.captured_at)}`,
+        color: DRONE_GROUP.color,
+        visible: false,
+        group: DRONE_GROUP.id,
       })),
     ]);
-  }, [sortedHistory]);
+  }, [sortedHistory, relevantDroneImages]);
 
   const makeHistoryLayer = useCallback((history: BoundaryHistory) => {
     const features = [];
@@ -100,6 +130,27 @@ export function ProgressMap({ acquisitionId }: Props) {
     });
   }, []);
 
+  const makeDroneLayer = useCallback((img: DroneImage & { geometry_wkt: string }) => {
+    const geom = wktFormat.current.readGeometry(img.geometry_wkt, {
+      dataProjection: "EPSG:4326",
+      featureProjection: "EPSG:3857",
+    });
+    const extent = geom.getExtent();
+    droneExtents.current[String(img.id)] = extent;
+    return new ImageLayer({
+      visible: false,
+      zIndex: 90,
+      source: img.image_url
+        ? new ImageStatic({
+            url: img.image_url,
+            imageExtent: extent,
+            projection: "EPSG:3857",
+            crossOrigin: "anonymous",
+          })
+        : undefined,
+    });
+  }, []);
+
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) =>
       prev.map((l) => {
@@ -108,18 +159,26 @@ export function ProgressMap({ acquisitionId }: Props) {
 
         if (id === PLAN_LAYER_ID) {
           planLayer.current?.setVisible(next.visible);
-        } else {
+        } else if (historyLayers.current[id]) {
           const layer = historyLayers.current[id];
-          layer?.setVisible(next.visible);
-          if (next.visible && layer && olMap.current) {
-            const extent = layer.getSource()?.getExtent();
-            if (extent) {
-              olMap.current.getView().fit(extent, {
-                padding: [48, 48, 48, 48],
-                maxZoom: 17,
-                duration: 500,
-              });
-            }
+          layer.setVisible(next.visible);
+          const extent = layer.getSource()?.getExtent();
+          if (next.visible && extent && olMap.current) {
+            olMap.current.getView().fit(extent, {
+              padding: [48, 48, 48, 48],
+              maxZoom: 17,
+              duration: 500,
+            });
+          }
+        } else if (droneLayers.current[id]) {
+          droneLayers.current[id].setVisible(next.visible);
+          const extent = droneExtents.current[id];
+          if (next.visible && extent && olMap.current) {
+            olMap.current.getView().fit(extent, {
+              padding: [48, 48, 48, 48],
+              maxZoom: 17,
+              duration: 500,
+            });
           }
         }
         return next;
@@ -206,6 +265,7 @@ export function ProgressMap({ acquisitionId }: Props) {
       map.setTarget(undefined);
       olMap.current = null;
       historyLayers.current = {};
+      droneLayers.current = {};
     };
   }, [acqFilter, acquisitionId]);
 
@@ -221,13 +281,26 @@ export function ProgressMap({ acquisitionId }: Props) {
     });
   }, [sortedHistory, makeHistoryLayer]);
 
+  // Drone image layers are added lazily once the relevant (overlapping) list is known.
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map || !relevantDroneImages.length) return;
+    relevantDroneImages.forEach((img) => {
+      const id = String(img.id);
+      if (droneLayers.current[id]) return;
+      const layer = makeDroneLayer(img);
+      droneLayers.current[id] = layer;
+      map.addLayer(layer);
+    });
+  }, [relevantDroneImages, makeDroneLayer]);
+
   return (
     <div
       className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
       style={{ height: 360 }}
     >
       <div ref={mapRef} className="h-full w-full" />
-      <LayerPanel layers={layers} onToggle={handleToggle} />
+      <LayerPanel layers={layers} groups={[HISTORY_GROUP, DRONE_GROUP]} onToggle={handleToggle} />
     </div>
   );
 }

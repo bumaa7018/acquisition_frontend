@@ -35,7 +35,7 @@ import type {
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, AssetSpec, AssetCalculation,
-  AssetSpecType, AssetCalcType,
+  AssetSpecType, AssetCalcType, DroneImage,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -594,6 +594,11 @@ export const reportApi = {
 }
 
 // ── Plans ─────────────────────────────────────────────
+export const droneImageApi = {
+  list: () =>
+    api.get<ApiResponse<DroneImage[]>>('/drone-images').then(r => r.data.data ?? []),
+}
+
 export const planApi = {
   search: (code: string) =>
     api.get<ApiResponse<Plan>>('/plans/search', { params: { code } }).then(r => r.data.data),
