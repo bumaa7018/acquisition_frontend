@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
@@ -15,6 +15,14 @@ const ProgressMap = dynamic(
 );
 
 export default function DronePage() {
+  return (
+    <Suspense fallback={null}>
+      <DronePageContent />
+    </Suspense>
+  );
+}
+
+function DronePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [acquisitionId, setAcquisitionId] = useState(
