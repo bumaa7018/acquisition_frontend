@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Columns2 } from "lucide-react";
+import { Columns2, ArrowRight } from "lucide-react";
 import { droneImageApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import type { DroneImage } from "@/types";
@@ -22,9 +22,28 @@ function Placeholder({ text }: { text: string }) {
   );
 }
 
-export function DroneCompare({ acquisitionId }: Props) {
-  const [splitPercent, setSplitPercent] = useState(50);
+function Panel({ label, image }: { label: string; image: DroneImage & { image_url: string } }) {
+  return (
+    <div className="relative flex-1 overflow-hidden rounded-lg bg-slate-100 dark:bg-[#252630]">
+      <img
+        src={image.image_url}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/60 to-transparent px-2.5 py-2">
+        <span className="text-[10.5px] font-semibold uppercase tracking-wider text-white/80">
+          {label}
+        </span>
+        <span className="rounded-md bg-black/50 px-1.5 py-0.5 text-[11px] font-medium text-white">
+          {formatDate(image.captured_at)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
+export function DroneCompare({ acquisitionId }: Props) {
   const { data: droneImages = [] } = useQuery({
     queryKey: ["drone-images"],
     queryFn: () => droneImageApi.list(),
@@ -49,50 +68,12 @@ export function DroneCompare({ acquisitionId }: Props) {
     return <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" />;
 
   return (
-    <div
-      className="relative w-full select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]"
-      style={{ height: 360 }}
-    >
-      {/* base — most recent image, fills the whole frame */}
-      <img
-        src={last.image_url}
-        alt=""
-        draggable={false}
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      {/* overlay — earliest image, clipped to the left portion up to the slider */}
-      <div
-        className="absolute inset-0 overflow-hidden"
-        style={{ clipPath: `inset(0 ${100 - splitPercent}% 0 0)` }}
-      >
-        <img
-          src={first.image_url}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+    <div className="flex items-stretch gap-2" style={{ height: 360 }}>
+      <Panel label="Эхний зураг" image={first} />
+      <div className="flex shrink-0 items-center text-slate-300 dark:text-slate-600">
+        <ArrowRight className="h-5 w-5" />
       </div>
-
-      <span className="absolute left-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-        {formatDate(first.captured_at)}
-      </span>
-      <span className="absolute right-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-        {formatDate(last.captured_at)}
-      </span>
-
-      <div
-        className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_4px_rgba(0,0,0,0.6)] pointer-events-none z-10"
-        style={{ left: `${splitPercent}%` }}
-      />
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={splitPercent}
-        onChange={(e) => setSplitPercent(Number(e.target.value))}
-        className="absolute left-0 w-full z-20 cursor-ew-resize"
-        style={{ top: "50%", accentColor: "#02c0ce" }}
-      />
+      <Panel label="Сүүлийн зураг" image={last} />
     </div>
   );
 }
