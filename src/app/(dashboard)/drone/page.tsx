@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 
@@ -14,7 +15,21 @@ const ProgressMap = dynamic(
 );
 
 export default function DronePage() {
-  const [acquisitionId, setAcquisitionId] = useState("");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [acquisitionId, setAcquisitionId] = useState(
+    () => searchParams.get("acq") ?? "",
+  );
+
+  function selectAcquisition(id: string) {
+    setAcquisitionId(id);
+    const params = new URLSearchParams(searchParams);
+    if (id) params.set("acq", id);
+    else params.delete("acq");
+    router.replace(`/drone${params.toString() ? `?${params.toString()}` : ""}`, {
+      scroll: false,
+    });
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -30,8 +45,8 @@ export default function DronePage() {
       <div className="ap-card p-4">
         <AcquisitionSelect
           selectedId={acquisitionId}
-          onSelect={(id) => setAcquisitionId(id)}
-          onClear={() => setAcquisitionId("")}
+          onSelect={(id) => selectAcquisition(id)}
+          onClear={() => selectAcquisition("")}
           className="w-72"
         />
       </div>
