@@ -7,6 +7,7 @@ import { STATUS_CFG, hasPermission } from "./_components/shared";
 import { GeneralTab } from "./_components/general-tab";
 import { AttachmentsTab } from "./_components/attachments-tab";
 import { ProgressTab } from "./_components/progress-tab";
+import { DroneTab } from "./_components/drone-tab";
 import { AssigneesTab } from "./_components/assignees-tab";
 import { ParcelsTab } from "./_components/parcels-tab";
 import { FinancingTab } from "./_components/financing-tab";
@@ -327,6 +328,7 @@ export default function AcquisitionDetailPage() {
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />
         </div>
       )}
+      {activeTab === "drone" && <DroneTab key={tabKey} id={id} />}
     </div>
   );
 }

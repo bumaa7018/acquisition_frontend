@@ -1,6 +1,5 @@
 "use client";
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronRight, Clock, X } from "lucide-react";
@@ -8,16 +7,6 @@ import { landApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import { STATUS_CFG } from "./shared";
-
-const ProgressMap = dynamic(
-  () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="h-[360px] rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />
-    ),
-  },
-);
 
 function AdvanceModal({
   id,
@@ -236,15 +225,14 @@ export function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-        {/* Progress table */}
-        <div className="ap-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              Явцын түүх
-            </p>
-          </div>
-          {isLoading ? (
+      {/* Progress table */}
+      <div className="ap-card overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+            Явцын түүх
+          </p>
+        </div>
+        {isLoading ? (
             <div className="p-5 space-y-3 animate-pulse">
               {[...Array(3)].map((_, i) => (
                 <div
@@ -324,19 +312,6 @@ export function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               </table>
             </div>
           )}
-        </div>
-
-        {/* Progress map */}
-        <div className="ap-card overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              Явцын зураг
-            </p>
-          </div>
-          <div className="p-5">
-            <ProgressMap acquisitionId={id} />
-          </div>
-        </div>
       </div>
     </div>
   );
