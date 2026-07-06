@@ -3,6 +3,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
+import { DroneCompare } from "./_components/drone-compare";
 
 const ProgressMap = dynamic(
   () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
@@ -59,14 +60,27 @@ function DronePageContent() {
         />
       </div>
 
-      <div className="ap-card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            Явцын зураг
-          </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className="ap-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Явцын зураг
+            </p>
+          </div>
+          <div className="p-5">
+            <ProgressMap acquisitionId={acquisitionId} />
+          </div>
         </div>
-        <div className="p-5">
-          <ProgressMap acquisitionId={acquisitionId} />
+
+        <div className="ap-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Харьцуулах
+            </p>
+          </div>
+          <div className="p-5">
+            <DroneCompare acquisitionId={acquisitionId} />
+          </div>
         </div>
       </div>
     </div>
