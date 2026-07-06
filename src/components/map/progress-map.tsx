@@ -188,8 +188,54 @@ export function ProgressMap({ acquisitionId }: Props) {
     );
   }, []);
 
+  // Base map — created once and kept mounted regardless of whether an acquisition is selected.
   useEffect(() => {
-    if (!mapRef.current || olMap.current || !acquisitionId) return;
+    if (!mapRef.current || olMap.current) return;
+
+    const map = new OLMap({
+      target: mapRef.current,
+      layers: [
+        new TileLayer({
+          source: new XYZ({
+            urls: [
+              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
+            ],
+            maxZoom: 20,
+            crossOrigin: "anonymous",
+          }),
+        }),
+      ],
+      view: new View({
+        center: fromLonLat([104.9, 47.9]),
+        zoom: 5,
+        minZoom: 4,
+        maxZoom: 20,
+      }),
+    });
+
+    olMap.current = map;
+
+    return () => {
+      map.setTarget(undefined);
+      olMap.current = null;
+    };
+  }, []);
+
+  // Plan layer + boundary/drone overlays are rebuilt whenever the selected acquisition changes,
+  // since the same map instance can now be reused across different selections (e.g. on the drone page).
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map) return;
+
+    if (planLayer.current) map.removeLayer(planLayer.current);
+    Object.values(historyLayers.current).forEach((l) => map.removeLayer(l));
+    Object.values(droneLayers.current).forEach((l) => map.removeLayer(l));
+    historyLayers.current = {};
+    droneLayers.current = {};
+    droneExtents.current = {};
 
     const plan = new ImageLayer({
       opacity: 0.85,
@@ -207,33 +253,9 @@ export function ProgressMap({ acquisitionId }: Props) {
       }),
     });
     planLayer.current = plan;
+    map.addLayer(plan);
 
-    const map = new OLMap({
-      target: mapRef.current,
-      layers: [
-        new TileLayer({
-          source: new XYZ({
-            urls: [
-              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-            ],
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
-        plan,
-      ],
-      view: new View({
-        center: fromLonLat([104.9, 47.9]),
-        zoom: 5,
-        minZoom: 4,
-        maxZoom: 20,
-      }),
-    });
-
-    olMap.current = map;
+    if (!acquisitionId) return;
 
     const params = new URLSearchParams({
       service: "WFS",
@@ -262,13 +284,6 @@ export function ProgressMap({ acquisitionId }: Props) {
       .catch(() => {
         /* keep default view */
       });
-
-    return () => {
-      map.setTarget(undefined);
-      olMap.current = null;
-      historyLayers.current = {};
-      droneLayers.current = {};
-    };
   }, [acqFilter, acquisitionId]);
 
   // History layers are added lazily once boundary history has loaded.

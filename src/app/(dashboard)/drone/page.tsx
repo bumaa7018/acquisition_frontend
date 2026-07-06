@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Camera } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 
 const ProgressMap = dynamic(
@@ -44,14 +43,7 @@ export default function DronePage() {
           </p>
         </div>
         <div className="p-5">
-          {acquisitionId ? (
-            <ProgressMap acquisitionId={acquisitionId} />
-          ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-slate-400 dark:text-slate-500">
-              <Camera className="h-7 w-7 mb-2 opacity-30" />
-              <p className="text-[13px]">Эхлээд чөлөөлөлт сонгоно уу</p>
-            </div>
-          )}
+          <ProgressMap acquisitionId={acquisitionId} />
         </div>
       </div>
     </div>
