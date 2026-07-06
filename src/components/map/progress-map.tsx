@@ -323,8 +323,9 @@ export function ProgressMap({ acquisitionId }: Props) {
   const firstDroneImage = relevantDroneImages[0];
   const lastDroneImage = relevantDroneImages[relevantDroneImages.length - 1];
 
-  // Split-swipe compare: clips the "before" (earliest) image so it only covers the left
-  // portion of the map, revealing the "after" (latest) image underneath on the right.
+  // Split-swipe compare: clips the "after" (latest) image so it only covers the left
+  // portion of the map, revealing the "before" (earliest) image underneath on the right.
+  // Dragging left shrinks/hides "after"; dragging right shrinks/hides "before".
   useEffect(() => {
     const map = olMap.current;
     if (!map || !compareMode || !canCompare || !firstDroneImage || !lastDroneImage) return;
@@ -350,11 +351,9 @@ export function ProgressMap({ acquisitionId }: Props) {
     Object.entries(droneLayers.current).forEach(([id, l]) =>
       l.setVisible(id === beforeId || id === afterId),
     );
-    afterLayer.setZIndex(90);
-    beforeLayer.setZIndex(91);
+    beforeLayer.setZIndex(90);
+    afterLayer.setZIndex(91);
 
-    // "before" (earliest) is clipped to the left portion up to the slider; "after" (latest)
-    // sits underneath and fills the rest, so left = old, right = recent — matching the labels.
     const clip = (event: RenderEvent) => {
       const ctx = event.context as CanvasRenderingContext2D;
       const size = map.getSize();
@@ -368,8 +367,8 @@ export function ProgressMap({ acquisitionId }: Props) {
     const unclip = (event: RenderEvent) => {
       (event.context as CanvasRenderingContext2D).restore();
     };
-    beforeLayer.on("prerender", clip);
-    beforeLayer.on("postrender", unclip);
+    afterLayer.on("prerender", clip);
+    afterLayer.on("postrender", unclip);
 
     const beforeExtent = droneExtents.current[beforeId];
     const afterExtent = droneExtents.current[afterId];
@@ -382,8 +381,8 @@ export function ProgressMap({ acquisitionId }: Props) {
     map.render();
 
     return () => {
-      beforeLayer.un("prerender", clip);
-      beforeLayer.un("postrender", unclip);
+      afterLayer.un("prerender", clip);
+      afterLayer.un("postrender", unclip);
       planLayer.current?.setVisible(prevVisibility.plan);
       Object.entries(historyLayers.current).forEach(([id, l]) =>
         l.setVisible(prevVisibility.history[id] ?? false),
@@ -409,14 +408,14 @@ export function ProgressMap({ acquisitionId }: Props) {
       {compareMode && canCompare && firstDroneImage && lastDroneImage ? (
         <>
           <div className="absolute inset-x-3 top-3 z-20 flex items-center justify-between rounded-lg bg-black/60 backdrop-blur px-3 py-2 text-[11.5px] font-medium text-white">
-            <span>{formatDate(firstDroneImage.captured_at)}</span>
+            <span>{formatDate(lastDroneImage.captured_at)}</span>
             <button
               onClick={() => setCompareMode(false)}
               className="flex items-center gap-1 rounded-md bg-white/15 px-2 py-1 hover:bg-white/25 transition-colors"
             >
               <X className="h-3 w-3" /> Гарах
             </button>
-            <span>{formatDate(lastDroneImage.captured_at)}</span>
+            <span>{formatDate(firstDroneImage.captured_at)}</span>
           </div>
           <div
             className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_4px_rgba(0,0,0,0.6)] pointer-events-none z-10"
