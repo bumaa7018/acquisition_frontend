@@ -11,7 +11,7 @@ import ImageStatic from "ol/source/ImageStatic";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
-import { extend as extendExtent, type Extent } from "ol/extent";
+import { getIntersection, isEmpty as isEmptyExtent } from "ol/extent";
 import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
 import type RenderEvent from "ol/render/Event";
@@ -372,8 +372,10 @@ export function ProgressMap({ acquisitionId }: Props) {
     const beforeExtent = droneExtents.current[beforeId];
     const afterExtent = droneExtents.current[afterId];
     if (beforeExtent && afterExtent) {
-      const combined = extendExtent(beforeExtent.slice() as Extent, afterExtent);
-      map.getView().fit(combined, { padding: [48, 48, 48, 48], maxZoom: 17, duration: 500 });
+      const overlap = getIntersection(beforeExtent, afterExtent);
+      if (!isEmptyExtent(overlap)) {
+        map.getView().fit(overlap, { padding: [48, 48, 48, 48], maxZoom: 17, duration: 500 });
+      }
     }
     map.render();
 
