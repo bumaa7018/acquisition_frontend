@@ -60,7 +60,7 @@ function DronePageContent() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         <div className="ap-card overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
@@ -72,7 +72,7 @@ function DronePageContent() {
           </div>
         </div>
 
-        {/* <div className="ap-card overflow-hidden">
+        <div className="ap-card overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
               Харьцуулах
@@ -81,7 +81,7 @@ function DronePageContent() {
           <div className="p-5">
             <DroneCompare acquisitionId={acquisitionId} />
           </div>
-        </div> */}
+        </div>
       </div>
     </div>
   );

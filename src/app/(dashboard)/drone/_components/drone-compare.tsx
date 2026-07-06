@@ -58,7 +58,7 @@ export function DroneCompare({ acquisitionId }: Props) {
         src={last.image_url}
         alt=""
         draggable={false}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-contain"
       />
       {/* overlay — earliest image, clipped to the left portion up to the slider */}
       <div
@@ -69,7 +69,7 @@ export function DroneCompare({ acquisitionId }: Props) {
           src={first.image_url}
           alt=""
           draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain"
         />
       </div>
 
