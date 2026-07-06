@@ -49,7 +49,7 @@ type Tab =
   | "parcels"
   | "assignees"
   | "map"
-  | "financing";
+  | "financing"|"drone";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 async function generateReport(acqId: string) {
@@ -205,6 +205,7 @@ export default function AcquisitionDetailPage() {
       icon: <Users className="h-4 w-4" />,
     },
     { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
+    { key: "drone", label: "Дроне", icon: <Map className="h-4 w-4" /> },
   ];
   const visibleTabs = isExternal
     ? TABS.filter((item) => item.key === "general" || item.key === "parcels")
