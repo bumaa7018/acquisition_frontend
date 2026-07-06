@@ -323,8 +323,8 @@ export function ProgressMap({ acquisitionId }: Props) {
   const firstDroneImage = relevantDroneImages[0];
   const lastDroneImage = relevantDroneImages[relevantDroneImages.length - 1];
 
-  // Split-swipe compare: clips the "after" (latest) image so it only covers the left
-  // portion of the map, revealing the "before" (earliest) image underneath on the right.
+  // Split-swipe compare: clips the "before" (earliest) image so it only covers the left
+  // portion of the map, revealing the "after" (latest) image underneath on the right.
   useEffect(() => {
     const map = olMap.current;
     if (!map || !compareMode || !canCompare || !firstDroneImage || !lastDroneImage) return;
@@ -350,9 +350,11 @@ export function ProgressMap({ acquisitionId }: Props) {
     Object.entries(droneLayers.current).forEach(([id, l]) =>
       l.setVisible(id === beforeId || id === afterId),
     );
-    beforeLayer.setZIndex(90);
-    afterLayer.setZIndex(91);
+    afterLayer.setZIndex(90);
+    beforeLayer.setZIndex(91);
 
+    // "before" (earliest) is clipped to the left portion up to the slider; "after" (latest)
+    // sits underneath and fills the rest, so left = old, right = recent — matching the labels.
     const clip = (event: RenderEvent) => {
       const ctx = event.context as CanvasRenderingContext2D;
       const size = map.getSize();
@@ -366,8 +368,8 @@ export function ProgressMap({ acquisitionId }: Props) {
     const unclip = (event: RenderEvent) => {
       (event.context as CanvasRenderingContext2D).restore();
     };
-    afterLayer.on("prerender", clip);
-    afterLayer.on("postrender", unclip);
+    beforeLayer.on("prerender", clip);
+    beforeLayer.on("postrender", unclip);
 
     const beforeExtent = droneExtents.current[beforeId];
     const afterExtent = droneExtents.current[afterId];
@@ -380,8 +382,8 @@ export function ProgressMap({ acquisitionId }: Props) {
     map.render();
 
     return () => {
-      afterLayer.un("prerender", clip);
-      afterLayer.un("postrender", unclip);
+      beforeLayer.un("prerender", clip);
+      beforeLayer.un("postrender", unclip);
       planLayer.current?.setVisible(prevVisibility.plan);
       Object.entries(historyLayers.current).forEach(([id, l]) =>
         l.setVisible(prevVisibility.history[id] ?? false),
