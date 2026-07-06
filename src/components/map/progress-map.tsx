@@ -51,9 +51,11 @@ export function ProgressMap({ acquisitionId }: Props) {
     queryFn: () => droneImageApi.list(),
   });
 
-  const sortedHistory = [...boundaryHistory].sort(
-    (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
-  );
+  const sortedHistory = useMemo(() => {
+    return [...boundaryHistory].sort(
+      (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime(),
+    );
+  }, [boundaryHistory]);
 
   // Only "acquisition"-type drone images tied to this specific acquisition.
   const relevantDroneImages = useMemo(() => {
