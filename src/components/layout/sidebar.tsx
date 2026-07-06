@@ -27,6 +27,7 @@ import {
   GitBranch,
   FolderOpen,
   Calculator,
+  Camera,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -35,6 +36,7 @@ const NAV_MAIN = [
   { href: "/acquisition", label: "Газар чөлөөлөлт", icon: FileText },
   { href: "/report", label: "Тайлан", icon: BarChart3 },
   { href: "/map", label: "Газрын зураг", icon: Map },
+  { href: "/drone", label: "Дрон зураг", icon: Camera },
   { href: "/parcel", label: "Нэгж талбарын түүх", icon: Grid2x2 },
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
 ];

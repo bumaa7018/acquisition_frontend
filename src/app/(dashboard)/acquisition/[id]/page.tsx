@@ -7,7 +7,6 @@ import { STATUS_CFG, hasPermission } from "./_components/shared";
 import { GeneralTab } from "./_components/general-tab";
 import { AttachmentsTab } from "./_components/attachments-tab";
 import { ProgressTab } from "./_components/progress-tab";
-import { DroneTab } from "./_components/drone-tab";
 import { AssigneesTab } from "./_components/assignees-tab";
 import { ParcelsTab } from "./_components/parcels-tab";
 import { FinancingTab } from "./_components/financing-tab";
@@ -50,7 +49,7 @@ type Tab =
   | "parcels"
   | "assignees"
   | "map"
-  | "financing"|"drone";
+  | "financing";
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 async function generateReport(acqId: string) {
@@ -206,7 +205,6 @@ export default function AcquisitionDetailPage() {
       icon: <Users className="h-4 w-4" />,
     },
     { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
-    { key: "drone", label: "Дроне", icon: <Map className="h-4 w-4" /> },
   ];
   const visibleTabs = isExternal
     ? TABS.filter((item) => item.key === "general" || item.key === "parcels")
@@ -328,7 +326,6 @@ export default function AcquisitionDetailPage() {
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />
         </div>
       )}
-      {activeTab === "drone" && <DroneTab key={tabKey} id={id} />}
     </div>
   );
 }
