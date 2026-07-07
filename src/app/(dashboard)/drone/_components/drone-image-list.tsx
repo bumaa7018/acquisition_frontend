@@ -44,7 +44,7 @@ export function DroneImageList({ acquisitionId }: Props) {
   if (!acquisitionId) return null;
 
   return (
-    <div className="ap-card overflow-hidden">
+    <>
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
         <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
           Дрон зургийн жагсаалт
@@ -107,7 +107,7 @@ export function DroneImageList({ acquisitionId }: Props) {
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
