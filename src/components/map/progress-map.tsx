@@ -210,8 +210,8 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
         }),
       ],
       view: new View({
-        center: fromLonLat([104.9, 47.9]),
-        zoom: 5,
+        center: fromLonLat([106.917, 47.918]),
+        zoom: 11,
         minZoom: 4,
         maxZoom: 20,
       }),
