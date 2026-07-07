@@ -53,7 +53,7 @@ export function DroneCompare({ acquisitionId }: Props) {
     return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
 
   if (relevant.length < 2)
-    return <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" />;
+    return <Placeholder text="Харьцуулах дрон зураг олдсонгүй" />;
 
   const defaultFirst = relevant[0];
   const defaultLast = relevant[relevant.length - 1];
