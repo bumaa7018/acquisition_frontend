@@ -130,6 +130,9 @@ function DronePageContent() {
           </div>
         </div>
       </div>
+
+
+      {/* Drone zurgiin list?  */}
     </div>
   );
 }
