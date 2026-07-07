@@ -13,6 +13,7 @@ import { FinancingTab } from "./_components/financing-tab";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import {
   canViewAcquisitionTab,
+  hasRole,
   isExternalSpecialRole,
   isProfessionalOrg,
 } from "@/lib/role-utils";
@@ -84,7 +85,8 @@ export default function AcquisitionDetailPage() {
   function handleTabClick(key: Tab) {
     setTab(key);
   }
-  const canEditBase = hasPermission("acquisition.create");
+  // Backend PUT нь ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
+  const canEditBase = hasRole("senior_specialist", "Ахлах мэргэжилтэн") && hasPermission("land:update");
 
   const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],

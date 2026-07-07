@@ -866,7 +866,7 @@ export default function LandPage() {
                               Дэлгэрэнгүй
                             </Link>
                           )}
-                          {!isExternal && (
+                          {!isExternal && hasPermission("land:delete") && (
                             <button
                               onClick={() => setPendingConfirm({ title: "Устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(land.id) })}
                               className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"

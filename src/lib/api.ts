@@ -278,7 +278,8 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<ApiResponse<LoginResponse>>('/auth/login', { username: email, password }).then(r => r.data.data),
-  logout: () => api.post('/auth/logout').then(r => r.data),
+  // Refresh токеноо хамт илгээж хоёуланг нь хүчингүй болгоно
+  logout: () => api.post('/auth/logout', { refresh_token: authStorage.getRefreshToken() }).then(r => r.data),
   me: () => api.get<ApiResponse<User>>('/users/me').then(r => r.data.data),
 }
 
@@ -555,22 +556,6 @@ export const landApi = {
           return user.roles.some(role => role.name === 'professional_org' || role.id === 'professional_org')
         })
       }),
-}
-
-// ── Professional Org: own acquisitions ────────────────────────────────────
-export const myLandApi = {
-  list: (filter?: { plan_code?: string; acquisition_name?: string; status?: number; au3_code?: string; page?: number; page_size?: number }) => {
-    const p = new URLSearchParams()
-    if (filter?.plan_code)        p.set('plan_code', filter.plan_code)
-    if (filter?.acquisition_name) p.set('acquisition_name', filter.acquisition_name)
-    if (filter?.status)           p.set('status', String(filter.status))
-    if (filter?.au3_code)         p.set('au3_code', filter.au3_code)
-    if (filter?.page)             p.set('page', String(filter.page))
-    if (filter?.page_size)        p.set('page_size', String(filter.page_size))
-    return api
-      .get<PaginatedResponse<import('@/types').LandAcquisition>>(`/land-acquisitions/my?${p.toString()}`)
-      .then(r => r.data)
-  },
 }
 
 // ── Global Parcels ────────────────────────────────────
