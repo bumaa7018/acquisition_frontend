@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Plus, UploadCloud } from "lucide-react";
 import { droneImageApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
+import { DroneImagePicker } from "./drone-image-picker";
 
 interface Props {
   acquisitionId: string;
@@ -72,52 +73,49 @@ export function DroneUpload({ acquisitionId }: Props) {
       <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
         Дрон зураг нэмэх
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
             Зургийн файл <span className="text-red-400">*</span>
           </p>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className={`${inp} pt-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 dark:file:bg-[#252630] file:px-2.5 file:py-1 file:text-[12px] file:text-slate-600 dark:file:text-slate-300`}
-          />
+          <DroneImagePicker file={file} onChange={setFile} disabled={uploadMutation.isPending} />
         </div>
-        <div>
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-            Авсан огноо
-          </p>
-          <input
-            type="date"
-            value={capturedAt}
-            onChange={(e) => setCapturedAt(e.target.value)}
-            className={inp}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-            Нэр <span className="text-slate-300 dark:text-slate-600">(заавал биш)</span>
-          </p>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Жишээ: 2026 оны 7-р сарын зураг"
-            className={inp}
-          />
-        </div>
-        <div className="md:col-span-2">
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-            Polygon (WKT) <span className="text-red-400">*</span>
-          </p>
-          <textarea
-            value={geometryWkt}
-            onChange={(e) => setGeometryWkt(e.target.value)}
-            rows={3}
-            placeholder="POLYGON((106.9 47.9, 106.91 47.9, 106.91 47.91, 106.9 47.91, 106.9 47.9))"
-            className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[12.5px] font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-none"
-          />
+        <div className="flex flex-col gap-3">
+          <div>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+              Авсан огноо
+            </p>
+            <input
+              type="date"
+              value={capturedAt}
+              onChange={(e) => setCapturedAt(e.target.value)}
+              className={inp}
+            />
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+              Нэр <span className="text-slate-300 dark:text-slate-600">(заавал биш)</span>
+            </p>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Жишээ: 2026 оны 7-р сарын зураг"
+              className={inp}
+            />
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+              Polygon (WKT) <span className="text-red-400">*</span>
+            </p>
+            <textarea
+              value={geometryWkt}
+              onChange={(e) => setGeometryWkt(e.target.value)}
+              rows={4}
+              placeholder="POLYGON((106.9 47.9, 106.91 47.9, 106.91 47.91, 106.9 47.91, 106.9 47.9))"
+              className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[12.5px] font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-none"
+            />
+          </div>
         </div>
       </div>
       <div className="flex justify-end gap-2">
