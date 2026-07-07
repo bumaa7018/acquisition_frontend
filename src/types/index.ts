@@ -264,8 +264,8 @@ export interface ParcelStatusHistory {
 }
 
 // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв (нэгж талбар бүрт).
-// "voided" — өөр урсгал баталгаажихад автоматаар хүчингүй болсон (эцсийн).
-export type ValuationStatus = "draft" | "submitted" | "approved" | "returned" | "voided";
+// "rejected" — өөр урсгал баталгаажихад автоматаар татгалзагдсан (эцсийн).
+export type ValuationStatus = "draft" | "submitted" | "approved" | "returned" | "rejected";
 
 export interface ValuationSubmission {
   id: string;
@@ -286,7 +286,7 @@ export interface ValuationSubmissionHistory {
   id: number;
   acquisition_id: string;
   parcel_id: string;
-  action: "submit" | "approve" | "return" | "void";
+  action: "submit" | "approve" | "return" | "reject";
   from_status: string;
   to_status: string;
   note: string;
@@ -299,7 +299,7 @@ export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
   submitted: "Илгээсэн",
   approved: "Баталгаажсан",
   returned: "Буцаагдсан",
-  voided: "Хүчингүй",
+  rejected: "Татгалзсан",
 };
 
 // Үнэлгээний урсгалын төрөл — дэд табын түлхүүрүүдтэй ижил (asset/independent/mika)

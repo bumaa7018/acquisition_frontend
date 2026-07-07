@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
 import { isExternalSpecialRole } from "@/lib/role-utils";
@@ -78,10 +79,15 @@ export function Header() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  const queryClient = useQueryClient();
   const handleLogout = async () => {
     try {
       await authApi.logout();
     } catch {}
+    // Идэвхтэй query-нүүдийг зогсоож кэшийг хоослоно — токен цэвэрлэгдсэний дараа
+    // үлдэгдэл хүсэлт 401 авч "сесс дууссан" анхааруулга гаргахаас сэргийлнэ.
+    await queryClient.cancelQueries();
+    queryClient.clear();
     authStorage.clear();
     router.push("/login");
   };

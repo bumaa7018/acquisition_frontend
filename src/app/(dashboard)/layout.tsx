@@ -25,12 +25,14 @@ export default function DashboardLayout({
     if (!isExternalSpecialRole()) return;
     const profOrgAllowed =
       isProfessionalOrg() &&
-      (pathname === "/my_acquisitions" ||
+      (pathname === "/" ||
+        pathname === "/my_acquisitions" ||
         pathname.startsWith("/acquisition") ||
         /^\/parcel\/[^/]+$/.test(pathname));
     const otherExternalAllowed =
       !isProfessionalOrg() &&
-      (pathname.startsWith("/acquisition") ||
+      (pathname === "/" ||
+        pathname.startsWith("/acquisition") ||
         /^\/parcel\/[^/]+$/.test(pathname));
     if (!profOrgAllowed && !otherExternalAllowed) {
       router.replace(isProfessionalOrg() ? "/my_acquisitions" : "/acquisition");

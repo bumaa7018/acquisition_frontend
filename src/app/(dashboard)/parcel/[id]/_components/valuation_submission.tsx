@@ -37,9 +37,9 @@ const STATUS_STYLE: Record<ValuationStatus, { dot: string; chip: string; Icon: t
     chip: "bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400",
     Icon: Undo2,
   },
-  voided: {
-    dot: "bg-slate-300",
-    chip: "bg-slate-100 text-slate-400 line-through dark:bg-slate-500/15 dark:text-slate-500",
+  rejected: {
+    dot: "bg-red-400",
+    chip: "bg-red-100 text-red-500 dark:bg-red-500/15 dark:text-red-400",
     Icon: Ban,
   },
 };
@@ -250,7 +250,7 @@ export function ValuationTransitionModal({
   );
 }
 
-const ACTION_LABEL: Record<string, string> = { submit: "Илгээсэн", approve: "Баталгаажуулсан", return: "Буцаасан", void: "Хүчингүй болгосон" };
+const ACTION_LABEL: Record<string, string> = { submit: "Илгээсэн", approve: "Баталгаажуулсан", return: "Буцаасан", reject: "Татгалзсан" };
 
 export function ValuationHistoryModal({
   loader,

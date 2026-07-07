@@ -241,6 +241,15 @@ api.interceptors.response.use(
 
     // ── 401: нэвтрэх шаардлагатай ──────────────────────────────────────────
     if (status === 401 && !isAuthRoute) {
+      // "Гарах" дарж storage цэвэрлэгдсэн (эсвэл нэвтрээгүй) үед үлдэгдэл
+      // хүсэлтүүд 401 буцаадаг — энэ нь сесс дууссан хэрэг биш тул анхааруулга
+      // харуулахгүйгээр чимээгүй login хуудас руу шилжинэ.
+      if (!authStorage.getRefreshToken()) {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
       if (!error.config?._retry) {
         // Нэг удаа token refresh хийж үзнэ
         error.config._retry = true
@@ -253,7 +262,7 @@ api.interceptors.response.use(
         } catch {
           // Refresh амжилтгүй → session дууссан гэж үзнэ
           authStorage.clear()
-          showAccessDenied('Сессийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
+          showAccessDenied('Хандах эрхийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
           return Promise.reject(error)
         }
       }
@@ -682,6 +691,17 @@ export interface TimelinePoint {
   count: number
 }
 
+export interface ValuationStatusStat {
+  status: string
+  count:  number
+}
+
+export interface ValuationTypeStat {
+  valuation_type: string
+  count:          number
+  amount:         number
+}
+
 export interface DashboardData {
   acquisitions:         LandAcquisition[]
   parcel_statuses:      ParcelStatus[]
@@ -693,6 +713,8 @@ export interface DashboardData {
   total_compensation:   number
   status_breakdown:     ParcelStatusStat[]
   timeline:             TimelinePoint[]
+  valuation_statuses?:  ValuationStatusStat[]
+  valuation_types?:     ValuationTypeStat[]
   filtered_parcel_ids:  string[]
   filtered_au1_codes:   string[]
   filtered_au2_codes:   string[]
@@ -702,6 +724,7 @@ export interface DashboardData {
 export type DashboardFilter = {
   acquisition_id?:      string
   plan_code?:           string
+  status?:              number
   years?:               number[]
   general_category_id?: number
   sub_category_id?:     number
@@ -713,6 +736,7 @@ export const dashboardApi = {
     const params = new URLSearchParams()
     if (filter?.acquisition_id)      params.set('acquisition_id', filter.acquisition_id)
     if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
+    if (filter?.status)              params.set('status', String(filter.status))
     if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
     if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)

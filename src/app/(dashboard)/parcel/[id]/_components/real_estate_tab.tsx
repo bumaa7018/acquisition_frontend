@@ -1,7 +1,7 @@
 "use client";
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi } from "@/lib/api";
+import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi, documentTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { type Asset, type AssetCalculation, type Compensation, type CompensationHistory, type LandValuation, type LandValuationUpsert, type ValuationImportPayload, type ParcelFull, type User, type ValuationSubmission, type ValuationStatus, type ValuationType, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
@@ -24,6 +24,9 @@ import {
   Clock,
   CheckCheck,
   Pencil,
+  Paperclip,
+  FileText,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
@@ -321,6 +324,8 @@ export function RealEstateTab({
         deleteAsset: (a: string, id: string) => profApi.profDeleteAsset(a, id),
         deleteCompensation: (a: string, id: string) => profApi.profDeleteCompensation(a, id),
         listCompensationHistory: (a: string, id: string) => profApi.profListCompensationHistory(a, id),
+        listDocuments: (p: string) => profApi.profListParcelDocuments(p),
+        deleteDocument: (p: string, docId: string) => profApi.profDeleteParcelDocument(p, docId),
         getValuationSubmission: (a: string, p: string, vt?: string) => profApi.profGetValuationSubmission(a, p, vt),
         transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string) =>
           profApi.profTransitionValuationSubmission(a, p, action, note, vt),
@@ -355,6 +360,8 @@ export function RealEstateTab({
         deleteAsset: (a: string, id: string) => landApi.deleteAsset(a, id).then(() => undefined),
         deleteCompensation: (a: string, id: string) => landApi.deleteCompensation(a, id).then(() => undefined),
         listCompensationHistory: (a: string, id: string) => landApi.listCompensationHistory(a, id),
+        listDocuments: (p: string) => parcelApi.listDocuments(p),
+        deleteDocument: (p: string, docId: string) => parcelApi.deleteDocument(p, docId),
         getValuationSubmission: (a: string, p: string, vt?: string) => landApi.getValuationSubmission(a, p, vt),
         transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string) =>
           landApi.transitionValuationSubmission(a, p, action, note, vt),
@@ -389,6 +396,7 @@ export function RealEstateTab({
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [subModal, setSubModal] = useState<{ action: "submit" | "approve" | "return"; note: string } | null>(null);
   const [subHistoryOpen, setSubHistoryOpen] = useState(false);
+  const reportFileRef = useRef<HTMLInputElement | null>(null);
 
   const { data: specTypes = [] } = useQuery({
     queryKey: ["asset-spec-types"],
@@ -523,6 +531,38 @@ export function RealEstateTab({
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
     },
     onError: (err) => toast.error(getApiError(err, "Төлөв шилжүүлэхэд алдаа гарлаа")),
+  });
+
+  // Үнэлгээний тайлан — нэгж талбарт ГАНЦ тайлан. Ердийн хавсралтын (parcel
+  // documents) флоугоор "Хөрөнгийн үнэлгээний тайлан" төрөлтэй хадгалагдана,
+  // Баримт бичиг табд бусад хавсралтын адил харагдана.
+  const { data: docTypes = [] } = useQuery({
+    queryKey: ["document-types", "parcel"],
+    queryFn: () => documentTypeApi.list("parcel"),
+    staleTime: Infinity,
+    enabled: !!selectedType,
+  });
+  const reportDocType = docTypes.find((t) => t.type === "valuation_report");
+  const { data: parcelDocs = [] } = useQuery({
+    queryKey: ["parcel-documents", parcelId],
+    queryFn: () => svc.listDocuments(parcelId),
+    enabled: !!parcelId && !!selectedType,
+  });
+  const reportDoc = parcelDocs.find((d) => !!reportDocType && d.document_type_id === reportDocType.id);
+  const reportMutation = useMutation({
+    // Солих үед шинэ файлыг эхэлж амжилттай оруулсны ДАРАА хуучныг устгана —
+    // алдаа гарвал хуучин тайлан хэвээр үлдэнэ.
+    mutationFn: async ({ file, replaceDocId }: { file: File; replaceDocId?: string }) => {
+      // Дэлгэцийн нэр нь хавсралтын төрлийн нэр; физик нэрийг backend
+      // <нэгж талбарын дугаар>_<төрлийн код>.<өргөтгөл> хэлбэрээр өгнө.
+      await svc.uploadDocument(parcelId, file, reportDocType?.id, reportDocType?.name);
+      if (replaceDocId) await svc.deleteDocument(parcelId, replaceDocId);
+    },
+    onSuccess: (_data, vars) => {
+      toast.success(vars.replaceDocId ? "Үнэлгээний тайлан солигдлоо" : "Үнэлгээний тайлан хавсаргагдлаа");
+      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Тайлан хавсаргахад алдаа гарлаа")),
   });
 
   const upsertLandValuationMutation = useMutation({
@@ -768,6 +808,13 @@ export function RealEstateTab({
   // нэгж талбарт зөвхөн НЭГ баталгаажсан үнэлгээ байна.
   const hasValuationData = parcelAssets.length > 0 || allComps.length > 0 || !!landValuation;
   const canReviewValuation = isFinance && valStatus === "submitted" && hasValuationData && !selectedType;
+  // Үнэлгээний тайлан хавсаргах — ЗӨВХӨН баталгаажсан (сонгогдсон) урсгал дээр:
+  // дотоод ажилтан эсвэл тухайн урсгалын эзэн мэргэжлийн байгууллага хавсаргана.
+  const canUploadReport =
+    !isLocked &&
+    !!selectedType &&
+    activeType === selectedType &&
+    (!isExternal || (isProfOrg && canEditValuationSubTab(activeSubTab, parcelData, acquisition)));
   const orgDisplayName = (id: string) => orgUserName(professionalOrgUsers.find((x) => x.id === id));
   const currentIndependentOrgId = assignedIndependentOrg?.id || parcelData?.independent_org_id || "";
   const selectedIndependentOrgName =
@@ -1076,9 +1123,104 @@ export function RealEstateTab({
         canSubmit={canSubmitValuation}
         canReview={canReviewValuation}
         pending={transitionMutation.isPending}
-        onAction={(action) => setSubModal({ action, note: "" })}
+        onAction={(action) => {
+          // Илгээхийн өмнө "Үл хөдлөх" төрлийн хөрөнгө бүр зурагтай эсэхийг шалгана
+          // (backend мөн адил шалгаж 422 буцаана).
+          if (action === "submit") {
+            const missingPhotos = parcelAssets.filter(
+              (a) => a.asset_type === "real_state" && !a.photo_pdf_url,
+            );
+            if (missingPhotos.length > 0) {
+              toast.error("Зураг оруулаагүй үл хөдлөх хөрөнгө байна", {
+                description:
+                  missingPhotos
+                    .map((a) => a.asset_name || a.asset_number || "Нэргүй хөрөнгө")
+                    .join(", ") + " — илгээхийн өмнө хөрөнгө бүрт зураг (PDF) хавсаргана уу.",
+              });
+              return;
+            }
+          }
+          setSubModal({ action, note: "" });
+        }}
         onHistory={() => setSubHistoryOpen(true)}
       />
+
+      {/* Үнэлгээний тайлан — нэгж талбарт ГАНЦ тайлан. Зөвхөн баталгаажсан урсгал
+          дээр харагдаж, "Чөлөөлсөн" болгохын өмнө заавал хавсаргагдсан байх ёстой. */}
+      {!!selectedType && activeType === selectedType && (
+        <div className="ap-card overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3.5 dark:border-[#37394d]">
+            <div className="flex items-center gap-2">
+              <Paperclip className="h-4 w-4 text-[#02c0ce]" />
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Үнэлгээний тайлан</p>
+            </div>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">
+              Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө тайлан (PDF) хавсаргасан байх шаардлагатай
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <FileText className={`h-4 w-4 shrink-0 ${reportDoc ? "text-emerald-500" : "text-slate-300 dark:text-slate-600"}`} />
+              {reportDoc ? (
+                <a
+                  href={reportDoc.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-[#02c0ce] hover:underline"
+                >
+                  <span className="truncate">{reportDoc.name || "Үнэлгээний тайлан"}</span>
+                  <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                </a>
+              ) : (
+                <p className="text-[13px] text-slate-400">Тайлан хавсаргаагүй байна</p>
+              )}
+            </div>
+            {canUploadReport && !!reportDocType && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="hidden"
+                  ref={reportFileRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    e.target.value = "";
+                    if (file.type !== "application/pdf") {
+                      toast.error("Зөвхөн PDF файл оруулна уу");
+                      return;
+                    }
+                    if (reportDoc) {
+                      // Солихын өмнө баталгаажуулна — хуучин тайлан устана
+                      setPendingConfirm({
+                        title: "Үнэлгээний тайлан солих уу?",
+                        description: `"${reportDoc.name}" файл шинэ "${file.name}" файлаар солигдож, хуучин нь устана.`,
+                        confirmLabel: "Солих",
+                        confirmColor: "#02c0ce",
+                        onConfirm: () => reportMutation.mutate({ file, replaceDocId: reportDoc.id }),
+                      });
+                    } else {
+                      reportMutation.mutate({ file });
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => reportFileRef.current?.click()}
+                  disabled={reportMutation.isPending}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-60"
+                >
+                  {reportMutation.isPending ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  ) : (
+                    <Upload className="h-3.5 w-3.5" />
+                  )}
+                  {reportDoc ? "Тайлан солих" : "Тайлан хавсаргах"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {activeSubTab === "independent" && (
         <div className="ap-card overflow-hidden">
@@ -1154,6 +1296,46 @@ export function RealEstateTab({
           </div>
         </div>
       )}
+
+      {/* Хөрөнгийн бүртгэл — нэмэх/импортын товчнууд табын дээд хэсэгт */}
+      <div className="ap-card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-slate-400" />
+            <div>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөрөнгийн бүртгэл</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{effectiveParcelCode || parcelId} нэгж талбар</p>
+            </div>
+          </div>
+          {canEditCurrent && (
+            <div className="flex items-center gap-2">
+              <ValuationExcelImport
+                acqId={acqId}
+                parcelId={parcelId}
+                parcelCode={effectiveParcelCode}
+                valuationType={activeType}
+                svc={svc}
+                specTypes={specTypes}
+                calcTypes={calcTypes}
+                existingAssets={parcelAssets}
+                existingComps={allComps}
+                onDone={() => {
+                  queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType] });
+                  queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode, activeType] });
+                  queryClient.invalidateQueries({ queryKey: ["land-valuation", acqId, effectiveParcelCode, activeType] });
+                }}
+              />
+              <button
+                onClick={() => setShowForm(true)}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Хөрөнгө нэмэх
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="ap-card grid grid-cols-3 divide-x divide-slate-100 overflow-hidden dark:divide-[#37394d]">
         {summaryItems.map(({ label, value, Icon }) => (
@@ -1355,44 +1537,6 @@ export function RealEstateTab({
         </div>
       )}
 
-      <div className="ap-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-slate-400" />
-            <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Хөрөнгийн бүртгэл</p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{effectiveParcelCode || parcelId} нэгж талбар</p>
-            </div>
-          </div>
-          {canEditCurrent && (
-            <div className="flex items-center gap-2">
-              <ValuationExcelImport
-                acqId={acqId}
-                parcelId={parcelId}
-                parcelCode={effectiveParcelCode}
-                valuationType={activeType}
-                svc={svc}
-                specTypes={specTypes}
-                calcTypes={calcTypes}
-                existingAssets={parcelAssets}
-                existingComps={allComps}
-                onDone={() => {
-                  queryClient.invalidateQueries({ queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType] });
-                  queryClient.invalidateQueries({ queryKey: ["compensations", acqId, effectiveParcelCode, activeType] });
-                  queryClient.invalidateQueries({ queryKey: ["land-valuation", acqId, effectiveParcelCode, activeType] });
-                }}
-              />
-              <button
-                onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Хөрөнгө нэмэх
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
 
       {assetsLoading ? (
         <div className="space-y-3 animate-pulse">

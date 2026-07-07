@@ -219,14 +219,17 @@ export function Sidebar() {
           </nav>
         )}
 
-        {/* Main nav — external special roles see only acquisition menu */}
+        {/* Main nav — external special roles see dashboard and acquisition menu */}
         {ready && (
           <div>
             <nav className="space-y-0.5">
               {(isExternal
                 ? isProfOrg
-                  ? [{ href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText }]
-                  : NAV_MAIN.filter((item) => item.href === "/acquisition")
+                  ? [
+                      { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
+                      { href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText },
+                    ]
+                  : NAV_MAIN.filter((item) => item.href === "/" || item.href === "/acquisition")
                 : NAV_MAIN
               ).map((item) => (
                 <NavItem

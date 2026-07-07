@@ -11,13 +11,15 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
-import { profApi } from "@/lib/prof-api";
-import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
-import { useRouter } from "next/navigation";
+import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg } from "@/lib/role-utils";
 import Link from "next/link";
-import type { GlobalParcel } from "@/types";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import {
@@ -25,6 +27,10 @@ import {
   Layers,
   FileText,
   Banknote,
+  CheckCircle2,
+  Clock3,
+  RotateCcw,
+  Send,
   Search,
   X,
   ChevronDown,
@@ -43,8 +49,6 @@ const YEAR_OPTIONS = Array.from(
   { length: CURRENT_YEAR - 2000 + 1 },
   (_, i) => CURRENT_YEAR - i,
 );
-
-type ParcelWithCtx = GlobalParcel;
 
 /* ── Text highlighter ────────────────────────────────── */
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -622,46 +626,335 @@ function HBar({
   );
 }
 
-/* ── Page ────────────────────────────────────────────── */
-function ProfOrgDashboard() {
+const VALUATION_STATUS_LABELS: Record<string, string> = {
+  draft: "Ноорог",
+  submitted: "Илгээсэн",
+  approved: "Баталгаажсан",
+  returned: "Буцаагдсан",
+  rejected: "Татгалзсан",
+};
+
+const VALUATION_TYPE_LABELS: Record<string, string> = {
+  asset: "Хөрөнгийн үнэлгээ",
+  independent: "Хөндлөнгийн үнэлгээ",
+  mika: "МИКА үнэлгээ",
+};
+
+const VALUATION_STATUS_COLORS: Record<string, string> = {
+  draft: "#64748b",
+  submitted: "#f59e0b",
+  approved: "#0acf97",
+  returned: "#f1556c",
+  rejected: "#94a3b8",
+};
+
+const VALUATION_TYPE_COLORS = ["#02c0ce", "#777edd", "#0acf97", "#f9bc0b", "#f1556c"];
+
+const EXTERNAL_TOOLTIP_STYLE = {
+  fontSize: 12,
+  borderRadius: 6,
+  border: "1px solid #e5e7eb",
+  background: "#fff",
+  color: "#334155",
+  boxShadow: "0 8px 24px rgba(15,23,42,.12)",
+};
+
+function moneyShort(value: number) {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)} тэр`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)} сая`;
+  return value.toLocaleString();
+}
+
+function ExternalDashboard() {
+  const isFinance = isFinanceSpecialist();
+  const isMikaRole = isMika();
+  const isProfOrgRole = isProfessionalOrg();
+  const roleLabel = isFinance
+    ? "Санхүүгийн хяналт"
+    : isMikaRole
+      ? "МИКА үнэлгээ"
+      : "Үнэлгээ оруулах байгууллага";
+  const listHref = isProfOrgRole ? "/my_acquisitions" : "/acquisition";
+
   const { data, isLoading } = useQuery({
-    queryKey: ["my-land-dashboard"],
-    queryFn: () => profApi.profListMyAcquisitions({ page: 1, page_size: 5 }),
+    queryKey: ["dashboard", "external"],
+    queryFn: () => dashboardApi.get(),
     staleTime: 60_000,
   });
 
-  const items = data?.data ?? [];
-  const total = data?.total ?? 0;
+  const acquisitions = data?.acquisitions ?? [];
+  const statuses = data?.status_breakdown ?? [];
+  const valuationStatuses = data?.valuation_statuses ?? [];
+  const valuationTypes = data?.valuation_types ?? [];
+  const totalCompensation = data?.total_compensation ?? 0;
+  const statusCount = (status: string) =>
+    valuationStatuses.find((s) => s.status === status)?.count ?? 0;
+  const draftCount = statusCount("draft");
+  const returnedCount = statusCount("returned");
+  const submittedCount = statusCount("submitted");
+  const approvedCount = statusCount("approved");
+  const workToEditCount = draftCount + returnedCount;
+  const statusTotal = valuationStatuses.reduce((sum, row) => sum + row.count, 0);
+  const reviewCompletionPct = statusTotal > 0 ? Math.round((approvedCount / statusTotal) * 100) : 0;
+  const actionAcquisitions = isFinance
+    ? acquisitions.filter((land) => (land.parcel_count ?? 0) > 0)
+    : acquisitions;
+  const pageTitle = isFinance ? "Санхүүгийн хяналтын самбар" : "Үнэлгээний ажлын самбар";
+  const pageHint = isFinance
+    ? "Илгээсэн үнэлгээ, баталгаажуулалт, нөхөх олговорын хяналтын мэдээлэл"
+    : "Өөрт хуваарилагдсан үнэлгээний ажил, илгээх явц, буцаагдсан засварын мэдээлэл";
+  const queueTitle = isFinance ? "Хянах шаардлагатай чөлөөлөлтүүд" : "Ажиллах чөлөөлөлтүүд";
+  const queueEmpty = isFinance ? "Хянах үнэлгээ олдсонгүй" : "Танд ажиллах үнэлгээ олдсонгүй";
+  const primaryActionLabel = isFinance ? "Хянах" : "Ажиллах";
+  const mainStatusTitle = isFinance ? "Хяналтын төлөв" : "Ажлын төлөв";
+  const statusPanelTitle = isFinance ? "Баталгаажуулалтын явц" : "Илгээх явц";
+  const compensationLabel = isFinance ? "Хянагдаж буй нөхөх олговор" : "Оруулсан нөхөх олговор";
+  const cards = isFinance
+    ? [
+        { label: "Хянах үнэлгээ", value: submittedCount, icon: Clock3, color: "#f59e0b" },
+        { label: "Баталгаажсан", value: approvedCount, icon: CheckCircle2, color: "#0acf97" },
+        { label: "Буцаасан", value: returnedCount, icon: RotateCcw, color: "#f1556c" },
+        { label: "Үнэлгээ хийх нэгж талбар", value: data?.total_parcels ?? 0, icon: Layers, color: "#777edd" },
+      ]
+    : [
+        { label: "Ажиллах үнэлгээ", value: workToEditCount, icon: FileText, color: "#02c0ce" },
+        { label: "Илгээсэн", value: submittedCount, icon: Send, color: "#f9bc0b" },
+        { label: "Буцаагдсан", value: returnedCount, icon: RotateCcw, color: "#f1556c" },
+        { label: "Баталгаажсан", value: approvedCount, icon: CheckCircle2, color: "#0acf97" },
+      ];
+  const focusStatuses = isFinance
+    ? ["submitted", "approved", "returned"]
+    : ["draft", "returned", "submitted", "approved"];
+  const valuationStatusChart = focusStatuses.map((status) => ({
+    status,
+    name: VALUATION_STATUS_LABELS[status] ?? status,
+    count: statusCount(status),
+    color: VALUATION_STATUS_COLORS[status] ?? "#02c0ce",
+  }));
+  const valuationTypeChart = valuationTypes.map((type, index) => ({
+    name: VALUATION_TYPE_LABELS[type.valuation_type] ?? type.valuation_type,
+    count: type.count,
+    amount: Math.round(type.amount / 1_000_000),
+    color: VALUATION_TYPE_COLORS[index % VALUATION_TYPE_COLORS.length],
+  }));
+  const parcelStatusChart = statuses.slice(0, 6).map((status) => ({
+    name: status.name,
+    count: status.count,
+    color: getParcelStatusStyle(status.status_id, status.name).color,
+  }));
+  const hasValuationStatusChart = valuationStatusChart.some((status) => status.count > 0);
+  const hasValuationTypeChart = valuationTypeChart.some((type) => type.count > 0 || type.amount > 0);
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-800 dark:text-white">Хяналтын самбар</h1>
-        <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-          Танд нийт {total} чөлөөлөлт хуваарилагдсан байна
-        </p>
-      </div>
-      <div className="rounded-xl border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-            Сүүлийн чөлөөлөлтүүд
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white">{pageTitle}</h1>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+            {roleLabel} · {pageHint}
           </p>
-          <Link
-            href="/my_acquisitions"
-            className="text-[12px] font-medium text-[#02c0ce] hover:underline"
-          >
-            Бүгдийг харах →
-          </Link>
         </div>
+        <Link
+          href={listHref}
+          className="inline-flex h-9 items-center rounded-lg border border-slate-200 dark:border-[#37394d] px-3 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
+        >
+          Жагсаалт харах
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className="ap-card p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-2 text-3xl font-black tabular-nums text-slate-800 dark:text-white">
+                    {isLoading ? <Skel w="w-14" /> : card.value.toLocaleString()}
+                  </p>
+                </div>
+                <span className="flex h-11 w-11 items-center justify-center rounded-lg" style={{ background: `${card.color}18` }}>
+                  <Icon className="h-5 w-5" style={{ color: card.color }} />
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-stretch">
+        <div className="ap-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                {isFinance ? "Үнэлгээний хяналтын график" : "Үнэлгээний ажлын график"}
+              </p>
+              <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+                {statusPanelTitle}
+              </p>
+            </div>
+            <span className="rounded-md bg-slate-100 dark:bg-white/[0.06] px-2 py-1 text-[11px] font-semibold text-slate-500 dark:text-slate-300">
+              {statusTotal.toLocaleString()} үнэлгээ
+            </span>
+          </div>
+          {isLoading ? (
+            <div className="h-[250px] rounded-lg bg-slate-100 dark:bg-white/[0.05] animate-pulse" />
+          ) : !hasValuationStatusChart ? (
+            <p className="py-24 text-center text-[13px] text-slate-400">Үнэлгээний төлөв бүртгэгдээгүй</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-center">
+              <div className="h-[250px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={valuationStatusChart.filter((status) => status.count > 0)}
+                      dataKey="count"
+                      nameKey="name"
+                      innerRadius={58}
+                      outerRadius={88}
+                      paddingAngle={3}
+                    >
+                      {valuationStatusChart.filter((status) => status.count > 0).map((entry) => (
+                        <Cell key={entry.status} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={EXTERNAL_TOOLTIP_STYLE} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {valuationStatusChart.map((status) => (
+                  <div key={status.status} className="rounded-lg border border-slate-100 dark:border-[#37394d] px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: status.color }} />
+                        {status.name}
+                      </span>
+                      <span className="text-lg font-black tabular-nums text-slate-800 dark:text-white">
+                        {status.count.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${statusTotal > 0 ? Math.round((status.count / statusTotal) * 100) : 0}%`,
+                          background: status.color,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="ap-card p-4">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">
+            {compensationLabel}
+          </p>
+          <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] px-3 py-3 mb-4">
+            <p className="text-[11px] text-slate-400 dark:text-slate-500">Нийт дүн</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-slate-800 dark:text-white">
+              {isLoading ? <Skel w="w-20" /> : `${moneyShort(totalCompensation)} ₮`}
+            </p>
+            {isFinance && (
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Баталгаажуулалт</span>
+                  <span>{reviewCompletionPct}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-white dark:bg-[#252630] overflow-hidden">
+                  <div className="h-full rounded-full bg-[#0acf97]" style={{ width: `${reviewCompletionPct}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+          {isLoading ? (
+            <div className="h-[160px] rounded-lg bg-slate-100 dark:bg-white/[0.05] animate-pulse" />
+          ) : !hasValuationTypeChart ? (
+            <p className="py-10 text-center text-[12px] text-slate-400">Мэдээлэл олдсонгүй</p>
+          ) : (
+            <div className="h-[180px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={valuationTypeChart} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+                  <CartesianGrid vertical={false} stroke="#eef2f7" strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={EXTERNAL_TOOLTIP_STYLE} />
+                  <Bar dataKey="amount" name="Дүн (сая ₮)" radius={[5, 5, 0, 0]}>
+                    {valuationTypeChart.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-4 items-start">
+        <div className="ap-card p-4">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              {mainStatusTitle}
+            </p>
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              {isLoading ? "…" : `${(data?.total_parcels ?? 0).toLocaleString()} нэгж талбар`}
+            </span>
+          </div>
+          {isLoading ? (
+            <div className="h-[220px] rounded-lg bg-slate-100 dark:bg-white/[0.05] animate-pulse" />
+          ) : parcelStatusChart.length === 0 ? (
+            <p className="py-10 text-center text-[12px] text-slate-400">Мэдээлэл олдсонгүй</p>
+          ) : (
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={parcelStatusChart} layout="vertical" margin={{ top: 0, right: 8, left: 10, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={128}
+                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip contentStyle={EXTERNAL_TOOLTIP_STYLE} />
+                  <Bar dataKey="count" name="Нэгж талбар" radius={[0, 6, 6, 0]}>
+                    {parcelStatusChart.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+              {queueTitle}
+            </p>
+            <span className="text-[12px] text-slate-400">
+              {isLoading ? "…" : `${acquisitions.length.toLocaleString()} бичлэг`}
+            </span>
+          </div>
         {isLoading ? (
           <div className="px-5 py-8 text-center text-[13px] text-slate-400">Ачааллаж байна...</div>
-        ) : !items.length ? (
+        ) : !actionAcquisitions.length ? (
           <div className="px-5 py-8 text-center text-[13px] text-slate-400">
-            Танд холбоотой чөлөөлөлт олдсонгүй
+            {queueEmpty}
           </div>
         ) : (
           <div className="divide-y divide-slate-50 dark:divide-[#2a2c38]">
-            {items.map((land) => (
+            {actionAcquisitions.slice(0, 12).map((land) => (
               <div key={land.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-white/[0.03] transition-colors">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
@@ -675,30 +968,27 @@ function ProfOrgDashboard() {
                   href={`/acquisition/${land.id}`}
                   className="shrink-0 ml-4 inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
                 >
-                  Нэвтрэх
+                  {primaryActionLabel}
                 </Link>
               </div>
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
+  const [roleReady, setRoleReady] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
-  // МИКА/санхүүгийн мэргэжилтэн — дотоод дашбоардын API эрхгүй (compensation:*-д
-  // шилжсэн) тул чөлөөлөлтийн жагсаалт руу шилжүүлнэ.
   const [isOtherExternal, setIsOtherExternal] = useState(false);
   useEffect(() => {
     setIsProfOrg(isProfessionalOrg());
     setIsOtherExternal(isExternalSpecialRole() && !isProfessionalOrg());
+    setRoleReady(true);
   }, []);
-  useEffect(() => {
-    if (isOtherExternal) router.replace("/acquisition");
-  }, [isOtherExternal, router]);
 
   const { resolvedTheme } = useTheme();
   const isDark = resolvedTheme === "dark";
@@ -727,11 +1017,12 @@ export default function DashboardPage() {
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
+    enabled: roleReady && !isProfOrg && !isOtherExternal,
   });
   const { data: dashSubCats = [] } = useQuery({
     queryKey: ["acquisition-categories", inGenCatId],
     queryFn: () => landApi.listCategories(inGenCatId),
-    enabled: !!inGenCatId,
+    enabled: roleReady && !isProfOrg && !isOtherExternal && !!inGenCatId,
     staleTime: Infinity,
   });
 
@@ -761,7 +1052,7 @@ export default function DashboardPage() {
       assigned_user_id:   appliedFilter.employeeId || undefined,
     }),
     staleTime: 60_000,
-    enabled: !isProfOrg && !isOtherExternal,
+    enabled: roleReady && !isProfOrg && !isOtherExternal,
   });
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
@@ -838,8 +1129,19 @@ export default function DashboardPage() {
     return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
   }, [appliedFilter]);
 
-  if (isProfOrg) return <ProfOrgDashboard />;
-  if (isOtherExternal) return null;
+  if (!roleReady) {
+    return (
+      <div className="flex flex-col gap-4 animate-pulse">
+        <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-xl bg-slate-100 dark:bg-[#252630]" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (isProfOrg || isOtherExternal) return <ExternalDashboard />;
 
   return (
     <div className="flex flex-col gap-4">

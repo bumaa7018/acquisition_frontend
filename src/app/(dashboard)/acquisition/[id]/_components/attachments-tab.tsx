@@ -66,9 +66,10 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
-    if (f.size > 10 * 1024 * 1024) { toast.error("Файлын хэмжээ 10MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
+    if (f.size > 50 * 1024 * 1024) { toast.error("Файлын хэмжээ 50MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
     setSelectedFile(f);
-    setFileName(f.name.replace(/\.pdf$/i, ""));
+    const t = docTypes.find(x => x.id === documentTypeId);
+    setFileName(t ? t.name : f.name.replace(/\.pdf$/i, ""));
   }
 
   function handleSubmit() {
@@ -87,7 +88,7 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <div>
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
           </div>
           {canEdit && (
             <button
@@ -167,7 +168,13 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын төрөл</label>
                 <select
                   value={documentTypeId}
-                  onChange={e => setDocumentTypeId(e.target.value ? Number(e.target.value) : "")}
+                  onChange={e => {
+                    const v = e.target.value ? Number(e.target.value) : "";
+                    setDocumentTypeId(v);
+                    // Файлын нэрийг хавсралтын төрлийн нэрээр санал болгоно
+                    const t = docTypes.find(x => x.id === v);
+                    if (t) setFileName(t.name);
+                  }}
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
                   <option value="">— Сонгох —</option>
