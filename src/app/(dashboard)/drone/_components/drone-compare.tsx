@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Columns2 } from "lucide-react";
 import { droneImageApi } from "@/lib/api";
@@ -30,6 +30,11 @@ export function DroneCompare({ acquisitionId, fullscreen }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [leftId, setLeftId] = useState("");
   const [rightId, setRightId] = useState("");
+
+  useEffect(() => {
+    setLeftId("");
+    setRightId("");
+  }, [acquisitionId]);
 
   const { data: droneImages = [] } = useQuery({
     queryKey: ["drone-images"],
