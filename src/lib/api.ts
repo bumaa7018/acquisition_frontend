@@ -597,6 +597,18 @@ export const reportApi = {
 export const droneImageApi = {
   list: () =>
     api.get<ApiResponse<DroneImage[]>>('/drone-images').then(r => r.data.data ?? []),
+  create: (data: { file: File; geometry_wkt: string; acquisition_id: string; captured_at?: string; name?: string }) => {
+    const fd = new FormData()
+    fd.append('file', data.file)
+    fd.append('geometry_wkt', data.geometry_wkt)
+    fd.append('acquisition_id', data.acquisition_id)
+    fd.append('type', 'acquisition')
+    if (data.captured_at) fd.append('captured_at', data.captured_at)
+    if (data.name) fd.append('name', data.name)
+    return api.post<ApiResponse<DroneImage>>('/drone-images', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
 }
 
 export const planApi = {
