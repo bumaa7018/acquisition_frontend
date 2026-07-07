@@ -318,8 +318,7 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
 
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
-      style={fullscreen ? { height: "100%" } : { height: 360 }}
+      className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
     >
       <div ref={mapRef} className="h-full w-full" />
       <LayerPanel layers={layers} groups={[HISTORY_GROUP, DRONE_GROUP]} onToggle={handleToggle} />

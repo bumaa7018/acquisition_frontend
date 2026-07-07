@@ -91,9 +91,9 @@ function DronePageContent() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-        <div className="ap-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="ap-card overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
               Явцын зураг
             </p>
@@ -105,13 +105,13 @@ function DronePageContent() {
               <Maximize2 className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="p-5">
+          <div className="p-5 h-[400px]">
             <ProgressMap acquisitionId={acquisitionId} />
           </div>
         </div>
 
-        <div className="ap-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+        <div className="ap-card overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
               Харьцуулах
             </p>
@@ -123,7 +123,7 @@ function DronePageContent() {
               <Maximize2 className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="p-5">
+          <div className="p-5 h-[400px]">
             <DroneCompare acquisitionId={acquisitionId} />
           </div>
         </div>

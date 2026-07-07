@@ -14,19 +14,16 @@ interface Props {
 const select =
   "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2 text-[12px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors";
 
-function Placeholder({ text, fullscreen }: { text: string; fullscreen?: boolean }) {
+function Placeholder({ text }: { text: string }) {
   return (
-    <div
-      className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500"
-      style={fullscreen ? { height: "100%" } : { height: 360 }}
-    >
+    <div className="flex h-full flex-col items-center justify-center text-slate-400 dark:text-slate-500">
       <Columns2 className="h-7 w-7 mb-2 opacity-30" />
       <p className="text-[13px]">{text}</p>
     </div>
   );
 }
 
-export function DroneCompare({ acquisitionId, fullscreen }: Props) {
+export function DroneCompare({ acquisitionId }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [leftId, setLeftId] = useState("");
   const [rightId, setRightId] = useState("");
@@ -53,12 +50,10 @@ export function DroneCompare({ acquisitionId, fullscreen }: Props) {
   }, [droneImages, acquisitionId]);
 
   if (!acquisitionId)
-    return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" fullscreen={fullscreen} />;
+    return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
 
   if (relevant.length < 2)
-    return (
-      <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" fullscreen={fullscreen} />
-    );
+    return <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" />;
 
   const defaultFirst = relevant[0];
   const defaultLast = relevant[relevant.length - 1];
@@ -70,8 +65,8 @@ export function DroneCompare({ acquisitionId, fullscreen }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-2" style={fullscreen ? { height: "100%" } : undefined}>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex h-full flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
         <select
           value={leftId}
           onChange={(e) => setLeftId(e.target.value)}
@@ -99,10 +94,7 @@ export function DroneCompare({ acquisitionId, fullscreen }: Props) {
         </select>
       </div>
 
-      <div
-        className="relative w-full flex-1 min-h-0 select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]"
-        style={fullscreen ? undefined : { height: 360 }}
-      >
+      <div className="relative w-full flex-1 min-h-0 select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]">
         {/* base — right-side image, fills the whole frame */}
         <img
           src={right.image_url}
