@@ -603,7 +603,12 @@ export const droneImageApi = {
     fd.append('geometry_wkt', data.geometry_wkt)
     fd.append('acquisition_id', data.acquisition_id)
     fd.append('type', 'acquisition')
-    if (data.captured_at) fd.append('captured_at', data.captured_at)
+    if (data.captured_at) {
+      const capturedAt = /^\d{4}-\d{2}-\d{2}$/.test(data.captured_at)
+        ? `${data.captured_at}T00:00:00Z`
+        : data.captured_at
+      fd.append('captured_at', capturedAt)
+    }
     if (data.name) fd.append('name', data.name)
     return api.post<ApiResponse<DroneImage>>('/drone-images', fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
