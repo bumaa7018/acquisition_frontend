@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Images, Pencil, Trash2, X, UploadCloud } from "lucide-react";
+import { Image as ImageIcon, Pencil, Trash2, X, UploadCloud } from "lucide-react";
 import { droneImageApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import type { DroneImage } from "@/types";
@@ -52,59 +52,49 @@ export function DroneImageList({ acquisitionId }: Props) {
       </div>
 
       {isLoading ? (
-        <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 animate-pulse">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-40 rounded-lg bg-slate-100 dark:bg-[#252630]" />
+        <div className="p-5 space-y-3 animate-pulse">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />
           ))}
         </div>
       ) : !relevant.length ? (
         <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
-          <Images className="h-8 w-8 mb-2 opacity-30" />
+          <ImageIcon className="h-8 w-8 mb-2 opacity-30" />
           <p className="text-[13px]">Дрон зураг байхгүй</p>
         </div>
       ) : (
-        <div className="p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
           {relevant.map((img) => (
             <div
               key={img.id}
-              className="group relative rounded-lg border border-slate-200 dark:border-white/[0.08] overflow-hidden bg-slate-100 dark:bg-[#252630]"
+              className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
             >
-              <div className="relative h-32 w-full">
-                {img.image_url ? (
-                  <img
-                    src={img.image_url}
-                    alt={img.name ?? ""}
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-300 dark:text-slate-600">
-                    <Images className="h-6 w-6" />
-                  </div>
-                )}
-                <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => setEditing(img)}
-                    title="Засах"
-                    className="flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/75 transition-colors"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm("Дрон зураг устгах уу?")) deleteMutation.mutate(img.id);
-                    }}
-                    title="Устгах"
-                    className="flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-red-600 transition-colors"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
+                <ImageIcon className="h-4 w-4 text-[#02c0ce]" />
               </div>
-              <div className="px-2.5 py-2">
-                <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200 truncate">
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
                   {img.name || "Нэргүй"}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">{formatDate(img.captured_at)}</p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setEditing(img)}
+                  title="Засах"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Дрон зураг устгах уу?")) deleteMutation.mutate(img.id);
+                  }}
+                  title="Устгах"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           ))}
