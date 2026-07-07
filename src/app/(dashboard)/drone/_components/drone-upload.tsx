@@ -111,7 +111,7 @@ export function DroneUpload({ acquisitionId }: Props) {
             <textarea
               value={geometryWkt}
               onChange={(e) => setGeometryWkt(e.target.value)}
-              rows={4}
+              rows={13}
               placeholder="POLYGON((106.9 47.9, 106.91 47.9, 106.91 47.91, 106.9 47.91, 106.9 47.9))"
               className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[12.5px] font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-none"
             />
