@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { ArrowLeft, Maximize2 } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 import { DroneCompare } from "./_components/drone-compare";
-import { DroneUpload } from "./_components/drone-upload";
 import { DroneImageList } from "./_components/drone-image-list";
 
 const ProgressMap = dynamic(
@@ -132,7 +131,6 @@ function DronePageContent() {
 
       {acquisitionId && (
         <div className="ap-card overflow-hidden">
-          <DroneUpload acquisitionId={acquisitionId} />
           <DroneImageList acquisitionId={acquisitionId} />
         </div>
       )}

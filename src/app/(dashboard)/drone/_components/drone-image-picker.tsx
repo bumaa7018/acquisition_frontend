@@ -7,9 +7,10 @@ interface Props {
   onChange: (file: File | null) => void;
   disabled?: boolean;
   previewHeight?: number;
+  existingImageUrl?: string;
 }
 
-export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405 }: Props) {
+export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405, existingImageUrl }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
@@ -34,6 +35,8 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
     if (inputRef.current) inputRef.current.value = "";
   }
 
+  const displaySrc = previewSrc ?? (!file ? existingImageUrl : undefined);
+
   return (
     <div>
       <input
@@ -44,21 +47,31 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
         className="hidden"
       />
 
-      {previewSrc ? (
+      {displaySrc ? (
         <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-[#252630]" style={{ height: previewHeight }}>
           <img
-            src={previewSrc}
+            src={displaySrc}
             alt=""
             className="absolute inset-0 h-full w-full object-contain"
           />
           {!disabled && (
-            <button
-              type="button"
-              onClick={remove}
-              className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/75 transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            previewSrc ? (
+              <button
+                type="button"
+                onClick={remove}
+                className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-black/75 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-md bg-black/60 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-black/75 transition-colors"
+              >
+                <ImagePlus className="h-3.5 w-3.5" /> Солих
+              </button>
+            )
           )}
         </div>
       ) : (
