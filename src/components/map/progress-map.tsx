@@ -27,9 +27,10 @@ const DRONE_GROUP: LayerGroupConfig = { id: "drone_images", label: "Дрон з�
 
 interface Props {
   acquisitionId: string;
+  fullscreen?: boolean;
 }
 
-export function ProgressMap({ acquisitionId }: Props) {
+export function ProgressMap({ acquisitionId, fullscreen }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
@@ -218,7 +219,11 @@ export function ProgressMap({ acquisitionId }: Props) {
 
     olMap.current = map;
 
+    const resizeObserver = new ResizeObserver(() => map.updateSize());
+    resizeObserver.observe(mapRef.current);
+
     return () => {
+      resizeObserver.disconnect();
       map.setTarget(undefined);
       olMap.current = null;
     };
@@ -314,7 +319,7 @@ export function ProgressMap({ acquisitionId }: Props) {
   return (
     <div
       className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
-      style={{ height: 360 }}
+      style={fullscreen ? { height: "100%" } : { height: 360 }}
     >
       <div ref={mapRef} className="h-full w-full" />
       <LayerPanel layers={layers} groups={[HISTORY_GROUP, DRONE_GROUP]} onToggle={handleToggle} />

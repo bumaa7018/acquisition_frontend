@@ -8,13 +8,14 @@ import type { DroneImage } from "@/types";
 
 interface Props {
   acquisitionId: string;
+  fullscreen?: boolean;
 }
 
-function Placeholder({ text }: { text: string }) {
+function Placeholder({ text, fullscreen }: { text: string; fullscreen?: boolean }) {
   return (
     <div
       className="flex flex-col items-center justify-center text-slate-400 dark:text-slate-500"
-      style={{ height: 360 }}
+      style={fullscreen ? { height: "100%" } : { height: 360 }}
     >
       <Columns2 className="h-7 w-7 mb-2 opacity-30" />
       <p className="text-[13px]">{text}</p>
@@ -22,7 +23,7 @@ function Placeholder({ text }: { text: string }) {
   );
 }
 
-export function DroneCompare({ acquisitionId }: Props) {
+export function DroneCompare({ acquisitionId, fullscreen }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
 
   const { data: droneImages = [] } = useQuery({
@@ -41,17 +42,20 @@ export function DroneCompare({ acquisitionId }: Props) {
       );
   }, [droneImages, acquisitionId]);
 
-  if (!acquisitionId) return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
+  if (!acquisitionId)
+    return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" fullscreen={fullscreen} />;
 
   const first = relevant[0];
   const last = relevant[relevant.length - 1];
   if (!first || !last || first.id === last.id)
-    return <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" />;
+    return (
+      <Placeholder text="Харьцуулах дрон зураг хүрэлцэхгүй байна" fullscreen={fullscreen} />
+    );
 
   return (
     <div
       className="relative w-full select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]"
-      style={{ height: 360 }}
+      style={fullscreen ? { height: "100%" } : { height: 360 }}
     >
       {/* base — most recent image, fills the whole frame */}
       <img
