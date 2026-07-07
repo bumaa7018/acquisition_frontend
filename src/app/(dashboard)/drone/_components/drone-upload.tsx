@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { UploadCloud } from "lucide-react";
+import { Plus, UploadCloud } from "lucide-react";
 import { droneImageApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 
@@ -10,15 +10,27 @@ interface Props {
   acquisitionId: string;
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function DroneUpload({ acquisitionId }: Props) {
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [geometryWkt, setGeometryWkt] = useState("");
-  const [capturedAt, setCapturedAt] = useState("");
+  const [capturedAt, setCapturedAt] = useState(todayStr);
   const [name, setName] = useState("");
 
   const inp =
     "w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+
+  function resetForm() {
+    setFile(null);
+    setGeometryWkt("");
+    setCapturedAt(todayStr());
+    setName("");
+  }
 
   const uploadMutation = useMutation({
     mutationFn: () =>
@@ -32,15 +44,26 @@ export function DroneUpload({ acquisitionId }: Props) {
     onSuccess: () => {
       toast.success("Дрон зураг нэмэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["drone-images"] });
-      setFile(null);
-      setGeometryWkt("");
-      setCapturedAt("");
-      setName("");
+      resetForm();
+      setShowForm(false);
     },
     onError: (err) => toast.error(getApiError(err, "Дрон зураг нэмэхэд алдаа гарлаа")),
   });
 
   if (!acquisitionId) return null;
+
+  if (!showForm) {
+    return (
+      <div className="ap-card p-4 flex justify-end">
+        <button
+          onClick={() => setShowForm(true)}
+          className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+        >
+          <Plus className="h-4 w-4" /> Дрон зураг нэмэх
+        </button>
+      </div>
+    );
+  }
 
   const canSubmit = !!file && !!geometryWkt.trim() && !uploadMutation.isPending;
 
@@ -97,7 +120,16 @@ export function DroneUpload({ acquisitionId }: Props) {
           />
         </div>
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => {
+            resetForm();
+            setShowForm(false);
+          }}
+          className="h-9 px-4 rounded-lg text-[13px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
+        >
+          Буцах
+        </button>
         <button
           onClick={() => uploadMutation.mutate()}
           disabled={!canSubmit}
