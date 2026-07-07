@@ -6,9 +6,10 @@ interface Props {
   file: File | null;
   onChange: (file: File | null) => void;
   disabled?: boolean;
+  previewHeight?: number;
 }
 
-export function DroneImagePicker({ file, onChange, disabled }: Props) {
+export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
@@ -44,7 +45,7 @@ export function DroneImagePicker({ file, onChange, disabled }: Props) {
       />
 
       {previewSrc ? (
-        <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-[#252630]" style={{ height: 405 }}>
+        <div className="relative w-full overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-100 dark:bg-[#252630]" style={{ height: previewHeight }}>
           <img
             src={previewSrc}
             alt=""
@@ -66,7 +67,7 @@ export function DroneImagePicker({ file, onChange, disabled }: Props) {
           disabled={disabled}
           onClick={() => inputRef.current?.click()}
           className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-white/[0.15] text-slate-400 dark:text-slate-500 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors disabled:opacity-50"
-          style={{ height: 405}}
+          style={{ height: previewHeight }}
         >
           <ImagePlus className="h-6 w-6" />
           <span className="text-[13px] font-medium">Зураг оруулах</span>

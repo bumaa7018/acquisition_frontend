@@ -6,6 +6,7 @@ import { ArrowLeft, Maximize2 } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 import { DroneCompare } from "./_components/drone-compare";
 import { DroneUpload } from "./_components/drone-upload";
+import { DroneImageList } from "./_components/drone-image-list";
 
 const ProgressMap = dynamic(
   () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
@@ -131,8 +132,7 @@ function DronePageContent() {
         </div>
       </div>
 
-
-      {/* Drone zurgiin list?  */}
+      <DroneImageList acquisitionId={acquisitionId} />
     </div>
   );
 }

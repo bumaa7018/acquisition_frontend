@@ -614,6 +614,22 @@ export const droneImageApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data)
   },
+  update: (id: number, data: { file?: File | null; geometry_wkt?: string; captured_at?: string; name?: string }) => {
+    const fd = new FormData()
+    if (data.file) fd.append('file', data.file)
+    if (data.geometry_wkt) fd.append('geometry_wkt', data.geometry_wkt)
+    if (data.captured_at) {
+      const capturedAt = /^\d{4}-\d{2}-\d{2}$/.test(data.captured_at)
+        ? `${data.captured_at}T00:00:00Z`
+        : data.captured_at
+      fd.append('captured_at', capturedAt)
+    }
+    if (data.name) fd.append('name', data.name)
+    return api.put<ApiResponse<DroneImage>>(`/drone-images/${id}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
+  delete: (id: number) => api.delete(`/drone-images/${id}`),
 }
 
 export const planApi = {
