@@ -36,7 +36,7 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  const displaySrc = previewSrc ?? (!file ? resolveImageUrl(existingImageUrl) : undefined);
+  const displaySrc = previewSrc ?? (!file ? resolveImageUrl(existingImageUrl, "drone-image") : undefined);
 
   return (
     <div>
