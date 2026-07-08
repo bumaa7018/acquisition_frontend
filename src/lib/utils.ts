@@ -25,9 +25,10 @@ export function getApiError(err: unknown, fallback: string): string {
   return data?.error || data?.message || fallback;
 }
 
-export function resolveImageUrl(url?: string): string | undefined {
+export function resolveImageUrl(url?: string, objectname?: string): string | undefined {
   if (!url) return url;
   if (/^https?:\/\//i.test(url)) return url;
   const base = process.env.NEXT_PUBLIC_MOCK_FILES_URL ?? "";
-  return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+  const segments = [base.replace(/\/$/, ""), objectname?.replace(/^\/|\/$/g, ""), url.replace(/^\//, "")].filter(Boolean);
+  return segments.join("/");
 }
