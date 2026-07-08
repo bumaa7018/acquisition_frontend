@@ -77,16 +77,22 @@ export function DroneCompare({ acquisitionId }: Props) {
           className={select}
         >
           <option value="">{`Эхний огноо (${formatDate(defaultFirst.captured_at)})`}</option>
-          {relevant.map((img, i) => (
-            <option key={img.id} value={img.id}>
-              {optionLabel(img, i)}
-            </option>
-          ))}
+          {relevant.map((img, i) =>
+            String(img.id) === String(right.id) ? null : (
+              <option key={img.id} value={img.id}>
+                {optionLabel(img, i)}
+              </option>
+            ),
+          )}
         </select>
         <span className="text-slate-300 dark:text-slate-600">→</span>
         <select
           value={rightId}
-          onChange={(e) => setRightId(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setRightId(value);
+            if (value && value === leftId) setLeftId("");
+          }}
           className={select}
         >
           <option value="">{`Сүүлийн огноо (${formatDate(defaultLast.captured_at)})`}</option>
