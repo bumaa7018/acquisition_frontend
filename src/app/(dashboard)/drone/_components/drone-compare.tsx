@@ -45,7 +45,7 @@ export function DroneCompare({ acquisitionId }: Props) {
           !!img.image_url && img.type === "acquisition" && img.acquisition_id === acquisitionId,
       )
       .sort(
-        (a, b) => new Date(a.captured_at ?? 0).getTime() - new Date(b.captured_at ?? 0).getTime(),
+        (a, b) => new Date(b.captured_at ?? 0).getTime() - new Date(a.captured_at ?? 0).getTime(),
       );
   }, [droneImages, acquisitionId]);
 
@@ -55,8 +55,8 @@ export function DroneCompare({ acquisitionId }: Props) {
   if (relevant.length < 2)
     return <Placeholder text="Харьцуулах дрон зураг олдсонгүй" />;
 
-  const defaultFirst = relevant[0];
-  const defaultLast = relevant[relevant.length - 1];
+  const defaultFirst = relevant[relevant.length - 1];
+  const defaultLast = relevant[0];
   const left = relevant.find((img) => String(img.id) === leftId) ?? defaultFirst;
   const right = relevant.find((img) => String(img.id) === rightId) ?? defaultLast;
 

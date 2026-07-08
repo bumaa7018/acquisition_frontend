@@ -66,7 +66,7 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
           !!img.geometry_wkt && img.type === "acquisition" && img.acquisition_id === acquisitionId,
       )
       .sort(
-        (a, b) => new Date(a.captured_at ?? 0).getTime() - new Date(b.captured_at ?? 0).getTime(),
+        (a, b) => new Date(b.captured_at ?? 0).getTime() - new Date(a.captured_at ?? 0).getTime(),
       );
   }, [droneImages, acquisitionId]);
 
