@@ -23,6 +23,12 @@ function Placeholder({ text }: { text: string }) {
   );
 }
 
+function CompareImage({ src, className }: { src?: string; className: string }) {
+  const [error, setError] = useState(false);
+  if (!src || error) return null;
+  return <img src={src} alt="" draggable={false} onError={() => setError(true)} className={className} />;
+}
+
 export function DroneCompare({ acquisitionId }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [leftId, setLeftId] = useState("");
@@ -108,10 +114,9 @@ export function DroneCompare({ acquisitionId }: Props) {
 
       <div className="relative w-full flex-1 min-h-0 select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]">
         {/* base — right-side image, fills the whole frame */}
-        <img
+        <CompareImage
+          key={right.id}
           src={resolveImageUrl(right.image_url, "drone-image")}
-          alt=""
-          draggable={false}
           className="absolute inset-0 h-full w-full object-contain"
         />
         {/* overlay — left-side image, clipped to the left portion up to the slider */}
@@ -119,10 +124,9 @@ export function DroneCompare({ acquisitionId }: Props) {
           className="absolute inset-0 overflow-hidden"
           style={{ clipPath: `inset(0 ${100 - splitPercent}% 0 0)` }}
         >
-          <img
+          <CompareImage
+            key={left.id}
             src={resolveImageUrl(left.image_url, "drone-image")}
-            alt=""
-            draggable={false}
             className="absolute inset-0 h-full w-full object-contain"
           />
         </div>

@@ -14,6 +14,7 @@ interface Props {
 export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405, existingImageUrl }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     if (!file) {
@@ -24,6 +25,10 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
     setPreviewSrc(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [previewSrc, existingImageUrl]);
 
   function choose(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0] ?? null;
@@ -36,7 +41,7 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  const displaySrc = previewSrc ?? (!file ? resolveImageUrl(existingImageUrl, "drone-image") : undefined);
+  const displaySrc = imgError ? undefined : previewSrc ?? (!file ? resolveImageUrl(existingImageUrl, "drone-image") : undefined);
 
   return (
     <div>
@@ -53,6 +58,7 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
           <img
             src={displaySrc}
             alt=""
+            onError={() => setImgError(true)}
             className="absolute inset-0 h-full w-full object-contain"
           />
           {!disabled && (
