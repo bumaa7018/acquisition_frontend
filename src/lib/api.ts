@@ -340,13 +340,9 @@ export const landApi = {
   getById: (id: string) =>
     api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
   create: (data: FormData) =>
-    api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data),
+    api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data).then(r => r.data.data),
   update: (id: string, data: FormData) =>
-    api.put<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`, data, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data),
+    api.put<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`, data).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
@@ -387,9 +383,7 @@ export const landApi = {
   uploadCompensationReport: (acqId: string, compId: string, file: File) => {
     const fd = new FormData()
     fd.append('file', file)
-    return api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}/report`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
+    return api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}/report`, fd).then(r => r.data.data)
   },
   listCompensationHistory: (acqId: string, compId: string) =>
     api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
@@ -448,9 +442,7 @@ export const landApi = {
     fd.append('file', file)
     if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
     if (name?.trim()) fd.append('name', name.trim())
-    return api.post<ApiResponse<Document>>(`/land-acquisitions/${id}/documents`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
+    return api.post<ApiResponse<Document>>(`/land-acquisitions/${id}/documents`, fd).then(r => r.data.data)
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
@@ -546,9 +538,7 @@ export const parcelApi = {
     fd.append('file', file)
     if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
     if (name?.trim()) fd.append('name', name.trim())
-    return api.post<ApiResponse<Document>>(`/parcels/${id}/documents`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
+    return api.post<ApiResponse<Document>>(`/parcels/${id}/documents`, fd).then(r => r.data.data)
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/parcels/${id}/documents/${docId}`),
@@ -610,9 +600,7 @@ export const droneImageApi = {
       fd.append('captured_at', capturedAt)
     }
     if (data.name) fd.append('name', data.name)
-    return api.post<ApiResponse<DroneImage>>('/drone-images', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
+    return api.post<ApiResponse<DroneImage>>('/drone-images', fd).then(r => r.data.data)
   },
   update: (id: number, data: { file?: File | null; geometry_wkt?: string; captured_at?: string; name?: string }) => {
     const fd = new FormData()
@@ -625,9 +613,7 @@ export const droneImageApi = {
       fd.append('captured_at', capturedAt)
     }
     if (data.name) fd.append('name', data.name)
-    return api.put<ApiResponse<DroneImage>>(`/drone-images/${id}`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data.data)
+    return api.put<ApiResponse<DroneImage>>(`/drone-images/${id}`, fd).then(r => r.data.data)
   },
   delete: (id: number) => api.delete(`/drone-images/${id}`),
 }
