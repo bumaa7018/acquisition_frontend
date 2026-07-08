@@ -69,7 +69,11 @@ export function DroneCompare({ acquisitionId }: Props) {
       <div className="flex flex-wrap items-center gap-2 shrink-0">
         <select
           value={leftId}
-          onChange={(e) => setLeftId(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setLeftId(value);
+            if (value && value === rightId) setRightId("");
+          }}
           className={select}
         >
           <option value="">{`Эхний огноо (${formatDate(defaultFirst.captured_at)})`}</option>
@@ -86,11 +90,13 @@ export function DroneCompare({ acquisitionId }: Props) {
           className={select}
         >
           <option value="">{`Сүүлийн огноо (${formatDate(defaultLast.captured_at)})`}</option>
-          {relevant.map((img, i) => (
-            <option key={img.id} value={img.id}>
-              {optionLabel(img, i)}
-            </option>
-          ))}
+          {relevant.map((img, i) =>
+            String(img.id) === String(left.id) ? null : (
+              <option key={img.id} value={img.id}>
+                {optionLabel(img, i)}
+              </option>
+            ),
+          )}
         </select>
       </div>
 
