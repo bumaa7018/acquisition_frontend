@@ -25,7 +25,13 @@ function Placeholder({ text }: { text: string }) {
 
 function CompareImage({ src, className }: { src?: string; className: string }) {
   const [error, setError] = useState(false);
-  if (!src || error) return null;
+  if (!src || error) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-slate-100 dark:bg-[#252630]`}>
+        <p className="text-[12px] text-slate-400 dark:text-slate-500">Зураг ачаалагдсангүй</p>
+      </div>
+    );
+  }
   return <img src={src} alt="" draggable={false} onError={() => setError(true)} className={className} />;
 }
 
