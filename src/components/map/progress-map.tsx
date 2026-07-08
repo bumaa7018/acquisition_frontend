@@ -145,7 +145,7 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
       zIndex: 90,
       source: img.image_url
         ? new ImageStatic({
-            url: resolveImageUrl(img.image_url)!,
+            url: resolveImageUrl(img.image_url, "drone-image")!,
             imageExtent: extent,
             projection: "EPSG:3857",
             crossOrigin: "anonymous",
