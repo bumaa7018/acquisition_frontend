@@ -109,7 +109,7 @@ export function DroneCompare({ acquisitionId }: Props) {
       <div className="relative w-full flex-1 min-h-0 select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]">
         {/* base — right-side image, fills the whole frame */}
         <img
-          src={resolveImageUrl(right.image_url)}
+          src={resolveImageUrl(right.image_url, "drone-image")}
           alt=""
           draggable={false}
           className="absolute inset-0 h-full w-full object-contain"
@@ -120,7 +120,7 @@ export function DroneCompare({ acquisitionId }: Props) {
           style={{ clipPath: `inset(0 ${100 - splitPercent}% 0 0)` }}
         >
           <img
-            src={resolveImageUrl(left.image_url)}
+            src={resolveImageUrl(left.image_url, "drone-image")}
             alt=""
             draggable={false}
             className="absolute inset-0 h-full w-full object-contain"
