@@ -24,3 +24,10 @@ export function getApiError(err: unknown, fallback: string): string {
   const data = (err as { response?: { data?: { error?: string; message?: string } } })?.response?.data;
   return data?.error || data?.message || fallback;
 }
+
+export function resolveImageUrl(url?: string): string | undefined {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = process.env.NEXT_PUBLIC_MOCK_FILES_URL ?? "";
+  return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
+}

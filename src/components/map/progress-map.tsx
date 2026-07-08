@@ -17,7 +17,7 @@ import { Fill, Stroke, Style } from "ol/style";
 import "ol/ol.css";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { landApi, droneImageApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveImageUrl } from "@/lib/utils";
 import type { BoundaryHistory, DroneImage } from "@/types";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 
@@ -145,7 +145,7 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
       zIndex: 90,
       source: img.image_url
         ? new ImageStatic({
-            url: img.image_url,
+            url: resolveImageUrl(img.image_url)!,
             imageExtent: extent,
             projection: "EPSG:3857",
             crossOrigin: "anonymous",

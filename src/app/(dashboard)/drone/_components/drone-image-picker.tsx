@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
+import { resolveImageUrl } from "@/lib/utils";
 
 interface Props {
   file: File | null;
@@ -35,7 +36,7 @@ export function DroneImagePicker({ file, onChange, disabled, previewHeight = 405
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  const displaySrc = previewSrc ?? (!file ? existingImageUrl : undefined);
+  const displaySrc = previewSrc ?? (!file ? resolveImageUrl(existingImageUrl) : undefined);
 
   return (
     <div>
