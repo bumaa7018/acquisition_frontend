@@ -88,7 +88,7 @@ export function DroneCompare({ acquisitionId }: Props) {
           }}
           className={select}
         >
-          <option value="">{`Эхний огноо (${formatDate(defaultFirst.captured_at)})`}</option>
+          {/* <option value="">{`Эхний огноо (${formatDate(defaultFirst.captured_at)})`}</option> */}
           {relevant.map((img, i) =>
             String(img.id) === String(right.id) ? null : (
               <option key={img.id} value={img.id}>
@@ -107,7 +107,7 @@ export function DroneCompare({ acquisitionId }: Props) {
           }}
           className={select}
         >
-          <option value="">{`Сүүлийн огноо (${formatDate(defaultLast.captured_at)})`}</option>
+          {/* <option value="">{`Сүүлийн огноо (${formatDate(defaultLast.captured_at)})`}</option> */}
           {relevant.map((img, i) =>
             String(img.id) === String(left.id) ? null : (
               <option key={img.id} value={img.id}>
