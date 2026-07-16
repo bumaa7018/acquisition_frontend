@@ -7,8 +7,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
 import { isExternalSpecialRole } from "@/lib/role-utils";
+import { NotificationBell } from "./notification-bell";
 import {
-  Bell,
   Search,
   User,
   ChevronRight,
@@ -139,6 +139,9 @@ export function Header() {
             <Moon className="h-4 w-4" />
           )}
         </button>
+
+        {/* Мэдэгдэл — role тодорхой болсны дараа зурна (SSE нэвтрэлт шаарддаг) */}
+        {ready && <NotificationBell />}
 
         <div className="mx-1.5 h-5 w-px bg-slate-200 dark:bg-[#37394d]" />
 

@@ -701,3 +701,21 @@ export const STATUS_COLORS: Record<number, string> = {
   3: "bg-green-100 text-green-800",
   4: "bg-red-100 text-red-800",
 };
+
+// ── Мэдэгдэл ─────────────────────────────────────────
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  actor_id?: string;
+  actor_name: string;
+  type: string;
+  title: string;
+  body: string;
+  resource_type: "acquisition" | "parcel" | "compensation" | "";
+  resource_id: string;
+  acquisition_id?: string;
+  parcel_id?: string;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string;
+}

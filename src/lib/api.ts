@@ -197,23 +197,31 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
   }
 }
 
+// _silent: true — арын хүсэлтүүд (мэдэгдлийн poll г.м.) бүтэн дэлгэцийн
+// блоклогч loader-ийг асаахгүй байх тохиргоо.
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    _silent?: boolean
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
   // Эрхийн шалгалтыг backend (/prof group + middleware) дээр төвлөрүүлсэн.
   // Frontend талд урьдчилсан allowlist хийхгүй — false 403 (Хандах эрхгүй)
   // toast гарахаас сэргийлж, backend-тэй зөрчилдөхөөс зайлсхийнэ.
-  notifyRequestStart()
+  if (!config._silent) notifyRequestStart()
   return config
 })
 
 api.interceptors.response.use(
   (res) => {
-    notifyRequestEnd()
+    if (!res.config._silent) notifyRequestEnd()
     return res
   },
   async (error) => {
-    notifyRequestEnd()
+    if (!error.config?._silent) notifyRequestEnd()
     console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
 
     const status = error.response?.status
@@ -229,13 +237,17 @@ api.interceptors.response.use(
     const noResponse = !error.response // network error эсвэл timeout (ECONNABORTED)
     const isServerError = typeof status === 'number' && status >= 500
     if (!isAuthRoute && (noResponse || isServerError)) {
-      redirectToServerError()
+      // Арын (_silent) хүсэлтийн түр алдаа хэрэглэгчийг алдааны хуудас руу
+      // шидэхгүй — дараагийн poll дээр өөрөө сэргэнэ.
+      if (!error.config?._silent) redirectToServerError()
       return Promise.reject(error)
     }
 
     // ── 403: хандах эрхгүй (backend эсвэл frontend access-policy) ──────────
     if (status === 403 && !isAuthRoute) {
-      showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+      if (!error.config?._silent) {
+        showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+      }
       return Promise.reject(error)
     }
 
@@ -783,6 +795,25 @@ export const acquisitionCategoryApi = {
   update: (id: number, body: { name: string; sort_order?: number }) =>
     api.put<ApiResponse<AcquisitionCategory>>(`/acquisition-categories/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/acquisition-categories/${id}`),
+}
+
+// ── Мэдэгдэл ────────────────────────────────────────
+// Бүх хүсэлт _silent — хонхны арын шинэчлэлт бүтэн дэлгэцийн
+// блоклогч loader асаахгүй, түр алдаа нь хэрэглэгчид мэдэгдэхгүй.
+export const notificationApi = {
+  list: (params?: { unread?: boolean; page?: number; page_size?: number }) =>
+    api
+      .get<PaginatedResponse<import('@/types').AppNotification>>('/notifications', {
+        params: { ...(params?.unread ? { unread: true } : {}), page: params?.page ?? 1, page_size: params?.page_size ?? 15 },
+        _silent: true,
+      })
+      .then(r => ({ items: r.data.data ?? [], total: r.data.total ?? 0 })),
+  unreadCount: () =>
+    api
+      .get<ApiResponse<{ count: number }>>('/notifications/unread-count', { _silent: true })
+      .then(r => r.data.data?.count ?? 0),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`, undefined, { _silent: true }),
+  markAllRead: () => api.post('/notifications/read-all', undefined, { _silent: true }),
 }
 
 export default api

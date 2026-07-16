@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parcelApi, landApi } from "@/lib/api";
+import { parcelApi, landApi, documentTypeApi } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
 import { getParcelStatusStyle } from "@/types";
 import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle } from "lucide-react";
@@ -34,9 +34,30 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   const parcelComps = parcelCode
     ? allComps.filter((c) => c.parcel_id === parcelCode && c.valuation_type === (selectedType ?? "asset"))
     : [];
-  const hasApprovedReport = parcelComps.some(
-    (c) => c.status === "approved" && !!c.valuation_report_url,
-  );
+  // «Чөлөөлсөн» болгох нөхцөл — backend-ийн UpdateParcelStatus шалгалттай ижил:
+  // сонгосон урсгалд зөвшөөрөгдсөн олговортой БА үнэлгээний тайлантай байх.
+  // Тайлан нь ШИНЭ флоу («Хөрөнгийн үнэлгээний тайлан» төрөлт parcel document,
+  // Үл хөдлөх табаас хавсаргадаг) эсвэл ХУУЧИН флоу (олговрын
+  // valuation_report_url) аль нэгээр нь бүртгэгдсэн байж болно.
+  const { data: docTypes = [] } = useQuery({
+    queryKey: ["document-types", "parcel"],
+    queryFn: () => documentTypeApi.list("parcel"),
+    staleTime: Infinity,
+    enabled: !!parcelId,
+  });
+  const reportTypeId = docTypes.find((t) => t.type === "valuation_report")?.id;
+  const { data: parcelDocs = [] } = useQuery({
+    queryKey: ["parcel-documents", parcelId],
+    queryFn: () => parcelApi.listDocuments(parcelId),
+    enabled: !!parcelId,
+  });
+  const hasReportDoc =
+    !!reportTypeId && parcelDocs.some((d) => d.document_type_id === reportTypeId);
+  const hasApprovedComp = parcelComps.some((c) => c.status === "approved");
+  const hasApprovedReport =
+    hasApprovedComp &&
+    (hasReportDoc ||
+      parcelComps.some((c) => c.status === "approved" && !!c.valuation_report_url));
 
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["parcel-available-statuses", acqId, parcelId],
@@ -336,7 +357,8 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
-                    Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө зөвшөөрөгдсөн нөхөн төлбөрт үнэлгээний тайлан хавсаргасан байх шаардлагатай.
+                    Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө нөхөн төлбөр зөвшөөрөгдсөн бөгөөд
+                    үнэлгээний тайлан (Үл хөдлөх таб эсвэл олговрын хавсралт) хавсаргасан байх шаардлагатай.
                   </p>
                 </div>
               )}
