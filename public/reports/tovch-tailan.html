@@ -1,0 +1,453 @@
+<title>Товч тайлан — Газар чөлөөлөлтийн систем</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  :root {
+    --bg: #101110; --surface: #1a1b1a; --surface2: #212322;
+    --ink: #f2f2ef; --ink2: #c3c2b7; --muted: #8b8d88;
+    --hair: #2d2e2c; --cyan: #02c0ce; --blue: #5598e7;
+    --green: #3fa53f; --yellow: #eda100; --gray: #6b6c66;
+  }
+  body {
+    background: var(--bg); color: var(--ink2);
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 15px; line-height: 1.6; -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 28px 16px 80px; }
+  h1, h2 { font-family: Georgia, "Times New Roman", serif; color: var(--ink); line-height: 1.25; text-wrap: balance; }
+  h1 { font-size: clamp(24px, 6vw, 34px); margin: 10px 0; }
+  h2 { font-size: clamp(17px, 4.5vw, 21px); }
+  .eyebrow { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); font-weight: 700; }
+  .sub { color: var(--ink2); font-size: 14px; }
+  section { margin: 40px 0; }
+  .ch-head { display: flex; align-items: baseline; gap: 10px; border-bottom: 1.5px solid var(--hair); padding-bottom: 8px; margin-bottom: 14px; }
+  .ch-num { font-family: Georgia, serif; font-size: 19px; color: var(--gray); font-weight: 700; }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 14px 0; }
+  @media (min-width: 640px) { .stats { grid-template-columns: repeat(3, 1fr); } .stats.s4 { grid-template-columns: repeat(4, 1fr); } }
+  .stat { background: var(--surface); border: 1px solid var(--hair); border-radius: 10px; padding: 12px 14px 10px; border-top: 3px solid var(--cyan); }
+  .stat .v { font-size: 24px; font-weight: 800; color: var(--cyan); line-height: 1.1; }
+  .stat .l { font-size: 11.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+  .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; padding: 14px 16px; margin: 10px 0; }
+  .card b.ttl { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--cyan); display: block; margin-bottom: 6px; }
+  .cols2 { display: grid; gap: 10px; }
+  @media (min-width: 640px) { .cols2 { grid-template-columns: 1fr 1fr; } .cols3 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr 1fr; } }
+
+  .note {
+    background: #14262c; border: 1px solid #02565c; border-radius: 10px;
+    padding: 11px 14px; margin: 12px 0; font-size: 13.5px; color: #c9e8ea;
+  }
+  .note b { color: #7fd6dc; }
+  .note::before { content: "ℹ Энгийн тайлбар: "; font-weight: 700; color: #7fd6dc; }
+
+  ul.t { padding-left: 18px; margin: 8px 0; }
+  ul.t li { margin: 5px 0; font-size: 14px; }
+  ul.t li b { color: var(--ink); }
+
+  .flow { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .fbox { background: var(--surface); border: 1px solid var(--hair); border-left: 3px solid var(--blue); border-radius: 10px; padding: 10px 14px; }
+  .fbox b { color: var(--blue); display: block; font-size: 14.5px; }
+  .fbox span { font-size: 13px; color: var(--muted); }
+  .fdown { text-align: center; color: var(--gray); font-size: 15px; margin: -3px 0; }
+
+  .tbl-scroll { overflow-x: auto; border: 1px solid var(--hair); border-radius: 10px; margin: 10px 0; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 12.5px; background: var(--surface); }
+  th { background: #0d2733; color: #9adbe0; padding: 8px 9px; text-align: left; font-size: 11px; letter-spacing: .04em; white-space: nowrap; }
+  th.c, td.c { text-align: center; }
+  td { border-bottom: 1px solid var(--hair); padding: 7px 9px; color: var(--ink2); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td.grp { background: #1c2a1e !important; color: #86d98a; font-weight: 700; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+  .ok { color: #4ade80; font-weight: 700; } .cnd { color: var(--blue); font-weight: 700; } .no { color: #55564f; }
+
+  .mods { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 10px 0; }
+  @media (min-width: 560px) { .mods { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 780px) { .mods { grid-template-columns: 1fr 1fr 1fr; } }
+  .mod { background: var(--surface); border: 1px solid var(--hair); border-left: 3px solid var(--green); border-radius: 9px; padding: 9px 12px; }
+  .mod b { font-size: 13.5px; color: var(--ink); display: block; }
+  .mod span { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .mod:nth-child(even) { border-left-color: var(--blue); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; }
+  svg text { font-family: -apple-system, "Segoe UI", Arial, sans-serif; }
+  .chart svg { width: 100%; height: auto; }
+
+  .big80 { display: flex; gap: 16px; align-items: center; background: #16283e; border: 1px solid #24466e; border-radius: 12px; padding: 14px 18px; margin: 12px 0; }
+  .big80 .n { font-size: 42px; font-weight: 800; color: var(--blue); font-family: Georgia, serif; }
+  .big80 p { font-size: 13.5px; }
+
+  .rolebar { background: #0d2733; border: 1px solid #02565c; color: var(--ink2); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 10px; }
+  .rolebar b { color: var(--cyan); }
+  .foot { color: var(--muted); font-size: 12px; border-top: 1px solid var(--hair); padding-top: 14px; margin-top: 50px; text-align: center; }
+  .dl { display: inline-block; background: var(--cyan); color: #06282b; text-decoration: none; padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 13.5px; margin-top: 8px; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Систем хөгжүүлэлтийн техникийн тайлан · Товч хувилбар · 2026-07</div>
+  <h1>Газар чөлөөлөлт, нөхөх олговрын нэгдсэн систем</h1>
+  <p class="sub">Газар чөлөөлөх ажлын бүх алхмыг — талбарын бүртгэлээс эхлээд үнэлгээ, нөхөх олговрыг батлах
+  хүртэл — цаасан бус, нэг цахим системд хяналттай явуулдаг вэб систем.</p>
+  <div class="stats s4">
+    <div class="stat"><div class="v">185</div><div class="l">REST API endpoint — үйлчилгээний цэг</div></div>
+    <div class="stat"><div class="v">49</div><div class="l">Өгөгдлийн сангийн хүснэгт</div></div>
+    <div class="stat"><div class="v">24</div><div class="l">Вэб хуудас (дэлгэц)</div></div>
+    <div class="stat"><div class="v">220</div><div class="l">Автомат тест</div></div>
+  </div>
+</header>
+
+<!-- 01 -->
+<section>
+  <div class="ch-head"><span class="ch-num">01</span><h2>Ерөнхий тойм</h2></div>
+  <div class="stats">
+    <div class="stat"><div class="v">185</div><div class="l">REST API endpoint</div></div>
+    <div class="stat"><div class="v">49</div><div class="l">Хүснэгт (2 сан)</div></div>
+    <div class="stat"><div class="v">58</div><div class="l">Migration</div></div>
+    <div class="stat"><div class="v">24</div><div class="l">Frontend хуудас</div></div>
+    <div class="stat"><div class="v">~55.4К</div><div class="l">Кодын мөр (Go + TS)</div></div>
+    <div class="stat"><div class="v">6</div><div class="l">Хэрэглэгчийн роль</div></div>
+  </div>
+  <div class="note">Систем нь дөрвөн хэсгээс бүтнэ — таны хөтчид харагдах <b>вэб хуудас</b>, ард нь ажиллаж
+  дүрэм шалгадаг <b>сервер</b>, бүх мэдээллийг хадгалдаг <b>өгөгдлийн сан</b>, талбаруудыг зурагладаг
+  <b>газрын зургийн үйлчилгээ</b>. «API endpoint» гэдэг нь эдгээрийн хооронд мэдээлэл дамжих 185 суваг гэсэн үг.</div>
+</section>
+
+<!-- 02 -->
+<section>
+  <div class="ch-head"><span class="ch-num">02</span><h2>Системийн архитектур</h2></div>
+  <div class="flow">
+    <div class="fbox"><b>Вэб хуудас — Next.js 14</b><span>24 хуудас · газрын зургийн прокси · Excel тайлан · DOCX загвар · OpenLayers зураг</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox"><b>Сервер — Go 1.25 / Gin</b><span>Handler → Service → Repository гэсэн 3 давхарга · JWT нэвтрэлт, эрхийн шалгалт, түгжээ · Swagger баримт</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox" style="border-left-color:var(--green)"><b style="color:var(--green)">Өгөгдлийн сан — PostgreSQL 16</b><span>Бизнесийн сан (41 хүснэгт, газарзүйн PostGIS өргөтгөлтэй) + Хэрэглэгчийн сан (8 хүснэгт) — хоёр тусдаа</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox" style="border-left-color:var(--cyan)"><b style="color:var(--cyan)">Газрын зураг — GeoServer 2.25</b><span>Талбаруудын хил, статусын давхаргуудыг зураг болгон түгээнэ</span></div>
+  </div>
+  <div class="cols2">
+    <div class="card"><b class="ttl">Кодын хэмжээ</b><ul class="t"><li>Сервер (Go): <b>29 586 мөр</b></li><li>Вэб (TypeScript): <b>25 850+ мөр</b></li></ul></div>
+    <div class="card"><b class="ttl">Онцлог</b><ul class="t"><li>Давхарга бүр тусдаа — засвар, өргөтгөлд тэсвэртэй</li><li>Хэрэглэгчийн сан тусгаарлагдсан — нууц мэдээлэл салангид</li></ul></div>
+  </div>
+  <div class="note">Байшинтай зүйрлэвэл: вэб хуудас нь <b>үзэгдэх фасад</b>, сервер нь <b>дотоод инженерчлэл</b>,
+  өгөгдлийн сан нь <b>архив</b>. Тус бүрийг тусад нь засварлаж, өргөтгөж болдог нь энэ загварын гол давуу тал.</div>
+</section>
+
+<!-- 03 -->
+<section>
+  <div class="ch-head"><span class="ch-num">03</span><h2>Технологийн стек</h2></div>
+  <div class="cols3">
+    <div class="card"><b class="ttl" style="color:var(--blue)">Frontend</b>
+      <ul class="t"><li><b>Next.js 14 · React 18 · TS 5</b></li><li>Radix UI + Tailwind — dark mode</li><li>React Query — өгөгдлийн кэш</li><li>OpenLayers 10.2 — газрын зураг</li><li>exceljs · SheetJS · pdf-lib</li></ul></div>
+    <div class="card"><b class="ttl">Backend</b>
+      <ul class="t"><li><b>Go 1.25 · Gin 1.10</b></li><li>pgx/v5 — шууд SQL (өндөр хурд)</li><li>golang-jwt · bcrypt</li><li>golang-migrate — автомат</li><li>Swagger баримтжуулалт</li></ul></div>
+    <div class="card"><b class="ttl" style="color:var(--green)">Дэд бүтэц</b>
+      <ul class="t"><li><b>PostgreSQL 16 + PostGIS 3.4</b></li><li>GeoServer 2.25 — WMS/WFS</li><li>Docker + compose</li><li>systemd · Makefile</li></ul></div>
+  </div>
+  <div class="note">Бүх технологи <b>нээлттэй эхийн</b> (үнэгүй, лицензийн төлбөргүй) бөгөөд дэлхийд өргөн
+  хэрэглэгддэг, идэвхтэй хөгжиж буй сангууд тул урт хугацаанд найдвартай.</div>
+</section>
+
+<!-- 04 -->
+<section>
+  <div class="ch-head"><span class="ch-num">04</span><h2>Мэдээллийн сангийн бүтэц</h2></div>
+  <p class="sub">Хоёр тусдаа сан: бизнес (41 хүснэгт, PostGIS) + хэрэглэгч/эрх (8 хүснэгт) · 58 migration</p>
+  <div class="card chart">
+    <b class="ttl">Хүснэгтүүд — сэдвээр (нийт 49)</b>
+    <svg viewBox="0 0 520 172">
+      <g font-size="9.5" fill="#c3c2b7" text-anchor="end">
+        <text x="145" y="17">Нэгж талбар</text><text x="145" y="38">Газар чөлөөлөлт</text>
+        <text x="145" y="59">Үнэлгээ, байгууламж</text><text x="145" y="80">Хэрэглэгч, эрх</text>
+        <text x="145" y="101">Төлөвлөгөө, лавлах</text><text x="145" y="122">Нөхөх олговор</text>
+        <text x="145" y="143">Баримт бичиг</text><text x="145" y="164">Мэдэгдэл, аудит</text>
+      </g>
+      <g fill="#199e70">
+        <rect x="152" y="7" width="320" height="13" rx="3"/><rect x="152" y="28" width="288" height="13" rx="3"/>
+        <rect x="152" y="49" width="288" height="13" rx="3"/><rect x="152" y="70" width="224" height="13" rx="3"/>
+        <rect x="152" y="91" width="192" height="13" rx="3"/><rect x="152" y="112" width="128" height="13" rx="3"/>
+        <rect x="152" y="133" width="64" height="13" rx="3"/><rect x="152" y="154" width="64" height="13" rx="3"/>
+      </g>
+      <g font-size="9.5" font-weight="700" fill="#f2f2ef">
+        <text x="478" y="17">10</text><text x="446" y="38">9</text><text x="446" y="59">9</text>
+        <text x="382" y="80">7</text><text x="350" y="101">6</text><text x="286" y="122">4</text>
+        <text x="222" y="143">2</text><text x="222" y="164">2</text>
+      </g>
+    </svg>
+  </div>
+  <ul class="t">
+    <li><b>Газарзүйн багана</b> — талбарын хил, давхцлыг сан дотор автоматаар тооцно</li>
+    <li><b>3 зэрэгцээ үнэлгээ</b> — талбар бүрд илгээх→батлах хяналттай урсгал</li>
+    <li><b>Түүхжүүлэлт</b> — өөрчлөлт бүр түүхийн хүснэгтэд үлддэг · <b>SHA-256</b> — Excel давхардлын хамгаалалт</li>
+  </ul>
+  <div class="note">«Хүснэгт» гэдэг нь нэг төрлийн мэдээллийг эмх цэгцтэй хадгалах Excel-ийн хуудастай төстэй
+  бүтэц. «Migration» нь сангийн бүтцийн өөрчлөлт бүрийг дугаарлан хадгалсан 58 алхам — шинэ орчинд сан
+  ямар ч үед мөр дараалан ижил бүтэцтэй босдог гэсэн үг.</div>
+</section>
+
+<!-- 05 -->
+<section>
+  <div class="ch-head"><span class="ch-num">05</span><h2>API интерфейс — 185 endpoint</h2></div>
+  <div class="card chart">
+    <b class="ttl">Endpoint-ууд — бүлгээр</b>
+    <svg viewBox="0 0 520 172">
+      <g font-size="9.5" fill="#c3c2b7" text-anchor="end">
+        <text x="145" y="17">Газар чөлөөлөлт</text><text x="145" y="38">Гадны байгууллагын портал</text>
+        <text x="145" y="59">Лавлах, тохиргоо</text><text x="145" y="80">Хэрэглэгч, эрх</text>
+        <text x="145" y="101">Самбар, тайлан, бусад</text><text x="145" y="122">Нэвтрэлт</text>
+        <text x="145" y="143">Нэгж талбар</text><text x="145" y="164">Мэдэгдэл + аудит</text>
+      </g>
+      <g fill="#3987e5">
+        <rect x="152" y="7" width="320" height="13" rx="3"/><rect x="152" y="28" width="226" height="13" rx="3"/>
+        <rect x="152" y="49" width="189" height="13" rx="3"/><rect x="152" y="70" width="84" height="13" rx="3"/>
+        <rect x="152" y="91" width="58" height="13" rx="3"/><rect x="152" y="112" width="32" height="13" rx="3"/>
+        <rect x="152" y="133" width="32" height="13" rx="3"/><rect x="152" y="154" width="32" height="13" rx="3"/>
+      </g>
+      <g font-size="9.5" font-weight="700" fill="#f2f2ef">
+        <text x="478" y="17">61</text><text x="384" y="38">43</text><text x="347" y="59">36</text>
+        <text x="242" y="80">16</text><text x="216" y="101">11</text><text x="190" y="122">6</text>
+        <text x="190" y="143">6</text><text x="190" y="164">6</text>
+      </g>
+    </svg>
+  </div>
+  <ul class="t">
+    <li><b>SSE стрийм</b> — Excel тайлан явцын мэдээлэлтэй татагдана</li>
+    <li><b>GeoServer прокси</b> — газрын зургийн сервер гадагш ил гардаггүй</li>
+    <li><b>Rate limit</b> — нэвтрэлтийн оролдлогыг минутад 30-аар хязгаарлана</li>
+  </ul>
+  <div class="note">Гадны үнэлгээний байгууллагууд ерөнхий сувгуудыг огт ашиглахгүй — тэдэнд зориулсан
+  <b>тусдаа 43 сувагтай портал</b> байдаг тул дотоод мэдээлэлд халдах боломжгүй.</div>
+</section>
+
+<!-- 06 -->
+<section>
+  <div class="ch-head"><span class="ch-num">06</span><h2>Аюулгүй байдал, эрхийн удирдлага</h2></div>
+  <div class="cols2">
+    <div class="card"><b class="ttl">Нэвтрэлт ба token</b>
+      <ul class="t"><li>JWT — 15 минутын үнэмлэх + 7 хоногийн сунгалт</li><li>Нууц үг bcrypt хэшээр (ил хадгалагддаггүй)</li><li>Гарахад үнэмлэх хүчингүй болдог</li><li>Нууц үг солиход бүх төхөөрөмжөөс гаргана</li></ul></div>
+    <div class="card"><b class="ttl">4 давхар шалгалт</b>
+      <ul class="t"><li>Эрх/ролийн шалгалт</li><li>Хуваарилалт — оноогдсон ажилтан эсэх</li><li>Түгжээ — батлагдсаныг засахаас сэргийлнэ</li><li>Гишүүнчлэл — байгууллага зөвхөн өөрийн объектод</li></ul></div>
+  </div>
+  <div class="rolebar"><b>6 РОЛЬ:</b> Админ · Ахлах мэргэжилтэн · Мэргэжилтэн · Мэргэжлийн байгууллага · МИКА · Санхүүгийн мэргэжилтэн</div>
+
+  <h2 style="font-size:16px;margin:22px 0 4px">06.1 Роль тус бүрийн цэсний хандалт</h2>
+  <p class="sub"><span class="ok">✓</span> бүрэн · <span class="cnd">◐</span> нөхцөлтэй · <span class="no">—</span> харагдахгүй &nbsp;·&nbsp; <i>хүснэгтийг хажуу тийш гүйлгэж харна</i></p>
+  <div class="tbl-scroll"><table>
+    <tr><th>Цэс</th><th class="c">Админ</th><th class="c">Ахлах</th><th class="c">Мэргэжилтэн</th><th class="c">Мэрг. байг.</th><th class="c">МИКА</th><th class="c">Санхүү</th></tr>
+    <tr><td>Хяналтын самбар</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐¹</td><td class="c cnd">◐¹</td><td class="c cnd">◐¹</td></tr>
+    <tr><td>Газар чөлөөлөлт</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐²</td><td class="c cnd">◐³</td><td class="c cnd">◐³</td></tr>
+    <tr><td>Тайлан</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Газрын зураг</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Нэгж талбарын түүх</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Нөхөх олговорын түүх</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Удирдлага → Хэрэглэгчид</td><td class="c ok">✓</td><td class="c cnd">◐⁴</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Удирдлага → Эрх &amp; Роль</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Тохиргоо (8 дэд цэс)</td><td class="c ok">✓⁵</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+  </table></div>
+  <p class="sub" style="font-size:11.5px">¹ Цар хүрээ ролиор хязгаарлагдана · ² Зөвхөн өөрт оноогдсон · ³ Хязгаартай табууд · ⁴ Зөвхөн харах · ⁵ admin:read эрхтэйд</p>
+
+  <h2 style="font-size:16px;margin:22px 0 4px">06.2–06.3 Мэдээлэлтэй ажиллах эрхийн матриц</h2>
+  <div class="tbl-scroll"><table>
+    <tr><th>Үйлдэл</th><th class="c">Админ</th><th class="c">Ахлах</th><th class="c">Мэргэжилтэн</th><th class="c">Мэрг. байг.</th><th class="c">МИКА</th><th class="c">Санхүү</th></tr>
+    <tr><td class="grp" colspan="7">Газар чөлөөлөлт</td></tr>
+    <tr><td>Жагсаалт, дэлгэрэнгүй харах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐ᵃ</td><td class="c cnd">◐ᵇ</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+    <tr><td>Үүсгэх, засах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Устгах</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Статусын workflow шилжүүлэх</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td class="grp" colspan="7">Нэгж талбар</td></tr>
+    <tr><td>Мэдээлэл харах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐ᵃ</td><td class="c cnd">◐ᶜ</td><td class="c cnd">◐ᶜ</td><td class="c cnd">◐ᶜ</td></tr>
+    <tr><td>Засах, баримт, төлбөр</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td class="grp" colspan="7">Үнэлгээ (3 урсгал)</td></tr>
+    <tr><td>Үнэлгээ харах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐ᵈ</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+    <tr><td>Хөрөнгийн үнэлгээ оруулах</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c cnd">◐ᵉ</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Хөндлөнгийн үнэлгээ оруулах</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c cnd">◐ᶠ</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>МИКА үнэлгээ оруулах</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c ok">✓</td><td class="c no">—</td></tr>
+    <tr><td>Excel-ээс импортлох</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c cnd">◐ᵉ</td><td class="c ok">✓</td><td class="c no">—</td></tr>
+    <tr><td>Үнэлгээ илгээх</td><td class="c no">—</td><td class="c ok">✓</td><td class="c no">—</td><td class="c cnd">◐ᵉ</td><td class="c cnd">◐ᵍ</td><td class="c no">—</td></tr>
+    <tr><td>Үнэлгээ батлах / буцаах</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c ok">✓</td></tr>
+    <tr><td class="grp" colspan="7">Нөхөх олговор</td></tr>
+    <tr><td>Харах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c cnd">◐ᵃ</td><td class="c cnd">◐ᵇ</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+    <tr><td>Бүртгэх, засах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c cnd">◐ᵉ</td><td class="c ok">✓</td><td class="c no">—</td></tr>
+    <tr><td>Батлах / татгалзах</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c ok">✓ʰ</td></tr>
+    <tr><td class="grp" colspan="7">Удирдлага, тайлан</td></tr>
+    <tr><td>Хэрэглэгч удирдах</td><td class="c ok">✓</td><td class="c cnd">◐ⁱ</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Роль, зөвшөөрөл, тохиргоо</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+    <tr><td>Excel тайлан татах</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+  </table></div>
+  <p class="sub" style="font-size:11.5px">ᵃ Өөрт хуваарилагдсан · ᵇ Байгууллагад оноогдсон · ᶜ «Үнэлгээ хийх» статусад · ᵈ Өөрийн урсгал · ᵉ Үндсэн гүйцэтгэгч · ᶠ Хөндлөнгөөр оноогдсон · ᵍ Өөрийн урсгалдаа · ʰ Зөвхөн санхүү (админ ч эрхгүй) · ⁱ Зөвхөн харах</p>
+  <div class="note">Хамгийн чухал зарчим: <b>олговрыг батлах эрх зөвхөн санхүүгийн мэргэжилтэнд</b> бий —
+  админ ч энэ үйлдлийг хийж чадахгүй. Ингэснээр нэг хүн бүх шатыг дангаар шийдэх боломжийг хаасан
+  (үүрэг тусгаарлалтын зарчим).</div>
+</section>
+
+<!-- 07 -->
+<section>
+  <div class="ch-head"><span class="ch-num">07</span><h2>Функциональ модулиуд</h2></div>
+  <div class="mods">
+    <div class="mod"><b>Хяналтын самбар</b><span>нэгтгэл, шүүлт, зураг</span></div>
+    <div class="mod"><b>Газар чөлөөлөлт</b><span>хил, ангилал, статусын урсгал</span></div>
+    <div class="mod"><b>Нэгж талбар</b><span>эзэмшигч, баримт, түүх</span></div>
+    <div class="mod"><b>Үнэлгээ — 3 урсгал</b><span>илгээх → батлах хяналттай</span></div>
+    <div class="mod"><b>Excel импорт</b><span>үнэлгээг файлаас, давхардлын шалгалттай</span></div>
+    <div class="mod"><b>Нөхөх олговор</b><span>батлах/татгалзах, түүх</span></div>
+    <div class="mod"><b>Байгууламж</b><span>үзүүлэлт, тооцоолол, зураг→PDF</span></div>
+    <div class="mod"><b>Газрын зураг</b><span>статус өнгөөр, давхаргууд</span></div>
+    <div class="mod"><b>Тайлан</b><span>Excel татах, явцтай</span></div>
+    <div class="mod"><b>Хэвлэх загварууд</b><span>11 албан баримт автоматаар</span></div>
+    <div class="mod"><b>Гадны байгууллагын портал</b><span>тусгаарлагдсан 43 суваг</span></div>
+    <div class="mod"><b>Тохиргооны 8 модуль</b><span>дүрэм өөрчлөхөд код засахгүй</span></div>
+  </div>
+</section>
+
+<!-- 08 -->
+<section>
+  <div class="ch-head"><span class="ch-num">08</span><h2>Мэдэгдэл ба аудит лог</h2></div>
+  <div class="cols2">
+    <div class="card" style="border-top:3px solid var(--cyan)"><b class="ttl">Бодит цагийн мэдэгдэл</b>
+      <ul class="t"><li>Төлөв өөрчлөгдмөгц хонх, toast-оор <b>шууд</b></li><li>9 төрлийн үйл явдал — статус, үнэлгээ, олговор, оноолт</li><li>Зөвхөн холбоотой хүмүүст; өөрийн үйлдэл мэдэгдэхгүй</li><li>Дарахад холбогдох мэдээлэл рүү шилжинэ</li><li>Тасалдалд тэсвэртэй — алдагдсаныг нөхөж татна</li></ul></div>
+    <div class="card" style="border-top:3px solid var(--blue)"><b class="ttl" style="color:var(--blue)">Аудит лог (мөрдлөг)</b>
+      <ul class="t"><li><b>36 бүртгэх цэг</b> — бүх чухал үйлдэл</li><li>Хэн · хэзээ · хаанаас — нэр, роль, IP, төхөөрөмж</li><li>Өөрчилсөн утгууд дэлгэрэнгүй хадгалагдана</li><li>Тусгай эрхтэй хүн л үзнэ · үндсэн ажлыг удаашруулдаггүй</li></ul></div>
+  </div>
+  <div class="note">Мэдэгдэл нь «одоо юу болов» гэдгийг <b>хүмүүст</b> хэлдэг бол, аудит лог нь «өнгөрсөнд
+  юу болсон» гэдгийг <b>хяналт шалгалтад</b> нотолдог. Төлөвлөгөөний «Лог файл үүсгэх» ажил аудит логоор хэрэгжсэн.</div>
+</section>
+
+<!-- 09 -->
+<section>
+  <div class="ch-head"><span class="ch-num">09</span><h2>GIS — газарзүйн интеграци</h2></div>
+  <div class="flow">
+    <div class="fbox"><b>1. Хадгалалт — PostGIS</b><span>Талбар бүрийн хил координатаар хадгалагдана</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox"><b>2. Тооцоолол — сан дотор</b><span>Давхцал, чөлөөлөх талбайг автоматаар бодно</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox" style="border-left-color:var(--green)"><b style="color:var(--green)">3. Нийтлэлт — GeoServer</b><span>Статусын 6 өнгөт давхарга зураг болно</span></div>
+    <div class="fdown">↓</div>
+    <div class="fbox" style="border-left-color:var(--cyan)"><b style="color:var(--cyan)">4. Дүрслэл — OpenLayers</b><span>Хөтчид интерактив зураг, шүүлт, popup</span></div>
+  </div>
+  <div class="note">Өмнө нь гараар хэмжиж тооцдог байсан <b>талбарын давхцал, чөлөөлөх хэсгийн хэмжээг</b>
+  одоо систем координатаас нь автоматаар бодож, зөрүүгүй нэг эх сурвалж болгосон.</div>
+</section>
+
+<!-- 10 -->
+<section>
+  <div class="ch-head"><span class="ch-num">10</span><h2>Чанар, тестийн хамралт</h2></div>
+  <div class="stats s4">
+    <div class="stat"><div class="v">220</div><div class="l">Тест функц</div></div>
+    <div class="stat"><div class="v">23</div><div class="l">Тест файл</div></div>
+    <div class="stat"><div class="v">3</div><div class="l">Mock багц</div></div>
+    <div class="stat"><div class="v">2</div><div class="l">Frontend сьют</div></div>
+  </div>
+  <div class="note">«Автомат тест» гэдэг нь код өөрчлөгдөх бүрд <b>220 шалгалт өөрөө ажиллаж</b> хуучин
+  боломжууд эвдэрсэн эсэхийг илрүүлдэг хамгаалалт. Эрхийн хяналтад тусгай тест байдаг тул хэн юу хийж
+  болохын дүрэм санамсаргүй өөрчлөгдвөл шууд мэдэгдэнэ.</div>
+</section>
+
+<!-- 11 -->
+<section>
+  <div class="ch-head"><span class="ch-num">11</span><h2>Хөгжүүлэлтийн явц</h2></div>
+  <p class="sub">2026.06.15 – 07.12 · нийт 177 commit (өөрчлөлтийн багц) · 58 migration</p>
+  <div class="card chart">
+    <div class="legend"><span><span class="sw" style="background:#3987e5"></span>Вэб (frontend) — 116</span><span><span class="sw" style="background:#199e70"></span>Сервер (backend) — 61</span></div>
+    <svg viewBox="0 0 520 122">
+      <line x1="28" y1="100" x2="502" y2="100" stroke="#3a3b38"/>
+      <g fill="#3987e5">
+        <rect x="58" y="60" width="30" height="40" rx="3"/><rect x="174" y="29" width="30" height="71" rx="3"/>
+        <rect x="290" y="9" width="30" height="91" rx="3"/><rect x="406" y="91" width="30" height="9" rx="3"/>
+      </g>
+      <g fill="#199e70">
+        <rect x="92" y="69" width="30" height="31" rx="3"/><rect x="208" y="60" width="30" height="40" rx="3"/>
+        <rect x="324" y="73" width="30" height="27" rx="3"/><rect x="440" y="87" width="30" height="13" rx="3"/>
+      </g>
+      <g font-size="9" font-weight="700" fill="#f2f2ef" text-anchor="middle">
+        <text x="73" y="56">22</text><text x="107" y="65">17</text><text x="189" y="25">39</text><text x="223" y="56">22</text>
+        <text x="305" y="6" dy="1">50</text><text x="339" y="69">15</text><text x="421" y="87">5</text><text x="455" y="83">7</text>
+      </g>
+      <g font-size="9" fill="#8b8d88" text-anchor="middle">
+        <text x="90" y="115">06/15–21</text><text x="206" y="115">06/22–28</text><text x="322" y="115">06/29–07/05</text><text x="438" y="115">07/06–12</text>
+      </g>
+    </svg>
+  </div>
+  <div class="note">Дөрөвхөн долоо хоногт бүрэн ажиллагаатай систем хүргэгдсэн бөгөөд жижиг, ойр ойрхон
+  өөрчлөлтөөр явсан тул алдаа мөрдөх, буцаах бүрэн түүхтэй.</div>
+</section>
+
+<!-- 12 -->
+<section>
+  <div class="ch-head"><span class="ch-num">12</span><h2>Төлөвлөгөөний биелэлт</h2></div>
+  <p class="sub">Хөгжүүлэлтийн нарийвчилсан төлөвлөгөөний задаргаа түвшний 50 ажил (гарчиг мөрүүд тооцоогүй)</p>
+  <div class="big80">
+    <div class="n">80%</div>
+    <p><b style="color:var(--ink)">50 ажлын 40 нь системийн талаас хэрэгжсэн.</b><br>
+    13 бүрэн дууссан + 27 нь системд бэлэн боловч Газрын удирдлагын системийн (ГУС) холболт нээгдэхийг хүлээж байна.</p>
+  </div>
+  <div class="stats">
+    <div class="stat" style="border-top-color:#3fa53f"><div class="v" style="color:#4ade80">13</div><div class="l">Бүрэн хийгдсэн (26%)</div></div>
+    <div class="stat" style="border-top-color:#eda100"><div class="v" style="color:#eda100">27</div><div class="l">ГУС холболт хүлээж буй (54%)</div></div>
+    <div class="stat" style="border-top-color:#6b6c66"><div class="v" style="color:#a9aaa3">10</div><div class="l">Хүлээгдэж байгаа (20%)</div></div>
+  </div>
+  <div class="card chart">
+    <div class="legend"><span><span class="sw" style="background:#3fa53f"></span>Бүрэн</span><span><span class="sw" style="background:#eda100"></span>ГУС хүлээгдэж</span><span><span class="sw" style="background:#6b6c66"></span>Хүлээгдэж</span></div>
+    <svg viewBox="0 0 520 64">
+      <text x="126" y="18" text-anchor="end" font-size="9.5" fill="#c3c2b7">Бичиг баримт</text>
+      <rect x="134" y="7" width="15" height="14" rx="3" fill="#3fa53f"/><text x="156" y="18" font-size="9" font-weight="700" fill="#f2f2ef">2 / 2</text>
+      <text x="126" y="48" text-anchor="end" font-size="9.5" fill="#c3c2b7">Систем хөгжүүлэлт</text>
+      <rect x="134" y="37" width="80" height="14" rx="3" fill="#3fa53f"/><text x="174" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">11</text>
+      <rect x="216" y="37" width="196" height="14" rx="3" fill="#eda100"/><text x="314" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#1a1b1a">27</text>
+      <rect x="414" y="37" width="72" height="14" rx="3" fill="#6b6c66"/><text x="450" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#f2f2ef">10</text>
+      <text x="492" y="48" font-size="9.5" font-weight="700" fill="#f2f2ef">48</text>
+    </svg>
+  </div>
+
+  <h2 style="font-size:16px;margin:20px 0 4px">12.1 ГУС-ийн холболт хүлээж буй 27 ажил</h2>
+  <div class="tbl-scroll"><table>
+    <tr><th>Хамрах хэсэг</th><th class="c">Тоо</th><th>Ажлууд</th></tr>
+    <tr><td><b>Удирдлага, үндсэн бүртгэл</b></td><td class="c" style="color:#eda100;font-weight:700">7</td><td>Хэрэглэгч/эрх, ажилтан, хуулийн этгээд, үнэлгээний байгууллагын бүртгэл</td></tr>
+    <tr><td><b>Төлөвлөгөөний давхаргаас татах</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Гэр хороолол, авто зам, нийгмийн дэд бүтэц ангиллаар</td></tr>
+    <tr><td><b>ГУС-ийн бүрэлдэхүүн системүүд</b></td><td class="c" style="color:#eda100;font-weight:700">5</td><td>Кадастр, үнэлгээ, хот төлөвлөлт, мониторингийн системүүд</td></tr>
+    <tr><td><b>Кадастрын давхцал</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Зөрчилтэй талбарын давхарга, давхцал шалгах</td></tr>
+    <tr><td><b>Эрх, захирамж</b></td><td class="c" style="color:#eda100;font-weight:700">2</td><td>Чиг үүргийн эрх, захирамжийн төсөл</td></tr>
+    <tr><td><b>Дундын мэдээллийн сан</b></td><td class="c" style="color:#eda100;font-weight:700">6</td><td>УБЕГ, Татвар, ШШГЕГ, үнийн сан, E-Mongolia, динамик давхарга</td></tr>
+    <tr><td><b>Бусад</b></td><td class="c" style="color:#eda100;font-weight:700">1</td><td>Бусад системд өгөгдөл холбох</td></tr>
+  </table></div>
+  <div class="note">Эдгээр 27 ажлын <b>системийн тал нь бүрэн бэлэн</b> — зөвхөн төрийн бусад системээс
+  мэдээлэл өгөх «цонх» нээгдэхийг хүлээж байна. Холболт нээгдмэгц богино хугацаанд ашиглалтад орно.</div>
+
+  <h2 style="font-size:16px;margin:20px 0 4px">12.2 Хүлээгдэж буй ба нэмэлт хийгдсэн</h2>
+  <div class="cols2">
+    <div class="card" style="border-top:3px solid var(--gray)"><b class="ttl" style="color:#a9aaa3">Хүлээгдэж байгаа 10 ажил</b>
+      <ul class="t" style="font-size:13px"><li>Зураг төслийн түүхэн өөрчлөлт харах</li><li>НЭЗ судалгааг цахимаар авах</li><li>Мэдэгдэх хуудас, албан бичиг цахимаар хүргүүлэх</li><li>Тооцооллын журам, аргачлалын бүртгэл</li><li>Гэрээ хэвлэх · Чөлөөлсөн акт үйлдэх</li><li>Агаар сансрын зураг · дроны мэдээлэл</li><li>2010–2025 оны түүхэн өгөгдөл нөхөж оруулах</li></ul></div>
+    <div class="card" style="border-top:3px solid var(--green)"><b class="ttl" style="color:#4ade80">Төлөвлөгөөнөөс гадуур хийгдсэн 6 ажил</b>
+      <ul class="t" style="font-size:13px"><li><b>Excel-ээс үнэлгээ импортлох</b> — давхардлын хамгаалалттай</li><li><b>Гадны байгууллагын портал</b> — 43 суваг</li><li><b>Бүрэн түүхжүүлэлт</b></li><li><b>Аюулгүй байдлын өргөтгөлүүд</b></li><li><b>Бодит цагийн мэдэгдэл</b></li><li><b>Аудит лог</b> — 36 цэгт мөрдлөг</li></ul></div>
+  </div>
+</section>
+
+<!-- 13-14 -->
+<section>
+  <div class="ch-head"><span class="ch-num">13</span><h2>Нэгдсэн дүгнэлт</h2></div>
+  <div class="cols2">
+    <div class="card" style="border-top:3px solid var(--blue)"><b class="ttl" style="color:var(--blue)">Гарсан үр дүн</b>
+      <ul class="t"><li>Бүх үе шат нэгдсэн цахим урсгалд шилжсэн</li><li>3 бие даасан үнэлгээ зэрэгцээ, хяналттай баталгааждаг</li><li>Орон зайн тооцоолол автоматжсан, зурган дээр бодит цагт</li><li>Гадны байгууллагууд тусгаарлагдсан порталтай</li><li>11 албан баримт автоматаар үүсдэг</li></ul></div>
+    <div class="card" style="border-top:3px solid var(--green)"><b class="ttl" style="color:#4ade80">Давуу талууд</b>
+      <ul class="t"><li>Цэвэр давхаргажилт — өргөтгөлд тэсвэртэй</li><li>4 давхар эрхийн хамгаалалт</li><li>Дүрэм тохиргоогоор — код засалтгүй өөрчилнө</li><li>Өөрчлөлт бүр түүхтэй — бүрэн мөрдөгдөнө</li><li>Нээлттэй эх — лицензийн зардалгүй</li></ul></div>
+  </div>
+
+  <div class="ch-head" style="margin-top:28px"><span class="ch-num">14</span><h2>Нэмэгдэх боломжууд</h2></div>
+  <div class="tbl-scroll"><table>
+    <tr><th class="c">№</th><th>Чиглэл</th><th>Агуулга</th></tr>
+    <tr><td class="c" style="color:var(--cyan);font-weight:700">1</td><td><b>Файлын бодит хадгалалт</b></td><td>Түр файл серверийг S3/MinIO-оор солих (интерфейс бэлэн)</td></tr>
+    <tr><td class="c" style="color:var(--cyan);font-weight:700">2</td><td><b>Мэдэгдлийн өргөтгөл</b></td><td>И-мэйл/push суваг; аудит логийн админ дэлгэц</td></tr>
+    <tr><td class="c" style="color:var(--cyan);font-weight:700">3</td><td><b>ДАН / 2FA</b></td><td>Төрийн нэгдсэн нэвтрэлт, хоёр шатлалт баталгаажуулалт</td></tr>
+    <tr><td class="c">4</td><td><b>CI/CD, E2E тест</b></td><td>Автомат build–test–deploy, хөтчийн түвшний тест</td></tr>
+    <tr><td class="c">5</td><td><b>Мониторинг</b></td><td>OpenTelemetry метрик, лог, trace</td></tr>
+    <tr><td class="c">6</td><td><b>Гүйцэтгэлийн масштаб</b></td><td>Redis кэш, vector tile, read replica</td></tr>
+    <tr><td class="c">7</td><td><b>Мобайл клиент</b></td><td>Хээрийн судалгааны апп (API бэлэн)</td></tr>
+    <tr><td class="c">8</td><td><b>Гадаад интеграци</b></td><td>Кадастр, ХУР солилцоо, webhook</td></tr>
+  </table></div>
+</section>
+
+<div class="foot">
+  Газар чөлөөлөлт, нөхөх олговрын нэгдсэн систем · Техникийн товч тайлан · 2026-07-17<br>
+  Тоон үзүүлэлтүүд эх кодоос шууд тоологдсон · government-frontend (Next.js) · government (Go API) · PostgreSQL + PostGIS · GeoServer<br>
+  <a class="dl" href="/reports/tovch-tailan.pdf" download>PDF хувилбар татах</a>
+</div>
+
+</div>
