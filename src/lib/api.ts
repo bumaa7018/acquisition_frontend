@@ -29,6 +29,7 @@ function showAccessDenied(title: string, description: string, withLoginBtn = fal
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
+  AuditLog,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
@@ -358,6 +359,22 @@ export const permissionsApi = {
   create: (body: { name: string; description?: string }) =>
     api.post<ApiResponse<Permission>>('/permissions', body).then(r => normalizePermission(r.data.data)),
   delete: (id: string) => api.delete(`/permissions/${id}`),
+}
+
+export const auditApi = {
+  list: (params?: {
+    page?: number
+    page_size?: number
+    actor_id?: string
+    action?: string
+    resource_type?: string
+    resource_id?: string
+    acquisition_id?: string
+    parcel_id?: string
+    created_from?: string
+    created_to?: string
+  }) =>
+    api.get<PaginatedResponse<AuditLog>>('/audit-logs', { params }).then(r => r.data),
 }
 
 // ── Land Acquisitions ─────────────────────────────────

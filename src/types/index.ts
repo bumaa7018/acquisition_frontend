@@ -41,6 +41,23 @@ export interface Permission {
   resource?: string;
 }
 
+export interface AuditLog {
+  id: string;
+  actor_id?: string;
+  actor_name: string;
+  actor_position: string;
+  actor_roles: string[];
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  acquisition_id?: string;
+  parcel_id?: string;
+  details: Record<string, unknown>;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+}
+
 export interface Plan {
   id?: string;
   plan_code: string;
