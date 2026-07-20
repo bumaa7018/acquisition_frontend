@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="mn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дэлгэрэнгүй тайлан — Газар чөлөөлөлтийн систем</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #e9e9e6; font-family: "Times New Roman", Times, Georgia, serif;
+         color: #000; font-size: 15.5px; line-height: 1.55; -webkit-text-size-adjust: 100%; }
+  .paper { max-width: 860px; margin: 0 auto; background: #fff; padding: 46px 54px 70px;
+           box-shadow: 0 0 24px rgba(0,0,0,.12); min-height: 100vh; }
+  @media (max-width: 700px) { .paper { padding: 22px 14px 50px; } body { font-size: 15px; } }
+  h2 { font-size: 19px; font-weight: 700; margin: 26px 0 10px; line-height: 1.3; }
+  h3 { font-size: 16.5px; font-weight: 700; margin: 18px 0 7px; }
+  p { margin: 7px 0; }
+  p.j { text-align: justify; text-indent: 34px; }
+  p.tocline { margin: 3px 0; }
+  p.tocline a { color: #000; text-decoration: none; border-bottom: 1px dotted #999; }
+  p.tocline a:hover { color: #1c5cab; border-color: #1c5cab; }
+  a { color: #1c5cab; }
+  ul { margin: 6px 0 10px 26px; }
+  li { margin: 3px 0; }
+  .tbl-scroll { overflow-x: auto; margin: 10px 0; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; min-width: 540px; font-size: 12.5px; }
+  th, td { border: 1px solid #8a8a8a; padding: 5px 8px; vertical-align: top; text-align: left; }
+  th { background: #d9d9d9; font-weight: 700; text-align: center; white-space: normal; }
+  tr:nth-child(even) td { background: #f5f5f5; }
+  .ok { color: #006300; font-weight: 700; } .cnd { color: #1c5cab; font-weight: 700; } .no { color: #8a8a8a; }
+  img.shot { max-width: 100%; height: auto; display: block; margin: 12px auto 4px; border: 1px solid #ccc; }
+  html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+<div class="paper">
+<p style="text-align:center"><b>СИСТЕМ ХӨГЖҮҮЛЭЛТИЙН ТЕХНИКИЙН ТАЙЛАН</b></p>
+<p style="text-align:center"><b>ГАЗРЫН УДИРДЛАГЫН НЭГДСЭН МЭДЭЭЛЛИЙН СИСТЕМД СУУРИЛСАН ГАЗАР ЧӨЛӨӨЛӨЛТИЙН НЭГДСЭН СИСТЕМ</b></p>
+<p style="text-align:center">Газар чөлөөлөлтийн үйл явц, нэгж талбарын бүртгэл, үнэлгээ болон нөхөх олговрын тооцооллыг нэг цэгээс удирдах вэб систем</p>
+<p style="text-align:center">Бүрэлдэхүүн: government-frontend (Next.js) · government (Go API) · PostgreSQL + PostGIS · GeoServer</p>
+<p style="text-align:center">Тайлан үүсгэсэн: 2026-07-17</p>
+<h2>Товч хураангуй</h2>
+<p class="j">Энэхүү систем нь газар чөлөөлөлтийн ажлыг цаасан бүртгэлээс бүрэн цахим хэлбэрт шилжүүлсэн нэгдсэн вэб систем юм. Газар чөлөөлөх төлөвлөгөө батлагдснаас эхлээд нөлөөлөлд өртсөн нэгж талбар бүрийг бүртгэх, хөрөнгийн үнэлгээ хийлгэх, нөхөх олговрыг тооцож батлах, эцэст нь газрыг чөлөөлөх хүртэлх бүх алхам нэг системд, хяналттай дарааллаар явагдана.</p>
+<p class="j">Ажлын алхам бүр тодорхой эрх бүхий хүнээр хийгддэг: мэргэжилтэн бүртгэнэ, үнэлгээний байгууллага үнэлгээгээ оруулж илгээнэ, санхүүгийн мэргэжилтэн баталгаажуулна. Аль нэг төлөв өөрчлөгдөх бүрд холбогдох хүмүүст мэдэгдэл шууд очиж, үйлдэл бүр хэн, хэзээ, хаанаас хийснээр нь бүртгэгдэж үлдэнэ (аудит лог). Газрын зураг дээр талбар бүрийн явц өнгөөр ялгарч бодит цагт харагдана.</p>
+<p class="j">Гол үзүүлэлтүүд: 185 үйлчилгээний цэг (API endpoint), 49 өгөгдлийн хүснэгт, 24 дэлгэц, 220 автомат тест. Хөгжүүлэлтийн төлөвлөгөөний 50 ажлын 40 нь (80%) системийн талаас хэрэгжсэн бөгөөд үүнээс 27 ажил Газрын удирдлагын системийн (ГУС) холболт нээгдэхийг хүлээж байна.</p>
+<h2>АГУУЛГА</h2>
+<p class="tocline"><a href="#_toc101"><b>1. Ерөнхий тойм</b></a></p>
+<p class="tocline"><a href="#_toc102"><b>2. Системийн архитектур</b></a></p>
+<p class="tocline"><a href="#_toc103"><b>3. Технологийн стек</b></a></p>
+<p class="tocline"><a href="#_toc104"><b>4. Мэдээллийн сангийн бүтэц</b></a></p>
+<p class="tocline"><a href="#_toc105">4.1 Бүтцийн ерөнхий диаграм (ERD)</a></p>
+<p class="tocline"><a href="#_toc106">4.2 Гол хүснэгтүүдийн дэлгэрэнгүй</a></p>
+<p class="tocline"><a href="#_toc107">4.3 Домэйн тус бүрийн хүснэгтийн бүрэн задаргаа</a></p>
+<p class="tocline"><a href="#_toc108">4.4 Гол харилцаанууд ба онцлох дизайны шийдлүүд</a></p>
+<p class="tocline"><a href="#_toc109"><b>5. API интерфейс — 185 endpoint</b></a></p>
+<p class="tocline"><a href="#_toc110"><b>6. Аюулгүй байдал, эрхийн удирдлага</b></a></p>
+<p class="tocline"><a href="#_toc111">6.1 Нэвтрэлт (Authentication)</a></p>
+<p class="tocline"><a href="#_toc112">6.2 Ролиуд ба зөвшөөрөл</a></p>
+<p class="tocline"><a href="#_toc113">6.3 Роль тус бүрийн цэсний хандалт</a></p>
+<p class="tocline"><a href="#_toc114">6.4 Мэдээлэлтэй ажиллах эрхийн матриц</a></p>
+<p class="tocline"><a href="#_toc115"><b>7. Цэс, дэлгэцүүдийн дэлгэрэнгүй тайлбар</b></a></p>
+<p class="tocline"><a href="#_toc116">7.1 Хяналтын самбар</a></p>
+<p class="tocline"><a href="#_toc117">7.2 Газар чөлөөлөлт — жагсаалт</a></p>
+<p class="tocline"><a href="#_toc118">7.3 Газар чөлөөлөлтийн дэлгэрэнгүй — 7 таб</a></p>
+<p class="tocline"><a href="#_toc119">7.4 Нэгж талбарын түүх — нэгдсэн жагсаалт</a></p>
+<p class="tocline"><a href="#_toc120">7.5 Нэгж талбарын дэлгэрэнгүй — 6 таб</a></p>
+<p class="tocline"><a href="#_toc121">7.5.1 «Нөхөх олговор» таб — үнэлгээний 3 дэд таб</a></p>
+<p class="tocline"><a href="#_toc122">7.5.2 «Эх хэвлэл» — хэвлэх загварууд (11)</a></p>
+<p class="tocline"><a href="#_toc123">7.6 Нөхөх олговорын түүх</a></p>
+<p class="tocline"><a href="#_toc124">7.7 Тайлан</a></p>
+<p class="tocline"><a href="#_toc125">7.8 Газрын зураг</a></p>
+<p class="tocline"><a href="#_toc126">7.9 Хэрэглэгчид ба Эрх &amp; Роль</a></p>
+<p class="tocline"><a href="#_toc127">7.10 Миний чөлөөлөлтүүд (мэргэжлийн байгууллага)</a></p>
+<p class="tocline"><a href="#_toc128">7.11 Тохиргооны 8 модуль (админ)</a></p>
+<p class="tocline"><a href="#_toc129">7.12 Мэдэгдлийн систем — бодит цагийн</a></p>
+<p class="tocline"><a href="#_toc130">7.13 Аудит лог — үйлдлийн мөрдлөг</a></p>
+<p class="tocline"><a href="#_toc131"><b>8. GIS — газарзүйн мэдээллийн интеграци</b></a></p>
+<p class="tocline"><a href="#_toc132"><b>9. Чанар, тестийн хамралт</b></a></p>
+<p class="tocline"><a href="#_toc133"><b>10. Хөгжүүлэлтийн явцын үзүүлэлт</b></a></p>
+<p class="tocline"><a href="#_toc134"><b>11. Төлөвлөгөөний биелэлт</b></a></p>
+<p class="tocline"><a href="#_toc135">11.1 Бүрэн хийгдсэн ажлууд (13)</a></p>
+<p class="tocline"><a href="#_toc136">11.2 Тусгай бүлэг — ГУС-ийн холболтоор хийгдэх ажлууд (27)</a></p>
+<p class="tocline"><a href="#_toc137">11.3 Хүлээгдэж байгаа ажлууд (10)</a></p>
+<p class="tocline"><a href="#_toc138">11.4 Төлөвлөгөөт ажлын иж бүрдэлд ороогүй боловч хэрэгжсэн ажлууд</a></p>
+<p class="tocline"><a href="#_toc139"><b>12. Нэгдсэн дүгнэлт</b></a></p>
+<p class="tocline"><a href="#_toc140">12.1 Систем хийгдсэнээр гарсан үр дүн</a></p>
+<p class="tocline"><a href="#_toc141">12.2 Давуу талууд</a></p>
+<p class="tocline"><a href="#_toc142"><b>Хавсралт. Нэр томьёоны тайлбар</b></a></p>
+<h2 id="_toc101">1. Ерөнхий тойм</h2>
+<p class="j">Систем нь дөрвөн үндсэн бүрэлдэхүүнээс тогтоно: хэрэглэгчийн харах вэб апп (frontend — Next.js 14), бизнесийн логикийг гүйцэтгэх сервер (backend — Go/Gin REST API), өгөгдөл хадгалах сан (PostgreSQL + газарзүйн PostGIS өргөтгөл) болон газрын зургийн үйлчилгээ (GeoServer). Энгийнээр хэлбэл: хэрэглэгч вэб хуудсаар ажиллаж, вэб хуудас нь серверээс мэдээлэл авч, сервер нь өгөгдлийн сангаас уншиж бичдэг гинжин холбоо юм. Гол тоон үзүүлэлтүүд:</p>
+<div class="tbl-scroll"><table><tr><th><b>Үзүүлэлт</b></th><th><b>Утга</b></th></tr><tr><td><b>REST API endpoint (үйлчилгээний цэг)</b></td><td>185</td></tr><tr><td><b>Өгөгдлийн сангийн хүснэгт (2 сан)</b></td><td>49</td></tr><tr><td><b>Хувилбарлагдсан migration (бүтцийн өөрчлөлт)</b></td><td>58</td></tr><tr><td><b>Frontend хуудас (route)</b></td><td>24</td></tr><tr><td><b>Нийт кодын мөр (Go + TS/TSX)</b></td><td>~55,400</td></tr><tr><td><b>Backend тест функц</b></td><td>220</td></tr></table></div>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>Газар чөлөөлөлтөөс нөхөх олговор хүртэлх бүх үе шат нэг системд цахимжсан; 4 бүрэлдэхүүн бүрэн холбогдсон</td><td>Frontend/backend тусдаа — багууд зэрэг хөгжүүлэх боломжтой; GIS анхнаасаа гол хэсэг</td><td>Мобайл апп; бусад төрийн системтэй (ХУР, ДАН) интеграци</td></tr></table></div>
+<h2 id="_toc102">2. Системийн архитектур</h2>
+<p class="j">Backend нь Clean Architecture зарчмаар давхаргажсан (handler → service → repository → PostgreSQL), frontend нь Next.js App Router бүтэцтэй. Бүх хамаарал dependency injection хэлбэрээр угсрагдана.</p>
+<div class="tbl-scroll"><table><tr><th><b>Давхарга</b></th><th><b>Тайлбар</b></th></tr><tr><td><b>Вэб апп — Next.js 14</b></td><td>24 хуудас · GeoServer прокси · SSE Excel тайлан · DOCX загвар · React Query · OpenLayers</td></tr><tr><td><b>REST API — Go 1.25 / Gin</b></td><td>Handler (33) → Service (13) → Repository (10, raw SQL/pgx) · Middleware: JWT, RBAC, assignment, lock, rate-limit · Swagger</td></tr><tr><td><b>Main DB — PostgreSQL 16 + PostGIS 3.4</b></td><td>Бизнес өгөгдөл: 41 хүснэгт · геометр (EPSG:4326) · ST_* орон зайн тооцоолол</td></tr><tr><td><b>Auth DB — PostgreSQL 16</b></td><td>Хэрэглэгч, роль, зөвшөөрөл, token: 8 хүснэгт · тусдаа сан</td></tr><tr><td><b>GeoServer 2.25 — WMS/WFS</b></td><td>Захиргааны нэгж, төлөвлөгөө, талбарын статусын давхаргууд · CQL шүүлт</td></tr></table></div>
+<p>Кодын хэмжээ: Backend (Go) — 29,586 мөр; Frontend (TS/TSX) — 25,850+ мөр.</p>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>199 файлд давхаргажсан код; Docker-оор орчин нэг командаар босдог</td><td>Бизнес логик framework-оос хараат бус, mock-оор тестлэгддэг; Auth DB тусгаарлагдсан</td><td>Redis кэш; stateless тул горизонталь масштаблахад бэлэн</td></tr></table></div>
+<h2 id="_toc103">3. Технологийн стек</h2>
+<div class="tbl-scroll"><table><tr><th><b>Хэсэг</b></th><th><b>Технологи</b></th><th><b>Үүрэг</b></th></tr><tr><td><b>Frontend</b></td><td>Next.js 14.2 · React 18 · TypeScript 5</td><td>App Router, SSR/standalone build</td></tr><tr><td>&nbsp;</td><td>Radix UI + Tailwind CSS 3.4</td><td>Хүртээмжтэй UI, dark mode</td></tr><tr><td>&nbsp;</td><td>TanStack React Query 5</td><td>Сервер өгөгдлийн кэш</td></tr><tr><td>&nbsp;</td><td>react-hook-form + zod</td><td>Маягт, схем валидаци</td></tr><tr><td>&nbsp;</td><td>OpenLayers 10.2</td><td>Газрын зургийн дүрслэл</td></tr><tr><td>&nbsp;</td><td>exceljs · SheetJS · pdf-lib · recharts</td><td>Excel, PDF, график</td></tr><tr><td><b>Backend</b></td><td>Go 1.25 · Gin 1.10</td><td>HTTP framework, middleware</td></tr><tr><td>&nbsp;</td><td>pgx/v5 + pgxpool</td><td>ORM-гүй raw SQL</td></tr><tr><td>&nbsp;</td><td>golang-jwt/v5 · bcrypt</td><td>Token, нууц үгийн хэшлэлт</td></tr><tr><td>&nbsp;</td><td>golang-migrate/v4</td><td>Автомат migration</td></tr><tr><td>&nbsp;</td><td>swaggo/swag</td><td>Swagger баримтжуулалт</td></tr><tr><td><b>Дэд бүтэц</b></td><td>PostgreSQL 16 + PostGIS 3.4</td><td>Реляц + орон зайн сан (2 instance)</td></tr><tr><td>&nbsp;</td><td>GeoServer 2.25 · Docker · systemd</td><td>WMS/WFS, контейнержуулалт</td></tr></table></div>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>Бүх давхаргад орчин үеийн нээлттэй эхийн технологи — лицензийн зардалгүй</td><td>Go + raw SQL — өндөр гүйцэтгэл; TypeScript — төрлийн аюулгүй байдал</td><td>OpenTelemetry мониторинг; sqlc — SQL-ийн compile-time шалгалт</td></tr></table></div>
+<h2 id="_toc104">4. Мэдээллийн сангийн бүтэц</h2>
+<p class="j">Өгөгдөл хоёр тусдаа санд хуваагдана: бизнес өгөгдлийн main DB (41 хүснэгт, PostGIS өргөтгөлтэй) ба хэрэглэгч/эрхийн auth DB (8 хүснэгт). Хоёр санг тусгаарласнаар хэрэглэгчийн нууц мэдээлэл бизнес өгөгдлөөс салангид хамгаалагдаж, тус тусдаа нөөцлөх/сэргээх боломжтой. Schema-ийн өөрчлөлт бүр 58 хувилбартай migration-аар (up/down хостой, нийт 116 файл) бүртгэгдэж, сервер асахад автоматаар хэрэгжинэ.</p>
+<h3 id="_toc105">4.1 Бүтцийн ерөнхий диаграм (ERD)</h3>
+<p style="text-align:center"><img class="shot" src="img/docx-01.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 1. Өгөгдлийн сангийн хялбаршуулсан ERD — хоёр сан, гол хүснэгтүүд ба харилцаанууд</i></p>
+<h3 id="_toc106">4.2 Гол хүснэгтүүдийн дэлгэрэнгүй</h3>
+<p>Домэйн бүрийн төв хүснэгтүүд, тэдгээрийн гол баганууд (DB-ээс шууд гаргав):</p>
+<div class="tbl-scroll"><table><tr><th><b>Хүснэгт</b></th><th><b>Гол баганууд</b></th><th><b>Үүрэг</b></th></tr><tr><td><b>land_acquisition</b></td><td>id, plan_code/plan_geom, acquisition_name, geometry, area_m2, status, decree_number/date, professional_org_id, general/sub_category_id, implementing/responsible_org</td><td>Системийн төв объект — газар чөлөөлөлт. Төлөвлөгөөний хилээс эхэлж, статусын workflow-оор «Баталгаажсан» хүртэл явна</td></tr><tr><td><b>parcel</b></td><td>id, parcel_id (кадастрын код), acquisition_id, geometry, acquisition_geom, acquisition_area_m2, remaining_area_m2, status, right_type, landuse, independent_org_id, selected_valuation_type, compensation_paid</td><td>Чөлөөлөлтөд өртсөн нэгж талбар. Давхцлын геометр/талбай PostGIS-ээр автоматаар тооцогдоно</td></tr><tr><td><b>parcel_detail / right_holder</b></td><td>holder холбоос, valuation_zone, base_price, auction_coefficient/price</td><td>Эзэмшигчийн болон газрын үнэлгээний суурь мэдээлэл</td></tr><tr><td><b>parcel_valuation_submission</b></td><td>acquisition_id, parcel_id, valuation_type (asset/independent/mika), status, submitted_by/at, reviewed_by/at, last_note</td><td>Гурван зэрэгцээ үнэлгээний урсгалын илгээх→батлах төлөв; _history хүснэгтэд бүх шилжилт архивлагдана. Батлахад бусад урсгал автоматаар «Татгалзсан» болно</td></tr><tr><td><b>land_valuation</b></td><td>land_area_m2, base_price_per_m2, appraiser_org_name/reg_no/license/director, source_file_name, source_file_hash</td><td>Газрын үнэлгээ + Excel-ээс импортолсон үнэлгээчийн мэдээлэл; source_file_hash (SHA-256) давхардсан файлыг дахин оруулахаас сэргийлнэ</td></tr><tr><td><b>assets</b></td><td>asset_number, asset_type (real_state/property), asset_name, floor_count, area_m2, owner_name, unit_price, photo_pdf_url, valuation_type</td><td>Талбар дээрх барилга байгууламж, эд хөрөнгө; asset_spec/asset_calculation-аар тохируулгат үзүүлэлт, тооцоолол хадгална</td></tr><tr><td><b>compensation</b></td><td>target_type (parcel/asset), valuation_type, compensation_type, coverage_percent, amount, status (pending/approved/rejected), review_note, reviewed_by, valuation_report_url</td><td>Нөхөх олговор; санхүүгийн батлах workflow-той, compensation_grant (газраар олгох) ба compensation_history (архив) дагалдана</td></tr><tr><td><b>notification</b></td><td>recipient_id, actor_id, type, title, body, resource_type/id, acquisition_id, parcel_id, is_read, read_at</td><td>Хэрэглэгчийн мэдэгдэл; SSE стриймээр бодит цагт түгээгдэнэ</td></tr><tr><td><b>users (Auth DB)</b></td><td>username, email, password (bcrypt), position, is_active, tokens_valid_from, deleted_at</td><td>Хэрэглэгчийн бүртгэл; tokens_valid_from нь нууц үг солиход бүх session-ийг хүчингүй болгох epoch; зөөлөн устгалттай (deleted_at)</td></tr></table></div>
+<h3 id="_toc107">4.3 Домэйн тус бүрийн хүснэгтийн бүрэн задаргаа</h3>
+<div class="tbl-scroll"><table><tr><th><b>Домэйн</b></th><th><b>Тоо</b></th><th><b>Хүснэгтүүд</b></th></tr><tr><td><b>Нэгж талбар</b></td><td>10</td><td>parcel, parcel_detail, parcel_document, parcel_payment, parcel_status, parcel_status_history, parcel_workflow, source_parcel, right_holder, authorized_representatives</td></tr><tr><td><b>Газар чөлөөлөлт</b></td><td>9</td><td>land_acquisition, land_acquisition_assignee, land_acquisition_au, land_acquisition_boundary_history, land_acquisition_document, acquisition_category, acquisition_document, acquisition_progress, acquisition_workflow</td></tr><tr><td><b>Үнэлгээ, байгууламж</b></td><td>9</td><td>assets, asset_detail, asset_spec, asset_spec_type, asset_calc_type, asset_calculation, land_valuation, parcel_valuation_submission, parcel_valuation_submission_history</td></tr><tr><td><b>Хэрэглэгч, эрх (Auth DB)</b></td><td>7</td><td>users, roles, permissions, role_permissions, user_roles, password_reset_tokens, revoked_tokens</td></tr><tr><td><b>Төлөвлөгөө, лавлах</b></td><td>6</td><td>plan, au1, au2, au3, construction_type, progress_type</td></tr><tr><td><b>Нөхөх олговор</b></td><td>4</td><td>compensation, compensation_grant, compensation_history, funding_sources</td></tr><tr><td><b>Баримт бичиг</b></td><td>2</td><td>document, document_type</td></tr><tr><td><b>Мэдэгдэл</b></td><td>1</td><td>notification</td></tr><tr><td><b>Аудит лог</b></td><td>1</td><td>audit_log</td></tr></table></div>
+<p style="text-align:center"><img class="shot" src="img/docx-02.png" alt=""></p>
+<p style="text-align:center"><i>График. Өгөгдлийн сангийн хүснэгтүүдийн домэйн тус бүрийн тоо</i></p>
+<h3 id="_toc108">4.4 Гол харилцаанууд ба онцлох дизайны шийдлүүд</h3>
+<ul>
+<li><b>Сан хоорондын холбоос</b> — plan (Auth DB) → land_acquisition (Main DB) — төлөвлөгөөний код, хилээр холбогдоно; хоёр сан хоорондын холбоос FK-гүй, UUID/кодоор</li>
+<li><b>Гол гинжин холбоо</b> — land_acquisition 1:N parcel — талбар бүр давхцлын геометртэй (acquisition_geom); parcel 1:1 parcel_detail/right_holder; parcel 1:3 valuation_submission (урсгал бүрд нэг)</li>
+<li><b>Орон зайн багана</b> — geometry(Polygon, 4326) багана — давхцлын талбайг DB дотор ST_Intersection, ST_Area-гаар тооцно; орон зайн индекстэй</li>
+<li><b>Түүхжүүлэлт (аудит)</b> — статус (parcel_status_history, acquisition_progress), хил (boundary_history), олговор (compensation_history), үнэлгээ (submission_history) — өөрчлөлт бүр хэн, хэзээ, юу гэдгээр архивлагдана</li>
+<li><b>RBAC бүтэц</b> — users → user_roles → roles → role_permissions → permissions — M:N загвар; зөвшөөрөл resource:action хэлбэртэй</li>
+<li><b>Хамгаалалт</b> — Excel импорт source_file_hash (SHA-256)-аар давхардлаас сэргийлнэ; revoked_tokens + tokens_valid_from — token-ийн давхар хамгаалалт</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>49 хүснэгтэд домэйн бүрэн загварчлагдаж, 58 migration-аар хувилбаржсан</td><td>Migration бүр буцаах хостой; түүхийн хүснэгтүүд — аудит бэлэн; хоёр сан тусгаарлагдсан</td><td>PITR нөөцлөлт, read replica; том хүснэгтийг partition хийх</td></tr></table></div>
+<h2 id="_toc109">5. API интерфейс — 185 endpoint</h2>
+<p class="j">Backend нь /api/v1 суурьтай 185 REST endpoint (програмуудын хооронд мэдээлэл солилцох үйлчилгээний цэг) үзүүлдэг, бүгд Swagger-ээр баримтжсан.</p>
+<div class="tbl-scroll"><table><tr><th><b>Бүлэг</b></th><th><b>Endpoint</b></th></tr><tr><td><b>Газар чөлөөлөлт (nested ресурсууд)</b></td><td>61</td></tr><tr><td><b>Мэргэжлийн байгууллагын портал (/prof)</b></td><td>43</td></tr><tr><td><b>Лавлах, тохиргоо (9 бүлэг)</b></td><td>36</td></tr><tr><td><b>Хэрэглэгч, роль, зөвшөөрөл</b></td><td>16</td></tr><tr><td><b>Бусад (dashboard, олговор, тайлан…)</b></td><td>11</td></tr><tr><td><b>Нэвтрэлт /auth (rate limit 30/мин)</b></td><td>6</td></tr><tr><td><b>Нэгж талбар (global)</b></td><td>6</td></tr><tr><td><b>Мэдэгдэл /notifications</b></td><td>5</td></tr><tr><td><b>Аудит лог /audit-logs</b></td><td>1</td></tr></table></div>
+<p style="text-align:center"><img class="shot" src="img/docx-03.png" alt=""></p>
+<p style="text-align:center"><i>График. API endpoint-уудын бүлэглэл</i></p>
+<ul>
+<li><b>SSE стрийм</b> — Excel тайланг Server-Sent Events-ээр явцын мэдээлэлтэй стрийм татдаг</li>
+<li><b>Прокси</b> — GeoServer reverse proxy — GIS дэд бүтэц гадагш ил гардаггүй</li>
+<li><b>Алдааны нэгдсэн урсгал</b> — 401 → token сэргээлт, 403 → эрхийн мэдэгдэл, 5xx → алдааны хуудас</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>Гадны байгууллагын хандалт тусдаа порталаар тусгаарлагдсан</td><td>Хувилбартай зам (/api/v1) — v2 гаргахад эвдрэлгүй</td><td>Webhook API; batch endpoint-ууд</td></tr></table></div>
+<h2 id="_toc110">6. Аюулгүй байдал, эрхийн удирдлага</h2>
+<h3 id="_toc111">6.1 Нэвтрэлт (Authentication)</h3>
+<ul>
+<li>JWT (HS256) — access 24 цаг + refresh 7 хоног (.env тохиргоогоор), тусдаа нууц түлхүүртэй</li>
+<li>Нууц үг bcrypt хэшээр; сэргээх token SHA-256, 1 цагийн TTL</li>
+<li>Гарахад token хүчингүйжүүлэлт + нууц үг солиход бүх session таслагдана (epoch)</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-04.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 8. Системд нэвтрэх дэлгэц</i></p>
+<h3 id="_toc112">6.2 Ролиуд ба зөвшөөрөл</h3>
+<div class="tbl-scroll"><table><tr><th><b>Роль</b></th><th><b>Хамрах хүрээ</b></th></tr><tr><td><b>admin</b></td><td>Бүх зөвшөөрөл, тохиргооны модулиуд</td></tr><tr><td><b>senior_specialist — Ахлах мэргэжилтэн</b></td><td>Чөлөөлөлт үүсгэх/засах, батлах үйлдлүүд, хэрэглэгч харах</td></tr><tr><td><b>employee — Мэргэжилтэн</b></td><td>Өөрт хуваарилагдсан чөлөөлөлт дээр ажиллах</td></tr><tr><td><b>professional_org — Мэргэжлийн байгууллага</b></td><td>Зөвхөн /prof портал; өөрт оноогдсон объектууд</td></tr><tr><td><b>mika — МИКА</b></td><td>Хөндлөнгийн хяналтын үнэлгээний урсгал</td></tr><tr><td><b>finance_specialist — Санхүү</b></td><td>Нөхөх олговрын хяналт, баталгаажуулалт</td></tr></table></div>
+<p class="j">Зөвшөөрөл resource:action хэлбэртэй, JWT дотор шингэсэн тул шалгалт DB хандалтгүй. Middleware 4 түвшний хамгаалалт давхарлана: permission/role шалгалт, хуваарилалтын шалгалт, түгжээний шалгалт, байгууллагын гишүүнчлэл.</p>
+<h3 id="_toc113">6.3 Роль тус бүрийн цэсний хандалт</h3>
+<p><span class="ok">✓ бүрэн · ◐ нөхцөлтэй/хязгаартай · — харагдахгүй</span></p>
+<div class="tbl-scroll"><table><tr><th><b>Цэс / Үйлдэл</b></th><th><b>Админ</b></th><th><b>Ахлах</b></th><th><b>Мэргэжилтэн</b></th><th><b>Мэрг.байг.</b></th><th><b>МИКА</b></th><th><b>Санхүү</b></th></tr><tr><td><b>Хяналтын самбар</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐¹</b></td><td><b class="cnd">◐¹</b></td><td><b class="cnd">◐¹</b></td></tr><tr><td><b>Газар чөлөөлөлт</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐²</b></td><td><b class="cnd">◐³</b></td><td><b class="cnd">◐³</b></td></tr><tr><td><b>Тайлан</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Газрын зураг</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Нэгж талбарын түүх</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Нөхөх олговорын түүх</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Удирдлага → Хэрэглэгчид</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐⁴</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Удирдлага → Эрх &amp; Роль</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Тохиргоо (8 дэд цэс)</b></td><td><b class="ok">✓⁵</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr></table></div>
+<p class="j">¹ Самбарын цар хүрээ ролиор хязгаарлагдана  ² Зөвхөн өөрт оноогдсон (/my_acquisitions)  ³ Дэлгэрэнгүйд зөвхөн «Ерөнхий», «Нэгж талбар» таб  ⁴ users:read — зөвхөн харах  ⁵ admin:read эрхтэйд харагдана</p>
+<h3 id="_toc114">6.4 Мэдээлэлтэй ажиллах эрхийн матриц</h3>
+<div class="tbl-scroll"><table><tr><th><b>Цэс / Үйлдэл</b></th><th><b>Админ</b></th><th><b>Ахлах</b></th><th><b>Мэргэжилтэн</b></th><th><b>Мэрг.байг.</b></th><th><b>МИКА</b></th><th><b>Санхүү</b></th></tr><tr><td><b>— Газар чөлөөлөлт —</b></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td><b>Жагсаалт, дэлгэрэнгүй харах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐ᵃ</b></td><td><b class="cnd">◐ᵇ</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td></tr><tr><td><b>Үүсгэх, засах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Устгах</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Статусын workflow шилжүүлэх</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>— Нэгж талбар —</b></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td><b>Талбарын мэдээлэл харах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐ᵃ</b></td><td><b class="cnd">◐ᶜ</b></td><td><b class="cnd">◐ᶜ</b></td><td><b class="cnd">◐ᶜ</b></td></tr><tr><td><b>Засах, баримт, төлбөр бүртгэх</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>— Үнэлгээ (3 урсгал) —</b></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td><b>Үнэлгээний мэдээлэл харах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐ᵈ</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td></tr><tr><td><b>Хөрөнгийн үнэлгээ оруулах</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><b class="cnd">◐ᵉ</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Хөндлөнгийн үнэлгээ оруулах</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><b class="cnd">◐ᶠ</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>МИКА үнэлгээ оруулах</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td></tr><tr><td><b>Excel-ээс үнэлгээ импортлох</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><b class="cnd">◐ᵉ</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td></tr><tr><td><b>Үнэлгээ илгээх (submit)</b></td><td><span class="no">—</span></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><b class="cnd">◐ᵉ</b></td><td><b class="cnd">◐ᵍ</b></td><td><span class="no">—</span></td></tr><tr><td><b>Үнэлгээ батлах / буцаах</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><b class="ok">✓</b></td></tr><tr><td><b>— Нөхөх олговор —</b></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td><b>Олговрын мэдээлэл харах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐ᵃ</b></td><td><b class="cnd">◐ᵇ</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td></tr><tr><td><b>Олговор бүртгэх, засах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><b class="cnd">◐ᵉ</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td></tr><tr><td><b>Олговор батлах / татгалзах</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><b class="ok">✓ʰ</b></td></tr><tr><td><b>— Удирдлага, тайлан —</b></td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td><b>Хэрэглэгч удирдах (CRUD)</b></td><td><b class="ok">✓</b></td><td><b class="cnd">◐ⁱ</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Роль, зөвшөөрөл, тохиргоо</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr><tr><td><b>Excel тайлан татах</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><b class="ok">✓</b></td><td><span class="no">—</span></td><td><span class="no">—</span></td><td><span class="no">—</span></td></tr></table></div>
+<p class="j">ᵃ Өөрт хуваарилагдсан чөлөөлөлт  ᵇ Өөрийн байгууллагад оноогдсон объект (/prof)  ᶜ «Үнэлгээ хийх» статустай үед, хязгаартай табууд  ᵈ Зөвхөн өөрийн урсгал  ᵉ Үндсэн гүйцэтгэгчээр оноогдсон үед  ᶠ Хөндлөнгийн байгууллагаар оноогдсон талбарт  ᵍ МИКА өөрийн урсгалдаа  ʰ Зөвхөн санхүүгийн роль — админ ч эрхгүй  ⁱ users:read — зөвхөн харах</p>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>6 роль, 4 давхар middleware хамгаалалт; гадны байгууллага дотоод өгөгдөлд хандахгүй</td><td>Token-д шингэсэн эрх — хурдан шалгалт; объект түвшний нарийн хяналт</td><td>2FA, ДАН нэвтрэлт; аудит логийн админ UI</td></tr></table></div>
+<h2 id="_toc115">7. Цэс, дэлгэцүүдийн дэлгэрэнгүй тайлбар</h2>
+<p class="j">Энэ бүлэгт системийн цэс бүрийн дэлгэц дээр харагдах мэдээлэл, хэрэглэгчийн гүйцэтгэх боломжтой бүх үйлдлийг эх кодоос шууд гаргаж дэлгэрэнгүй тайлбарлав. Хуудасны бүтэц: үндсэн үйл ажиллагааны 11, тохиргоо/лавлахын 8, хэрэглэгч-эрхийн 3, системийн 2 хуудас.</p>
+<h3 id="_toc116">7.1 Хяналтын самбар</h3>
+<p class="j">Дотоод хэрэглэгчийн самбар — системийн нэгдсэн статистикийг шүүлттэйгээр харуулна. Гадаад ролиудад (санхүү, МИКА, үнэлгээний байгууллага) тусгай хувилбар харагдана.</p>
+<ul>
+<li><b>Шүүлтүүрүүд</b> — «Чөлөөлөлт», «Төлөвлөгөө», «Он» (олон сонголт), «Хариуцсан ажилтан», «Ерөнхий/Дэд ангилал» — «Харах» товчоор хэрэгжинэ</li>
+<li><b>4 үндсэн KPI карт</b> — «Төлөвлөлтийн хил» (нийт талбай, га), «Нэгж талбар» (тоо), «Нийт захирамж», «Нийт нөхөх олговор» (тэрбум ₮)</li>
+<li><b>Чөлөөлөлтийн явц</b> — «Чөлөөлөгдсөн нэгж талбар», «Чөлөөлөгдсөн талбай» — хувийн явцын зурвастай</li>
+<li><b>График, самбарууд</b> — Статусаар задалсан баганан графикууд, газрын зураг, огноогоор нэгж талбарын хугацааны график, чөлөөлөлтүүдийн жагсаалт</li>
+<li><b>Гадаад ролийн самбар</b> — Санхүү: «Хянах үнэлгээ», «Баталгаажсан», «Буцаасан» картууд + «Хянах шаардлагатай чөлөөлөлтүүд» ажлын дараалал; үнэлгээний байгууллага: «Ажиллах үнэлгээ», «Илгээсэн», «Буцаагдсан» + «Ажиллах» линкүүд</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-05.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 2. Хяналтын самбар — шүүлтүүр, KPI картууд, статусын задаргаа, газрын зураг, чөлөөлөлтүүдийн жагсаалт</i></p>
+<h3 id="_toc117">7.2 Газар чөлөөлөлт — жагсаалт</h3>
+<ul>
+<li><b>Баганууд</b> — Төлөвлөгөө (код + нэр), Чөлөөлөлтийн нэр, Ерөнхий/Дэд ангилал, Статус (Шинэ/Хээрийн судалгаа/Баталгаажсан/Цуцлагдсан), Талбай, Эхлэх огноо, Нэгж талбарын тоо</li>
+<li><b>Шүүлтүүрүүд</b> — Төлөвлөгөө, чөлөөлөлт, ангилал, төлөв, ажилтан, он — «Хайх»/«Цэвэрлэх» товчнууд</li>
+<li><b>Мөрийн үйлдлүүд</b> — «Дэлгэрэнгүй» линк; «Устгах» (land:delete эрхтэй, баталгаажуулах асуулттай); баталгаажсан чөлөөлөлт гадаад хэрэглэгчид «Хаалттай» тэмдэгтэй</li>
+</ul>
+<p>«Нэмэх» — шинэ чөлөөлөлт бүртгэх 2 алхамт цонх (зөвхөн ахлах мэргэжилтэн, land:create):</p>
+<ul>
+<li>1-р алхам: төлөвлөгөөг дугаар/нэрээр хайж сонгох</li>
+<li>2-р алхам: Чөлөөлөлтийн нэр*, Ерөнхий/Дэд ангилал*, Эхлэх огноо*, Хэрэгжүүлэгч болон Хариуцах байгууллага, Санхүүжилтийн эх үүсвэр (олон мөр нэмэх боломжтой), Чөлөөлөх шалтгаан, Хил хязгаарын файл (.shp zip)* — «Бүртгэх»</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-06.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 3. Газар чөлөөлөлтийн жагсаалт — шүүлтүүр, статусын тэмдэглэгээ, мөрийн үйлдлүүд</i></p>
+<h3 id="_toc118">7.3 Газар чөлөөлөлтийн дэлгэрэнгүй — 7 таб</h3>
+<p class="j">Толгой хэсэгт нэр, статус, төлөвлөгөөний код, «Тайлан татах» (тухайн чөлөөлөлтийн Excel тайлан) товч байрлана. Баталгаажсан чөлөөлөлт бүх засварыг түгжинэ.</p>
+<div class="tbl-scroll"><table><tr><th><b>Таб</b></th><th><b>Агуулга ба үйлдлүүд</b></th></tr><tr><td><b>Ерөнхий мэдээлэл</b></td><td>Үндсэн ба төслийн мэдээлэл; «Засах» горимд: хил солих файл, талбайг «Хилээс тооцоолох», Мэргэжлийн байгууллага сонгох, НЗД захирамжийн дугаар/огноо, чөлөөлөх шалтгаан</td></tr><tr><td><b>Хавсралт</b></td><td>Баримт бичгийн жагсаалт (PDF, ≤50MB); «Нэмэх» — файлын төрөл сонгож байршуулах; татах, «Устгах»</td></tr><tr><td><b>Нэгж талбарууд</b></td><td>Талбаруудын хүснэгт: дугаар, баг, эрхийн төрөл, зориулалт, талбай, давхцал, нөхөн төлбөрийн хэлбэр, төлөв; дугаар/захиргааны нэгж/эрхийн төрөл/төлөвөөр шүүх; «Дэлгэрэнгүй» линк. Санхүү зөвхөн илгээгдсэн үнэлгээтэй талбаруудыг харна</td></tr><tr><td><b>Санхүүжилт</b></td><td>Эх үүсвэрүүдийн хүснэгт (байгууллага, төрөл, дүн MNT/USD/EUR/CNY, тайлбар, нийт дүн); «Нэмэх», «Засах», «Устгах» — зөвхөн ахлах мэргэжилтэн</td></tr><tr><td><b>Явц</b></td><td>Одоогийн төлөв + «Явц солих» цонх: шилжүүлэх төлөв сонгох, «Баталгаажсан» руу шилжихэд НЗД-ын захирамжийн дугаар*, огноо* заавал; бүх талбар эцсийн төлөвт байхыг шаардана. Явцын түүхийн хүснэгт</td></tr><tr><td><b>Ажилтнууд</b></td><td>Хуваарилагдсан ажилтнуудын жагсаалт; «Ажилтан нэмэх» 2 алхамт цонх (нэр/албан тушаалаар хайж олноор сонгох → баталгаажуулах); хасах үйлдэл — зөвхөн ахлах мэргэжилтэн. Шинээр нэмэгдсэн ажилтанд мэдэгдэл очно</td></tr><tr><td><b>Байршил</b></td><td>Чөлөөлөлтийн хил, захиргааны нэгжийн зурган дүрслэл (OpenLayers)</td></tr></table></div>
+<p style="text-align:center"><img class="shot" src="img/docx-07.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 4. Чөлөөлөлтийн дэлгэрэнгүй — табууд, үндсэн ба төслийн мэдээлэл</i></p>
+<h3 id="_toc119">7.4 Нэгж талбарын түүх — нэгдсэн жагсаалт</h3>
+<ul>
+<li><b>Баганууд</b> — Дугаар, Чөлөөлөлт (нэр + төлөвлөгөөний код), Огноо, Чөлөөлөлтийн төлөв, Эрхийн төрөл, Зориулалт, Талбай, Нөхөн төлбөрийн хэлбэр, Төлөв</li>
+<li><b>Шүүлт ба үйлдэл</b> — Талбарын дугаар, төлөвлөгөө, чөлөөлөлт, эрхийн төрөл, зориулалт, төлөвөөр шүүнэ; «Дэлгэрэнгүй» линк талбарын хуудас руу очно</li>
+</ul>
+<h3 id="_toc120">7.5 Нэгж талбарын дэлгэрэнгүй — 6 таб</h3>
+<p class="j">Талбар «Чөлөөлсөн», «Татгалзсан», «Нөлөөллөөс гарсан» төлөвт орсон эсвэл чөлөөлөлт баталгаажсан үед засвар түгжигдэнэ. Мэргэжлийн байгууллага бүх үйлдлээ /prof порталаар хийнэ.</p>
+<div class="tbl-scroll"><table><tr><th><b>Таб</b></th><th><b>Агуулга ба үйлдлүүд</b></th></tr><tr><td><b>Ерөнхий мэдээлэл</b></td><td>Талбарын мэдээлэл (дугаар, захиргааны нэгж, эрхийн төрөл, зориулалт, нийт/чөлөөлөгдөх талбай, үлдэх хэмжээ); «Засах» горимд чөлөөлөгдөх талбай, хилийн WKT/GeoJSON, МС-д өөрчлөлт орсон тэмдэглэгээ; «Хилээс тооцоолох»; «Мэдээлэл дуудах» — кадастр, төлбөр-үнэлгээ, мониторингийн мэдээллийг алхамчилсан синхрончлолоор татна; байршлын зураг</td></tr><tr><td><b>Эзэмшигч</b></td><td>Эзэмшигчийн мэдээлэл (нэр, регистр, утас, и-мэйл); өргөдөл, шийдвэр, гэрээ, гэрчилгээний дугаарууд; газрын үнэлгээ (бүс, суурь үнэ, дуудлагын итгэлцүүр); «Итгэмжлэгдсэн төлөөлөгч» бүртгэх/устгах</td></tr><tr><td><b>Нөхөх олговор</b></td><td>Гурван үнэлгээний дэд таб (доор дэлгэрэнгүй)</td></tr><tr><td><b>Баримт бичиг</b></td><td>Талбарын хавсралтууд (PDF ≤50MB); төрөл сонгож «Нэмэх», татах, «Устгах»</td></tr><tr><td><b>Эх хэвлэл</b></td><td>11 хэвлэх загвар (доор жагсаав) — «Татах» товчоор мэдээлэл автоматаар бөглөгдөж үүснэ</td></tr><tr><td><b>Явц</b></td><td>Одоогийн статус + «Явц нэмэх»: статус сонгох → баталгаажуулах; «Чөлөөлсөн» болгохын өмнө сонгосон урсгалын олговор зөвшөөрөгдсөн, үнэлгээний тайлан хавсаргагдсан байхыг шаардана; явцын түүхийн цагийн хэлхээ</td></tr></table></div>
+<h3 id="_toc121">7.5.1 «Нөхөх олговор» таб — үнэлгээний 3 дэд таб</h3>
+<p class="j">«Үндсэн үнэлгээ» (мэргэжлийн байгууллага), «Хөндлөнгийн үнэлгээ» (хөндлөнгийн байгууллага), «МИКА» гэсэн 3 зэрэгцээ урсгал. Санхүүгийн баталсан урсгал «Үндсэн үнэлгээ» болж, бусад нь «Идэвхгүй» тэмдэглэгддэг.</p>
+<ul>
+<li><b>Илгээх-батлах workflow</b> — Төлөвийн зурвас: Ноорог → Илгээсэн → Баталгаажсан/Буцаагдсан/Татгалзсан; «Түүх» товч бүх шилжилтийг харуулна</li>
+<li><b>Шилжилтийн товчнууд</b> — «Илгээх» (үнэлгээ оруулсан байгууллага), «Буцаах» ба «Нөхөх олговор баталгаажуулах» (санхүүгийн мэргэжилтэн) — бүгд тайлбар* шаардана</li>
+<li><b>Excel импорт</b> — «Excel-ээс оруулах» — .xlsx файлыг хөтөч дотор задалж, үнэлгээний байгууллага, газрын үнэлгээ, хөрөнгийн тодорхойлол, өртгийн хандлага, зардлын хэсгүүдийг урьдчилан харуулж засварлан «Системд оруулах»; давхардлыг SHA-256 хэшээр шалгана</li>
+<li><b>Байгууламж</b> — «Хөрөнгө нэмэх» — байгууламжийн дугаар, төрөл (үл хөдлөх/эд хөрөнгө), нэр, давхар, талбай, эзэмшигч; чанарын үзүүлэлт ба тооцооллын утгууд; олговрын мөрүүд (хэлбэр, хувь, дүн); зураг хавсаргах (PDF болно)</li>
+<li><b>Олговрын хяналт</b> — Хүснэгтэд өргөтгөх мөр — олговрын задаргаа; санхүү pending олговор дээр «Зөвшөөрөх»/«Татгалзах» (тайлбартай); олговрын түүх харах</li>
+<li><b>Газрын үнэлгээ</b> — Талбай × м²-ийн суурь үнэ = нийт дүн; «Хадгалах»/«Устгах»</li>
+<li><b>Тайлан ба байгууллага</b> — «Тайлан хавсаргах/солих» — сонгогдсон урсгал дээр үнэлгээний тайланг талбарын баримтаар хадгална; «Хөндлөнгийн байгууллага холбох/солих/салгах»</li>
+<li><b>Нэгтгэл</b> — Газрын үнэлгээ, хөрөнгийн үнэлгээ, нэгдсэн дүнгийн нэгтгэл картууд</li>
+</ul>
+<h3 id="_toc122">7.5.2 «Эх хэвлэл» — хэвлэх загварууд (11)</h3>
+<div class="tbl-scroll"><table><tr><th><b>№</b></th><th><b>Загвар</b></th><th><b>Формат</b></th></tr><tr><td>1</td><td>Урьдчилан мэдэгдэх хуудас</td><td>DOCX</td></tr><tr><td>2</td><td>Санал асуулгын хуудас</td><td>DOCX</td></tr><tr><td>3</td><td>Нийгэм эдийн засгийн судалгаа</td><td>DOCX</td></tr><tr><td>4</td><td>Шалгах хуудас</td><td>DOCX</td></tr><tr><td>5</td><td>Хурлын тэмдэглэл</td><td>DOCX</td></tr><tr><td>6</td><td>Уулзалтын тэмдэглэл</td><td>DOCX</td></tr><tr><td>7</td><td>Захирамжийн төсөл</td><td>XLSX (мэдээлэл автоматаар бөглөгдөнө)</td></tr><tr><td>8</td><td>Чөлөөлсөн газрыг хүлээлцсэн акт</td><td>DOCX</td></tr><tr><td>9</td><td>Чөлөөлсөн газрыг хүлээлцсэн акт 2</td><td>DOCX</td></tr><tr><td>10</td><td>Хяналтын карт</td><td>DOCX</td></tr><tr><td>11</td><td>Төлбөрийн гүйцэтгэл</td><td>XLSX</td></tr></table></div>
+<h3 id="_toc123">7.6 Нөхөх олговорын түүх</h3>
+<ul>
+<li><b>Статистик</b> — Нийт / Батлагдсан / Хүлээгдэж буй / Татгалзсан тоон картууд</li>
+<li><b>Баганууд</b> — Нэгж талбар (линк), Эзэмшигч (+чөлөөлөлтийн нэр), Регистр, Хэлбэр (Мөнгөн/Газраар), Дүн, Огноо, Төлөв</li>
+<li><b>Шүүлтүүр</b> — Талбарын дугаар/эзэмшигчээр хайх, чөлөөлөлт, олговорын хэлбэр, төлөвөөр шүүх</li>
+<li><b>Дэлгэрэнгүй</b> — Дэлгэрэнгүй нь хэвлэхэд бэлэн баримт хэлбэртэй — «Хэвлэх» товчтой; олговор бүртгэх үйлдэл талбарын «Нөхөх олговор» табаас хийгдэнэ</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-08.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 5. Нөхөх олговорын нэгдсэн жагсаалт — статистик картууд, шүүлтүүр, төлөвийн тэмдэглэгээ</i></p>
+<h3 id="_toc124">7.7 Тайлан</h3>
+<ul>
+<li><b>Баганууд</b> — Нэгж талбарын дугаар, чөлөөлөлт, төлөвлөгөө, ангилал, өмчлөгч, регистр, талбай, чөлөөлөх талбай, эрхийн төрөл, нөхөн төлбөрийн дүн</li>
+<li><b>Шүүлтүүр</b> — Төлөвлөгөө, чөлөөлөлт, он (олон сонголт), эрхийн төрөл, зориулалт, олговорын хэлбэр, ангиллаар шүүнэ</li>
+<li><b>Excel экспорт</b> — «Тайлан татах» — Excel файлыг сервер талд загвараас үүсгэн, явцын мэдээллийг бодит цагт (N/нийт) харуулж татна (SSE стрийм)</li>
+</ul>
+<h3 id="_toc125">7.8 Газрын зураг</h3>
+<ul>
+<li><b>Давхаргууд</b> — Аймаг/Нийслэл, Сум/Дүүрэг, Баг/Хороо, Төлөвлөгөөний хил, Чөлөөлөх бүсийн хил + нэгж талбарын статусын 6 давхарга (Хүлээгдэж буй, Зөвшилцөх шатандаа, Үнэлгээ хийх, Нөлөөлөгдсөн гарсан, Татгалзсан, Чөлөөлсөн)</li>
+<li><b>Үйлдлүүд</b> — Давхаргын самбараас асааж/унтраана; объект дээр дарахад тухайн давхаргын мэдээллийн popup гарна</li>
+<li><b>Шүүлт</b> — Хяналтын самбараас чөлөөлөлт, он, захиргааны нэгж, ажилтнаар CQL шүүлт дамждаг</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-09.png" alt=""></p>
+<p style="text-align:center"><i>Зураг 6. Газрын зураг — GeoServer давхаргууд, нэгж талбарын статусын өнгөт дүрслэл</i></p>
+<h3 id="_toc126">7.9 Хэрэглэгчид ба Эрх &amp; Роль</h3>
+<ul>
+<li><b>Хэрэглэгчид</b> — Хэрэглэгчийн жагсаалт (нэр, албан тушаал, и-мэйл, роль, идэвхтэй эсэх); «Нэмэх» — нэр*, овог*, хэрэглэгчийн нэр*, албан тушаал, и-мэйл*, роль, нууц үг*; мөрийн үйлдэл: «Засах», нууц үг солих, «Устгах»</li>
+<li><b>Эрх &amp; Роль</b> — «Роль нэмэх» (нэр*, тайлбар); ролийн «Засах»/«Устгах»; роль сонгоход зөвшөөрлүүд ресурсээр бүлэглэгдэн харагдаж, дарахад шууд олгогдоно/хасагдана</li>
+</ul>
+<h3 id="_toc127">7.10 Миний чөлөөлөлтүүд (мэргэжлийн байгууллага)</h3>
+<ul>
+<li><b>Хязгаарлагдмал жагсаалт</b> — Зөвхөн өөрийн байгууллагад оноогдсон чөлөөлөлтүүд; нэрээр хайх; «Дэлгэрэнгүй» (баталгаажсан бол «Хаалттай»); үүсгэх/засах үйлдэлгүй</li>
+</ul>
+<h3 id="_toc128">7.11 Тохиргооны 8 модуль (админ)</h3>
+<p class="j">Эдгээр 8 дэлгэц нь системийн «тохируулгын самбар» юм: байгууллагын ажлын дүрэм, ангилал, статусууд өөрчлөгдөхөд программист дуудахгүйгээр админ өөрөө эндээс өөрчилдөг. Бүх модуль «Нэмэх» / «Засах» / «Устгах» (баталгаажуулах асуулттай) нэгдсэн загвартай.</p>
+<div class="tbl-scroll"><table><tr><th><b>Модуль</b></th><th><b>Юу тохируулах, системд хэрхэн нөлөөлөх</b></th></tr><tr><td><b>Чөлөөлөлтийн ангилал</b></td><td>Ерөнхий ангилал ба түүний доторх дэд ангиллын мод (нэр, эрэмбэ). Шинэ чөлөөлөлт бүртгэхэд заавал сонгогдоно; хяналтын самбар болон тайлангийн шүүлтүүрт ашиглагдана. Жишээ: «Авто зам» ерөнхий ангилал дотор «Гүүр» дэд ангилал нэмж болно</td></tr><tr><td><b>Чөлөөлөлтийн явцын статус</b></td><td>Чөлөөлөлтийн түвшний статусууд (нэр, тайлбар). Чөлөөлөлтийн «Явц» таб дээр харагдах төлөвүүдийг тодорхойлно</td></tr><tr><td><b>Нэгж талбарын статус</b></td><td>Талбарын амьдралын мөчлөгийн статусууд (код, нэр, эрэмбэ) — Хүлээгдэж буй, Зөвшилцөх шатандаа, Үнэлгээ хийх, Чөлөөлсөн г.м. Газрын зурган дээрх өнгөт давхаргууд (s0–s5) эдгээртэй уягдана. «Үнэлгээ хийх» статуст орсон талбар үнэлгээний байгууллагуудад автоматаар мэдэгдэл илгээнэ</td></tr><tr><td><b>Баримт бичгийн төрөл</b></td><td>Хавсралтын төрлүүд (код, нэр, хамрах хүрээ: чөлөөлөлт/талбар). Файл хавсаргах цонхны «Файлын төрөл» сонголтыг бүрдүүлнэ. Онцгой: valuation_report (Хөрөнгийн үнэлгээний тайлан) төрөлт баримт нь талбарыг «Чөлөөлсөн» болгох урьдчилсан нөхцөл</td></tr><tr><td><b>Нэгж талбарын ажлын урсгал</b></td><td>Талбарын аль статусаас аль статус руу шилжиж болохын дүрэм (эхлэх статус → очих статус, эрэмбэ). Талбарын «Явц нэмэх» цонхонд зөвхөн энд зөвшөөрөгдсөн шилжилтүүд санал болгогдоно — буруу дарааллаар алхам алгасахаас сэргийлнэ</td></tr><tr><td><b>Чөлөөлөлтийн ажлын урсгал</b></td><td>Чөлөөлөлтийн статусын шилжилтийн дүрэм (Шинэ → Хээрийн судалгаа → Баталгаажсан г.м.). Тохируулаагүй шилжилтийг систем зөвшөөрөхгүй</td></tr><tr><td><b>Байгууламжийн чанарын төрөл</b></td><td>Барилга байгууламжийн чанарын үзүүлэлтийн төрлүүд (код, нэр, эрэмбэ) — жишээ нь барилгын хийц, зориулалт. «Хөрөнгө нэмэх» цонхонд нэмэлт талбар болж харагдана; Excel импортын багана эдгээртэй тулгагдана</td></tr><tr><td><b>Байгууламжийн тооцооллын төрөл</b></td><td>Үнэлгээний тооцооллын үзүүлэлтүүд (код, нэр, хэмжих нэгж — жишээ нь «төгрөг/м²»). Хөрөнгийн үнэлгээний тооцоололд ашиглагдаж, нэгж үнэ × хэмжээ хэлбэрийн мөрүүдийг бүрдүүлнэ</td></tr></table></div>
+<h3 id="_toc129">7.12 Мэдэгдлийн систем — бодит цагийн</h3>
+<p class="j">Мэдээллийн төлөв өөрчлөгдөх бүрд тухайн мэдээлэлтэй холбоотой бүх хэрэглэгчид мэдэгдэл үүсч, Server-Sent Events (SSE) стриймээр хөтөч рүү шууд түгээгдэнэ. Мэдэгдэл дээр дарахад холбогдох мэдээллийн дэлгэрэнгүй хуудас руу шилжинэ.</p>
+<ul>
+<li><b>Архитектур</b> — notification хүснэгт (main DB) → NotificationService → in-memory SSE hub → хөтчийн стрийм. Мэдэгдэл эхлээд DB-д хадгалагдаж дараа нь идэвхтэй холболтууд руу түгээгдэнэ — холболт тасарсан үед ч мэдээлэл алдагдахгүй</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>Endpoint</b></th><th><b>Үүрэг</b></th></tr><tr><td><b>GET /notifications</b></td><td>Өөрийн мэдэгдлийн жагсаалт (хуудаслалт, unread шүүлт)</td></tr><tr><td><b>GET /notifications/unread-count</b></td><td>Уншаагүй мэдэгдлийн тоо</td></tr><tr><td><b>GET /notifications/stream</b></td><td>SSE бодит цагийн стрийм (25с heartbeat-тэй)</td></tr><tr><td><b>POST /notifications/{id}/read</b></td><td>Нэг мэдэгдлийг уншсан болгох</td></tr><tr><td><b>POST /notifications/read-all</b></td><td>Бүгдийг уншсан болгох</td></tr></table></div>
+<p><b>Мэдэгдэл илгээгдэх үйл явдлууд ба хүлээн авагчид:</b></p>
+<div class="tbl-scroll"><table><tr><th><b>Үйл явдал</b></th><th><b>Хүлээн авагчид</b></th></tr><tr><td><b>Чөлөөлөлтийн статус шилжилт</b></td><td>Хуваарилагдсан ажилтнууд + мэргэжлийн байгууллага</td></tr><tr><td><b>Талбарын статус шилжилт</b></td><td>Хуваарилагдсан ажилтнууд</td></tr><tr><td><b>Талбар «Үнэлгээ хийх» төлөвт орох</b></td><td>Мэргэжлийн байгууллага + сонгогдсон хөндлөнгийн байгууллага (тусгай «Үнэлгээ хийх талбар ирлээ» мэдэгдэл)</td></tr><tr><td><b>Үнэлгээ илгээх (submit)</b></td><td>Санхүүгийн мэргэжилтнүүд + ажилтнууд</td></tr><tr><td><b>Үнэлгээ батлах / буцаах</b></td><td>Илгээсэн этгээд + байгууллагууд + ажилтнууд</td></tr><tr><td><b>Олговор бүртгэх</b></td><td>Санхүүгийн мэргэжилтнүүд + ажилтнууд</td></tr><tr><td><b>Олговор батлах / татгалзах</b></td><td>Бүртгэсэн этгээд + ажилтнууд + мэрг. байгууллага</td></tr><tr><td><b>Ажилтан хуваарилах</b></td><td>Зөвхөн шинээр нэмэгдсэн ажилтнууд</td></tr><tr><td><b>Байгууллага оноох</b></td><td>Тухайн байгууллага</td></tr></table></div>
+<ul>
+<li><b>Дүрэм</b> — Үйлдэл хийсэн хүн өөрөө өөрийн үйлдлийн мэдэгдлийг авахгүй; давхардсан хүлээн авагч нэг л мэдэгдэл авна</li>
+<li><b>Хэрэглэгчийн интерфейс</b> — Толгой цэсний хонх — уншаагүйн badge, шинэ мэдэгдэлд «Харах» товчтой toast; дарахад уншсан болж дэлгэрэнгүй рүү шилжинэ; таб идэвхжих/сүлжээ сэргэхэд стрийм автоматаар дахин холбогдож, тасалдлын үеийн мэдэгдлүүдийг нөхөж татна</li>
+</ul>
+<p style="text-align:center"><img class="shot" src="img/docx-10.png" alt=""></p>
+<p style="text-align:center"><i>Зураг. Мэдэгдлийн хонхны цэс — жагсаалт, уншсан/уншаагүй төлөв</i></p>
+<ul>
+<li><b>Аюулгүй байдал, найдвартай байдал</b> — Token Authorization header-ээр (URL-д гардаггүй — лог/түүхэд нууц үлдэхгүй); хэрэглэгч зөвхөн өөрийн мэдэгдэлд ханддаг (repo түвшний recipient шүүлт); нэг хэрэглэгч дээд тал нь 8 зэрэгцээ стрийм; мэдэгдлийн алдаа үндсэн үйлдлийг хэзээ ч унагаахгүй (async)</li>
+</ul>
+<h3 id="_toc130">7.13 Аудит лог — үйлдлийн мөрдлөг</h3>
+<p class="j">Хэн, хэзээ, ямар төхөөрөмж/хаягаас, ямар объект дээр, ямар өөрчлөлт хийснийг бүртгэх audit_log хүснэгт (migration 000052–000053, шүүлтийн индексүүдтэй) нэмэгдсэн.</p>
+<div class="tbl-scroll"><table><tr><th><b>Багана</b></th><th><b>Агуулга</b></th></tr><tr><td><b>actor_id, actor_name, actor_position, actor_roles</b></td><td>Үйлдэл хийсэн хэрэглэгч — JWT-ээс автоматаар</td></tr><tr><td><b>action</b></td><td>Үйлдлийн төрөл: created / updated / deleted / status_changed / valuation_submit / valuation_approve / valuation_return / imported / upserted г.м.</td></tr><tr><td><b>resource_type, resource_id</b></td><td>8 төрлийн объект: acquisition, parcel, valuation, compensation, document, payment, funding_source, authorized_representative</td></tr><tr><td><b>acquisition_id, parcel_id</b></td><td>Холбогдох чөлөөлөлт/талбар — хайлтад ашиглагдана</td></tr><tr><td><b>details (JSONB)</b></td><td>Үйлдлийн дэлгэрэнгүй — өөрчилсөн утгууд, тоо хэмжээ (жишээ нь импортын үед үүссэн/устсан мөрийн тоо)</td></tr><tr><td><b>ip_address, user_agent</b></td><td>Хүсэлт ирсэн IP хаяг, хөтчийн мэдээлэл</td></tr><tr><td><b>created_at</b></td><td>Үйлдлийн огноо, цаг</td></tr></table></div>
+<ul>
+<li><b>Бүртгэх цэгүүд</b> — Land service-ийн 36 мутацийн цэгээс бүртгэгдэнэ — статус шилжилт, үнэлгээний илгээх/батлах/буцаах, олговор үүсгэх/засах/устгах/батлах, Excel импорт, санхүүжилт, төлөөлөгч г.м.</li>
+<li><b>Автомат actor</b> — Actor-ийн мэдээлэл (нэр, албан тушаал, роль, IP, User-Agent) auth middleware-ээс request context-оор автоматаар дамждаг — handler бүрт код нэмэх шаардлагагүй</li>
+<li><b>Гүйцэтгэл</b> — Async fire-and-forget — лог бичилт үндсэн үйлдлийг удаашруулахгүй, алдаа гарвал зөвхөн серверийн логд тэмдэглэгдэнэ</li>
+<li><b>Хандалт</b> — GET /audit-logs — audit:read зөвшөөрөлтэй (одоогоор зөвхөн админ); actor, action, resource, огнооны мужаар шүүж хуудаслан харна</li>
+<li><b>Нэмэгдэх боломж</b> — Аудит логийн жагсаалтын дэлгэц frontend-д одоогоор байхгүй — админы UI нэмэх боломжтой</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>13 багц модуль нэгдсэн урсгал бүрдүүлж, бүх чухал үйлдэл мэдэгдэл + аудитын давхар бүртгэлтэй</td><td>Үйлдэл бүр ролиор хязгаарлагдсан; мэдэгдэл бодит цагт; аудит IP/төхөөрөмжтэй мөрдөгдөнө</td><td>Аудит логийн админ дэлгэц; и-мэйл/E-Mongolia суваг; цахим гарын үсэг</td></tr></table></div>
+<h2 id="_toc131">8. GIS — газарзүйн мэдээллийн интеграци</h2>
+<div class="tbl-scroll"><table><tr><th><b>Давхарга</b></th><th><b>Хэрэгжилт</b></th><th><b>Үүрэг</b></th></tr><tr><td><b>Хадгалалт</b></td><td>PostGIS 3.4</td><td>geometry(Polygon,4326) багана, орон зайн индекс</td></tr><tr><td><b>Тооцоолол</b></td><td>SQL доторх ST_* функцууд</td><td>Огтлолцол, давхцлын талбай, геометрийн засвар</td></tr><tr><td><b>Нийтлэлт</b></td><td>GeoServer 2.25</td><td>WMS/WFS — статусын давхаргууд (s0–s5)</td></tr><tr><td><b>Дүрслэл</b></td><td>OpenLayers 10.2</td><td>Интерактив зураг, давхаргын самбар, CQL шүүлт</td></tr><tr><td><b>Импорт</b></td><td>Go shapefile уншигч</td><td>ESRI Shapefile → WKT (гадны сангүй)</td></tr><tr><td><b>Прокси</b></td><td>Next.js route</td><td>GeoServer-ийг гадагш ил гаргалгүй дамжуулна</td></tr></table></div>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>Талбарын давхцал, чөлөөлөх талбай автоматаар тодорхойлогддог</td><td>Тооцоолол DB түвшинд — үнэн зөвийн нэг эх сурвалж</td><td>Vector tile (MVT); кадастрын системтэй синхрончлол</td></tr></table></div>
+<h2 id="_toc132">9. Чанар, тестийн хамралт</h2>
+<div class="tbl-scroll"><table><tr><th><b>Үзүүлэлт</b></th><th><b>Утга</b></th></tr><tr><td><b>Backend тест функц</b></td><td>220</td></tr><tr><td><b>Backend тест файл</b></td><td>23</td></tr><tr><td><b>Mock багц (handler / service / repo)</b></td><td>3</td></tr><tr><td><b>Frontend тест сьют (policy, parser)</b></td><td>2</td></tr></table></div>
+<ul>
+<li><b>Давхаргажсан unit тест</b> — mock-оор тусгаарлагдсан — DB-гүйгээр хурдан ажиллана</li>
+<li><b>Хандалтын эрхийн тест</b> — router_access_test.go — эрхийн регресс автоматаар илэрдэг</li>
+<li><b>Баримтжуулалт</b> — Swagger UI, Postman collection, монгол хэлний i18n</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>Гол бизнес логик автомат шалгалттай</td><td>Эрхийн хяналт тусгай тестээр баталгаажсан</td><td>E2E тест (Playwright); CI/CD pipeline; ачааллын тест</td></tr></table></div>
+<h2 id="_toc133">10. Хөгжүүлэлтийн явцын үзүүлэлт</h2>
+<p class="j">Идэвхтэй хөгжүүлэлт 2026.06.15–07.12-нд явагдаж, хоёр repo-д нийт 177 commit бүртгэгдсэн (frontend 116, backend 61). Мөн хугацаанд 55 migration-аар schema шат дараатай хөгжсөн.</p>
+<p style="text-align:center"><img class="shot" src="img/docx-11.png" alt=""></p>
+<p style="text-align:center"><i>График. Долоо хоног тутмын commit — repo тус бүрээр</i></p>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>4 долоо хоногт бүрэн ажиллагаатай систем — 177 commit, 55 migration</td><td>Жижиг, ойр commit; front/back зэрэгцээ хөгжсөн</td><td>Release tag, changelog; PR-д автомат шалгалт</td></tr></table></div>
+<h2 id="_toc134">11. Төлөвлөгөөний биелэлт</h2>
+<p class="j">Хөгжүүлэлтийн нарийвчилсан төлөвлөгөө (plan.xlsx, 2026.05–09)-ний бичиг баримт болон систем хөгжүүлэлтийн бүлгүүд нь задаргаа түвшний 50 ажлаас бүрдэнэ. Төлөв өнгөөр кодлогдсон: ногоон = бүрэн хийгдсэн; шар = хийгдсэн боловч Газрын удирдлагын системтэй (ГУС) холбогдох хөгжүүлэлт хүлээгдэж байгаа; будаагүй = хүлээгдэж байгаа.</p>
+<p class="j"><i>Тооллогын арга: бүлэг, дэд бүлгийн гарчиг мөрүүдийг ажлын тоонд оруулаагүй, зөвхөн задаргаа ажлуудыг тоолсон. «Лог файл үүсгэх» (2.4.4.6) ажлыг аудит логийн системийн хэрэгжилтээр хийгдсэнд тооцов.</i></p>
+<div class="tbl-scroll"><table><tr><th><b>Төлөв</b></th><th><b>Тоо</b></th><th><b>Хувь</b></th></tr><tr><td><b>Нийт төлөвлөгөөт ажил</b></td><td>50</td><td>100%</td></tr><tr><td><b>Бүрэн хийгдсэн</b></td><td>13</td><td>26%</td></tr><tr><td><b>Хийгдсэн — ГУС интеграци хүлээгдэж буй</b></td><td>27</td><td>54%</td></tr><tr><td><b>Хүлээгдэж байгаа</b></td><td>10</td><td>20%</td></tr></table></div>
+<p style="text-align:center"><img class="shot" src="img/docx-12.png" alt=""></p>
+<p style="text-align:center"><i>График. Төлөвлөгөөний биелэлт — бүлэг, төлөв тус бүрээр</i></p>
+<p><b>Системийн талаас хэрэгжсэн: 40/50 ажил (80%).</b></p>
+<h3 id="_toc135">11.1 Бүрэн хийгдсэн ажлууд (13)</h3>
+<ul>
+<li>Системийн бичиг баримт /архитектурын загвар/ ба техникийн тодорхойлолт (1.1, 1.2)</li>
+<li>Системийн template бэлдэх, Map server бэлдэх (2.1.1, 2.1.2)</li>
+<li>Батлагдсан төлөвлөгөөнөөс ЗЗН болон холбогдох мэдээллээр хайх цонх (2.2.2.1)</li>
+<li>Төлөвлөгөөний биелэлтийн тайланг төслийн дугаараар татах (2.2.2.3)</li>
+<li>Талбарын хэмжээ, байршлын өөрчлөлтийг ЕТ-ийн бүсчлэлтэй нийцүүлж хянах (2.2.2.4)</li>
+<li>Үнэлгээний тайланг илгээх, засварлах, баталгаажуулах, хүлээн авах (2.4.3.3)</li>
+<li>Уулзалтын тэмдэглэл үйлдэж баримт хавсаргах (2.4.4.1)</li>
+<li>Нөхөх олговрын үнийн дүнгийн төлбөрийн гүйцэтгэл (2.4.4.5)</li>
+<li>Статистикийн хяналтын самбар (2.5.1), тайланг төрлөөр боловсруулах (2.5.2)</li>
+<li>Лог файл үүсгэх — аудит логийн системээр хэрэгжсэн (2.4.4.6)</li>
+</ul>
+<h3 id="_toc136">11.2 Тусгай бүлэг — ГУС-ийн холболтоор хийгдэх ажлууд (27)</h3>
+<p class="j">Эдгээр ажлын системийн тал нь хийгдсэн бөгөөд ГУС-ээс мэдээлэл татах/солилцох холболт нээгдэхийг хүлээж байна. Ажил тус бүрд холбох мэдээллийг тодорхойлов:</p>
+<div class="tbl-scroll"><table><tr><th><b>Бүлэг</b></th><th><b>Ажил (дугаар)</b></th><th><b>Холбох мэдээлэл</b></th></tr><tr><td><b>А. Удирдлага,үндсэн бүртгэл</b></td><td>Хэрэглэгчийн бүртгэл, жагсаалт (2.2.1)</td><td>ГУС-ийн хэрэглэгчийн нэгдсэн бүртгэлээс нэр, албан тушаал, байгууллага, холбоо барих мэдээллийг татах</td></tr><tr><td>&nbsp;</td><td>Хэрэглэгчийн эрхийн бүртгэл (2.2.2)</td><td>Эрхийн түвшин, ролийн мэдээллийг татаж системийн эрхтэй уялдуулах</td></tr><tr><td>&nbsp;</td><td>Эрхийн тохиргоо (2.2.3)</td><td>Чиг үүргийн ангиллыг системийн 6 роль, зөвшөөрөлтэй харгалзуулах</td></tr><tr><td>&nbsp;</td><td>Ажилтны бүртгэл (2.3.1)</td><td>Албан хаагчийн мэдээлэл — хариуцагч оноох жагсаалтын эх сурвалж</td></tr><tr><td>&nbsp;</td><td>Ажилтны лавлахууд (2.3.2)</td><td>Албан тушаал, нэгж/хэлтсийн лавлахыг синхрончлох</td></tr><tr><td>&nbsp;</td><td>Хуулийн этгээдийн бүртгэл (2.3.3)</td><td>Регистр, нэр, хаяг — эзэмшигч, төлөөлөгчийг баталгаажуулах</td></tr><tr><td>&nbsp;</td><td>Үнэлгээний байгууллага (2.3.4)</td><td>Тусгай зөвшөөрөлтэй байгууллагын жагсаалт, лицензийн хугацаа</td></tr><tr><td><b>Б. Төлөвлөгөөнийдавхарга</b></td><td>Гэр хорооллын чөлөөлөлт (2.2.1.1)</td><td>Зөвшилцсөн давхаргаас ангиллын хил, талбай татаж чөлөөлөлт автоматаар үүсгэх</td></tr><tr><td>&nbsp;</td><td>Авто зам, шугам сүлжээ (2.2.1.2)</td><td>Мөн давхаргаас зам, трассын ангиллын хилийг татах</td></tr><tr><td>&nbsp;</td><td>Нийгмийн дэд бүтэц (2.2.1.3)</td><td>Сургууль, эмнэлэг зэрэг ангиллын хилийг татах</td></tr><tr><td><b>В. ГУС-ийнсистемүүд</b></td><td>ГЗБ, хот төлөвлөлтийн цахим (2.3.1)</td><td>Бүсчлэл, хориглолт-хязгаарлалт — талбарын өөрчлөлтийг ЕТ-тэй хянах</td></tr><tr><td>&nbsp;</td><td>Газрын кадастр (2.3.2)</td><td>Хил, эзэмшигч, эрхийн төрөл, гэрчилгээ — «Мэдээлэл дуудах» синхрончлолын эх сурвалж</td></tr><tr><td>&nbsp;</td><td>Газрын үнэлгээ (2.3.3)</td><td>Үнэлгээний бүс, суурь үнэ, дуудлагын итгэлцүүр — олговрын тооцооллын суурь</td></tr><tr><td>&nbsp;</td><td>Хот байгуулалтын кадастр (2.3.4)</td><td>Барилга байгууламжийн бүртгэл, хил, зориулалт</td></tr><tr><td>&nbsp;</td><td>Газрын мониторинг (2.3.5)</td><td>Газрын төлөв байдал, ашиглалтын хяналтын дүн</td></tr><tr><td><b>Г. Кадастрындавхцал</b></td><td>Зөрчлийн давхарга үүсгэх (2.4.1.1)</td><td>Кадастрын зургийг чөлөөлөлтийн хилтэй харьцуулж зөрчилтэй талбарыг зурагт харуулах</td></tr><tr><td>&nbsp;</td><td>Зөрчлийг системд холбох (2.4.1.2)</td><td>Зөрчил бүрийг нэгж талбарын дэлгэрэнгүйтэй холбох</td></tr><tr><td>&nbsp;</td><td>Давхцал шалгах (2.9.1)</td><td>Кадастрын API-аас хил татаж системийн PostGIS тооцоололтой тулгах</td></tr><tr><td><b>Д. Эрх,захирамж</b></td><td>Чиг үүргээр эрх тохируулах (2.4.3.1)</td><td>ГУС-ийн чиг үүргээс системийн роль/зөвшөөрөлд автоматаар буулгах</td></tr><tr><td>&nbsp;</td><td>Захирамжийн төсөл (2.4.4.3)</td><td>Талбар, эзэмшигч, олговрын дүнг загварт бөглөж захирамжийн бүртгэлтэй уях</td></tr><tr><td><b>Е. Дундынмэдээллийн сан</b></td><td>УБЕГ (2.8.1)</td><td>Регистрээр үл хөдлөхийн гэрчилгээ, өмчлөл, барьцааны лавлагаа</td></tr><tr><td>&nbsp;</td><td>Татварын ерөнхий газар (2.8.2)</td><td>Татварын өр, төлөлтийн лавлагаа — олговор олгохын өмнөх шалгалт</td></tr><tr><td>&nbsp;</td><td>ШШГЕГ (2.8.3)</td><td>Шүүхийн маргаан, эрх түдгэлзүүлэлтийн лавлагаа</td></tr><tr><td>&nbsp;</td><td>Үнийн мэдээний сан (2.8.4)</td><td>Батлагдсан олговруудаас үнийн сан бүрдүүлж ГУС-т лавлагаа болгон өгөх</td></tr><tr><td>&nbsp;</td><td>E-Mongolia (2.8.5)</td><td>Иргэнд мэдэгдэл хүргүүлж, НЭЗ судалгааны хариуг хүлээн авах</td></tr><tr><td>&nbsp;</td><td>Динамик давхарга (2.8.6)</td><td>ГУС-ийн каталогоос давхаргыг кодгүйгээр зурагт нэмэх</td></tr><tr><td><b>Ж. Бусад</b></td><td>Бусад системд өгөгдөл өгөх (2.9.2)</td><td>Чөлөөлөлт, талбар, олговрын мэдээллийг REST/WFS-ээр гаргах</td></tr></table></div>
+<h3 id="_toc137">11.3 Хүлээгдэж байгаа ажлууд (10)</h3>
+<ul>
+<li>Зураг төслийн түүхэн өөрчлөлтийг харуулах (2.2.2.2)</li>
+<li>НЭЗ судалгааг цахимаар авч тоон мэдээлэл үүсгэх (2.4.2.1)</li>
+<li>Цахим хэлбэрээр мэдэгдэх хуудас хүргүүлэх (2.4.2.2)</li>
+<li>Албан бичиг хүргүүлэх (2.4.2.3)</li>
+<li>Тооцооллын журам, аргачлал, стандарт, үнийн мэдээний бүртгэл (2.4.3.2)</li>
+<li>Газар чөлөөлөх гэрээг цахим системээр хэвлэх (2.4.4.2)</li>
+<li>Газар чөлөөлсөн тухай акт үйлдэх (2.4.4.4)</li>
+<li>Агаар сансрын зурган мэдээллийг тогтмол шинэчлэх (2.6.1)</li>
+<li>Дроноор авсан мэдээллийг мэдээллийн санд оруулах (2.6.2)</li>
+<li>2010–2025 оны чөлөөлөгдсөн талбарын мэдээллийг нөхөж оруулах (2.7.1)</li>
+</ul>
+<h3 id="_toc138">11.4 Төлөвлөгөөт ажлын иж бүрдэлд ороогүй боловч хэрэгжсэн ажлууд</h3>
+<ul>
+<li><b>Excel-ээс үнэлгээ импортлох</b> — хөтөч дотор задлан шинжилж, SHA-256 хэшээр давхардлаас хамгаалдаг</li>
+<li><b>Мэргэжлийн байгууллагын тусгаарлагдсан портал</b> — гадны байгууллага зөвхөн өөрт оноогдсон объект дээр ажиллах 43 endpoint орчин</li>
+<li><b>Бүрэн түүхжүүлэлт</b> — статус, хил, олговор, үнэлгээний өөрчлөлт бүр аудитын мөртэй</li>
+<li><b>Аюулгүй байдлын өргөтгөлүүд</b> — token хүчингүйжүүлэлт, session epoch, объект түвшний 4 давхар хамгаалалт</li>
+<li><b>Бодит цагийн мэдэгдлийн систем</b> — төлөв өөрчлөгдөх бүрд холбогдох хэрэглэгчдэд SSE-ээр шууд мэдэгддэг (7.12)</li>
+</ul>
+<div class="tbl-scroll"><table><tr><th><b>ҮР ДҮН</b></th><th><b>ДАВУУ ТАЛ</b></th><th><b>НЭМЭГДЭХ БОЛОМЖ</b></th></tr><tr><td>50 ажлын 40 нь (80%) системийн талаас хэрэгжсэн; төлөвлөгөөнөөс гадуур 5 томоохон боломж нэмэгдсэн (аудит лог нь 2.4.4.6-ийн хэрэгжилт)</td><td>Үлдэгдлийн дийлэнх нь гадаад хамааралтай — системийн суурь бэлэн</td><td>ГУС-ийн API нээгдмэгц 27 ажил богино хугацаанд хаагдана; үлдэгдэл 11 ажлыг дараагийн шатанд төлөвлөх</td></tr></table></div>
+<h2 id="_toc139">12. Нэгдсэн дүгнэлт</h2>
+<h3 id="_toc140">12.1 Систем хийгдсэнээр гарсан үр дүн</h3>
+<ul>
+<li>Бүх үе шат цаасан бус, нэгдсэн цахим урсгалд шилжсэн</li>
+<li>3 бие даасан үнэлгээ зэрэгцээ явагдаж, workflow-оор баталгааждаг</li>
+<li>Орон зайн тооцоолол автоматжиж, зурган дээр бодит хугацаанд харагдана</li>
+<li>Гадны байгууллагууд тусгаарлагдсан порталтай</li>
+<li>9 төрлийн албан баримт, Excel тайлан автоматаар үүсдэг</li>
+</ul>
+<h3 id="_toc141">12.2 Давуу талууд</h3>
+<ul>
+<li><b>Цэвэр давхаргажилт</b> — өргөтгөлд тэсвэртэй, тестлэгдэхүйц бүтэц</li>
+<li><b>Гүн хамгаалалт</b> — 4 давхар эрхийн шалгалт</li>
+<li><b>Workflow тохиргоогоор</b> — процесс өөрчлөгдөхөд код засалтгүй</li>
+<li><b>Бүрэн аудитын мөр</b> — өөрчлөлт бүр түүхтэй</li>
+<li><b>Нээлттэй эхийн стек</b> — лицензийн зардалгүй</li>
+</ul>
+<h2 id="_toc142">Хавсралт. Нэр томьёоны тайлбар</h2>
+<p>Тайланд ашигласан мэргэжлийн нэр томьёоны энгийн тайлбар:</p>
+<div class="tbl-scroll"><table><tr><th><b>Нэр томьёо</b></th><th><b>Энгийн тайлбар</b></th></tr><tr><td><b>Frontend / Backend</b></td><td>Frontend — хэрэглэгчийн хөтөч дээр харагдах вэб хуудаснууд; Backend — ард нь ажиллаж, өгөгдөл боловсруулж хадгалдаг сервер програм</td></tr><tr><td><b>API, endpoint</b></td><td>Програмууд хоорондоо мэдээлэл солилцох гэрээт «цонх». Endpoint нь тухайн нэг үйлчилгээний хаяг (жишээ: талбарын жагсаалт авах хаяг)</td></tr><tr><td><b>REST</b></td><td>API зохион байгуулах түгээмэл стандарт — унших/нэмэх/засах/устгах үйлдлүүд тус тусын хаягтай байдаг</td></tr><tr><td><b>Өгөгдлийн сан (PostgreSQL)</b></td><td>Бүх мэдээллийг хүснэгт хэлбэрээр найдвартай хадгалдаг сан</td></tr><tr><td><b>PostGIS</b></td><td>Өгөгдлийн санд газарзүйн хэлбэр (талбарын хил г.м.) хадгалж, талбай, давхцал зэргийг тооцох боломж олгодог өргөтгөл</td></tr><tr><td><b>GeoServer, WMS/WFS</b></td><td>Газрын зургийн давхаргуудыг вэбээр түгээдэг сервер; WMS — зураг хэлбэрээр, WFS — өгөгдөл хэлбэрээр өгдөг стандартууд</td></tr><tr><td><b>Migration</b></td><td>Өгөгдлийн сангийн бүтцийн өөрчлөлт бүрийг дугаарлаж хадгалсан «алхам» — шинэ орчинд сан ямар ч үед мөр дараалан ижил бүтэцтэй босдог</td></tr><tr><td><b>JWT, token</b></td><td>Нэвтэрсэн хэрэглэгчийг таниулах цахим «үнэмлэх» — хүсэлт бүрд дагалдаж, хугацаа дуусахад шинэчлэгдэнэ</td></tr><tr><td><b>bcrypt, SHA-256</b></td><td>Нууц үг болон файлыг математик аргаар «хурууны хээ» болгох аргууд — нууц үг ил хадгалагдахгүй, файлын давхардал илэрдэг</td></tr><tr><td><b>RBAC, permission</b></td><td>Ролид суурилсан эрхийн удирдлага — хэрэглэгч бүр ролийнхоо хүрээнд л үйлдэл хийж чадна (жишээ: land:update = чөлөөлөлт засах эрх)</td></tr><tr><td><b>Workflow</b></td><td>Ажлын урсгал — аль төлөвөөс аль төлөв рүү, ямар нөхцөлтэйгөөр шилжиж болохын урьдчилан тогтоосон дүрэм</td></tr><tr><td><b>SSE (Server-Sent Events)</b></td><td>Сервер хөтөч рүү мэдээллийг хүсэлт хүлээлгүйгээр өөрөө «түлхэж» илгээдэг холболт — мэдэгдэл бодит цагт ирэх үндэс</td></tr><tr><td><b>Аудит лог</b></td><td>Хэн, хэзээ, хаанаас (IP), юу өөрчилснийг бүртгэдэг хөндөгдөшгүй тэмдэглэл — хяналт шалгалтын эх сурвалж</td></tr><tr><td><b>Shapefile, WKT</b></td><td>Газарзүйн хилийн мэдээллийг хадгалах түгээмэл файлын форматууд</td></tr><tr><td><b>ERD</b></td><td>Өгөгдлийн сангийн хүснэгтүүд ба тэдгээрийн холбоог харуулсан бүтцийн зураг</td></tr><tr><td><b>Docker</b></td><td>Програмыг орчноос нь хамааралгүй, нэг командаар асаадаг «сав» технологи</td></tr><tr><td><b>Clean Architecture</b></td><td>Кодыг үе давхаргаар (хүлээн авах – боловсруулах – хадгалах) тусгаарлан зохион байгуулах арга — засвар, өргөтгөлд тэсвэртэй</td></tr><tr><td><b>Swagger</b></td><td>API-ийн бүх үйлчилгээний цэгийг жагсааж, туршиж үзэх боломжтой автомат баримтжуулалт</td></tr><tr><td><b>CQL шүүлт</b></td><td>Газрын зургийн давхаргаас нөхцөлөөр (он, чөлөөлөлт г.м.) шүүж харуулах хэллэг</td></tr><tr><td><b>Cache (кэш)</b></td><td>Олон дахин уншигддаг мэдээллийг түр санахад хадгалж хурдасгах арга</td></tr></table></div>
+<p class="j"><i>Энэхүү тайланг government-frontend болон government repo-гийн эх кодын шинжилгээнд үндэслэн үүсгэв. Тоон үзүүлэлтүүд нь эх кодоос шууд тоологдсон болно.</i></p>
+</div>
+</body>
+</html>
