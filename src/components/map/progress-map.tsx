@@ -16,14 +16,15 @@ import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
-import { landApi, droneImageApi } from "@/lib/api";
+import { landApi, droneImageApi, droneAcquisitionApi } from "@/lib/api";
 import { formatDate, resolveImageUrl } from "@/lib/utils";
-import type { BoundaryHistory, DroneImage } from "@/types";
+import type { BoundaryHistory, DroneImage, DroneAcquisition } from "@/types";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 
 const PLAN_LAYER_ID = "plan";
 const HISTORY_GROUP: LayerGroupConfig = { id: "boundary_history", label: "Хилийн өөрчлөлт", color: "#02c0ce" };
 const DRONE_GROUP: LayerGroupConfig = { id: "drone_images", label: "Дрон зураг", color: "#f59e0b" };
+const DRONE_TILE_GROUP: LayerGroupConfig = { id: "drone_tiles", label: "Дрон tile зураг", color: "#d946ef" };
 
 interface Props {
   acquisitionId: string;
@@ -37,6 +38,8 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
   const droneLayers = useRef<Record<string, ImageLayer<ImageStatic>>>({});
   const droneExtents = useRef<Record<string, number[]>>({});
+  const droneTileLayers = useRef<Record<string, TileLayer<XYZ>>>({});
+  const droneTileExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
   const acqFilter = `acquisition_id='${acquisitionId}'`;
@@ -50,6 +53,11 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
   const { data: droneImages = [] } = useQuery({
     queryKey: ["drone-images"],
     queryFn: () => droneImageApi.list(),
+  });
+
+  const { data: droneAcquisitions = [] } = useQuery({
+    queryKey: ["drone-acquisitions"],
+    queryFn: () => droneAcquisitionApi.list(),
   });
 
   const sortedHistory = useMemo(() => {
@@ -69,6 +77,19 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
         (a, b) => new Date(b.captured_at ?? 0).getTime() - new Date(a.captured_at ?? 0).getTime(),
       );
   }, [droneImages, acquisitionId]);
+
+  // Only ready tile pyramids ("acquisition"-type) tied to this specific acquisition.
+  const relevantDroneTiles = useMemo(() => {
+    return droneAcquisitions
+      .filter(
+        (acq): acq is DroneAcquisition & { bbox_wkt: string } =>
+          !!acq.bbox_wkt &&
+          acq.type === "acquisition" &&
+          acq.acquisition_id === acquisitionId &&
+          acq.status === "ready",
+      )
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [droneAcquisitions, acquisitionId]);
 
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: PLAN_LAYER_ID, label: "Төлөвлөгөөний хил", color: "#a855f7", visible: true },
@@ -91,8 +112,15 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
         visible: false,
         group: DRONE_GROUP.id,
       })),
+      ...relevantDroneTiles.map((acq, i) => ({
+        id: `tile-${acq.id}`,
+        label: `${i + 1}. ${formatDate(acq.created_at)}`,
+        color: DRONE_TILE_GROUP.color,
+        visible: false,
+        group: DRONE_TILE_GROUP.id,
+      })),
     ]);
-  }, [sortedHistory, relevantDroneImages]);
+  }, [sortedHistory, relevantDroneImages, relevantDroneTiles]);
 
   const makeHistoryLayer = useCallback((history: BoundaryHistory) => {
     const features = [];
@@ -154,6 +182,29 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
     });
   }, []);
 
+  const makeDroneTileLayer = useCallback((acq: DroneAcquisition & { bbox_wkt: string }) => {
+    const geom = wktFormat.current.readGeometry(acq.bbox_wkt, {
+      dataProjection: "EPSG:4326",
+      featureProjection: "EPSG:3857",
+    });
+    const extent = geom.getExtent();
+    droneTileExtents.current[`tile-${acq.id}`] = extent;
+    const root = resolveImageUrl(acq.tile_root_path, "drone-image")?.replace(/\/$/, "");
+    return new TileLayer({
+      visible: false,
+      zIndex: 91,
+      extent,
+      source: root
+        ? new XYZ({
+            url: `${root}/{z}/{x}/{y}.png`,
+            minZoom: acq.min_zoom,
+            maxZoom: acq.max_zoom,
+            crossOrigin: "anonymous",
+          })
+        : undefined,
+    });
+  }, []);
+
   const handleToggle = useCallback((id: string) => {
     setLayers((prev) =>
       prev.map((l) => {
@@ -176,6 +227,16 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
         } else if (droneLayers.current[id]) {
           droneLayers.current[id].setVisible(next.visible);
           const extent = droneExtents.current[id];
+          if (next.visible && extent && olMap.current) {
+            olMap.current.getView().fit(extent, {
+              padding: [48, 48, 48, 48],
+              maxZoom: 17,
+              duration: 500,
+            });
+          }
+        } else if (droneTileLayers.current[id]) {
+          droneTileLayers.current[id].setVisible(next.visible);
+          const extent = droneTileExtents.current[id];
           if (next.visible && extent && olMap.current) {
             olMap.current.getView().fit(extent, {
               padding: [48, 48, 48, 48],
@@ -238,9 +299,12 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
     if (planLayer.current) map.removeLayer(planLayer.current);
     Object.values(historyLayers.current).forEach((l) => map.removeLayer(l));
     Object.values(droneLayers.current).forEach((l) => map.removeLayer(l));
+    Object.values(droneTileLayers.current).forEach((l) => map.removeLayer(l));
     historyLayers.current = {};
     droneLayers.current = {};
     droneExtents.current = {};
+    droneTileLayers.current = {};
+    droneTileExtents.current = {};
 
     const plan = new ImageLayer({
       opacity: 0.85,
@@ -316,12 +380,29 @@ export function ProgressMap({ acquisitionId, fullscreen }: Props) {
     });
   }, [relevantDroneImages, makeDroneLayer]);
 
+  // Tile pyramid layers are added lazily once the relevant (ready, overlapping) list is known.
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map || !relevantDroneTiles.length) return;
+    relevantDroneTiles.forEach((acq) => {
+      const id = `tile-${acq.id}`;
+      if (droneTileLayers.current[id]) return;
+      const layer = makeDroneTileLayer(acq);
+      droneTileLayers.current[id] = layer;
+      map.addLayer(layer);
+    });
+  }, [relevantDroneTiles, makeDroneTileLayer]);
+
   return (
     <div
       className="relative w-full h-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
     >
       <div ref={mapRef} className="h-full w-full" />
-      <LayerPanel layers={layers} groups={[HISTORY_GROUP, DRONE_GROUP]} onToggle={handleToggle} />
+      <LayerPanel
+        layers={layers}
+        groups={[HISTORY_GROUP, DRONE_GROUP, DRONE_TILE_GROUP]}
+        onToggle={handleToggle}
+      />
     </div>
   );
 }

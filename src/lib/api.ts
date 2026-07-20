@@ -35,7 +35,7 @@ import type {
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, AssetSpec, AssetCalculation,
-  AssetSpecType, AssetCalcType, DroneImage,
+  AssetSpecType, AssetCalcType, DroneImage, DroneAcquisition,
 } from '@/types'
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -616,6 +616,35 @@ export const droneImageApi = {
     return api.put<ApiResponse<DroneImage>>(`/drone-images/${id}`, fd).then(r => r.data.data)
   },
   delete: (id: number) => api.delete(`/drone-images/${id}`),
+}
+
+export const droneAcquisitionApi = {
+  list: () =>
+    api.get<ApiResponse<DroneAcquisition[]>>('/drone-acquisitions').then(r => r.data.data ?? []),
+  getById: (id: number) =>
+    api.get<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`).then(r => r.data.data),
+  create: (data: {
+    owner_id: string
+    tile_root_path: string
+    min_zoom?: number
+    max_zoom?: number
+    bbox_wkt?: string
+    status?: string
+    type: 'parcel' | 'acquisition'
+    parcel_id?: string
+    acquisition_id?: string
+  }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', data).then(r => r.data.data),
+  update: (id: number, data: Partial<{
+    tile_root_path: string
+    min_zoom: number
+    max_zoom: number
+    bbox_wkt: string
+    status: string
+    type: 'parcel' | 'acquisition'
+    parcel_id: string
+    acquisition_id: string
+  }>) => api.put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, data).then(r => r.data.data),
+  delete: (id: number) => api.delete(`/drone-acquisitions/${id}`),
 }
 
 export const planApi = {

@@ -249,6 +249,22 @@ export interface DroneImage {
   acquisition_id?: string;
 }
 
+export type DroneAcquisitionStatus = "processing" | "ready" | "failed";
+
+export interface DroneAcquisition {
+  id: number;
+  owner_id: string;
+  tile_root_path: string;
+  min_zoom?: number;
+  max_zoom?: number;
+  bbox_wkt?: string;
+  status: DroneAcquisitionStatus;
+  type: DroneImageType;
+  parcel_id?: string;
+  acquisition_id?: string;
+  created_at: string;
+}
+
 export interface Document {
   id: string;
   name: string;
