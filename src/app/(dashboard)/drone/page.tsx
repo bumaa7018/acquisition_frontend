@@ -7,6 +7,7 @@ import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisit
 import { DroneCompare } from "./_components/drone-compare";
 import { DroneImageList } from "./_components/drone-image-list";
 import { DroneAcquisitionCompare } from "./_components/drone-acquisition/drone-acquisition-compare";
+import { DroneAcquisitionList } from "./_components/drone-acquisition/drone-acquisition-list";
 
 const ProgressMap = dynamic(
   () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
@@ -155,8 +156,13 @@ function DronePageContent() {
       </div>
 
       {acquisitionId && (
-        <div className="ap-card overflow-hidden">
-          <DroneImageList acquisitionId={acquisitionId} />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <div className="ap-card overflow-hidden">
+            <DroneImageList acquisitionId={acquisitionId} />
+          </div>
+          <div className="ap-card overflow-hidden">
+            <DroneAcquisitionList acquisitionId={acquisitionId} />
+          </div>
         </div>
       )}
     </div>
