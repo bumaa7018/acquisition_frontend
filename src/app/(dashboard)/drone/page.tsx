@@ -6,6 +6,7 @@ import { ArrowLeft, Maximize2 } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 import { DroneCompare } from "./_components/drone-compare";
 import { DroneImageList } from "./_components/drone-image-list";
+import { DroneAcquisitionCompare } from "./_components/drone-acquisition/drone-acquisition-compare";
 
 const ProgressMap = dynamic(
   () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
@@ -17,7 +18,7 @@ const ProgressMap = dynamic(
   },
 );
 
-type FullscreenCard = "map" | "compare" | null;
+type FullscreenCard = "map" | "compare" | "acq-compare" | null;
 
 export default function DronePage() {
   return (
@@ -56,13 +57,19 @@ function DronePageContent() {
             <ArrowLeft className="h-4 w-4" /> Буцах
           </button>
           <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            {fullscreen === "map" ? "Явцын зураг" : "Харьцуулах"}
+            {fullscreen === "map"
+              ? "Явцын зураг"
+              : fullscreen === "acq-compare"
+                ? "Tile харьцуулах"
+                : "Харьцуулах"}
           </p>
           <div className="w-[92px]" />
         </div>
         <div className="flex-1 min-h-0 p-5">
           {fullscreen === "map" ? (
             <ProgressMap acquisitionId={acquisitionId} fullscreen />
+          ) : fullscreen === "acq-compare" ? (
+            <DroneAcquisitionCompare acquisitionId={acquisitionId} fullscreen />
           ) : (
             <DroneCompare acquisitionId={acquisitionId} fullscreen />
           )}
@@ -91,7 +98,7 @@ function DronePageContent() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         <div className="ap-card overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
@@ -125,6 +132,24 @@ function DronePageContent() {
           </div>
           <div className="p-5 h-[400px]">
             <DroneCompare acquisitionId={acquisitionId} />
+          </div>
+        </div>
+
+        <div className="ap-card overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Tile харьцуулах
+            </p>
+            <button
+              onClick={() => setFullscreen("acq-compare")}
+              title="Дэлгэц дүүргэх"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-[#252630] dark:hover:text-slate-300 transition-colors"
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="p-5 h-[400px]">
+            <DroneAcquisitionCompare acquisitionId={acquisitionId} />
           </div>
         </div>
       </div>
