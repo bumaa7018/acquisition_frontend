@@ -8,8 +8,8 @@ import { DroneNav } from "../_components/drone-nav";
 import { DroneAcquisitionCompare } from "../_components/drone-acquisition/drone-acquisition-compare";
 import { DroneAcquisitionList } from "../_components/drone-acquisition/drone-acquisition-list";
 
-const ProgressMap = dynamic(
-  () => import("@/components/map/progress-map").then((m) => m.ProgressMap),
+const DroneAcquisitionMap = dynamic(
+  () => import("../_components/drone-acquisition/drone-acquisition-map").then((m) => m.DroneAcquisitionMap),
   {
     ssr: false,
     loading: () => (
@@ -63,7 +63,7 @@ function DroneAcquisitionsPageContent() {
         </div>
         <div className="flex-1 min-h-0 p-5">
           {fullscreen === "map" ? (
-            <ProgressMap acquisitionId={acquisitionId} fullscreen />
+            <DroneAcquisitionMap acquisitionId={acquisitionId} fullscreen />
           ) : (
             <DroneAcquisitionCompare acquisitionId={acquisitionId} fullscreen />
           )}
@@ -109,7 +109,7 @@ function DroneAcquisitionsPageContent() {
             </button>
           </div>
           <div className="p-5 h-[400px]">
-            <ProgressMap acquisitionId={acquisitionId} />
+            <DroneAcquisitionMap acquisitionId={acquisitionId} />
           </div>
         </div>
 
