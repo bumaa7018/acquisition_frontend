@@ -1,6 +1,7 @@
 import type OLMap from "ol/Map";
 import GeoJSON from 'ol/format/GeoJSON'
 import { createEmpty, extend as extendExtent, isEmpty } from 'ol/extent'
+import { logger } from '@/lib/logger'
 
 export type MapLayerId =
   | 'au1'
@@ -98,7 +99,8 @@ export async function fitLayerToMap({
     if (isEmpty(extent)) return
 
     map.getView().fit(extent, { padding, maxZoom, duration: 1000 })
-  } catch {
+  } catch (err) {
     // Keep the current view when a layer has no feature or WFS is unavailable.
+    logger.warn('map fitToLayer failed', { layerId, error: String(err) })
   }
 }

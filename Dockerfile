@@ -1,5 +1,6 @@
 # ── dev: hot-reload (volume mount хийгддэг, source copy хийхгүй) ──
 FROM node:22-alpine3.24 AS dev
+RUN apk add --no-cache tzdata
 WORKDIR /app
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -29,6 +30,7 @@ RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
 FROM node:22-alpine3.24 AS runner
+RUN apk add --no-cache tzdata
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./

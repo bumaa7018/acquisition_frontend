@@ -15,7 +15,12 @@ export function actorFromAuthorization(authorization: string | null): AccessActo
       userId: payload.user_id ?? null,
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     };
-  } catch {
+  } catch (err) {
+    // Энэ файл серверийн Node орчинд ажилладаг тул client logger (fetch/
+    // sendBeacon) хэрэглэхгүй — Next серверийн stdout руу шууд бичнэ, энэ нь
+    // Docker container лог болж Promtail/Loki-руу дамжина. Токен өөрийг нь
+    // хэзээ ч логлохгүй, зөвхөн задлах явцад алдаа гарсныг тэмдэглэнэ.
+    console.warn(JSON.stringify({ level: "WARN", msg: "jwt decode failed (server)", error: String(err) }));
     return { userId: null, roles: [] };
   }
 }

@@ -10,6 +10,7 @@ import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCi
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
+import { logger } from "@/lib/logger";
 
 const ParcelMap = dynamic(
   () => import("@/components/map/parcel-map").then((m) => m.ParcelMap),
@@ -206,7 +207,10 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         try {
           await Promise.all([apiFns[si][ssi](), minDelay(1500)]);
           setSyncDoneSubSteps((prev) => [...prev, subKey]);
-        } catch {
+        } catch (err) {
+          // Дуудсан axios хүсэлт interceptor-оороо аль хэдийн логлогдсон —
+          // энд синхрончлолын алхмын context-ыг (аль алхам амжилтгүй болсон) нэмж логлоно.
+          logger.error("parcel sync sub-step failed", { step: si, subStep: ssi, key: subKey, error: String(err) });
           failCount++;
           setSyncFailedSubSteps((prev) => [...prev, subKey]);
         }

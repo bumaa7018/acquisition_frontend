@@ -2,6 +2,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { authStorage } from './auth'
 import { notifyRequestStart, notifyRequestEnd } from './blocking-loader-state'
+import { logger } from './logger'
 
 // Нэг дор олон 401/403 toast гарахаас сэргийлнэ
 let _authAlertPending = false
@@ -219,14 +220,34 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     if (!res.config._silent) notifyRequestEnd()
+    // _silent (poll г.м. арын хүсэлт) бүрийг логлохгүй — эс тэгвээс лог
+    // notification polling-оор дүүрч, бодит хэрэглэгчийн үйлдэл дунд алга болно.
+    if (!res.config._silent) {
+      logger.info('api request success', {
+        method: res.config.method?.toUpperCase(),
+        url: res.config.url,
+        status: res.status,
+      })
+    }
     return res
   },
   async (error) => {
     if (!error.config?._silent) notifyRequestEnd()
-    console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
 
     const status = error.response?.status
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
+
+    if (!error.config?._silent) {
+      logger.error('api request failed', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        status,
+        code: error.code,
+        // Сервэрийн буцаасан аль хэдийн хэрэглэгчид зориулсан аюулгүй мессеж
+        // (i18n-жуулсан) — хүсэлтийн бие/header-ийг хэзээ ч логлохгүй.
+        error: error.response?.data?.error ?? error.response?.data?.message,
+      })
+    }
 
     // ── Хүсэлт цуцлагдсан (компонент unmount, шинэ хайлт) — алдаа биш, чимээгүй өнгөрөөнө ──
     if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {

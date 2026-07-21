@@ -1,3 +1,5 @@
+import { logger } from "./logger.ts";
+
 type Position = [number, number] | number[];
 
 function closeRing(points: Position[]): Position[] {
@@ -47,7 +49,8 @@ export function layerTextToWkt(text: string): string | null {
 
   try {
     return geoJsonToWkt(JSON.parse(trimmed));
-  } catch {
+  } catch (err) {
+    logger.warn("layer text to wkt parse failed", { error: String(err) });
     return null;
   }
 }
@@ -87,7 +90,8 @@ export function calcAreaFromWkt(wkt: string): number | null {
       area += x1 * y2 - x2 * y1;
     }
     return Math.abs(area / 2);
-  } catch {
+  } catch (err) {
+    logger.warn("calc area from wkt failed", { error: String(err) });
     return null;
   }
 }

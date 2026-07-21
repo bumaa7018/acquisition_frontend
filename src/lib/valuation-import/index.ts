@@ -5,6 +5,7 @@
 import { extractValuation, type Grid, type Workbook } from "./extract.ts";
 import { validateParsed } from "./validate.ts";
 import type { ParsedValuation } from "./types.ts";
+import { logger } from "../logger.ts";
 
 export * from "./types.ts";
 export { extractValuation } from "./extract.ts";
@@ -52,7 +53,10 @@ export async function fileSha256(file: File): Promise<string> {
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-  } catch {
+  } catch (err) {
+    // subtle.digest байхгүй (http/LAN орчин) эсвэл файл уншиж чадаагүй — хэш
+    // алгасах нь зорилготой зан төлөв тул warn түвшинд л тэмдэглэнэ.
+    logger.warn("file sha256 hash failed", { error: String(err) });
     return "";
   }
 }

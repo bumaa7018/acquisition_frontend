@@ -1,4 +1,5 @@
 import { authStorage } from "./auth";
+import { logger } from "./logger";
 import type { AppNotification } from "@/types";
 
 // Мэдэгдлийн бодит цагийн стрийм — fetch-суурьтай SSE клиент.
@@ -75,8 +76,13 @@ export function subscribeNotifications(
           handleFrame(frame);
         }
       }
-    } catch {
-      // abort эсвэл сүлжээний алдаа — доор дахин холбогдоно
+    } catch (err) {
+      // AbortError (unmount дээр controller.abort()) — санаатай, логлохгүй.
+      // Бусад бүх тохиолдол (сүлжээний алдаа г.м.) — доор дахин холбогдох
+      // хэдий ч, ямар шалтгаанаар тасарснаа логлоно.
+      if ((err as Error)?.name !== "AbortError") {
+        logger.warn("notification stream connection failed", { error: String(err) });
+      }
     }
     connecting = false;
     scheduleRetry();
@@ -98,8 +104,8 @@ export function subscribeNotifications(
     if (event !== "notification" || dataLines.length === 0) return;
     try {
       handlers.onNotification(JSON.parse(dataLines.join("\n")) as AppNotification);
-    } catch {
-      // эвдэрсэн фрэймийг алгасна
+    } catch (err) {
+      logger.warn("notification stream frame parse failed", { error: String(err) });
     }
   }
 

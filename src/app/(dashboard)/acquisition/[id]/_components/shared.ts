@@ -1,4 +1,5 @@
 import { authStorage } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 // Acquisition статусын өнгөний тохиргоо (status id 1..4)
 export const STATUS_CFG: Record<number, { color: string; bg: string }> = {
@@ -19,7 +20,8 @@ export function hasPermission(name: string): boolean {
     return (
       Array.isArray(payload.permissions) && payload.permissions.includes(name)
     );
-  } catch {
+  } catch (err) {
+    logger.warn("hasPermission token decode failed", { error: String(err) });
     return false;
   }
 }
@@ -35,7 +37,8 @@ export function isSeniorSpecialist(): boolean {
         r === "senior_specialist" || r === "Ахлах мэргэжилтэн"
       )
     );
-  } catch {
+  } catch (err) {
+    logger.warn("isSeniorSpecialist token decode failed", { error: String(err) });
     return false;
   }
 }

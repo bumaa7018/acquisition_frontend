@@ -34,6 +34,7 @@ import type {
 } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { getApiError } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import { similarity } from "@/lib/valuation-import/fuzzy";
 import {
   parseValuationFile,
@@ -166,8 +167,8 @@ export function ValuationExcelImport({
       setFileHash(hash);
       setPhase("preview");
     } catch (err) {
-      console.error("Excel parse error:", err);
       const msg = err instanceof Error ? err.message : String(err);
+      logger.error("excel parse failed", { fileName: file.name, error: msg });
       toast.error(`Excel задлахад алдаа гарлаа: ${msg}`);
       reset();
     }

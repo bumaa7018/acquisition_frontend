@@ -1,4 +1,5 @@
 import type ImageWrapper from "ol/Image";
+import { logger } from "./logger";
 
 export const GS_WMS = '/api/geoserver/land/wms'
 export const GS_WFS = '/api/geoserver/land/ows'
@@ -19,7 +20,10 @@ export function wmsPostLoad(image: ImageWrapper, src: string) {
       img.onerror = () => URL.revokeObjectURL(objectUrl)
       img.src = objectUrl
     })
-    .catch(() => { img.src = '' })
+    .catch((err) => {
+      logger.warn('wms tile load failed', { src: src.split('?')[0], error: String(err) })
+      img.src = ''
+    })
 }
 
 export function buildAcqCql(acquisitionIds?: string[]): string {

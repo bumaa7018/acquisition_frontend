@@ -12,6 +12,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
+      TZ: Asia/Ulaanbaatar
       NODE_ENV: production
       NEXT_API_URL: ${NEXT_API_URL}
       NEXT_GS_URL: ${NEXT_GS_URL}

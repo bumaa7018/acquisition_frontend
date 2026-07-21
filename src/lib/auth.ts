@@ -1,3 +1,5 @@
+import { logger } from "./logger";
+
 const ACCESS_TOKEN_KEY = "gov_access_token";
 const REFRESH_TOKEN_KEY = "gov_refresh_token";
 const USER_KEY = "gov_user";
@@ -19,7 +21,9 @@ export function decodeJwtPayload(token: string | null): Record<string, unknown> 
     // getCurrentActor() энэ түүхий бүтцээс role/permission уншдаг тул
     // энд User хэлбэрт хувиргаж БОЛОХГҮЙ (тэр хувиргалт нь userFromAccessToken-д).
     return JSON.parse(new TextDecoder().decode(bytes));
-  } catch {
+  } catch (err) {
+    // Токеныг НЭВТРҮҮЛЭХГҮЙ, зөвхөн задлах явцад алдаа гарсныг тэмдэглэнэ.
+    logger.warn("jwt decode failed", { error: String(err) });
     return null;
   }
 }
@@ -71,7 +75,8 @@ export const authStorage = {
     }
     try {
       return JSON.parse(u);
-    } catch {
+    } catch (err) {
+      logger.warn("stored user parse failed", { error: String(err) });
       return userFromAccessToken(localStorage.getItem(ACCESS_TOKEN_KEY));
     }
   },
