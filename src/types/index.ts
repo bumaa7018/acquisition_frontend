@@ -263,6 +263,7 @@ export interface DroneAcquisition {
   type: DroneImageType;
   parcel_id?: string;
   acquisition_id?: string;
+  captured_at?: string;
   created_at: string;
 }
 
