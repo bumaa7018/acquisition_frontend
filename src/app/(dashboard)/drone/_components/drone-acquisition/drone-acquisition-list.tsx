@@ -15,6 +15,10 @@ interface Props {
 const inp =
   "w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const STATUS_OPTIONS: DroneAcquisitionStatus[] = ["processing", "ready", "failed"];
 
 const STATUS_LABEL: Record<DroneAcquisitionStatus, string> = {
@@ -42,7 +46,11 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
   const relevant = useMemo(() => {
     return droneAcquisitions
       .filter((acq) => acq.type === "acquisition" && acq.acquisition_id === acquisitionId)
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.captured_at ?? b.created_at).getTime() -
+          new Date(a.captured_at ?? a.created_at).getTime(),
+      );
   }, [droneAcquisitions, acquisitionId]);
 
   const deleteMutation = useMutation({
@@ -93,7 +101,7 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
-                  {formatDate(acq.created_at)}
+                  {formatDate(acq.captured_at ?? acq.created_at)}
                 </p>
                 {/* <p className="text-[11px] text-slate-400 mt-0.5"></p> */}
               </div>
@@ -200,6 +208,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
   const [file, setFile] = useState<File | null>(null);
   const [minZoom, setMinZoom] = useState("14");
   const [maxZoom, setMaxZoom] = useState("20");
+  const [capturedAt, setCapturedAt] = useState(todayStr);
 
   const uploadMutation = useMutation({
     mutationFn: () =>
@@ -210,6 +219,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         acquisition_id: acquisitionId,
         min_zoom: minZoom ? Number(minZoom) : undefined,
         max_zoom: maxZoom ? Number(maxZoom) : undefined,
+        captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
       toast.success("Tile давхарга үүслээ");
@@ -244,6 +254,15 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
             <Upload className="h-4 w-4 shrink-0" />
             <span className="truncate">{file ? file.name : "Файл сонгох (.tif, .tiff)"}</span>
           </button>
+        </div>
+        <div>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Авсан огноо</p>
+          <input
+            type="date"
+            value={capturedAt}
+            onChange={(e) => setCapturedAt(e.target.value)}
+            className={inp}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -305,6 +324,7 @@ function ManualCreateForm({ acquisitionId, onClose }: { acquisitionId: string; o
   const [maxZoom, setMaxZoom] = useState("");
   const [bboxWkt, setBboxWkt] = useState("");
   const [status, setStatus] = useState<DroneAcquisitionStatus>("processing");
+  const [capturedAt, setCapturedAt] = useState(todayStr);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -317,6 +337,7 @@ function ManualCreateForm({ acquisitionId, onClose }: { acquisitionId: string; o
         status,
         type: "acquisition",
         acquisition_id: acquisitionId,
+        captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
       toast.success("Tile давхарга нэмэгдлээ");
@@ -341,6 +362,15 @@ function ManualCreateForm({ acquisitionId, onClose }: { acquisitionId: string; o
             onChange={(e) => setTileRootPath(e.target.value)}
             placeholder="drone-tiles/acq-123"
             className={`${inp} font-mono`}
+          />
+        </div>
+        <div>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Авсан огноо</p>
+          <input
+            type="date"
+            value={capturedAt}
+            onChange={(e) => setCapturedAt(e.target.value)}
+            className={inp}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -423,6 +453,7 @@ function EditDroneAcquisitionModal({
   const [file, setFile] = useState<File | null>(null);
   const [minZoom, setMinZoom] = useState(acquisition.min_zoom?.toString() ?? "");
   const [maxZoom, setMaxZoom] = useState(acquisition.max_zoom?.toString() ?? "");
+  const [capturedAt, setCapturedAt] = useState(todayStr);
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -430,6 +461,7 @@ function EditDroneAcquisitionModal({
         file: file!,
         min_zoom: minZoom ? Number(minZoom) : undefined,
         max_zoom: maxZoom ? Number(maxZoom) : undefined,
+        captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
       toast.success("Шинэ .tif боловсруулагдаж эхэллээ, өмнөх tile-ууд солигдоно");
@@ -481,6 +513,15 @@ function EditDroneAcquisitionModal({
               Одоогийн tile давхарга ({acquisition.tile_root_path || "замгүй"}) энэ файлаар
               бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.
             </p>
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Авсан огноо</p>
+            <input
+              type="date"
+              value={capturedAt}
+              onChange={(e) => setCapturedAt(e.target.value)}
+              className={inp}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

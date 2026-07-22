@@ -72,7 +72,11 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
           acq.acquisition_id === acquisitionId &&
           acq.status === "ready",
       )
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.captured_at ?? b.created_at).getTime() -
+          new Date(a.captured_at ?? a.created_at).getTime(),
+      );
   }, [droneAcquisitions, acquisitionId]);
 
   const [layers, setLayers] = useState<LayerConfig[]>([
@@ -91,7 +95,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       })),
       ...relevantDroneTiles.map((acq, i) => ({
         id: `tile-${acq.id}`,
-        label: `${i + 1}. ${formatDate(acq.created_at)}`,
+        label: `${i + 1}. ${formatDate(acq.captured_at ?? acq.created_at)}`,
         color: DRONE_TILE_GROUP.color,
         visible: false,
         group: DRONE_TILE_GROUP.id,

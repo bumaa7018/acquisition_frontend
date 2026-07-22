@@ -61,7 +61,11 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
           acq.acquisition_id === acquisitionId &&
           acq.status === "ready",
       )
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort(
+        (a, b) =>
+          new Date(b.captured_at ?? b.created_at).getTime() -
+          new Date(a.captured_at ?? a.created_at).getTime(),
+      );
   }, [droneAcquisitions, acquisitionId]);
 
   if (!acquisitionId) return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
@@ -75,7 +79,7 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
   const right = relevant.find((acq) => String(acq.id) === rightId) ?? defaultLast;
 
   function optionLabel(acq: DroneAcquisition, i: number) {
-    return `${i + 1}. ${formatDate(acq.created_at)}`;
+    return `${i + 1}. ${formatDate(acq.captured_at ?? acq.created_at)}`;
   }
 
   return (
@@ -138,10 +142,10 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
         </div>
 
         <span className="absolute left-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-          {formatDate(left.created_at)}
+          {formatDate(left.captured_at ?? left.created_at)}
         </span>
         <span className="absolute right-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-          {formatDate(right.created_at)}
+          {formatDate(right.captured_at ?? right.created_at)}
         </span>
 
         <div

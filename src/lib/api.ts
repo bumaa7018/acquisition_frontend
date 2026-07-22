@@ -583,6 +583,12 @@ export const reportApi = {
   },
 }
 
+// A bare "YYYY-MM-DD" from a <input type="date"> isn't a valid RFC3339 timestamp on its own.
+function toRFC3339Date(date?: string): string | undefined {
+  if (!date) return undefined
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00Z` : date
+}
+
 // ── Plans ─────────────────────────────────────────────
 export const droneImageApi = {
   list: () =>
@@ -633,7 +639,11 @@ export const droneAcquisitionApi = {
     type: 'parcel' | 'acquisition'
     parcel_id?: string
     acquisition_id?: string
-  }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', data).then(r => r.data.data),
+    captured_at?: string
+  }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', {
+    ...data,
+    captured_at: toRFC3339Date(data.captured_at),
+  }).then(r => r.data.data),
   // Uploads a .tif/.tiff — the backend generates the preview synchronously (fast) and
   // returns immediately with status "processing", tiling the pyramid in the background,
   // so this just needs enough headroom for the upload itself + preview generation.
@@ -645,6 +655,7 @@ export const droneAcquisitionApi = {
     acquisition_id?: string
     min_zoom?: number
     max_zoom?: number
+    captured_at?: string
   }) => {
     const fd = new FormData()
     fd.append('file', data.file)
@@ -654,17 +665,21 @@ export const droneAcquisitionApi = {
     if (data.acquisition_id) fd.append('acquisition_id', data.acquisition_id)
     if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
     if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
+    const capturedAt = toRFC3339Date(data.captured_at)
+    if (capturedAt) fd.append('captured_at', capturedAt)
     return api
       .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 5 * 60 * 1000 })
       .then(r => r.data.data)
   },
   // Replaces an existing acquisition's tile pyramid/preview from a new .tif — the old
   // ones are deleted on the backend once the new pyramid finishes tiling.
-  updateFromTif: (id: number, data: { file: File; min_zoom?: number; max_zoom?: number }) => {
+  updateFromTif: (id: number, data: { file: File; min_zoom?: number; max_zoom?: number; captured_at?: string }) => {
     const fd = new FormData()
     fd.append('file', data.file)
     if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
     if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
+    const capturedAt = toRFC3339Date(data.captured_at)
+    if (capturedAt) fd.append('captured_at', capturedAt)
     return api
       .put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, fd, { timeout: 5 * 60 * 1000 })
       .then(r => r.data.data)
@@ -678,7 +693,11 @@ export const droneAcquisitionApi = {
     type: 'parcel' | 'acquisition'
     parcel_id: string
     acquisition_id: string
-  }>) => api.put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, data).then(r => r.data.data),
+    captured_at: string
+  }>) => api.put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, {
+    ...data,
+    captured_at: toRFC3339Date(data.captured_at),
+  }).then(r => r.data.data),
   delete: (id: number) => api.delete(`/drone-acquisitions/${id}`),
 }
 
