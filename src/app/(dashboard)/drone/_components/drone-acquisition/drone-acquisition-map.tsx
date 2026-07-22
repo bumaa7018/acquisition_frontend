@@ -24,6 +24,9 @@ import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "@/component
 const PLAN_LAYER_ID = "plan";
 const HISTORY_GROUP: LayerGroupConfig = { id: "boundary_history", label: "Хилийн өөрчлөлт", color: "#02c0ce" };
 const DRONE_TILE_GROUP: LayerGroupConfig = { id: "drone_tiles", label: "Дрон tile давхарга", color: "#d946ef" };
+const TEST_TILE_LAYER_ID = "test-local-tile";
+// hana_tiles is symlinked into public/ locally for testing only — not committed, see .gitignore.
+const TEST_TILE_EXTENT_4326 = [106.787109375, 47.91634204016117, 106.8310546875, 47.945786463687185];
 
 interface Props {
   acquisitionId: string;
@@ -39,6 +42,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
   const droneTileLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const droneTileExtents = useRef<Record<string, number[]>>({});
+  const testTileLayer = useRef<TileLayer<XYZ> | null>(null);
   const wktFormat = useRef(new WKT());
 
   const [tileOpacity, setTileOpacity] = useState(1);
@@ -77,11 +81,13 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
 
   const [layers, setLayers] = useState<LayerConfig[]>([
     { id: PLAN_LAYER_ID, label: "Төлөвлөгөөний хил", color: "#a855f7", visible: true },
+    { id: TEST_TILE_LAYER_ID, label: "hana_tiles (локал)", color: "#f59e0b", visible: false },
   ]);
 
   useEffect(() => {
     setLayers([
       { id: PLAN_LAYER_ID, label: "Төлөвлөгөөний хил", color: "#a855f7", visible: true },
+      { id: TEST_TILE_LAYER_ID, label: "hana_tiles (локал)", color: "#f59e0b", visible: false },
       ...sortedHistory.map((h, i) => ({
         id: h.id,
         label: `${i + 1}. ${formatDate(h.changed_at)}`,
@@ -173,6 +179,16 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
 
         if (id === PLAN_LAYER_ID) {
           planLayer.current?.setVisible(next.visible);
+        } else if (id === TEST_TILE_LAYER_ID) {
+          testTileLayer.current?.setVisible(next.visible);
+          const extent = testTileLayer.current?.getExtent();
+          if (next.visible && extent && olMap.current) {
+            olMap.current.getView().fit(extent, {
+              padding: [48, 48, 48, 48],
+              maxZoom: 17,
+              duration: 500,
+            });
+          }
         } else if (historyLayers.current[id]) {
           const layer = historyLayers.current[id];
           layer.setVisible(next.visible);
@@ -204,6 +220,18 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   useEffect(() => {
     if (!mapRef.current || olMap.current) return;
 
+    const testLayer = new TileLayer({
+      visible: false,
+      zIndex: 92,
+      extent: transformExtent(TEST_TILE_EXTENT_4326, "EPSG:4326", "EPSG:3857"),
+      source: new XYZ({
+        url: "/hana_tiles/{z}/{x}/{y}.png",
+        minZoom: 14,
+        maxZoom: 22,
+      }),
+    });
+    testTileLayer.current = testLayer;
+
     const map = new OLMap({
       target: mapRef.current,
       layers: [
@@ -219,6 +247,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
             crossOrigin: "anonymous",
           }),
         }),
+        testLayer,
       ],
       view: new View({
         center: fromLonLat([106.917, 47.918]),
