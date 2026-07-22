@@ -255,6 +255,7 @@ export interface DroneAcquisition {
   id: number;
   owner_id: string;
   tile_root_path: string;
+  preview_image_path?: string;
   min_zoom?: number;
   max_zoom?: number;
   bbox_wkt?: string;

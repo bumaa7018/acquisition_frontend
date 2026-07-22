@@ -1,16 +1,7 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Columns2 } from "lucide-react";
-import OLMap from "ol/Map";
-import View from "ol/View";
-import TileLayer from "ol/layer/Tile";
-import XYZ from "ol/source/XYZ";
-import WKT from "ol/format/WKT";
-import { fromLonLat } from "ol/proj";
-import { getRenderPixel } from "ol/render";
-// @ts-ignore: CSS side-effect import for OpenLayers styles
-import "ol/ol.css";
 import { droneAcquisitionApi } from "@/lib/api";
 import { formatDate, resolveImageUrl } from "@/lib/utils";
 import type { DroneAcquisition } from "@/types";
@@ -32,30 +23,21 @@ function Placeholder({ text }: { text: string }) {
   );
 }
 
-type ReadyAcquisition = DroneAcquisition & { bbox_wkt: string };
-
-function makeTileLayer(acq: ReadyAcquisition, zIndex: number) {
-  const root = resolveImageUrl(acq.tile_root_path)?.replace(/\/$/, "");
-  return new TileLayer({
-    zIndex,
-    source: root
-      ? new XYZ({
-          url: `${root}/{z}/{x}/{y}.png`,
-          minZoom: acq.min_zoom,
-          maxZoom: acq.max_zoom,
-          crossOrigin: "anonymous",
-        })
-      : undefined,
-  });
+function CompareImage({ src, className }: { src?: string; className: string }) {
+  const [error, setError] = useState(false);
+  if (!src || error) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-slate-100 dark:bg-[#252630]`}>
+        <p className="text-[12px] text-slate-400 dark:text-slate-500">Зураг ачаалагдсангүй</p>
+      </div>
+    );
+  }
+  return <img src={src} alt="" draggable={false} onError={() => setError(true)} className={className} />;
 }
 
-export function DroneAcquisitionCompare({ acquisitionId }: Props) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const olMap = useRef<OLMap | null>(null);
-  const leftLayer = useRef<TileLayer<XYZ> | null>(null);
-  const rightLayer = useRef<TileLayer<XYZ> | null>(null);
-  const wktFormat = useRef(new WKT());
+type ReadyAcquisition = DroneAcquisition & { preview_image_path: string };
 
+export function DroneAcquisitionCompare({ acquisitionId }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [leftId, setLeftId] = useState("");
   const [rightId, setRightId] = useState("");
@@ -74,13 +56,18 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
     return droneAcquisitions
       .filter(
         (acq): acq is ReadyAcquisition =>
-          !!acq.bbox_wkt &&
+          !!acq.preview_image_path &&
           acq.type === "acquisition" &&
           acq.acquisition_id === acquisitionId &&
           acq.status === "ready",
       )
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [droneAcquisitions, acquisitionId]);
+
+  if (!acquisitionId) return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
+
+  if (relevant.length < 2)
+    return <Placeholder text="Харьцуулах бэлэн tile давхарга олдсонгүй" />;
 
   const defaultFirst = relevant[relevant.length - 1];
   const defaultLast = relevant[0];
@@ -90,107 +77,6 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
   function optionLabel(acq: DroneAcquisition, i: number) {
     return `${i + 1}. ${formatDate(acq.created_at)}`;
   }
-
-  // Base map — created once and kept mounted for the lifetime of this component.
-  useEffect(() => {
-    if (!mapRef.current || olMap.current) return;
-
-    const map = new OLMap({
-      target: mapRef.current,
-      layers: [],
-      view: new View({
-        center: fromLonLat([106.917, 47.918]),
-        zoom: 11,
-        minZoom: 4,
-        maxZoom: 22,
-      }),
-      controls: [],
-      // Static, picture-like comparison — no pan/zoom, matches the plain <img> swipe used for drone_images.
-      interactions: [],
-    });
-    olMap.current = map;
-
-    const resizeObserver = new ResizeObserver(() => map.updateSize());
-    resizeObserver.observe(mapRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-      map.setTarget(undefined);
-      olMap.current = null;
-    };
-  }, []);
-
-  // Rebuild left/right tile layers whenever the compared acquisitions change.
-  useEffect(() => {
-    const map = olMap.current;
-    if (!map || !left || !right) return;
-
-    if (rightLayer.current) map.removeLayer(rightLayer.current);
-    if (leftLayer.current) map.removeLayer(leftLayer.current);
-
-    const newRight = makeTileLayer(right, 10);
-    const newLeft = makeTileLayer(left, 11);
-    map.addLayer(newRight);
-    map.addLayer(newLeft);
-    rightLayer.current = newRight;
-    leftLayer.current = newLeft;
-
-    const geom = wktFormat.current.readGeometry(right.bbox_wkt, {
-      dataProjection: "EPSG:4326",
-      featureProjection: "EPSG:3857",
-    });
-    map.getView().fit(geom.getExtent(), { padding: [24, 24, 24, 24], maxZoom: 20, duration: 400 });
-
-    return () => {
-      map.removeLayer(newLeft);
-      map.removeLayer(newRight);
-    };
-  }, [left?.id, right?.id]);
-
-  // Clip the left (overlay) layer to the swipe position on render, OL's standard layer-swipe technique.
-  useEffect(() => {
-    const map = olMap.current;
-    const layer = leftLayer.current;
-    if (!map || !layer) return;
-
-    function handlePrerender(event: import("ol/render/Event").default) {
-      const ctx = event.context as CanvasRenderingContext2D;
-      const mapSize = map!.getSize();
-      if (!mapSize) return;
-      const width = mapSize[0] * (splitPercent / 100);
-      const tl = getRenderPixel(event, [width, 0]);
-      const tr = getRenderPixel(event, [mapSize[0], 0]);
-      const bl = getRenderPixel(event, [width, mapSize[1]]);
-      const br = getRenderPixel(event, [mapSize[0], mapSize[1]]);
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(tl[0], tl[1]);
-      ctx.lineTo(bl[0], bl[1]);
-      ctx.lineTo(br[0], br[1]);
-      ctx.lineTo(tr[0], tr[1]);
-      ctx.closePath();
-      ctx.clip();
-    }
-    function handlePostrender(event: import("ol/render/Event").default) {
-      const ctx = event.context as CanvasRenderingContext2D;
-      ctx.restore();
-    }
-
-    layer.on("prerender", handlePrerender);
-    layer.on("postrender", handlePostrender);
-    map.render();
-
-    return () => {
-      layer.un("prerender", handlePrerender);
-      layer.un("postrender", handlePostrender);
-    };
-  }, [splitPercent, left?.id, right?.id]);
-
-  if (!acquisitionId) return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
-
-  if (relevant.length < 2)
-    return <Placeholder text="Харьцуулах бэлэн tile давхарга олдсонгүй" />;
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -205,7 +91,7 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
           className={select}
         >
           {relevant.map((acq, i) =>
-            String(acq.id) === String(right?.id) ? null : (
+            String(acq.id) === String(right.id) ? null : (
               <option key={acq.id} value={acq.id}>
                 {optionLabel(acq, i)}
               </option>
@@ -223,7 +109,7 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
           className={select}
         >
           {relevant.map((acq, i) =>
-            String(acq.id) === String(left?.id) ? null : (
+            String(acq.id) === String(left.id) ? null : (
               <option key={acq.id} value={acq.id}>
                 {optionLabel(acq, i)}
               </option>
@@ -233,13 +119,29 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
       </div>
 
       <div className="relative w-full flex-1 min-h-0 select-none overflow-hidden rounded-xl bg-slate-100 dark:bg-[#252630]">
-        <div ref={mapRef} className="absolute inset-0 h-full w-full" />
+        {/* base — right-side image, fills the whole frame */}
+        <CompareImage
+          key={right.id}
+          src={resolveImageUrl(right.preview_image_path)}
+          className="absolute inset-0 h-full w-full object-contain"
+        />
+        {/* overlay — left-side image, clipped to the left portion up to the slider */}
+        <div
+          className="absolute inset-0 overflow-hidden"
+          style={{ clipPath: `inset(0 ${100 - splitPercent}% 0 0)` }}
+        >
+          <CompareImage
+            key={left.id}
+            src={resolveImageUrl(left.preview_image_path)}
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        </div>
 
         <span className="absolute left-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-          {formatDate(left?.created_at)}
+          {formatDate(left.created_at)}
         </span>
         <span className="absolute right-3 top-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white">
-          {formatDate(right?.created_at)}
+          {formatDate(right.created_at)}
         </span>
 
         <div
