@@ -1,10 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Image as ImageIcon, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 
 const TABS = [
-  { href: "/drone/images", label: "Дрон зураг", icon: ImageIcon },
   { href: "/drone/acquisitions", label: "Tile давхарга", icon: Layers },
 ];
 

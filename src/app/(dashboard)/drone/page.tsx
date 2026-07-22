@@ -7,5 +7,5 @@ export default function DronePage({
 }) {
   const acq = searchParams?.acq;
   const query = typeof acq === "string" ? `?acq=${encodeURIComponent(acq)}` : "";
-  redirect(`/drone/images${query}`);
+  redirect(`/drone/acquisitions${query}`);
 }
