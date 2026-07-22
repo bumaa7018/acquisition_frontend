@@ -2,11 +2,16 @@
 import { Download, FileSpreadsheet } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useQuery } from "@tanstack/react-query";
-import { landApi } from "@/lib/api";
+import { toast } from "sonner";
+import { landApi, parcelApi, documentTypeApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { formatArea } from "@/lib/utils";
-import type { LandAcquisition, ParcelFull } from "@/types";
+import type { Asset, Compensation, Document, LandAcquisition, LandValuation, ParcelFull } from "@/types";
 import { RIGHT_TYPE_LABELS } from "@/types";
+import { amountToMongolianWords } from "@/lib/mongolian-number";
+
+const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const MEETING_MINUTES_DOC_TYPE = "meeting_minutes";
 
 interface PrintTemplate {
   id: string;
@@ -19,6 +24,8 @@ interface PrintTemplate {
   isDownload?: boolean;
   // Загварыг өөрчлөхгүйгээр байгаагаар нь шууд татна (жишээ нь бэлэн xlsx)
   isStaticFile?: boolean;
+  // Хэвлэхийн өмнө "Хурлын тэмдэглэл" (docx) хавсралт шаардаж, түүнийг гэрээний ард нэгтгэнэ
+  requiresMeetingMinutes?: boolean;
 }
 
 function buildUrl(tpl: PrintTemplate, parcel?: ParcelFull): string {
@@ -42,7 +49,14 @@ function buildUrl(tpl: PrintTemplate, parcel?: ParcelFull): string {
 function openTemplate(tpl: PrintTemplate, parcel?: ParcelFull) {
   const url = buildUrl(tpl, parcel);
   const win = window.open(url, "_blank", "width=980,height=1150,menubar=no,toolbar=no");
-  if (!win) alert("Попап цонх блоклогдсон байна. Браузерын тохиргооноос зөвшөөрнө үү.");
+  if (!win) toast.error("Попап цонх блоклогдсон байна. Браузерын тохиргооноос зөвшөөрнө үү.");
+}
+
+// /api/templates/* route-ууд нэвтэрсэн эсэхийг шалгадаг тул тэдгээр рүү дуудахдаа
+// одоогийн хэрэглэгчийн access token-ыг дамжуулна.
+function authHeaders(): Record<string, string> {
+  const token = authStorage.getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -225,6 +239,151 @@ function buildDocxTemplateValues(parcel?: ParcelFull, acquisition?: LandAcquisit
   };
 }
 
+function sumAmount(list: { amount: number }[]): number {
+  return list.reduce((sum, c) => sum + (c.amount || 0), 0);
+}
+
+// Гэрээний хүснэгтийг (Газар/Барилга байгууламж/Эд хөрөнгө бусад/Нийт) системд
+// бүртгэгдсэн хөрөнгө (Asset) болон баталгаажсан нөхөх олговрын (Compensation)
+// мэдээллээр бөглөнө — сонгогдсон үнэлгээний урсгалаар (parcel.selected_valuation_type) шүүнэ.
+// "Үл хөдлөх"-ийн хүснэгтийн мөрүүдийг (нэг хөрөнгө = нэг мөр) сервер рүү тусад нь
+// (propertyRows) дамжуулж, docx-ийн хүснэгтэд шинэ мөр болгон нэмүүлнэ.
+function buildAcquisitionContractValues(
+  parcel: ParcelFull | undefined,
+  acquisition: LandAcquisition | undefined,
+  assets: Asset[],
+  compensations: Compensation[],
+  landValuation: LandValuation | null | undefined,
+) {
+  const base = buildDocxTemplateValues(parcel, acquisition);
+  const rightType = parcel ? RIGHT_TYPE_LABELS[parcel.right_type] || "" : "";
+
+  const realEstateAssets = assets.filter((a) => a.asset_type === "real_state");
+  const propertyAssets = assets.filter((a) => a.asset_type === "property");
+  const realEstateIds = new Set(realEstateAssets.map((a) => a.id));
+  const propertyIds = new Set(propertyAssets.map((a) => a.id));
+
+  const approved = compensations.filter((c) => c.status === "approved");
+  const approvedByAsset = new Map<string, Compensation[]>();
+  for (const c of approved) {
+    if (c.target_type !== "asset" || !c.asset_id) continue;
+    const list = approvedByAsset.get(c.asset_id) ?? [];
+    list.push(c);
+    approvedByAsset.set(c.asset_id, list);
+  }
+
+  const landCompTotal = sumAmount(approved.filter((c) => c.target_type === "parcel"));
+  const realEstateCompTotal = sumAmount(
+    approved.filter((c) => c.target_type === "asset" && c.asset_id && realEstateIds.has(c.asset_id)),
+  );
+  const propertyCompTotal = sumAmount(
+    approved.filter((c) => c.target_type === "asset" && c.asset_id && propertyIds.has(c.asset_id)),
+  );
+  const totalCompensation = landCompTotal + realEstateCompTotal + propertyCompTotal;
+
+  const propertyNames = realEstateAssets.map((a) => a.asset_name).filter(Boolean).join(", ");
+  const propertyCertNos = realEstateAssets.map((a) => a.asset_number).filter(Boolean).join(", ");
+  const propertyAreaTotal = realEstateAssets.reduce((sum, a) => sum + (a.area_m2 || 0), 0);
+
+  const propertyRows = realEstateAssets.map((a) => ({
+    name: a.asset_name || "-",
+    certificateNo: a.asset_number || "",
+    area: formatArea(a.area_m2),
+    amount: formatMoney(sumAmount(approvedByAsset.get(a.id) ?? [])),
+  }));
+
+  // Бүх урсгал нэг зэрэг зөвшөөрөгддөг тул (parcel_valuation_submission) аль ч
+  // баталгаажсан олговрын reviewed_by ижил хүн байх ёстой.
+  const approverUserId = approved.find((c) => c.reviewed_by)?.reviewed_by || "";
+
+  const values = {
+    ...base,
+    parcel_no: parcel?.parcel_id || "",
+    parcel_right_type: rightType,
+    parcel_certificate_no: parcel?.detail?.certificate_no || "",
+    parcel_streetname: "",
+    streetname: "",
+    parcel_door_number: "",
+    land_purpose_name: parcel?.landuse || "",
+    parcel_compensation_amount: formatMoney(landCompTotal),
+
+    all_property_names: propertyNames || "-",
+    property_count: String(realEstateAssets.length),
+    // Хүснэгтийн мөрүүд доор propertyRows-оор шинэ мөр болгон нэмэгддэг тул эдгээр нь
+    // зөвхөн загварын бүтэц өөрчлөгдсөн үед (мөр нэмэгдэхгүй бол) нөөц утга байна.
+    property_names: propertyNames || "-",
+    property_certificate_no: propertyCertNos,
+    property_area_m2: formatArea(propertyAreaTotal),
+    property_compensation_amount: formatMoney(realEstateCompTotal),
+
+    assets_compensation_amount_total: formatMoney(propertyCompTotal),
+
+    compensation_amoint_total: formatMoney(totalCompensation),
+    compensation_amoint_total_by_word: amountToMongolianWords(totalCompensation),
+
+    profesional_company_name: landValuation?.appraiser_org_name || "",
+    profesional_company_emp_fullname: landValuation?.appraiser_director || "",
+    compensation_approved_emp_firstname: "",
+    compensation_approved_emp_lastname_first_spell: "",
+    compensation_approved_emp_user_id: approverUserId,
+  };
+
+  return { values, propertyRows };
+}
+
+function findMeetingMinutesDocxAttachment(
+  docs: Document[],
+  docTypes: { id: number; type: string }[],
+): Document | undefined {
+  const docType = docTypes.find((t) => t.type === MEETING_MINUTES_DOC_TYPE);
+  if (!docType) return undefined;
+  return docs.find(
+    (d) =>
+      d.document_type_id === docType.id &&
+      (d.file_type === DOCX_CONTENT_TYPE || d.file_url.toLowerCase().endsWith(".docx")),
+  );
+}
+
+async function downloadAcquisitionContract(params: {
+  parcel?: ParcelFull;
+  acquisition?: LandAcquisition;
+  assets: Asset[];
+  compensations: Compensation[];
+  landValuation?: LandValuation | null;
+  attachment?: Document;
+}) {
+  const { parcel, acquisition, assets, compensations, landValuation, attachment } = params;
+  if (parcel?.acquisition_id && !acquisition) {
+    throw new Error("Чөлөөлөлтийн мэдээлэл ачаалж байна. Түр хүлээгээд дахин татна уу.");
+  }
+  if (!attachment) {
+    throw new Error(
+      "Эхлээд \"Баримт бичиг\" табаас \"Хурлын тэмдэглэл\" (DOCX) хавсралт хавсаргана уу — Гэрээг зөвхөн энэ хавсралттай хамт хэвлэнэ.",
+    );
+  }
+
+  const attachmentRes = await fetch(attachment.file_url);
+  if (!attachmentRes.ok) throw new Error("Хурлын тэмдэглэлийн хавсралтыг татаж чадсангүй");
+  const attachmentBlob = await attachmentRes.blob();
+
+  const { values, propertyRows } = buildAcquisitionContractValues(parcel, acquisition, assets, compensations, landValuation);
+  const fd = new FormData();
+  fd.append("values", JSON.stringify(values));
+  fd.append("property_rows", JSON.stringify(propertyRows));
+  // attachment.name бол дэлгэцийн нэр (өргөтгөлгүй байж болно) — жинхэнэ файлын
+  // нэрийг file_url-ээс авна.
+  const storedFilename = decodeURIComponent(attachment.file_url.split("/").pop() || "");
+  fd.append("attachment", attachmentBlob, storedFilename || "hurliin_temdeglel.docx");
+
+  const res = await fetch("/api/templates/acquisition-contract", { method: "POST", headers: authHeaders(), body: fd });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "Гэрээ үүсгэхэд алдаа гарлаа");
+  }
+  const blob = await res.blob();
+  triggerDownload(blob, `gereee_${parcel?.parcel_id || "template"}.docx`);
+}
+
 // Статик файлыг (docx) шууд татна
 function downloadFile(tpl: PrintTemplate) {
   const a = document.createElement("a");
@@ -242,7 +401,7 @@ async function downloadDocxTemplate(tpl: PrintTemplate, parcel?: ParcelFull, acq
 
   const res = await fetch("/api/templates/medegdeh-huudas", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({
       filename: tpl.filename,
       values: buildDocxTemplateValues(parcel, acquisition),
@@ -355,6 +514,14 @@ const TEMPLATES: PrintTemplate[] = [
     isDownload: true,
   },
   {
+    id: "acquisition_contract",
+    name: "Гэрээ",
+    description: "Нөхөх олговрын гэрээ — үл хөдлөх хөрөнгийн бүртгэлээр автоматаар бөглөнө. Хэвлэхийн өмнө \"Хурлын тэмдэглэл\" (DOCX) хавсралт шаардлагатай бөгөөд гэрээний ард залгагдана",
+    filename: "acquisition_contract.docx",
+    isDownload: true,
+    requiresMeetingMinutes: true,
+  },
+  {
     id: "appointment_minutes",
     name: "Уулзалтын тэмдэглэл",
     description: "Уулзалтын тэмдэглэлийн загвар маягт",
@@ -400,11 +567,47 @@ const TEMPLATES: PrintTemplate[] = [
 ];
 
 export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
+  const acqId = parcel?.acquisition_id;
+  const valuationType = parcel?.selected_valuation_type || "asset";
+
   const { data: acquisition } = useQuery({
-    queryKey: ["land", parcel?.acquisition_id],
-    queryFn: () => landApi.getById(parcel!.acquisition_id),
-    enabled: !!parcel?.acquisition_id,
+    queryKey: ["land", acqId],
+    queryFn: () => landApi.getById(acqId!),
+    enabled: !!acqId,
   });
+
+  const { data: assetsResult } = useQuery({
+    queryKey: ["assets", acqId, parcel?.parcel_id, valuationType],
+    queryFn: () => landApi.getAssets(acqId!, { page: 1, page_size: 200, parcel_id: parcel?.parcel_id, valuation_type: valuationType }),
+    enabled: !!acqId && !!parcel?.parcel_id,
+  });
+  const assets = assetsResult?.data ?? [];
+
+  const { data: compensations = [] } = useQuery({
+    queryKey: ["compensations", acqId, parcel?.parcel_id, valuationType],
+    queryFn: () => landApi.listCompensations(acqId!, parcel?.parcel_id, valuationType),
+    enabled: !!acqId && !!parcel?.parcel_id,
+  });
+
+  const { data: landValuation } = useQuery({
+    queryKey: ["land-valuation", acqId, parcel?.parcel_id, valuationType],
+    queryFn: () => landApi.getLandValuation(acqId!, parcel!.parcel_id, valuationType),
+    enabled: !!acqId && !!parcel?.parcel_id,
+  });
+
+  const { data: docs = [] } = useQuery({
+    queryKey: ["parcel-documents", parcel?.id],
+    queryFn: () => parcelApi.listDocuments(parcel!.id),
+    enabled: !!parcel?.id,
+  });
+
+  const { data: docTypes = [] } = useQuery({
+    queryKey: ["document-types", "parcel"],
+    queryFn: () => documentTypeApi.list("parcel"),
+    staleTime: 60_000,
+  });
+
+  const meetingMinutesAttachment = findMeetingMinutesDocxAttachment(docs, docTypes);
 
   return (
     <div className="ap-card overflow-hidden">
@@ -436,18 +639,34 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
                 )}
               </div>
               <p className="text-[11px] text-slate-400 mt-0.5 truncate">{tpl.description}</p>
+              {tpl.requiresMeetingMinutes && !meetingMinutesAttachment && (
+                <p className="text-[11px] text-red-500 mt-0.5">
+                  Эхлээд &ldquo;Баримт бичиг&rdquo; табаас &ldquo;Хурлын тэмдэглэл&rdquo; (DOCX) хавсаргана уу
+                </p>
+              )}
             </div>
             <button
               onClick={() =>
-                tpl.isStaticFile
-                  ? downloadFile(tpl)
-                  : tpl.isExcel
-                    ? downloadDecisionDraft(parcel, acquisition?.acquisition_name)
-                    : tpl.isDownload
-                      ? downloadDocxTemplate(tpl, parcel, acquisition).catch((err) => {
-                          alert(err instanceof Error ? err.message : "DOCX файл татахад алдаа гарлаа");
-                        })
-                      : openTemplate(tpl, parcel)
+                tpl.requiresMeetingMinutes
+                  ? downloadAcquisitionContract({
+                      parcel,
+                      acquisition,
+                      assets,
+                      compensations,
+                      landValuation,
+                      attachment: meetingMinutesAttachment,
+                    }).catch((err) => {
+                      toast.error(err instanceof Error ? err.message : "Гэрээ үүсгэхэд алдаа гарлаа");
+                    })
+                  : tpl.isStaticFile
+                    ? downloadFile(tpl)
+                    : tpl.isExcel
+                      ? downloadDecisionDraft(parcel, acquisition?.acquisition_name)
+                      : tpl.isDownload
+                        ? downloadDocxTemplate(tpl, parcel, acquisition).catch((err) => {
+                            toast.error(err instanceof Error ? err.message : "DOCX файл татахад алдаа гарлаа");
+                          })
+                        : openTemplate(tpl, parcel)
               }
               className={`flex items-center gap-1.5 h-8 px-4 rounded-lg text-[12px] font-semibold transition-colors whitespace-nowrap ${
                 tpl.isExcel

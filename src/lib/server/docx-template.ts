@@ -1,10 +1,18 @@
 import { deflateRawSync, inflateRawSync } from "zlib";
 
-type ZipEntry = {
+export type ZipEntry = {
   name: string;
   method: number;
   data: Buffer;
 };
+
+// Задлагдсан (decompressed) хэсэг бүрт болон нийт баримтад тавих дээд хэмжээ —
+// zip-bomb (жижиг файл боловч задлахад асар их санах ой шаарддаг) халдлагаас
+// хамгаална. Бодит DOCX хэсэг (жишээ нь word/document.xml, зураг г.м) эдгээр
+// хэмжээнээс хэтрэхгүй тул аюулгүйн зохистой дээд хязгаар.
+const MAX_ENTRY_UNCOMPRESSED_SIZE = 50 * 1024 * 1024;
+const MAX_TOTAL_UNCOMPRESSED_SIZE = 200 * 1024 * 1024;
+const MAX_ZIP_ENTRY_COUNT = 2000;
 
 const XML_ESCAPE: Record<string, string> = {
   "&": "&amp;",
@@ -46,11 +54,15 @@ function findEndOfCentralDirectory(zip: Buffer): number {
   throw new Error("DOCX zip бүтэц уншигдсангүй");
 }
 
-function readZipEntries(zip: Buffer): ZipEntry[] {
+export function readZipEntries(zip: Buffer): ZipEntry[] {
   const eocd = findEndOfCentralDirectory(zip);
   const entryCount = zip.readUInt16LE(eocd + 10);
+  if (entryCount > MAX_ZIP_ENTRY_COUNT) {
+    throw new Error("DOCX файлд хэт олон дотоод файл байна");
+  }
   let centralOffset = zip.readUInt32LE(eocd + 16);
   const entries: ZipEntry[] = [];
+  let totalUncompressed = 0;
 
   for (let i = 0; i < entryCount; i++) {
     if (zip.readUInt32LE(centralOffset) !== 0x02014b50) {
@@ -59,11 +71,22 @@ function readZipEntries(zip: Buffer): ZipEntry[] {
 
     const method = zip.readUInt16LE(centralOffset + 10);
     const compressedSize = zip.readUInt32LE(centralOffset + 20);
+    const uncompressedSize = zip.readUInt32LE(centralOffset + 24);
     const nameLength = zip.readUInt16LE(centralOffset + 28);
     const extraLength = zip.readUInt16LE(centralOffset + 30);
     const commentLength = zip.readUInt16LE(centralOffset + 32);
     const localOffset = zip.readUInt32LE(centralOffset + 42);
     const name = zip.subarray(centralOffset + 46, centralOffset + 46 + nameLength).toString("utf8");
+
+    // Zip-bomb хамгаалалт: төвийн лавлахад мэдэгдсэн задлагдсан хэмжээгээр
+    // урьдчилан шалгаж, бодит decompress (inflateRawSync)-оос ӨМНӨ татгалзана.
+    if (uncompressedSize > MAX_ENTRY_UNCOMPRESSED_SIZE) {
+      throw new Error(`DOCX дотоод файл хэт том байна: ${name}`);
+    }
+    totalUncompressed += uncompressedSize;
+    if (totalUncompressed > MAX_TOTAL_UNCOMPRESSED_SIZE) {
+      throw new Error("DOCX файлын нийт хэмжээ хэт том байна");
+    }
 
     if (zip.readUInt32LE(localOffset) !== 0x04034b50) {
       throw new Error(`DOCX local header буруу байна: ${name}`);
@@ -76,8 +99,11 @@ function readZipEntries(zip: Buffer): ZipEntry[] {
 
     let data: Buffer;
     if (method === 0) data = Buffer.from(compressed);
-    else if (method === 8) data = inflateRawSync(compressed);
-    else throw new Error(`DOCX zip compression дэмжигдэхгүй байна: ${method}`);
+    else if (method === 8) {
+      // maxOutputLength нь zip төвийн лавлахад мэдэгдсэн хэмжээ худал байсан ч
+      // (эвдэрсэн/дайсагнасан zip) бодит decompress-ийг давхар хязгаарлана.
+      data = inflateRawSync(compressed, { maxOutputLength: MAX_ENTRY_UNCOMPRESSED_SIZE });
+    } else throw new Error(`DOCX zip compression дэмжигдэхгүй байна: ${method}`);
 
     entries.push({ name, method, data });
     centralOffset += 46 + nameLength + extraLength + commentLength;
@@ -86,7 +112,7 @@ function readZipEntries(zip: Buffer): ZipEntry[] {
   return entries;
 }
 
-function writeZipEntries(entries: ZipEntry[]): Buffer {
+export function writeZipEntries(entries: ZipEntry[]): Buffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
@@ -149,7 +175,7 @@ function writeZipEntries(entries: ZipEntry[]): Buffer {
   return Buffer.concat([...localParts, central, eocd]);
 }
 
-function escapeXml(value: string): string {
+export function escapeXml(value: string): string {
   return value.replace(/[&<>"']/g, (ch) => XML_ESCAPE[ch]);
 }
 

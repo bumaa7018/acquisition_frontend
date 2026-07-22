@@ -13,6 +13,18 @@ function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// "Хурлын тэмдэглэл" төрлийн хавсралт Гэрээтэй нэгтгэж хэвлэдэг тул
+// цорын ганцаараа DOCX-ээр хавсаргах боломжтой байх ёстой (бусад бүх төрөл зөвхөн PDF).
+function isDocxAllowed(docType?: { type: string }) {
+  return docType?.type === "meeting_minutes";
+}
+
+function isDocxFile(file: File) {
+  return file.type === DOCX_CONTENT_TYPE || file.name.toLowerCase().endsWith(".docx");
+}
+
 export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -78,11 +90,17 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
+    const docType = docTypes.find(x => x.id === documentTypeId);
+    const docxAllowed = isDocxAllowed(docType);
+    const isPdf = f.type === "application/pdf";
+    if (!isPdf && !(docxAllowed && isDocxFile(f))) {
+      toast.error(docxAllowed ? "PDF эсвэл DOCX файл оруулна уу" : "PDF файл оруулна уу");
+      e.target.value = "";
+      return;
+    }
     if (f.size > 50 * 1024 * 1024) { toast.error("50MB хэтэрлээ"); e.target.value = ""; return; }
     setSelectedFile(f);
-    const t = docTypes.find(x => x.id === documentTypeId);
-    setFileName(t ? t.name : f.name.replace(/\.pdf$/i, ""));
+    setFileName(docType ? docType.name : f.name.replace(/\.(pdf|docx)$/i, ""));
   }
 
   function handleSubmit() {
@@ -182,6 +200,11 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     // Файлын нэрийг хавсралтын төрлийн нэрээр санал болгоно
                     const t = docTypes.find(x => x.id === v);
                     if (t) setFileName(t.name);
+                    // Шинэ төрөл DOCX зөвшөөрдөггүй бол өмнө сонгосон DOCX файлыг цэвэрлэнэ
+                    if (selectedFile && isDocxFile(selectedFile) && !isDocxAllowed(t)) {
+                      setSelectedFile(null);
+                      if (inputRef.current) inputRef.current.value = "";
+                    }
                   }}
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
@@ -195,7 +218,13 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
               {/* File picker */}
               <div className="space-y-1.5">
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файл</label>
-                <input ref={inputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileChange} />
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={isDocxAllowed(docTypes.find(x => x.id === documentTypeId)) ? ".pdf,application/pdf,.docx" : ".pdf,application/pdf"}
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}

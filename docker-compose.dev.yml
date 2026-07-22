@@ -1,5 +1,11 @@
 version: "3.9"
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   frontend:
     build:
@@ -23,6 +29,7 @@ services:
       # macOS дээр Docker volume-ийн inotify ажилладаггүй тул polling ашиглана
       WATCHPACK_POLLING: "true"
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - gov_network
 

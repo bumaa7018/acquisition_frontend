@@ -1,5 +1,13 @@
 version: "3.9"
 
+# Docker-ийн json-file driver хэмжээ хязгааргүй лог хуримтлуулж диск дүүрэх
+# шалтгаан болдог тул rotation тохируулна.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   frontend:
     build:
@@ -17,6 +25,7 @@ services:
       NEXT_API_URL: ${NEXT_API_URL}
       NEXT_GS_URL: ${NEXT_GS_URL}
     restart: on-failure
+    logging: *default-logging
     networks:
       - gov_network
 
