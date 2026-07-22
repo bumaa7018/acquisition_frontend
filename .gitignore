@@ -19,6 +19,3 @@ pnpm-debug.log*
 
 # OS/editor
 .DS_Store
-
-# Local test tile pyramid (symlink)
-public/hana_tiles

@@ -634,6 +634,29 @@ export const droneAcquisitionApi = {
     parcel_id?: string
     acquisition_id?: string
   }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', data).then(r => r.data.data),
+  // Uploads a .tif/.tiff — backend runs GDAL tiling synchronously (can take several minutes),
+  // so this needs a much longer timeout than the default 30s.
+  createFromTif: (data: {
+    file: File
+    owner_id: string
+    type: 'parcel' | 'acquisition'
+    parcel_id?: string
+    acquisition_id?: string
+    min_zoom?: number
+    max_zoom?: number
+  }) => {
+    const fd = new FormData()
+    fd.append('file', data.file)
+    fd.append('owner_id', data.owner_id)
+    fd.append('type', data.type)
+    if (data.parcel_id) fd.append('parcel_id', data.parcel_id)
+    if (data.acquisition_id) fd.append('acquisition_id', data.acquisition_id)
+    if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
+    if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
+    return api
+      .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 20 * 60 * 1000 })
+      .then(r => r.data.data)
+  },
   update: (id: number, data: Partial<{
     tile_root_path: string
     min_zoom: number

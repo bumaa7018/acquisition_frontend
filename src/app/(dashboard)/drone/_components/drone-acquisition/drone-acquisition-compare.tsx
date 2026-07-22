@@ -35,7 +35,7 @@ function Placeholder({ text }: { text: string }) {
 type ReadyAcquisition = DroneAcquisition & { bbox_wkt: string };
 
 function makeTileLayer(acq: ReadyAcquisition, zIndex: number) {
-  const root = resolveImageUrl(acq.tile_root_path, "drone-image")?.replace(/\/$/, "");
+  const root = resolveImageUrl(acq.tile_root_path)?.replace(/\/$/, "");
   return new TileLayer({
     zIndex,
     source: root
