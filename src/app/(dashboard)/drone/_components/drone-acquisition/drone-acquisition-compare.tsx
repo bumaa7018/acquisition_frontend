@@ -105,6 +105,8 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
         maxZoom: 22,
       }),
       controls: [],
+      // Static, picture-like comparison — no pan/zoom, matches the plain <img> swipe used for drone_images.
+      interactions: [],
     });
     olMap.current = map;
 
