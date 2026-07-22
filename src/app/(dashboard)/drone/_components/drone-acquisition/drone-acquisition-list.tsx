@@ -93,9 +93,9 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
-                  {acq.tile_root_path || "Замгүй"}
+                  {formatDate(acq.created_at)}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{formatDate(acq.created_at)}</p>
+                {/* <p className="text-[11px] text-slate-400 mt-0.5"></p> */}
               </div>
               <span
                 className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${STATUS_BADGE[acq.status]}`}
