@@ -419,28 +419,27 @@ function EditDroneAcquisitionModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [tileRootPath, setTileRootPath] = useState(acquisition.tile_root_path ?? "");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [minZoom, setMinZoom] = useState(acquisition.min_zoom?.toString() ?? "");
   const [maxZoom, setMaxZoom] = useState(acquisition.max_zoom?.toString() ?? "");
-  const [bboxWkt, setBboxWkt] = useState(acquisition.bbox_wkt ?? "");
-  const [status, setStatus] = useState<DroneAcquisitionStatus>(acquisition.status);
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      droneAcquisitionApi.update(acquisition.id, {
-        tile_root_path: tileRootPath.trim() || undefined,
+      droneAcquisitionApi.updateFromTif(acquisition.id, {
+        file: file!,
         min_zoom: minZoom ? Number(minZoom) : undefined,
         max_zoom: maxZoom ? Number(maxZoom) : undefined,
-        bbox_wkt: bboxWkt.trim() || undefined,
-        status,
       }),
     onSuccess: () => {
-      toast.success("Tile давхарга шинэчлэгдлээ");
+      toast.success("Шинэ .tif боловсруулагдаж эхэллээ, өмнөх tile-ууд солигдоно");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
     },
     onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
   });
+
+  const canSubmit = !!file && !updateMutation.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -459,13 +458,29 @@ function EditDroneAcquisitionModal({
 
         <div className="p-6 space-y-4 overflow-y-auto">
           <div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Tile root зам</p>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
+              Шинэ GeoTIFF файл <span className="text-red-400">*</span>
+            </p>
             <input
-              type="text"
-              value={tileRootPath}
-              onChange={(e) => setTileRootPath(e.target.value)}
-              className={`${inp} font-mono`}
+              ref={fileInputRef}
+              type="file"
+              accept=".tif,.tiff"
+              className="hidden"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={updateMutation.isPending}
+              className="w-full flex items-center gap-2.5 h-11 px-3 rounded-lg border border-dashed border-slate-300 dark:border-white/[0.12] text-[13px] text-slate-500 dark:text-slate-400 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors disabled:opacity-50"
+            >
+              <Upload className="h-4 w-4 shrink-0" />
+              <span className="truncate">{file ? file.name : "Файл сонгох (.tif, .tiff)"}</span>
+            </button>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+              Одоогийн tile давхарга ({acquisition.tile_root_path || "замгүй"}) энэ файлаар
+              бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -487,39 +502,24 @@ function EditDroneAcquisitionModal({
               />
             </div>
           </div>
-          <div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Төлөв</p>
-            <select value={status} onChange={(e) => setStatus(e.target.value as DroneAcquisitionStatus)} className={inp}>
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-              Хамрах хүрээ (bbox WKT)
+          {updateMutation.isPending && (
+            <p className="text-[12px] text-amber-600 dark:text-amber-400">
+              Шинэ tile боловсруулж байна. Цонхыг бүү хаа.
             </p>
-            <textarea
-              value={bboxWkt}
-              onChange={(e) => setBboxWkt(e.target.value)}
-              rows={8}
-              className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[12.5px] font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-none"
-            />
-          </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-100 dark:border-[#37394d] shrink-0">
           <button
             onClick={onClose}
-            className="h-9 px-4 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#252630] hover:bg-slate-200 dark:hover:bg-[#2e2f3e] transition-colors"
+            disabled={updateMutation.isPending}
+            className="h-9 px-4 rounded-lg text-[13px] font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-[#252630] hover:bg-slate-200 dark:hover:bg-[#2e2f3e] transition-colors disabled:opacity-50"
           >
             Цуцлах
           </button>
           <button
             onClick={() => updateMutation.mutate()}
-            disabled={updateMutation.isPending}
+            disabled={!canSubmit}
             className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
           >
             {updateMutation.isPending ? (

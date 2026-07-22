@@ -634,8 +634,9 @@ export const droneAcquisitionApi = {
     parcel_id?: string
     acquisition_id?: string
   }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', data).then(r => r.data.data),
-  // Uploads a .tif/.tiff — backend runs GDAL tiling synchronously (can take several minutes),
-  // so this needs a much longer timeout than the default 30s.
+  // Uploads a .tif/.tiff — the backend generates the preview synchronously (fast) and
+  // returns immediately with status "processing", tiling the pyramid in the background,
+  // so this just needs enough headroom for the upload itself + preview generation.
   createFromTif: (data: {
     file: File
     owner_id: string
@@ -654,7 +655,18 @@ export const droneAcquisitionApi = {
     if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
     if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
     return api
-      .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 20 * 60 * 1000 })
+      .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 5 * 60 * 1000 })
+      .then(r => r.data.data)
+  },
+  // Replaces an existing acquisition's tile pyramid/preview from a new .tif — the old
+  // ones are deleted on the backend once the new pyramid finishes tiling.
+  updateFromTif: (id: number, data: { file: File; min_zoom?: number; max_zoom?: number }) => {
+    const fd = new FormData()
+    fd.append('file', data.file)
+    if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
+    if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
+    return api
+      .put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, fd, { timeout: 5 * 60 * 1000 })
       .then(r => r.data.data)
   },
   update: (id: number, data: Partial<{
