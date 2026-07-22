@@ -12,6 +12,8 @@ import type {
   ParcelFull,
   ParcelStatus,
   ParcelStatusHistory,
+  ValuationSubmission,
+  ValuationSubmissionHistory,
   Asset,
   AssetSpec,
   AssetCalculation,
@@ -21,6 +23,9 @@ import type {
   CompensationHistory,
   CompensationGrant,
   LandValuation,
+  LandValuationUpsert,
+  ValuationImportPayload,
+  ValuationImportResult,
   Document,
   AuthorizedRepresentative,
   FundingSource,
@@ -54,6 +59,7 @@ export type ProfAssetListParams = {
   page?: number
   page_size?: number
   parcel_id?: string
+  valuation_type?: string
 }
 
 // ── ProfApi class ─────────────────────────────────────────────────────────────
@@ -113,12 +119,6 @@ class ProfApiService {
     return apiClient.delete(`/prof/land-acquisitions/${acqId}/documents/${docId}`)
   }
 
-  profListFundingSources(acqId: string): Promise<FundingSource[]> {
-    return apiClient
-      .get<ApiResponse<FundingSource[]>>(`/prof/land-acquisitions/${acqId}/funding-sources`)
-      .then(r => r.data.data ?? [])
-  }
-
   // ── Нэгж талбар ────────────────────────────────────────────────────────────
 
   profListParcels(acqId: string, params?: ProfParcelListParams): Promise<PaginatedResponse<Parcel>> {
@@ -161,6 +161,40 @@ class ProfApiService {
     return apiClient
       .get<ApiResponse<ParcelStatusHistory[]>>(
         `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`,
+      )
+      .then(r => r.data.data ?? [])
+  }
+
+  // ── Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв ──────────────────────────
+  profGetValuationSubmission(acqId: string, parcelId: string, valuationType?: string): Promise<ValuationSubmission | undefined> {
+    return apiClient
+      .get<ApiResponse<ValuationSubmission>>(
+        `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`,
+        { params: { valuation_type: valuationType } },
+      )
+      .then(r => r.data.data)
+  }
+
+  profTransitionValuationSubmission(
+    acqId: string,
+    parcelId: string,
+    action: "submit" | "approve" | "return",
+    note: string,
+    valuationType?: string,
+  ): Promise<ValuationSubmission | undefined> {
+    return apiClient
+      .post<ApiResponse<ValuationSubmission>>(
+        `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`,
+        { action, note, valuation_type: valuationType },
+      )
+      .then(r => r.data.data)
+  }
+
+  profListValuationSubmissionHistory(acqId: string, parcelId: string, valuationType?: string): Promise<ValuationSubmissionHistory[]> {
+    return apiClient
+      .get<ApiResponse<ValuationSubmissionHistory[]>>(
+        `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`,
+        { params: { valuation_type: valuationType } },
       )
       .then(r => r.data.data ?? [])
   }
@@ -290,10 +324,10 @@ class ProfApiService {
 
   // ── Нөхөх олговор ──────────────────────────────────────────────────────────
 
-  profListCompensations(acqId: string, parcelId?: string): Promise<Compensation[]> {
+  profListCompensations(acqId: string, parcelId?: string, valuationType?: string): Promise<Compensation[]> {
     return apiClient
       .get<ApiResponse<Compensation[]>>(`/prof/land-acquisitions/${acqId}/compensations`, {
-        params: parcelId ? { parcel_id: parcelId } : undefined,
+        params: { parcel_id: parcelId || undefined, valuation_type: valuationType || undefined },
       })
       .then(r => r.data.data ?? [])
   }
@@ -328,6 +362,18 @@ class ProfApiService {
       .then(r => r.data.data)
   }
 
+  profUploadAssetPhoto(acqId: string, assetId: string, file: File): Promise<{ photo_pdf_url: string; photo_pdf_name: string } | undefined> {
+    const fd = new FormData()
+    fd.append('file', file)
+    return apiClient
+      .post<ApiResponse<{ photo_pdf_url: string; photo_pdf_name: string }>>(
+        `/prof/land-acquisitions/${acqId}/assets/${assetId}/photos`,
+        fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      .then(r => r.data.data)
+  }
+
   profCreateCompensationGrant(acqId: string, compId: string, body: Partial<CompensationGrant>): Promise<CompensationGrant | undefined> {
     return apiClient
       .post<ApiResponse<CompensationGrant>>(
@@ -352,22 +398,40 @@ class ProfApiService {
 
   // ── Газрын үнэлгээ ──────────────────────────────────────────────────────────
 
-  profGetLandValuation(acqId: string, parcelId: string): Promise<LandValuation | null> {
+  profGetLandValuation(acqId: string, parcelId: string, valuationType?: string): Promise<LandValuation | null> {
     return apiClient
       .get<ApiResponse<LandValuation | null>>(
         `/prof/land-acquisitions/${acqId}/land-valuation`,
-        { params: { parcel_id: parcelId } },
+        { params: { parcel_id: parcelId, valuation_type: valuationType } },
       )
       .then(r => r.data.data ?? null)
   }
 
+  profDeleteLandValuation(acqId: string, parcelId: string, valuationType?: string): Promise<void> {
+    return apiClient
+      .delete(`/prof/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } })
+      .then(() => undefined)
+  }
+
   profUpsertLandValuation(
     acqId: string,
-    body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number },
+    body: LandValuationUpsert,
   ): Promise<LandValuation | undefined> {
     return apiClient
       .post<ApiResponse<LandValuation>>(
         `/prof/land-acquisitions/${acqId}/land-valuation`,
+        body,
+      )
+      .then(r => r.data.data)
+  }
+
+  profImportValuation(
+    acqId: string,
+    body: ValuationImportPayload,
+  ): Promise<ValuationImportResult | undefined> {
+    return apiClient
+      .post<ApiResponse<ValuationImportResult>>(
+        `/prof/land-acquisitions/${acqId}/valuation-import`,
         body,
       )
       .then(r => r.data.data)

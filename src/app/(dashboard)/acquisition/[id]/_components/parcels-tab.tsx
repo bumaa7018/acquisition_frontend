@@ -7,9 +7,9 @@ import { Info } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
-import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
-import { getParcelStatusStyle } from "@/types";
-import type { ParcelStatus } from "@/types";
+import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
+import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
+import type { ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const RIGHT_TYPE_OPTIONS = [
@@ -29,6 +29,15 @@ type ParcelFilter = {
 };
 
 const PAGE_SIZE = 20;
+
+// Нөхөх олговрын үнэлгээний төлөвийн чипийн өнгө
+const VAL_STATUS_CHIP: Record<ValuationStatus, string> = {
+  draft: "bg-slate-100 text-slate-500 dark:bg-slate-500/15 dark:text-slate-400",
+  submitted: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
+  approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
+  returned: "bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400",
+  rejected: "bg-red-100 text-red-500 dark:bg-red-500/15 dark:text-red-400",
+};
 
 const EMPTY_FILTER: ParcelFilter = {
   parcel_id: "",
@@ -66,6 +75,7 @@ export function ParcelsTab({
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
+  const isFinance = isFinanceSpecialist();
   const currentUserId = getCurrentUserId();
   const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
@@ -119,13 +129,25 @@ export function ParcelsTab({
     filter.landuse ||
     filter.status_id !== 0
   );
-  const visibleParcels = (parcels?.data ?? []).filter((parcel) =>
-    canAccessParcel(
-      parcel.status_name,
-      acquisitionProfOrgId,
-      parcel.independent_org_id,
-    ),
-  );
+  const visibleParcels = (parcels?.data ?? []).filter((parcel) => {
+    if (
+      !canAccessParcel(
+        parcel.status_name,
+        acquisitionProfOrgId,
+        parcel.independent_org_id,
+      )
+    )
+      return false;
+    // Санхүүгийн мэргэжилтэнд ЗӨВХӨН хянуулахаар илгээсэн (submitted) төлөвтэй
+    // үнэлгээтэй нэгж талбар харагдана — баталгаажсан болон хүлээгдэж буй
+    // (draft/returned) үнэлгээтэй талбарууд жагсаалтад орохгүй.
+    if (isFinance) {
+      return Object.values(parcel.valuation_statuses ?? {}).some(
+        (status) => status === "submitted",
+      );
+    }
+    return true;
+  });
 
   return (
     <>
@@ -349,6 +371,19 @@ export function ParcelsTab({
                             </span>
                           ) : (
                             <span className="text-[11px] text-slate-400">—</span>
+                          )}
+                          {/* Мэрг. байгууллагад нөхөх олговрын үнэлгээний төлөвийг урсгал бүрээр харуулна */}
+                          {isProfOrg && p.valuation_statuses && Object.keys(p.valuation_statuses).length > 0 && (
+                            <div className="mt-1 flex flex-col gap-0.5">
+                              {(Object.entries(p.valuation_statuses) as [ValuationType, ValuationStatus][]).map(([vt, vs]) => (
+                                <span
+                                  key={vt}
+                                  className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap ${VAL_STATUS_CHIP[vs] ?? "bg-slate-100 text-slate-500"}`}
+                                >
+                                  {VALUATION_TYPE_LABELS[vt] ?? vt}: {VALUATION_STATUS_LABELS[vs] ?? vs}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </td>
                         <td className="px-4 py-2.5">

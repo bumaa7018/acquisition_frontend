@@ -41,6 +41,23 @@ export interface Permission {
   resource?: string;
 }
 
+export interface AuditLog {
+  id: string;
+  actor_id?: string;
+  actor_name: string;
+  actor_position: string;
+  actor_roles: string[];
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  acquisition_id?: string;
+  parcel_id?: string;
+  details: Record<string, unknown>;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+}
+
 export interface Plan {
   id?: string;
   plan_code: string;
@@ -133,6 +150,8 @@ export interface LandAcquisition {
   // Professional org assigned to perform the primary valuation
   professional_org_id?: string;
   professional_org_name?: string;
+  // Дэлгэрэнгүй (getById) дээр л ирнэ — тусдаа funding-sources GET API байхгүй
+  funding_sources?: FundingSource[];
 }
 
 export interface AU {
@@ -211,6 +230,9 @@ export interface Parcel {
   geometry_wkt?: string;
   independent_org_id?: string;
   independent_org_name?: string;
+  // Урсгал бүрийн нөхөх олговрын илгээх төлөв (valuation_type → status).
+  // Санхүүгийн мэргэжилтэнд зөвхөн илгээсэн/баталгаажсан урсгалтай нэгж талбар харагдана.
+  valuation_statuses?: Partial<Record<ValuationType, ValuationStatus>>;
 }
 
 export interface StatusOption {
@@ -289,6 +311,54 @@ export interface ParcelStatusHistory {
   created_by: string;
 }
 
+// Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв (нэгж талбар бүрт).
+// "rejected" — өөр урсгал баталгаажихад автоматаар татгалзагдсан (эцсийн).
+export type ValuationStatus = "draft" | "submitted" | "approved" | "returned" | "rejected";
+
+export interface ValuationSubmission {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  valuation_type: ValuationType;
+  status: ValuationStatus;
+  submitted_by: string;
+  submitted_at: string | null;
+  reviewed_by: string;
+  reviewed_at: string | null;
+  last_note: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ValuationSubmissionHistory {
+  id: number;
+  acquisition_id: string;
+  parcel_id: string;
+  action: "submit" | "approve" | "return" | "reject";
+  from_status: string;
+  to_status: string;
+  note: string;
+  created_by: string;
+  created_at: string;
+}
+
+export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
+  draft: "Хүлээгдэж буй",
+  submitted: "Илгээсэн",
+  approved: "Баталгаажсан",
+  returned: "Буцаагдсан",
+  rejected: "Татгалзсан",
+};
+
+// Үнэлгээний урсгалын төрөл — дэд табын түлхүүрүүдтэй ижил (asset/independent/mika)
+export type ValuationType = "asset" | "independent" | "mika";
+
+export const VALUATION_TYPE_LABELS: Record<ValuationType, string> = {
+  asset: "Үндсэн үнэлгээ",
+  independent: "Хөндлөнгийн үнэлгээ",
+  mika: "МИКА үнэлгээ",
+};
+
 export interface ParcelWorkflow {
   id: number;
   from_status_id: number | null;
@@ -321,6 +391,7 @@ export interface ParcelFull extends Parcel {
   acquisition_geom_wkt: string;
   status_id: number;
   status_name: string;
+  selected_valuation_type?: ValuationType | null;
   created_at: string;
   created_by: string;
   detail?: ParcelDetail;
@@ -337,6 +408,7 @@ export interface ParcelFull extends Parcel {
 // Role тогтмолуудыг lib/access-policy.ts (ACCESS_ROLE_CODES / ACCESS_ROLE_NAMES)-д
 // төвлөрүүлсэн тул энд давхардуулахгүй — тэндээс import хийж ашиглана.
 export const ACQ_STATUS = {
+  FIELD_SURVEY: 2, // Хээрийн судалгаа — санхүүгийн мэргэжилтэнд зөвхөн энэ төлөвтэй чөлөөлөлт харагдана
   CONFIRMED: 3, // Баталгаажсан — цаашид засвар/устгал хийх боломжгүй (locked)
 } as const;
 
@@ -417,6 +489,7 @@ export interface Asset {
   parcel_id: string;
   asset_number: string;
   asset_type: "real_state" | "property";
+  valuation_type: ValuationType;
   asset_name: string;
   floor_count: number;
   area_m2: number;
@@ -426,8 +499,75 @@ export interface Asset {
   unit: string;
   capacity: string;
   description: string;
+  unit_price: number;
+  photo_pdf_url?: string;
+  photo_pdf_name?: string;
   created_at: string;
   updated_at: string;
+}
+
+// Газрын үнэлгээ upsert хийх body — Excel импортын нэмэлт талбарууд заавал биш.
+export interface LandValuationUpsert {
+  parcel_id: string;
+  valuation_type?: ValuationType;
+  land_area_m2: number;
+  base_price_per_m2: number;
+  ownership_cert_no?: string;
+  appraiser_org_name?: string;
+  appraiser_reg_no?: string;
+  appraiser_state_reg_no?: string;
+  appraiser_director?: string;
+  appraiser_license?: string;
+  appraiser_address?: string;
+  appraiser_contact?: string;
+  source_file_name?: string;
+  source_file_hash?: string;
+}
+
+// Excel-ээс бүхэл үнэлгээг нэг хүсэлтээр (нэг транзакц) оруулах payload.
+export interface ValuationImportAssetPayload {
+  asset_number?: string;
+  asset_type: "real_state" | "property";
+  asset_name: string;
+  area_m2: number;
+  unit?: string;
+  capacity?: string;
+  description?: string;
+  owner_name?: string;
+  notes?: string;
+  unit_price?: number;
+  compensation_amount?: number; // >0 бол cash нөхөн олговор үүснэ
+  specs?: { spec_type_id: number; value: string }[];
+  // calc_type_id байвал шууд, байхгүй бол name-ээр backend төрлийг олж/үүсгэнэ. group — бүлгийн нэр.
+  calculations?: { calc_type_id?: number; name?: string; group?: string; unit: string; value: number }[];
+}
+
+export interface ValuationImportPayload {
+  parcel_id: string;
+  valuation_type?: ValuationType;
+  replace: boolean; // true бол хуучин хөрөнгө/олговрыг эхлээд устгана
+  land: {
+    land_area_m2: number;
+    base_price_per_m2: number;
+    ownership_cert_no?: string;
+    appraiser_org_name?: string;
+    appraiser_reg_no?: string;
+    appraiser_state_reg_no?: string;
+    appraiser_director?: string;
+    appraiser_license?: string;
+    appraiser_address?: string;
+    appraiser_contact?: string;
+    source_file_name?: string;
+    source_file_hash?: string;
+  };
+  assets: ValuationImportAssetPayload[];
+}
+
+export interface ValuationImportResult {
+  deleted_assets: number;
+  deleted_comps: number;
+  created_assets: number;
+  created_comps: number;
 }
 
 export interface AssetSpec {
@@ -445,6 +585,7 @@ export interface AssetCalculation {
   calc_type_id: number;
   calc_code: string;
   calc_name: string;
+  calc_group?: string;
   unit: string;
   value: number;
 }
@@ -468,9 +609,20 @@ export interface LandValuation {
   id: string;
   acquisition_id: string;
   parcel_id: string;
+  valuation_type?: ValuationType;
   land_area_m2: number;
   base_price_per_m2: number;
   total_value: number;
+  ownership_cert_no?: string;
+  appraiser_org_name?: string;
+  appraiser_reg_no?: string;
+  appraiser_state_reg_no?: string;
+  appraiser_director?: string;
+  appraiser_license?: string;
+  appraiser_address?: string;
+  appraiser_contact?: string;
+  source_file_name?: string;
+  source_file_hash?: string;
   created_at: string;
   updated_at: string;
 }
@@ -497,6 +649,7 @@ export interface Compensation {
   id: string;
   acquisition_id: string;
   target_type: "parcel" | "asset";
+  valuation_type?: ValuationType;
   parcel_id: string;
   asset_id?: string;
   compensation_type: "cash" | "land_grant";
@@ -596,3 +749,21 @@ export const STATUS_COLORS: Record<number, string> = {
   3: "bg-green-100 text-green-800",
   4: "bg-red-100 text-red-800",
 };
+
+// ── Мэдэгдэл ─────────────────────────────────────────
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  actor_id?: string;
+  actor_name: string;
+  type: string;
+  title: string;
+  body: string;
+  resource_type: "acquisition" | "parcel" | "compensation" | "";
+  resource_id: string;
+  acquisition_id?: string;
+  parcel_id?: string;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string;
+}

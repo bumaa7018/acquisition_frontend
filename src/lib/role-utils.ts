@@ -4,6 +4,8 @@ import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
   canEditValuationSubTabForActor,
+  canViewAcquisitionTabForActor,
+  canViewParcelTabForActor,
   canViewValuationSubTabForActor,
   hasAccessRole,
   isExternalSpecialActor,
@@ -14,6 +16,8 @@ import {
   type AccessActor,
   type AccessAcquisition,
   type AccessParcel,
+  type AcquisitionTabKey,
+  type ParcelTabKey,
   type ValuationSubTabKey,
 } from "./access-policy";
 
@@ -119,6 +123,16 @@ export function canEditMikaValuation(
     "mika",
     { status_name: parcelStatusName },
   );
+}
+
+// Чөлөөлөлтийн дэлгэрэнгүйн таб хандах эрхээр харагдана
+export function canViewAcquisitionTab(tab: AcquisitionTabKey): boolean {
+  return canViewAcquisitionTabForActor(getCurrentActor(), tab);
+}
+
+// Нэгж талбарын дэлгэрэнгүйн таб хандах эрхээр харагдана
+export function canViewParcelTab(tab: ParcelTabKey): boolean {
+  return canViewParcelTabForActor(getCurrentActor(), tab);
 }
 
 export function canViewValuationSubTab(subTab: ValuationSubTabKey, parcel?: AccessParcel | null, acquisition?: AccessAcquisition | null): boolean {

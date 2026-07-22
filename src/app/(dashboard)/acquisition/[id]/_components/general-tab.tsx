@@ -18,10 +18,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["land", id],
     queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
   });
-  const { data: fundingSources = [] } = useQuery({
-    queryKey: ["funding-sources", id],
-    queryFn: () => (isProfOrg ? profApi.profListFundingSources(id) : landApi.listFundingSources(id)),
-  });
+  // Санхүүжилтийн эх үүсвэр дэлгэрэнгүй API-тай хамт ирдэг — тусдаа дуудлага хийхгүй
+  const fundingSources = acq?.funding_sources ?? [];
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
@@ -75,7 +73,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   }, [acq]);
 
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const fd = new FormData();
       if (form.start_date) fd.append("start_date", form.start_date);
       if (form.end_date) fd.append("end_date", form.end_date);
@@ -88,16 +86,16 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         fd.append("general_category_id", String(generalCategoryId));
       if (subCategoryId)
         fd.append("sub_category_id", String(subCategoryId));
-      if (professionalOrgId) {
-        fd.append("professional_org_id", professionalOrgId);
-      } else if (acq?.professional_org_id) {
-        fd.append("clear_professional_org", "true");
-      }
       const areaVal = parseFloat(areaM2);
       if (!isNaN(areaVal) && areaVal > 0)
         fd.append("area_m2", String(areaVal));
       if (boundaryFile) fd.append("shapefile", boundaryFile);
-      return landApi.update(id, fd);
+      await landApi.update(id, fd);
+      // Мэргэжлийн байгууллагыг ерөнхий update PUT уншдаггүй — зориулалтын
+      // /professional-org endpoint-оор тусад нь солино (өөрчлөгдсөн үед л).
+      if (professionalOrgId !== (acq?.professional_org_id ?? "")) {
+        await landApi.setProfessionalOrg(id, professionalOrgId || null);
+      }
     },
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
@@ -400,7 +398,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               )}
             </div>
           ))}
-          {/* Санхүүжилтийн эх үүсвэр — funding-sources API-аас авна */}
+          {/* Санхүүжилтийн эх үүсвэр — дэлгэрэнгүй API-ийн funding_sources талбараас */}
           <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-0.5">
               Санхүүжилтийн эх үүсвэр

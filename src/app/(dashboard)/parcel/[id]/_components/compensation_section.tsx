@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { TARGET_TYPE_LABELS, COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const EMPTY_COMP = {
   target_type: "asset" as Compensation["target_type"],
@@ -47,19 +48,29 @@ export function CompensationSection({
   const [form, setForm] = useState(EMPTY_COMP);
   const [grantForm, setGrantForm] = useState(EMPTY_GRANT);
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+
+  // Санхүү баталгаажуулсан үндсэн урсгал — зөвхөн түүний хөрөнгө/олговрыг харуулна.
+  const { data: parcelData } = useQuery({
+    queryKey: ["parcel-full", acqId, parcelId],
+    queryFn: () => landApi.getParcel(acqId, parcelId),
+    enabled: !!acqId && !!parcelId,
+  });
+  const selectedType = parcelData?.selected_valuation_type ?? "asset";
 
   const { data: allComps = [], isLoading } = useQuery({
     queryKey: ["compensations", acqId],
     queryFn: () => landApi.listCompensations(acqId),
     enabled: !!acqId,
   });
-  const compensations = parcelCode
+  const compensations = (parcelCode
     ? allComps.filter((c) => c.parcel_id === parcelCode)
-    : allComps;
+    : allComps
+  ).filter((c) => (c.valuation_type ?? "asset") === selectedType);
 
   const { data: assetsResult } = useQuery({
-    queryKey: ["parcel-assets", acqId, parcelCode],
-    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: parcelCode }),
+    queryKey: ["parcel-assets", acqId, parcelCode, selectedType],
+    queryFn: () => landApi.getAssets(acqId, { page: 1, page_size: 100, parcel_id: parcelCode, valuation_type: selectedType }),
     enabled: !!acqId && !!parcelCode,
   });
 
@@ -308,7 +319,7 @@ export function CompensationSection({
                             </button>
                           )}
                           <button
-                            onClick={() => { if (confirm("Нөхөн төлбөр устгах уу?")) deleteMutation.mutate(comp.id); }}
+                            onClick={() => setPendingConfirm({ title: "Нөхөн төлбөр устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(comp.id) })}
                             className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -536,6 +547,15 @@ export function CompensationSection({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }

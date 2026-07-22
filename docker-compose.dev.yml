@@ -1,5 +1,11 @@
 version: "3.9"
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   frontend:
     build:
@@ -16,12 +22,14 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
+      TZ: Asia/Ulaanbaatar
       NODE_ENV: development
       NEXT_API_URL: ${NEXT_API_URL}
       NEXT_GS_URL: ${NEXT_GS_URL}
       # macOS дээр Docker volume-ийн inotify ажилладаггүй тул polling ашиглана
       WATCHPACK_POLLING: "true"
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - gov_network
 

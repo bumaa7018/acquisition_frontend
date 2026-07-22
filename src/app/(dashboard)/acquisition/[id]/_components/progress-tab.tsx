@@ -2,11 +2,19 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronRight, Clock, X } from "lucide-react";
+import { AlertCircle, ChevronRight, Clock, X } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import { STATUS_CFG } from "./shared";
+
+const FINAL_PARCEL_STATUS_IDS = new Set([3, 4, 5]);
+const FINAL_PARCEL_STATUS_NAMES = new Set([
+  "Чөлөөлсөн",
+  "Нөлөөллөөс гарсан",
+  "Нөлөөлөгдсөн гарсан",
+  "Татгалзсан",
+]);
 
 function AdvanceModal({
   id,
@@ -49,6 +57,34 @@ function AdvanceModal({
   });
 
   const needsDecree = selectedStatus === ACQ_STATUS.CONFIRMED;
+  const { data: parcels, isLoading: parcelsLoading } = useQuery({
+    queryKey: ["land-parcels-final-status-check", id],
+    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 10000 }),
+    enabled: needsDecree,
+  });
+  const invalidParcels = (parcels?.data ?? []).filter(
+    (parcel) =>
+      !FINAL_PARCEL_STATUS_IDS.has(parcel.status) &&
+      !FINAL_PARCEL_STATUS_NAMES.has(parcel.status_name),
+  );
+  const blocksForIncompleteParcelCheck =
+    needsDecree &&
+    !parcelsLoading &&
+    !!parcels &&
+    parcels.data.length < parcels.total;
+  const blocksForUnfinalizedParcels = needsDecree && !parcelsLoading && invalidParcels.length > 0;
+
+  function handleAdvance() {
+    if (blocksForIncompleteParcelCheck) {
+      toast.error("Бүх нэгж талбарын төлөвийг шалгаж чадсангүй. Дахин оролдоно уу.");
+      return;
+    }
+    if (blocksForUnfinalizedParcels) {
+      toast.error("Бүх нэгж талбар Чөлөөлсөн, Нөлөөллөөс гарсан, Татгалзсан төлөвийн аль нэг болсон байх шаардлагатай.");
+      return;
+    }
+    advanceMutation.mutate();
+  }
 
   return (
     <div
@@ -117,6 +153,33 @@ function AdvanceModal({
               </div>
             </>
           )}
+          {needsDecree && parcelsLoading && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/15 px-4 py-3 text-[12px] text-amber-700 dark:text-amber-300">
+              Нэгж талбаруудын төлөвийг шалгаж байна...
+            </div>
+          )}
+          {blocksForIncompleteParcelCheck && (
+            <div className="rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                Бүх нэгж талбарын төлөвийг шалгаж чадсангүй. Нийт {parcels?.total ?? 0} мөрөөс {parcels?.data.length ?? 0} мөр уншигдсан байна.
+              </p>
+            </div>
+          )}
+          {blocksForUnfinalizedParcels && (
+            <div className="rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                <p>
+                  Чөлөөлөлтийг баталгаажуулахын өмнө бүх нэгж талбар <strong>Чөлөөлсөн</strong>,{" "}
+                  <strong>Нөлөөллөөс гарсан</strong>, <strong>Татгалзсан</strong> төлөвийн аль нэг болсон байх шаардлагатай.
+                </p>
+                <p className="mt-1">
+                  Одоогоор {invalidParcels.length} нэгж талбар өөр төлөвтэй байна.
+                </p>
+              </div>
+            </div>
+          )}
           <div>
             <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
               Тайлбар{" "}
@@ -140,10 +203,13 @@ function AdvanceModal({
               Болих
             </button>
             <button
-              onClick={() => advanceMutation.mutate()}
+              onClick={handleAdvance}
               disabled={
                 !selectedStatus ||
                 (needsDecree && (!decreeNumber || !decreeDate)) ||
+                (needsDecree && parcelsLoading) ||
+                blocksForIncompleteParcelCheck ||
+                blocksForUnfinalizedParcels ||
                 advanceMutation.isPending
               }
               className="flex items-center gap-2 h-9 px-5 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"

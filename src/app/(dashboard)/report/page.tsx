@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { logger } from "@/lib/logger";
 
 const PAGE_SIZE = 20;
 
@@ -708,7 +709,8 @@ export default function ReportPage() {
         setDlStatus("error");
         toast.error("Холболт тасарлаа");
       };
-    } catch {
+    } catch (err) {
+      logger.error("report download stream setup failed", { error: String(err) });
       setDlStatus("error");
     }
   }, [

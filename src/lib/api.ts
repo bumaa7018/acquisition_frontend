@@ -2,6 +2,7 @@ import axios from 'axios'
 import { toast } from 'sonner'
 import { authStorage } from './auth'
 import { notifyRequestStart, notifyRequestEnd } from './blocking-loader-state'
+import { logger } from './logger'
 
 // Нэг дор олон 401/403 toast гарахаас сэргийлнэ
 let _authAlertPending = false
@@ -29,14 +30,29 @@ function showAccessDenied(title: string, description: string, withLoginBtn = fal
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
+  AuditLog,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, AuthorizedRepresentative, LandValuation, AssetSpec, AssetCalculation,
-  AssetSpecType, AssetCalcType, DroneImage, DroneAcquisition,
+   DroneImage, DroneAcquisition,
+  CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  ValuationSubmission, ValuationSubmissionHistory,
+  AssetSpecType, AssetCalcType,
 } from '@/types'
+
+// Backend алдаа/timeout үед НЭГ л удаа алдааны хуудас руу шилжинэ (давхар дуудлага зогсоно)
+let _serverErrorRedirecting = false
+function redirectToServerError() {
+  if (typeof window === 'undefined' || _serverErrorRedirecting) return
+  const path = window.location.pathname
+  // Аль хэдийн алдааны/нэвтрэх хуудсанд байвал дахин шилжүүлэхгүй (loop-оос сэргийлнэ)
+  if (path === '/server-error' || path.startsWith('/login')) return
+  _serverErrorRedirecting = true
+  const from = window.location.pathname + window.location.search
+  window.location.href = `/server-error?from=${encodeURIComponent(from)}`
+}
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
 
@@ -184,36 +200,91 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
   }
 }
 
+// _silent: true — арын хүсэлтүүд (мэдэгдлийн poll г.м.) бүтэн дэлгэцийн
+// блоклогч loader-ийг асаахгүй байх тохиргоо.
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    _silent?: boolean
+  }
+}
+
 api.interceptors.request.use((config) => {
   const token = authStorage.getAccessToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
   // Эрхийн шалгалтыг backend (/prof group + middleware) дээр төвлөрүүлсэн.
   // Frontend талд урьдчилсан allowlist хийхгүй — false 403 (Хандах эрхгүй)
   // toast гарахаас сэргийлж, backend-тэй зөрчилдөхөөс зайлсхийнэ.
-  notifyRequestStart()
+  if (!config._silent) notifyRequestStart()
   return config
 })
 
 api.interceptors.response.use(
   (res) => {
-    notifyRequestEnd()
+    if (!res.config._silent) notifyRequestEnd()
+    // _silent (poll г.м. арын хүсэлт) бүрийг логлохгүй — эс тэгвээс лог
+    // notification polling-оор дүүрч, бодит хэрэглэгчийн үйлдэл дунд алга болно.
+    if (!res.config._silent) {
+      logger.info('api request success', {
+        method: res.config.method?.toUpperCase(),
+        url: res.config.url,
+        status: res.status,
+      })
+    }
     return res
   },
   async (error) => {
-    notifyRequestEnd()
-    console.error('[API Error]', error.config?.method?.toUpperCase(), error.config?.url, error.response?.status, error.response?.data)
+    if (!error.config?._silent) notifyRequestEnd()
 
     const status = error.response?.status
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
 
+    if (!error.config?._silent) {
+      logger.error('api request failed', {
+        method: error.config?.method?.toUpperCase(),
+        url: error.config?.url,
+        status,
+        code: error.code,
+        // Сервэрийн буцаасан аль хэдийн хэрэглэгчид зориулсан аюулгүй мессеж
+        // (i18n-жуулсан) — хүсэлтийн бие/header-ийг хэзээ ч логлохгүй.
+        error: error.response?.data?.error ?? error.response?.data?.message,
+      })
+    }
+
+    // ── Хүсэлт цуцлагдсан (компонент unmount, шинэ хайлт) — алдаа биш, чимээгүй өнгөрөөнө ──
+    if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error)
+    }
+
+    // ── Backend алдаа (5xx) / timeout / холбогдож чадсангүй ──────────────────
+    // Дахин API дуудахгүйгээр алдааны хуудас руу шилжиж зогсоно.
+    const noResponse = !error.response // network error эсвэл timeout (ECONNABORTED)
+    const isServerError = typeof status === 'number' && status >= 500
+    if (!isAuthRoute && (noResponse || isServerError)) {
+      // Арын (_silent) хүсэлтийн түр алдаа хэрэглэгчийг алдааны хуудас руу
+      // шидэхгүй — дараагийн poll дээр өөрөө сэргэнэ.
+      if (!error.config?._silent) redirectToServerError()
+      return Promise.reject(error)
+    }
+
     // ── 403: хандах эрхгүй (backend эсвэл frontend access-policy) ──────────
     if (status === 403 && !isAuthRoute) {
-      showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+      if (!error.config?._silent) {
+        showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
+      }
       return Promise.reject(error)
     }
 
     // ── 401: нэвтрэх шаардлагатай ──────────────────────────────────────────
     if (status === 401 && !isAuthRoute) {
+      // "Гарах" дарж storage цэвэрлэгдсэн (эсвэл нэвтрээгүй) үед үлдэгдэл
+      // хүсэлтүүд 401 буцаадаг — энэ нь сесс дууссан хэрэг биш тул анхааруулга
+      // харуулахгүйгээр чимээгүй login хуудас руу шилжинэ.
+      if (!authStorage.getRefreshToken()) {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login'
+        }
+        return Promise.reject(error)
+      }
       if (!error.config?._retry) {
         // Нэг удаа token refresh хийж үзнэ
         error.config._retry = true
@@ -226,7 +297,7 @@ api.interceptors.response.use(
         } catch {
           // Refresh амжилтгүй → session дууссан гэж үзнэ
           authStorage.clear()
-          showAccessDenied('Сессийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
+          showAccessDenied('Хандах эрхийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
           return Promise.reject(error)
         }
       }
@@ -242,7 +313,8 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<ApiResponse<LoginResponse>>('/auth/login', { username: email, password }).then(r => r.data.data),
-  logout: () => api.post('/auth/logout').then(r => r.data),
+  // Refresh токеноо хамт илгээж хоёуланг нь хүчингүй болгоно
+  logout: () => api.post('/auth/logout', { refresh_token: authStorage.getRefreshToken() }).then(r => r.data),
   me: () => api.get<ApiResponse<User>>('/users/me').then(r => r.data.data),
 }
 
@@ -311,6 +383,22 @@ export const permissionsApi = {
   delete: (id: string) => api.delete(`/permissions/${id}`),
 }
 
+export const auditApi = {
+  list: (params?: {
+    page?: number
+    page_size?: number
+    actor_id?: string
+    action?: string
+    resource_type?: string
+    resource_id?: string
+    acquisition_id?: string
+    parcel_id?: string
+    created_from?: string
+    created_to?: string
+  }) =>
+    api.get<PaginatedResponse<AuditLog>>('/audit-logs', { params }).then(r => r.data),
+}
+
 // ── Land Acquisitions ─────────────────────────────────
 export const landApi = {
   listConstructionTypes: () =>
@@ -346,7 +434,7 @@ export const landApi = {
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
-  getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string }) =>
+  getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; valuation_type?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
   createAsset: (acqId: string, body: Partial<Asset>) =>
     api.post<ApiResponse<Asset>>(`/land-acquisitions/${acqId}/assets`, body).then(r => r.data.data),
@@ -362,13 +450,17 @@ export const landApi = {
     api.get<ApiResponse<AssetCalculation[]>>(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`).then(r => r.data.data ?? []),
   upsertAssetCalculations: (acqId: string, assetId: string, calculations: { calc_type_id: number; unit: string; value: number }[]) =>
     api.post(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`, { calculations }),
-  getLandValuation: (acqId: string, parcelId: string) =>
-    api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId } }).then(r => r.data.data ?? null),
-  upsertLandValuation: (acqId: string, body: { parcel_id: string; land_area_m2: number; base_price_per_m2: number }) =>
+  getLandValuation: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(r => r.data.data ?? null),
+  upsertLandValuation: (acqId: string, body: LandValuationUpsert) =>
     api.post<ApiResponse<LandValuation>>(`/land-acquisitions/${acqId}/land-valuation`, body).then(r => r.data.data),
-  listCompensations: (acqId: string, parcelId?: string) =>
+  deleteLandValuation: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.delete(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(() => undefined),
+  importValuation: (acqId: string, body: ValuationImportPayload) =>
+    api.post<ApiResponse<ValuationImportResult>>(`/land-acquisitions/${acqId}/valuation-import`, body).then(r => r.data.data),
+  listCompensations: (acqId: string, parcelId?: string, valuationType?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
-      params: parcelId ? { parcel_id: parcelId } : undefined,
+      params: { parcel_id: parcelId || undefined, valuation_type: valuationType || undefined },
     }).then(r => r.data.data ?? []),
   createCompensation: (acqId: string, body: Partial<Compensation>) =>
     api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations`, body).then(r => r.data.data),
@@ -385,8 +477,23 @@ export const landApi = {
     fd.append('file', file)
     return api.post<ApiResponse<Compensation>>(`/land-acquisitions/${acqId}/compensations/${compId}/report`, fd).then(r => r.data.data)
   },
+  uploadAssetPhoto: (acqId: string, assetId: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<ApiResponse<{ photo_pdf_url: string; photo_pdf_name: string }>>(
+      `/land-acquisitions/${acqId}/assets/${assetId}/photos`, fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    ).then(r => r.data.data)
+  },
   listCompensationHistory: (acqId: string, compId: string) =>
     api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
+  // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв
+  getValuationSubmission: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { params: { valuation_type: valuationType } }).then(r => r.data.data),
+  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return", note: string, valuationType?: string) =>
+    api.post<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { action, note, valuation_type: valuationType }).then(r => r.data.data),
+  listValuationSubmissionHistory: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSubmissionHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`, { params: { valuation_type: valuationType } }).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
     api.post<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
   updateCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
@@ -466,9 +573,7 @@ export const landApi = {
       { org_user_id: orgUserId }
     ),
 
-  // Funding sources
-  listFundingSources: (acqId: string) =>
-    api.get<ApiResponse<FundingSource[]>>(`/land-acquisitions/${acqId}/funding-sources`).then(r => r.data.data ?? []),
+  // Funding sources — жагсаалт нь getById-ийн funding_sources талбараар ирдэг (тусдаа GET байхгүй)
   createFundingSource: (acqId: string, body: Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>) =>
     api.post<ApiResponse<FundingSource>>(`/land-acquisitions/${acqId}/funding-sources`, body).then(r => r.data.data),
   updateFundingSource: (acqId: string, srcId: string, body: Partial<Omit<FundingSource, 'id' | 'acquisition_id' | 'created_at' | 'created_by'>>) =>
@@ -494,22 +599,6 @@ export const landApi = {
           return user.roles.some(role => role.name === 'professional_org' || role.id === 'professional_org')
         })
       }),
-}
-
-// ── Professional Org: own acquisitions ────────────────────────────────────
-export const myLandApi = {
-  list: (filter?: { plan_code?: string; acquisition_name?: string; status?: number; au3_code?: string; page?: number; page_size?: number }) => {
-    const p = new URLSearchParams()
-    if (filter?.plan_code)        p.set('plan_code', filter.plan_code)
-    if (filter?.acquisition_name) p.set('acquisition_name', filter.acquisition_name)
-    if (filter?.status)           p.set('status', String(filter.status))
-    if (filter?.au3_code)         p.set('au3_code', filter.au3_code)
-    if (filter?.page)             p.set('page', String(filter.page))
-    if (filter?.page_size)        p.set('page_size', String(filter.page_size))
-    return api
-      .get<PaginatedResponse<import('@/types').LandAcquisition>>(`/land-acquisitions/my?${p.toString()}`)
-      .then(r => r.data)
-  },
 }
 
 // ── Global Parcels ────────────────────────────────────
@@ -745,6 +834,17 @@ export interface TimelinePoint {
   count: number
 }
 
+export interface ValuationStatusStat {
+  status: string
+  count:  number
+}
+
+export interface ValuationTypeStat {
+  valuation_type: string
+  count:          number
+  amount:         number
+}
+
 export interface DashboardData {
   acquisitions:         LandAcquisition[]
   parcel_statuses:      ParcelStatus[]
@@ -756,6 +856,8 @@ export interface DashboardData {
   total_compensation:   number
   status_breakdown:     ParcelStatusStat[]
   timeline:             TimelinePoint[]
+  valuation_statuses?:  ValuationStatusStat[]
+  valuation_types?:     ValuationTypeStat[]
   filtered_parcel_ids:  string[]
   filtered_au1_codes:   string[]
   filtered_au2_codes:   string[]
@@ -765,6 +867,7 @@ export interface DashboardData {
 export type DashboardFilter = {
   acquisition_id?:      string
   plan_code?:           string
+  status?:              number
   years?:               number[]
   general_category_id?: number
   sub_category_id?:     number
@@ -776,6 +879,7 @@ export const dashboardApi = {
     const params = new URLSearchParams()
     if (filter?.acquisition_id)      params.set('acquisition_id', filter.acquisition_id)
     if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
+    if (filter?.status)              params.set('status', String(filter.status))
     if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
     if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)
@@ -837,6 +941,25 @@ export const acquisitionCategoryApi = {
   update: (id: number, body: { name: string; sort_order?: number }) =>
     api.put<ApiResponse<AcquisitionCategory>>(`/acquisition-categories/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/acquisition-categories/${id}`),
+}
+
+// ── Мэдэгдэл ────────────────────────────────────────
+// Бүх хүсэлт _silent — хонхны арын шинэчлэлт бүтэн дэлгэцийн
+// блоклогч loader асаахгүй, түр алдаа нь хэрэглэгчид мэдэгдэхгүй.
+export const notificationApi = {
+  list: (params?: { unread?: boolean; page?: number; page_size?: number }) =>
+    api
+      .get<PaginatedResponse<import('@/types').AppNotification>>('/notifications', {
+        params: { ...(params?.unread ? { unread: true } : {}), page: params?.page ?? 1, page_size: params?.page_size ?? 15 },
+        _silent: true,
+      })
+      .then(r => ({ items: r.data.data ?? [], total: r.data.total ?? 0 })),
+  unreadCount: () =>
+    api
+      .get<ApiResponse<{ count: number }>>('/notifications/unread-count', { _silent: true })
+      .then(r => r.data.data?.count ?? 0),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`, undefined, { _silent: true }),
+  markAllRead: () => api.post('/notifications/read-all', undefined, { _silent: true }),
 }
 
 export default api

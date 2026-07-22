@@ -6,6 +6,7 @@ import { Plus, Trash2, Pencil, ReceiptText } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { isSeniorSpecialist } from "./shared";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -15,11 +16,15 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
-  const { data: sources = [], isLoading } = useQuery({
-    queryKey: ["funding-sources", id],
-    queryFn: () => landApi.listFundingSources(id),
+  // Санхүүжилтийн эх үүсвэр чөлөөлөлтийн дэлгэрэнгүй API-тай хамт ирдэг —
+  // тусдаа жагсаалтын API байхгүй. Энэ таб зөвхөн дотоод хэрэглэгчид харагдана.
+  const { data: acq, isLoading } = useQuery({
+    queryKey: ["land", id],
+    queryFn: () => landApi.getById(id),
   });
+  const sources = acq?.funding_sources ?? [];
 
   const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); };
 
@@ -38,7 +43,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     },
     onSuccess: () => {
       toast.success(editId ? "Мэдээлэл шинэчлэгдлээ" : "Санхүүжилтын эх үүсвэр нэмэгдлээ");
-      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+      queryClient.invalidateQueries({ queryKey: ["land", id] });
       closeForm();
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
@@ -48,7 +53,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     mutationFn: (srcId: string) => landApi.deleteFundingSource(id, srcId),
     onSuccess: () => {
       toast.success("Устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["funding-sources", id] });
+      queryClient.invalidateQueries({ queryKey: ["land", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
@@ -56,6 +61,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
   const inp = "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
 
   return (
+    <>
     <div className="flex flex-col gap-5">
       <div className="ap-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
@@ -198,7 +204,7 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                             Засах
                           </button>
                           <button
-                            onClick={() => { if (confirm("Устгах уу?")) deleteMutation.mutate(src.id); }}
+                            onClick={() => setPendingConfirm({ title: "Устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(src.id) })}
                             className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -225,5 +231,15 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
         )}
       </div>
     </div>
+    <ConfirmDialog
+      open={!!pendingConfirm}
+      title={pendingConfirm?.title ?? ""}
+      description={pendingConfirm?.description}
+      confirmLabel={pendingConfirm?.confirmLabel}
+      confirmColor={pendingConfirm?.confirmColor}
+      onConfirm={() => pendingConfirm?.onConfirm()}
+      onClose={() => setPendingConfirm(null)}
+    />
+    </>
   );
 }

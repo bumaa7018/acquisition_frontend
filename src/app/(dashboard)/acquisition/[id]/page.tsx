@@ -12,9 +12,12 @@ import { ParcelsTab } from "./_components/parcels-tab";
 import { FinancingTab } from "./_components/financing-tab";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import {
+  canViewAcquisitionTab,
+  hasRole,
   isExternalSpecialRole,
   isProfessionalOrg,
 } from "@/lib/role-utils";
+import type { AcquisitionTabKey } from "@/lib/access-policy";
 import {
   ArrowLeft,
   MapPin,
@@ -42,14 +45,7 @@ const AcquisitionMap = dynamic(
   },
 );
 
-type Tab =
-  | "general"
-  | "attachments"
-  | "progress"
-  | "parcels"
-  | "assignees"
-  | "map"
-  | "financing";
+type Tab = AcquisitionTabKey;
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 async function generateReport(acqId: string) {
@@ -82,16 +78,15 @@ export default function AcquisitionDetailPage() {
   const tabParam = searchParams.get("tab");
   const initialTab = (tabParam as Tab) ?? "general";
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [tabKey, setTabKey] = useState(0);
   const [reportLoading, setReportLoading] = useState(false);
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
 
   function handleTabClick(key: Tab) {
     setTab(key);
-    setTabKey((k) => k + 1);
   }
-  const canEditBase = hasPermission("acquisition.create");
+  // Backend PUT нь ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
+  const canEditBase = hasRole("senior_specialist", "Ахлах мэргэжилтэн") && hasPermission("land:update");
 
   const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],
@@ -206,9 +201,8 @@ export default function AcquisitionDetailPage() {
     },
     { key: "map", label: "Байршил", icon: <Map className="h-4 w-4" /> },
   ];
-  const visibleTabs = isExternal
-    ? TABS.filter((item) => item.key === "general" || item.key === "parcels")
-    : TABS;
+  // Таб бүр хандах эрхийн бодлогоор (access-policy) харагдана
+  const visibleTabs = TABS.filter((item) => canViewAcquisitionTab(item.key));
   const activeTab = visibleTabs.some((item) => item.key === tab)
     ? tab
     : "general";
@@ -299,7 +293,6 @@ export default function AcquisitionDetailPage() {
         })}
       </div>
 
-      {/* Tab content — key changes on every click (incl. re-click) → remount → fresh fetch */}
       {isAcqLocked && (
         <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 px-4 py-3">
           <span className="text-amber-500 shrink-0">🔒</span>
@@ -308,21 +301,20 @@ export default function AcquisitionDetailPage() {
           </p>
         </div>
       )}
-      {activeTab === "general" && <GeneralTab key={tabKey} id={id} canEdit={canEdit && !isExternal} />}
-      {activeTab === "attachments" && <AttachmentsTab key={tabKey} id={id} canEdit={canEdit} />}
-      {activeTab === "progress" && <ProgressTab key={tabKey} id={id} canEdit={canEdit} />}
+      {activeTab === "general" && <GeneralTab id={id} canEdit={canEdit && !isExternal} />}
+      {activeTab === "attachments" && <AttachmentsTab id={id} canEdit={canEdit} />}
+      {activeTab === "progress" && <ProgressTab id={id} canEdit={canEdit} />}
       {activeTab === "parcels" && (
         <ParcelsTab
-          key={tabKey}
           id={id}
           acquisitionProfOrgId={acq.professional_org_id}
           isAcqLocked={isAcqLocked}
         />
       )}
-      {activeTab === "assignees" && <AssigneesTab key={tabKey} id={id} canEdit={canEdit} />}
-      {activeTab === "financing" && <FinancingTab key={tabKey} id={id} canEdit={canEdit} />}
+      {activeTab === "assignees" && <AssigneesTab id={id} canEdit={canEdit} />}
+      {activeTab === "financing" && <FinancingTab id={id} canEdit={canEdit} />}
       {activeTab === "map" && (
-        <div key={tabKey} className="ap-card p-5">
+        <div className="ap-card p-5">
           <AcquisitionMap acquisitionId={id} aus={acq.aus} />
         </div>
       )}

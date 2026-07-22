@@ -28,6 +28,7 @@ import {
   FolderOpen,
   Calculator,
   Camera,
+  History,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -44,6 +45,10 @@ const NAV_MAIN = [
 const NAV_ADMIN = [
   { href: "/users", label: "Хэрэглэгчид", icon: Users },
   { href: "/roles", label: "Эрх & Роль", icon: Shield },
+];
+
+const NAV_AUDIT = [
+  { href: "/audit_logs", label: "Үйлдлийн лог", icon: History },
 ];
 
 const NAV_CONFIG = [
@@ -140,8 +145,9 @@ export function Sidebar() {
   const [isExternal, setIsExternal] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
   const [canViewConfig, setCanViewConfig] = useState(false);
+  const [canViewAudit, setCanViewAudit] = useState(false);
 
-  const allAdminHrefs = [...NAV_ADMIN, ...NAV_CONFIG].map((i) => i.href);
+  const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
     allAdminHrefs.some((href) => pathname.startsWith(href)),
   );
@@ -155,6 +161,7 @@ export function Sidebar() {
     setIsExternal(isExternalSpecialRole());
     setIsProfOrg(isProfessionalOrg());
     setCanViewConfig(hasPermission("admin:read"));
+    setCanViewAudit(hasPermission("audit:read"));
     setReady(true);
   }, []);
 
@@ -221,14 +228,17 @@ export function Sidebar() {
           </nav>
         )}
 
-        {/* Main nav — external special roles see only acquisition menu */}
+        {/* Main nav — external special roles see dashboard and acquisition menu */}
         {ready && (
           <div>
             <nav className="space-y-0.5">
               {(isExternal
                 ? isProfOrg
-                  ? [{ href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText }]
-                  : NAV_MAIN.filter((item) => item.href === "/acquisition")
+                  ? [
+                      { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
+                      { href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText },
+                    ]
+                  : NAV_MAIN.filter((item) => item.href === "/" || item.href === "/acquisition")
                 : NAV_MAIN
               ).map((item) => (
                 <NavItem
@@ -284,6 +294,15 @@ export function Sidebar() {
                       collapsed={collapsed}
                     />
                   ))}
+                  {canViewAudit &&
+                    NAV_AUDIT.map((item) => (
+                      <NavItem
+                        key={item.href}
+                        {...item}
+                        active={isActive(item.href)}
+                        collapsed={collapsed}
+                      />
+                    ))}
                 </nav>
 
                 {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}

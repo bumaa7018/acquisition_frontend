@@ -17,6 +17,7 @@ import LayerPanel, { type LayerConfig } from "./layer-panel";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { PARCEL_STATUS_STYLES } from "@/types";
+import { logger } from "@/lib/logger";
 
 const WMS_LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
@@ -195,7 +196,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
         });
         if (featureStatusId != null) feat.set("status_id", featureStatusId);
         return feat;
-      } catch {
+      } catch (err) {
+        logger.warn("wkt parse failed", { error: String(err) });
         return null;
       }
     };

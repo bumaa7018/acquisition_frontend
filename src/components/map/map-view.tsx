@@ -15,6 +15,7 @@ import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import FeaturePopup from './feature-popup'
 import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql } from '@/lib/geoserver'
+import { logger } from '@/lib/logger'
 
 const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -153,7 +154,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
             setPopup({ layer: id, properties: features[0].properties ?? {}, position: { x: pixel[0], y: pixel[1] } })
             break
           }
-        } catch { /* skip layer */ }
+        } catch (err) {
+          logger.warn('feature click query failed', { layer: id, error: String(err) })
+        }
       }
     })
 

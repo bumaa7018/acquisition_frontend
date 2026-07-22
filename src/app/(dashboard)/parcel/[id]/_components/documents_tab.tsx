@@ -7,9 +7,22 @@ import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
 import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// "Хурлын тэмдэглэл" төрлийн хавсралт Гэрээтэй нэгтгэж хэвлэдэг тул
+// цорын ганцаараа DOCX-ээр хавсаргах боломжтой байх ёстой (бусад бүх төрөл зөвхөн PDF).
+function isDocxAllowed(docType?: { type: string }) {
+  return docType?.type === "meeting_minutes";
+}
+
+function isDocxFile(file: File) {
+  return file.type === DOCX_CONTENT_TYPE || file.name.toLowerCase().endsWith(".docx");
 }
 
 export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
@@ -21,6 +34,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["parcel-documents", parcelId],
@@ -76,10 +90,17 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
-    if (f.size > 10 * 1024 * 1024) { toast.error("10MB хэтэрлээ"); e.target.value = ""; return; }
+    const docType = docTypes.find(x => x.id === documentTypeId);
+    const docxAllowed = isDocxAllowed(docType);
+    const isPdf = f.type === "application/pdf";
+    if (!isPdf && !(docxAllowed && isDocxFile(f))) {
+      toast.error(docxAllowed ? "PDF эсвэл DOCX файл оруулна уу" : "PDF файл оруулна уу");
+      e.target.value = "";
+      return;
+    }
+    if (f.size > 50 * 1024 * 1024) { toast.error("50MB хэтэрлээ"); e.target.value = ""; return; }
     setSelectedFile(f);
-    setFileName(f.name.replace(/\.pdf$/i, ""));
+    setFileName(docType ? docType.name : f.name.replace(/\.(pdf|docx)$/i, ""));
   }
 
   function handleSubmit() {
@@ -95,7 +116,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <div>
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 10MB</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
           </div>
           {!isLocked && (
             <button
@@ -142,7 +163,7 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     </a>
                     {!isLocked && (
                       <button
-                        onClick={() => { if (confirm("Баримт бичиг устгах уу?")) deleteMutation.mutate(doc.id); }}
+                        onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(doc.id) })}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -173,7 +194,18 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын төрөл</label>
                 <select
                   value={documentTypeId}
-                  onChange={e => setDocumentTypeId(e.target.value ? Number(e.target.value) : "")}
+                  onChange={e => {
+                    const v = e.target.value ? Number(e.target.value) : "";
+                    setDocumentTypeId(v);
+                    // Файлын нэрийг хавсралтын төрлийн нэрээр санал болгоно
+                    const t = docTypes.find(x => x.id === v);
+                    if (t) setFileName(t.name);
+                    // Шинэ төрөл DOCX зөвшөөрдөггүй бол өмнө сонгосон DOCX файлыг цэвэрлэнэ
+                    if (selectedFile && isDocxFile(selectedFile) && !isDocxAllowed(t)) {
+                      setSelectedFile(null);
+                      if (inputRef.current) inputRef.current.value = "";
+                    }
+                  }}
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
                   <option value="">— Сонгох —</option>
@@ -186,7 +218,13 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
               {/* File picker */}
               <div className="space-y-1.5">
                 <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файл</label>
-                <input ref={inputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFileChange} />
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={isDocxAllowed(docTypes.find(x => x.id === documentTypeId)) ? ".pdf,application/pdf,.docx" : ".pdf,application/pdf"}
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
@@ -230,6 +268,15 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }
