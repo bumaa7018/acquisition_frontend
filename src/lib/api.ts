@@ -34,7 +34,7 @@ import type {
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
-  ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
+  ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   ValuationSubmission, ValuationSubmissionHistory,
@@ -220,15 +220,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     if (!res.config._silent) notifyRequestEnd()
-    // _silent (poll г.м. арын хүсэлт) бүрийг логлохгүй — эс тэгвээс лог
-    // notification polling-оор дүүрч, бодит хэрэглэгчийн үйлдэл дунд алга болно.
-    if (!res.config._silent) {
-      logger.info('api request success', {
-        method: res.config.method?.toUpperCase(),
-        url: res.config.url,
-        status: res.status,
-      })
-    }
+    // Амжилттай хүсэлт БҮРийг логлохгүй — өдөрт олон мянган (ихэнхдээ 200 OK)
+    // бичлэг Loki руу урсаж, /api/client-log-ыг real API-тай ойролцоо тоогоор
+    // дуудуулж байсан бол илт хэрэггүй чимээ. Зөвхөн алдааг доор логлоно.
     return res
   },
   async (error) => {
@@ -660,24 +654,33 @@ export const parcelWorkflowApi = {
 }
 
 // ── Report rows ───────────────────────────────────────
+function reportQueryString(params?: ReportListParams): string {
+  const q = new URLSearchParams()
+  if (params?.page) q.set('page', String(params.page))
+  if (params?.page_size) q.set('page_size', String(params.page_size))
+  if (params?.acquisition_id) q.set('acquisition_id', params.acquisition_id)
+  if (params?.acquisition_name) q.set('acquisition_name', params.acquisition_name)
+  if (params?.plan_code) q.set('plan_code', params.plan_code)
+  if (params?.au3_code) q.set('au3_code', params.au3_code)
+  if (params?.right_type) q.set('right_type', String(params.right_type))
+  if (params?.landuse) q.set('landuse', params.landuse)
+  params?.years?.forEach(year => q.append('year', String(year)))
+  if (params?.compensation_type) q.set('compensation_type', params.compensation_type)
+  if (params?.general_category_id) q.set('general_category_id', String(params.general_category_id))
+  if (params?.sub_category_id) q.set('sub_category_id', String(params.sub_category_id))
+  return q.toString()
+}
+
 export const reportApi = {
   list: (params?: ReportListParams) => {
-    const q = new URLSearchParams()
-    if (params?.page) q.set('page', String(params.page))
-    if (params?.page_size) q.set('page_size', String(params.page_size))
-    if (params?.acquisition_id) q.set('acquisition_id', params.acquisition_id)
-    if (params?.acquisition_name) q.set('acquisition_name', params.acquisition_name)
-    if (params?.plan_code) q.set('plan_code', params.plan_code)
-    if (params?.au3_code) q.set('au3_code', params.au3_code)
-    if (params?.right_type) q.set('right_type', String(params.right_type))
-    if (params?.landuse) q.set('landuse', params.landuse)
-    params?.years?.forEach(year => q.append('year', String(year)))
-    if (params?.compensation_type) q.set('compensation_type', params.compensation_type)
-    if (params?.general_category_id) q.set('general_category_id', String(params.general_category_id))
-    if (params?.sub_category_id) q.set('sub_category_id', String(params.sub_category_id))
-
-    const suffix = q.toString()
+    const suffix = reportQueryString(params)
     return api.get<PaginatedResponse<ReportParcelRow>>(`/report/download${suffix ? `?${suffix}` : ''}`).then(r => r.data)
+  },
+  // Жагсаалтын дээд хэсгийн статистикийн картуудад зориулсан нэгтгэсэн тоо/дүн —
+  // бүх хуудсыг client талд дараалан татахын оронд НЭГ л дуудлагаар авна.
+  summary: (params?: Omit<ReportListParams, 'page' | 'page_size'>) => {
+    const suffix = reportQueryString(params)
+    return api.get<ApiResponse<ReportSummary>>(`/report/summary${suffix ? `?${suffix}` : ''}`).then(r => r.data.data)
   },
 }
 

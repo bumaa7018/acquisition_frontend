@@ -436,6 +436,9 @@ export interface ReportParcelRow {
   right_type: number;
   db_changed: boolean;
   changed_parcel_id: string;
+  status: number;
+  status_name: string;
+  status_date?: string;
   acquisition_id: string;
   acquisition_name: string;
   plan_code: string;
@@ -450,6 +453,33 @@ export interface ReportParcelRow {
   real_state_comp: number;
   property_comp: number;
   total_comp: number;
+}
+
+export interface ReportStatusStat {
+  status: number;
+  status_name: string;
+  count: number;
+}
+
+export interface ReportYearStat {
+  year: number;
+  count: number;
+}
+
+// ReportSummary — тайлангийн жагсаалтын дээд хэсгийн статистикийн карт (бүх
+// хуудаслагдсан үр дүнгээр, backend дээр нэг л дуудлагаар тооцоологдоно).
+export interface ReportSummary {
+  acquisition_count: number;
+  parcel_count: number;
+  total_area_m2: number;
+  total_parcel_area_m2: number;
+  total_compensation: number;
+  land_compensation: number;
+  real_state_compensation: number;
+  property_compensation: number;
+  other_compensation: number;
+  status_breakdown: ReportStatusStat[];
+  year_breakdown: ReportYearStat[];
 }
 
 export interface Asset {

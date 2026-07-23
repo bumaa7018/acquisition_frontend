@@ -1076,7 +1076,6 @@ export default function DashboardPage() {
   const TIMELINE = dashData?.timeline ?? [];
 
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
-  const maxArea  = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.area))  : 1;
 
   /* Map: API дуусахад л шинэчлэгдэх committed state */
   const [mapCommit, setMapCommit] = useState<{
@@ -1391,14 +1390,22 @@ export default function DashboardPage() {
 
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3.5">
-              НЭГЖ ТАЛБАРЫН ТАЛБАЙ /М.КВ/
+              НЭГЖ ТАЛБАРЫН ТАЛБАЙ /ГА/
             </p>
             {STATUSES.length === 0 ? (
               <p className="text-[11px] text-slate-400 dark:text-slate-500">—</p>
             ) : (
               <div className="space-y-2.5">
                 {STATUSES.map((s) => (
-                  <HBar key={s.key} label={s.label} value={s.area} maxVal={maxArea} color={s.color} suffix=" м²" />
+                  <div key={s.key} className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: s.color }} />
+                      {s.label}
+                    </span>
+                    <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200 shrink-0">
+                      {(s.area / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 })} га
+                    </span>
+                  </div>
                 ))}
               </div>
             )}
