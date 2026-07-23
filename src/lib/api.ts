@@ -727,14 +727,15 @@ export const droneAcquisitionApi = {
   },
   // Replaces an existing acquisition's tile pyramid/preview from a new .tif — the old
   // ones are deleted on the backend once the new pyramid finishes tiling. `file` is
-  // optional: omit it to patch only min_zoom/max_zoom/captured_at and leave the
-  // existing tile pyramid/preview untouched (the backend supports a file-less
-  // multipart request for exactly this — metadata-only update).
-  updateFromTif: (id: number, data: { file?: File; min_zoom?: number; max_zoom?: number; captured_at?: string }) => {
+  // optional: omit it to patch only captured_at and leave the existing tile pyramid/
+  // preview untouched (the backend supports a file-less multipart request for exactly
+  // this — metadata-only update). min_zoom/max_zoom are not editable here — the zoom
+  // range only makes sense in lockstep with the actual tiles on disk, so it's fixed at
+  // create time; the backend keeps the acquisition's existing range even when a new
+  // .tif is uploaded.
+  updateFromTif: (id: number, data: { file?: File; captured_at?: string }) => {
     const fd = new FormData()
     if (data.file) fd.append('file', data.file)
-    if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
-    if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
     const capturedAt = toRFC3339Date(data.captured_at)
     if (capturedAt) fd.append('captured_at', capturedAt)
     return api

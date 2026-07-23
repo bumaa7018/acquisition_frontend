@@ -295,8 +295,6 @@ function EditDroneAcquisitionModal({
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [minZoom, setMinZoom] = useState(acquisition.min_zoom?.toString() ?? "");
-  const [maxZoom, setMaxZoom] = useState(acquisition.max_zoom?.toString() ?? "");
   const [capturedAt, setCapturedAt] = useState(
     acquisition.captured_at ? acquisition.captured_at.slice(0, 10) : todayStr(),
   );
@@ -305,8 +303,6 @@ function EditDroneAcquisitionModal({
     mutationFn: () =>
       droneAcquisitionApi.updateFromTif(acquisition.id, {
         file: file ?? undefined,
-        min_zoom: minZoom ? Number(minZoom) : undefined,
-        max_zoom: maxZoom ? Number(maxZoom) : undefined,
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
@@ -362,7 +358,7 @@ function EditDroneAcquisitionModal({
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               {file
                 ? `Одоогийн явцын зураг (${acquisition.tile_root_path || "замгүй"}) энэ файлаар бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.`
-                : "Файл сонгохгүй бол зөвхөн доорх огноо/zoom мэдээлэл шинэчлэгдэж, одоогийн tile-ууд хэвээр үлдэнэ."}
+                : "Файл сонгохгүй бол зөвхөн доорх огноо шинэчлэгдэж, одоогийн tile-ууд хэвээр үлдэнэ."}
             </p>
           </div>
           <div>
@@ -373,26 +369,6 @@ function EditDroneAcquisitionModal({
               onChange={(e) => setCapturedAt(e.target.value)}
               className={inp}
             />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Min zoom</p>
-              <input
-                type="number"
-                value={minZoom}
-                onChange={(e) => setMinZoom(e.target.value)}
-                className={inp}
-              />
-            </div>
-            <div>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Max zoom</p>
-              <input
-                type="number"
-                value={maxZoom}
-                onChange={(e) => setMaxZoom(e.target.value)}
-                className={inp}
-              />
-            </div>
           </div>
           {updateMutation.isPending && (
             <p className="text-[12px] text-amber-600 dark:text-amber-400">
