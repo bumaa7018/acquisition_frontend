@@ -453,7 +453,9 @@ function EditDroneAcquisitionModal({
   const [file, setFile] = useState<File | null>(null);
   const [minZoom, setMinZoom] = useState(acquisition.min_zoom?.toString() ?? "");
   const [maxZoom, setMaxZoom] = useState(acquisition.max_zoom?.toString() ?? "");
-  const [capturedAt, setCapturedAt] = useState(todayStr);
+  const [capturedAt, setCapturedAt] = useState(
+    acquisition.captured_at ? acquisition.captured_at.slice(0, 10) : todayStr(),
+  );
 
   const updateMutation = useMutation({
     mutationFn: () =>
