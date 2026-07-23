@@ -94,10 +94,10 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
           }}
           className={select}
         >
-          {relevant.map((acq, i) =>
+          {relevant.map((acq) =>
             String(acq.id) === String(right.id) ? null : (
               <option key={acq.id} value={acq.id}>
-                {optionLabel(acq, i)}
+                {optionLabel(acq)}
               </option>
             ),
           )}
@@ -112,10 +112,10 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
           }}
           className={select}
         >
-          {relevant.map((acq, i) =>
+          {relevant.map((acq) =>
             String(acq.id) === String(left.id) ? null : (
               <option key={acq.id} value={acq.id}>
-                {optionLabel(acq, i)}
+                {optionLabel(acq)}
               </option>
             ),
           )}
