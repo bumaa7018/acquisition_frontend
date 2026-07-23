@@ -23,7 +23,7 @@ import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "@/component
 
 const PLAN_LAYER_ID = "plan";
 const HISTORY_GROUP: LayerGroupConfig = { id: "boundary_history", label: "Хилийн өөрчлөлт", color: "#02c0ce" };
-const DRONE_TILE_GROUP: LayerGroupConfig = { id: "drone_tiles", label: "Дрон tile давхарга", color: "#d946ef" };
+const DRONE_TILE_GROUP: LayerGroupConfig = { id: "drone_tiles", label: "Дрон явцын зураг", color: "#d946ef" };
 
 interface Props {
   acquisitionId: string;

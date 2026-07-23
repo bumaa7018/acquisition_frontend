@@ -56,7 +56,7 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => droneAcquisitionApi.delete(id),
     onSuccess: () => {
-      toast.success("Tile давхарга устгагдлаа");
+      toast.success("Явцын зураг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
@@ -68,13 +68,13 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
     <>
       <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
         <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-          Tile давхаргын жагсаалт
+          Явцын зургийн жагсаалт
         </p>
         <button
           onClick={() => setShowCreateForm(true)}
           className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
         >
-          <Plus className="h-4 w-4" /> Tile давхарга нэмэх
+          <Plus className="h-4 w-4" /> Явцын зураг нэмэх
         </button>
       </div>
 
@@ -87,7 +87,7 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
       ) : !relevant.length ? (
         <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
           <Layers className="h-8 w-8 mb-2 opacity-30" />
-          <p className="text-[13px]">Tile давхарга байхгүй</p>
+          <p className="text-[13px]">Явцын зураг байхгүй</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
@@ -120,7 +120,7 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm("Tile давхарга устгах уу?")) deleteMutation.mutate(acq.id);
+                    if (confirm("Явцын зураг устгах уу?")) deleteMutation.mutate(acq.id);
                   }}
                   title="Устгах"
                   className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
@@ -158,7 +158,7 @@ function CreateDroneAcquisitionModal({ acquisitionId, onClose }: { acquisitionId
       <div className="w-full max-w-lg max-h-[90vh] rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
           <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
-            Tile давхарга нэмэх
+            Явцын зураг нэмэх
           </p>
           <button
             onClick={onClose}
@@ -222,7 +222,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
-      toast.success("Tile давхарга үүслээ");
+      toast.success("Явцын зураг үүслээ");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
     },
@@ -286,7 +286,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         </div>
         {uploadMutation.isPending && (
           <p className="text-[12px] text-amber-600 dark:text-amber-400">
-            Tile боловсруулж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
+            Явцын зураг боловсруулж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
           </p>
         )}
       </div>
@@ -340,7 +340,7 @@ function ManualCreateForm({ acquisitionId, onClose }: { acquisitionId: string; o
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
-      toast.success("Tile давхарга нэмэгдлээ");
+      toast.success("Явцын зураг нэмэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
     },
@@ -478,7 +478,7 @@ function EditDroneAcquisitionModal({
       <div className="w-full max-w-lg max-h-[90vh] rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
           <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
-            Tile давхарга засах
+            Явцын зураг засах
           </p>
           <button
             onClick={onClose}
@@ -510,7 +510,7 @@ function EditDroneAcquisitionModal({
               <span className="truncate">{file ? file.name : "Файл сонгох (.tif, .tiff)"}</span>
             </button>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-              Одоогийн tile давхарга ({acquisition.tile_root_path || "замгүй"}) энэ файлаар
+              Одоогийн явцын зураг ({acquisition.tile_root_path || "замгүй"}) энэ файлаар
               бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.
             </p>
           </div>
@@ -545,7 +545,7 @@ function EditDroneAcquisitionModal({
           </div>
           {updateMutation.isPending && (
             <p className="text-[12px] text-amber-600 dark:text-amber-400">
-              Шинэ tile боловсруулж байна. Цонхыг бүү хаа.
+              Шинэ явцын зураг боловсруулж байна. Цонхыг бүү хаа.
             </p>
           )}
         </div>

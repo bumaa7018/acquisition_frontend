@@ -56,7 +56,7 @@ function DroneAcquisitionsPageContent() {
             <ArrowLeft className="h-4 w-4" /> Буцах
           </button>
           <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            {fullscreen === "map" ? "Явцын зураг" : "Tile харьцуулах"}
+            {fullscreen === "map" ? "Явцын зураг" : "Явцын зураг харьцуулах"}
           </p>
           <div className="w-[92px]" />
         </div>
@@ -75,10 +75,10 @@ function DroneAcquisitionsPageContent() {
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-          Дрон tile давхарга
+          Дрон явцын зураг
         </h1>
         <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-0.5">
-          Чөлөөлөлт сонгож боловсруулагдсан tile давхаргыг газрын зураг дээр харах
+          Чөлөөлөлт сонгож боловсруулагдсан явцын зургийг газрын зураг дээр харах
         </p>
       </div>
 
@@ -113,7 +113,7 @@ function DroneAcquisitionsPageContent() {
         <div className="ap-card overflow-hidden flex flex-col">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d] shrink-0">
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              Tile харьцуулах
+              Явцын зураг харьцуулах
             </p>
             <button
               onClick={() => setFullscreen("compare")}

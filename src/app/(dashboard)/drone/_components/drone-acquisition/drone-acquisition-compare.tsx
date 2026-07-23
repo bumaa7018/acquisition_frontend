@@ -71,15 +71,15 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
   if (!acquisitionId) return <Placeholder text="Эхлээд чөлөөлөлт сонгоно уу" />;
 
   if (relevant.length < 2)
-    return <Placeholder text="Харьцуулах бэлэн tile давхарга олдсонгүй" />;
+    return <Placeholder text="Харьцуулах бэлэн явцын зураг олдсонгүй" />;
 
   const defaultFirst = relevant[relevant.length - 1];
   const defaultLast = relevant[0];
   const left = relevant.find((acq) => String(acq.id) === leftId) ?? defaultFirst;
   const right = relevant.find((acq) => String(acq.id) === rightId) ?? defaultLast;
 
-  function optionLabel(acq: DroneAcquisition, i: number) {
-    return `${i + 1}. ${formatDate(acq.captured_at ?? acq.created_at)}`;
+  function optionLabel(acq: DroneAcquisition) {
+    return formatDate(acq.captured_at ?? acq.created_at);
   }
 
   return (
