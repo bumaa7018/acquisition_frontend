@@ -260,17 +260,6 @@ export interface BoundaryHistory {
 
 export type DroneImageType = "parcel" | "acquisition";
 
-export interface DroneImage {
-  id: number;
-  name?: string;
-  image_url?: string;
-  captured_at?: string;
-  geometry_wkt?: string;
-  type: DroneImageType;
-  parcel_id?: string;
-  acquisition_id?: string;
-}
-
 export type DroneAcquisitionStatus = "processing" | "ready" | "failed";
 
 export interface DroneAcquisition {

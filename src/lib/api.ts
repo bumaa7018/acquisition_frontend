@@ -36,7 +36,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-   DroneImage, DroneAcquisition,
+   DroneAcquisition,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
@@ -676,41 +676,6 @@ export const reportApi = {
 function toRFC3339Date(date?: string): string | undefined {
   if (!date) return undefined
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00Z` : date
-}
-
-// ── Plans ─────────────────────────────────────────────
-export const droneImageApi = {
-  list: () =>
-    api.get<ApiResponse<DroneImage[]>>('/drone-images').then(r => r.data.data ?? []),
-  create: (data: { file: File; geometry_wkt: string; acquisition_id: string; captured_at?: string; name?: string }) => {
-    const fd = new FormData()
-    fd.append('file', data.file)
-    fd.append('geometry_wkt', data.geometry_wkt)
-    fd.append('acquisition_id', data.acquisition_id)
-    fd.append('type', 'acquisition')
-    if (data.captured_at) {
-      const capturedAt = /^\d{4}-\d{2}-\d{2}$/.test(data.captured_at)
-        ? `${data.captured_at}T00:00:00Z`
-        : data.captured_at
-      fd.append('captured_at', capturedAt)
-    }
-    if (data.name) fd.append('name', data.name)
-    return api.post<ApiResponse<DroneImage>>('/drone-images', fd).then(r => r.data.data)
-  },
-  update: (id: number, data: { file?: File | null; geometry_wkt?: string; captured_at?: string; name?: string }) => {
-    const fd = new FormData()
-    if (data.file) fd.append('file', data.file)
-    if (data.geometry_wkt) fd.append('geometry_wkt', data.geometry_wkt)
-    if (data.captured_at) {
-      const capturedAt = /^\d{4}-\d{2}-\d{2}$/.test(data.captured_at)
-        ? `${data.captured_at}T00:00:00Z`
-        : data.captured_at
-      fd.append('captured_at', capturedAt)
-    }
-    if (data.name) fd.append('name', data.name)
-    return api.put<ApiResponse<DroneImage>>(`/drone-images/${id}`, fd).then(r => r.data.data)
-  },
-  delete: (id: number) => api.delete(`/drone-images/${id}`),
 }
 
 export const droneAcquisitionApi = {

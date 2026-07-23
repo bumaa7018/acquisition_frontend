@@ -4,7 +4,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Maximize2 } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
-import { DroneNav } from "../_components/drone-nav";
 import { DroneAcquisitionCompare } from "../_components/drone-acquisition/drone-acquisition-compare";
 import { DroneAcquisitionList } from "../_components/drone-acquisition/drone-acquisition-list";
 
@@ -82,8 +81,6 @@ function DroneAcquisitionsPageContent() {
           Чөлөөлөлт сонгож боловсруулагдсан tile давхаргыг газрын зураг дээр харах
         </p>
       </div>
-
-      <DroneNav />
 
       <div className="ap-card p-4">
         <AcquisitionSelect
