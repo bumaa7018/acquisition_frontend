@@ -304,20 +304,24 @@ function EditDroneAcquisitionModal({
   const updateMutation = useMutation({
     mutationFn: () =>
       droneAcquisitionApi.updateFromTif(acquisition.id, {
-        file: file!,
+        file: file ?? undefined,
         min_zoom: minZoom ? Number(minZoom) : undefined,
         max_zoom: maxZoom ? Number(maxZoom) : undefined,
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
-      toast.success("Шинэ .tif боловсруулагдаж эхэллээ, өмнөх tile-ууд солигдоно");
+      toast.success(
+        file
+          ? "Шинэ .tif боловсруулагдаж эхэллээ, өмнөх tile-ууд солигдоно"
+          : "Мэдээлэл шинэчлэгдлээ",
+      );
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
     },
     onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
   });
 
-  const canSubmit = !!file && !updateMutation.isPending;
+  const canSubmit = !updateMutation.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -337,7 +341,7 @@ function EditDroneAcquisitionModal({
         <div className="p-6 space-y-4 overflow-y-auto">
           <div>
             <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-              Шинэ GeoTIFF файл <span className="text-red-400">*</span>
+              Шинэ GeoTIFF файл <span className="text-slate-400">(заавал биш)</span>
             </p>
             <input
               ref={fileInputRef}
@@ -356,8 +360,9 @@ function EditDroneAcquisitionModal({
               <span className="truncate">{file ? file.name : "Файл сонгох (.tif, .tiff)"}</span>
             </button>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-              Одоогийн явцын зураг ({acquisition.tile_root_path || "замгүй"}) энэ файлаар
-              бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.
+              {file
+                ? `Одоогийн явцын зураг (${acquisition.tile_root_path || "замгүй"}) энэ файлаар бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.`
+                : "Файл сонгохгүй бол зөвхөн доорх огноо/zoom мэдээлэл шинэчлэгдэж, одоогийн tile-ууд хэвээр үлдэнэ."}
             </p>
           </div>
           <div>
