@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Columns2, ZoomOut } from "lucide-react";
+import { Columns2, Plus, Minus } from "lucide-react";
 import { droneAcquisitionApi } from "@/lib/api";
 import { formatDate, resolveImageUrl } from "@/lib/utils";
 import type { DroneAcquisition } from "@/types";
@@ -12,6 +12,22 @@ const DOUBLE_CLICK_ZOOM = 2.5;
 
 function clampZoom(scale: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+}
+
+type ZoomView = { scale: number; x: number; y: number };
+
+// Rescales around (px, py) — a point in the container's own coordinate space — so that
+// point stays visually fixed while scale changes. Used by wheel-zoom, double-click, and
+// the +/- buttons alike so all three zoom consistently.
+function zoomAt(v: ZoomView, px: number, py: number, nextScale: number): ZoomView {
+  nextScale = clampZoom(nextScale);
+  if (nextScale === v.scale) return v;
+  if (nextScale === MIN_ZOOM) return { scale: MIN_ZOOM, x: 0, y: 0 };
+  return {
+    scale: nextScale,
+    x: px - ((px - v.x) * nextScale) / v.scale,
+    y: py - ((py - v.y) * nextScale) / v.scale,
+  };
 }
 
 interface Props {
@@ -94,15 +110,8 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
       const rect = el.getBoundingClientRect();
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
-      setView((v) => {
-        const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
-        const nextScale = clampZoom(v.scale * factor);
-        if (nextScale === v.scale) return v;
-        if (nextScale === MIN_ZOOM) return { scale: MIN_ZOOM, x: 0, y: 0 };
-        const nx = px - ((px - v.x) * nextScale) / v.scale;
-        const ny = py - ((py - v.y) * nextScale) / v.scale;
-        return { scale: nextScale, x: nx, y: ny };
-      });
+      const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+      setView((v) => zoomAt(v, px, py, v.scale * factor));
     };
     el.addEventListener("wheel", handleWheel, { passive: false });
     wheelCleanupRef.current = () => el.removeEventListener("wheel", handleWheel);
@@ -114,11 +123,16 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
     const rect = el.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
-    setView((v) => {
-      if (v.scale > 1) return { scale: 1, x: 0, y: 0 };
-      const nextScale = DOUBLE_CLICK_ZOOM;
-      return { scale: nextScale, x: px - px * nextScale, y: py - py * nextScale };
-    });
+    setView((v) => (v.scale > 1 ? { scale: 1, x: 0, y: 0 } : zoomAt(v, px, py, DOUBLE_CLICK_ZOOM)));
+  }
+
+  // +/- buttons zoom toward the container's center, like a map control.
+  function zoomByButton(factor: number) {
+    const el = containerRef.current;
+    if (!el) return;
+    const px = el.clientWidth / 2;
+    const py = el.clientHeight / 2;
+    setView((v) => zoomAt(v, px, py, v.scale * factor));
   }
 
   function handlePanStart(e: React.MouseEvent) {
@@ -255,12 +269,31 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
         {view.scale > 1 && (
           <button
             onClick={() => setView({ scale: 1, x: 0, y: 0 })}
-            title="Томруулгыг арилгах"
-            className="absolute bottom-3 right-3 z-20 flex items-center gap-1.5 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white hover:bg-black/75 transition-colors"
+            title="Анхны хэмжээ рүү буцах"
+            className="absolute bottom-3 left-3 z-20 rounded-md bg-black/60 backdrop-blur px-2 py-1 text-[11px] font-medium text-white hover:bg-black/75 transition-colors"
           >
-            <ZoomOut className="h-3.5 w-3.5" /> {Math.round(view.scale * 100)}%
+            {Math.round(view.scale * 100)}%
           </button>
         )}
+
+        <div className="absolute bottom-3 right-3 z-20 flex flex-col overflow-hidden rounded-md bg-black/60 backdrop-blur shadow-lg">
+          <button
+            onClick={() => zoomByButton(1.4)}
+            disabled={view.scale >= MAX_ZOOM}
+            title="Томруулах"
+            className="flex h-8 w-8 items-center justify-center text-white hover:bg-white/15 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => zoomByButton(1 / 1.4)}
+            disabled={view.scale <= MIN_ZOOM}
+            title="Жижигрүүлэх"
+            className="flex h-8 w-8 items-center justify-center text-white hover:bg-white/15 transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+        </div>
 
         <div
           className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_4px_rgba(0,0,0,0.6)] pointer-events-none z-10"
