@@ -162,7 +162,7 @@ function AcquisitionSelect({
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-80 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full sm:w-80 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
             {!debounced.trim() ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
@@ -305,7 +305,7 @@ function EmployeeSelect({
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-72 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full sm:w-72 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
             {isFetching ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
@@ -427,7 +427,7 @@ function PlanSelect({
         )}
       </div>
       {open && (
-        <div className="absolute z-50 mt-1 w-64 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full sm:w-64 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-52 overflow-y-auto">
             {!debounced.trim() ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
@@ -532,7 +532,7 @@ function YearMultiSelect({
         )}
       </button>
       {open && (
-        <div className="absolute z-50 mt-1 w-44 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full sm:w-44 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-52 overflow-y-auto py-1">
             {YEAR_OPTIONS.map((y) => {
               const ys = String(y);
@@ -1147,9 +1147,11 @@ export default function DashboardPage() {
 
       {/* ── Filter card ───────────────────────────────── */}
       <div className="ap-card px-4 py-3">
-        <div className="flex flex-wrap items-end gap-3">
+        {/* grid ашигласнаар багана тоо тогтмол болж, 13 инчийн лаптоп зэрэг завсрын
+            хэмжээст "Харах" товч ганцаараа шинэ мөр рүү үсэрч гарахаа больсон */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
           {/* Acquisition select */}
-          <div className="flex flex-col gap-1 min-w-[220px] flex-1">
+          <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
               Чөлөөлөлт
             </label>
@@ -1161,7 +1163,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Plan code */}
-          <div className="flex flex-col gap-1 min-w-[180px] flex-1">
+          <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
               Төлөвлөгөө
             </label>
@@ -1169,7 +1171,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Year multi-select */}
-          <div className="flex flex-col gap-1 min-w-[160px]">
+          <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
               Он
             </label>
@@ -1177,7 +1179,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Employee select */}
-          <div className="flex flex-col gap-1 min-w-[200px] flex-1">
+          <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
               Хариуцсан ажилтан
             </label>
@@ -1189,7 +1191,7 @@ export default function DashboardPage() {
           </div>
 
           {/* General category */}
-          <div className="flex flex-col gap-1 min-w-[180px]">
+          <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
               Ерөнхий ангилал
             </label>
@@ -1210,7 +1212,7 @@ export default function DashboardPage() {
 
           {/* Sub category */}
           {!!inGenCatId && (
-            <div className="flex flex-col gap-1 min-w-[180px]">
+            <div className="flex flex-col gap-1 min-w-0">
               <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
                 Дэд ангилал
               </label>

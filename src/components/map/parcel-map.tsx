@@ -14,6 +14,8 @@ import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./layer-panel";
+import FullscreenButton from "./fullscreen-button";
+import { useFullscreen } from "./use-fullscreen";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { PARCEL_STATUS_STYLES } from "@/types";
@@ -64,10 +66,12 @@ interface Props {
 
 export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Props) {
   const mapRef       = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const olMap        = useRef<OLMap | null>(null);
   const wmsLayers    = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const vectorLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
   const wktFormat    = useRef(new WKT());
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
 
   const acqCql    = acquisitionId ? `acquisition_id='${acquisitionId}'` : undefined;
   const parcelCql = parcelId      ? `parcel_id='${parcelId}'`            : undefined;
@@ -230,13 +234,23 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
     }
   }, [geometryWkt, statusId]);
 
+  // Fullscreen горим сольсны дараа OL-д контейнерийн шинэ хэмжээг мэдэгдэнэ (өөрөө анзаардаггүй)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => olMap.current?.updateSize());
+    return () => cancelAnimationFrame(raf);
+  }, [isFullscreen]);
+
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden border border-slate-200 dark:border-[#37394d]"
-      style={{ height: 480 }}
+      ref={containerRef}
+      className={`relative w-full overflow-hidden bg-white dark:bg-[#1e1f27] ${
+        isFullscreen ? "" : "rounded-xl border border-slate-200 dark:border-[#37394d]"
+      }`}
+      style={isFullscreen ? undefined : { height: 480 }}
     >
       <div ref={mapRef} className="h-full w-full" />
       <LayerPanel layers={layers} onToggle={handleToggle} />
+      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
     </div>
   );
 }

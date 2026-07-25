@@ -12,12 +12,12 @@ import {
   Search,
   User,
   ChevronRight,
-  Menu,
   Settings,
   Moon,
   Sun,
   LogOut,
   UserCircle,
+  X,
 } from "lucide-react";
 
 const TITLES: Record<string, { greeting: string; crumb: string }> = {
@@ -60,6 +60,7 @@ export function Header() {
   const { greeting, crumb } = resolveTitle(pathname);
   const { resolvedTheme, setTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const initials = user?.first_name
@@ -94,7 +95,7 @@ export function Header() {
 
   return (
     <header
-      className="flex pl-14 h-[85px] shrink-0 items-center gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-6"
+      className="relative flex pl-14 h-[85px] shrink-0 items-center gap-2 sm:gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-3 sm:px-6"
       style={{ boxShadow: "0 0 35px 0 rgba(154,161,171,.15)" }}
     >
       {/* Page title + breadcrumb */}
@@ -115,14 +116,44 @@ export function Header() {
 
       <div className="flex-1" />
 
-      {/* Search */}
-      <div className="relative hidden md:block">
+      {/* Search — дэлгэц жижигсэх тусам input нарийсаж нэг мөрөнд багтана */}
+      <div className="relative hidden sm:block shrink-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
         <input
           placeholder="Хайлт..."
-          className="h-9 w-48 rounded-lg border border-slate-200 dark:border-[#37394d] border-solid bg-slate-50/80 dark:bg-[#1e1f27] pl-9 pr-3 text-[13px] text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:bg-white dark:focus:bg-[#252630] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+          className="h-9 w-28 sm:w-32 md:w-44 lg:w-56 xl:w-64 rounded-lg border border-slate-200 dark:border-[#37394d] border-solid bg-slate-50/80 dark:bg-[#1e1f27] pl-9 pr-3 text-[13px] text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:bg-white dark:focus:bg-[#252630] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
         />
       </div>
+
+      {/* Утасны дэлгэцэд input байрлуулах зай хүрэлцэхгүй тул icon товч → дарахад
+          бүтэн мөр хайлт нээгдэнэ (доор, absolute overlay) */}
+      <button
+        onClick={() => setMobileSearchOpen(true)}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630] transition-colors sm:hidden"
+        title="Хайх"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+
+      {mobileSearchOpen && (
+        <div className="absolute inset-0 z-20 flex items-center gap-2 bg-white dark:bg-[#1e1f27] px-3 sm:hidden">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              autoFocus
+              placeholder="Хайлт..."
+              className="h-9 w-full rounded-lg border border-slate-200 dark:border-[#37394d] border-solid bg-slate-50/80 dark:bg-[#1e1f27] pl-9 pr-3 text-[13px] text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:bg-white dark:focus:bg-[#252630] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+            />
+          </div>
+          <button
+            onClick={() => setMobileSearchOpen(false)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630] transition-colors"
+            title="Хаах"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Icon row */}
       <div className="flex items-center gap-0.5">
