@@ -17,6 +17,7 @@ services:
       args:
         NEXT_API_URL: ${NEXT_API_URL}
         NEXT_GS_URL: ${NEXT_GS_URL}
+        NEXT_PUBLIC_CESIUM_ION_TOKEN: ${NEXT_PUBLIC_CESIUM_ION_TOKEN}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:

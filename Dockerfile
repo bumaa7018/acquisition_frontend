@@ -24,8 +24,10 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_API_URL=http://api:8080
 ARG NEXT_GS_URL=http://geoserver:8080
+ARG NEXT_PUBLIC_CESIUM_ION_TOKEN=
 ENV NEXT_API_URL=$NEXT_API_URL
 ENV NEXT_GS_URL=$NEXT_GS_URL
+ENV NEXT_PUBLIC_CESIUM_ION_TOKEN=$NEXT_PUBLIC_CESIUM_ION_TOKEN
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 
