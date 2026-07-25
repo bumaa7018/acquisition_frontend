@@ -25,13 +25,21 @@ const nextConfig = {
   // public/cesium руу хуулж, CESIUM_BASE_URL-аар клиент талд ачаалуулна
   webpack(config, { isServer }) {
     if (!isServer) {
+      // Санамж: copy-webpack-plugin-ээр хуулсан файлууд ч webpack-ийн
+      // compilation.assets-д бүртгэгдэж, Next-ийн production Terser
+      // minimizer-т "энгийн .js" гэж таарч ордог. Cesium-ий Workers/*.js нь
+      // Cesium-ийн ӨӨРИЙН build-аас гарсан, аль хэдийн бэлтгэгдсэн ESM chunk
+      // (import/export агуулсан) тул Terser-ээр дахин parse хийлгэвэл
+      // "cannot be used outside of module code" syntax error өгдөг (зөвхөн
+      // `next build`/Docker-д илэрдэг — dev нь minify хийдэггүй тул мэдрэгддэггүй).
+      // info.minimized:true гэж тэмдэглэснээр Terser эдгээр asset-ыг алгасна.
       config.plugins.push(
         new CopyPlugin({
           patterns: [
-            { from: path.join(CESIUM_SRC, "Workers"), to: path.resolve(process.cwd(), "public/cesium/Workers") },
-            { from: path.join(CESIUM_SRC, "ThirdParty"), to: path.resolve(process.cwd(), "public/cesium/ThirdParty") },
-            { from: path.join(CESIUM_SRC, "Assets"), to: path.resolve(process.cwd(), "public/cesium/Assets") },
-            { from: path.join(CESIUM_SRC, "Widgets"), to: path.resolve(process.cwd(), "public/cesium/Widgets") },
+            { from: path.join(CESIUM_SRC, "Workers"), to: path.resolve(process.cwd(), "public/cesium/Workers"), info: { minimized: true } },
+            { from: path.join(CESIUM_SRC, "ThirdParty"), to: path.resolve(process.cwd(), "public/cesium/ThirdParty"), info: { minimized: true } },
+            { from: path.join(CESIUM_SRC, "Assets"), to: path.resolve(process.cwd(), "public/cesium/Assets"), info: { minimized: true } },
+            { from: path.join(CESIUM_SRC, "Widgets"), to: path.resolve(process.cwd(), "public/cesium/Widgets"), info: { minimized: true } },
           ],
         }),
       );
