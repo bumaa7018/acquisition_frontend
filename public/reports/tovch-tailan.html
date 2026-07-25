@@ -90,8 +90,8 @@
   <p class="sub">Газар чөлөөлөх ажлын бүх алхмыг талбарын бүртгэлээс эхлээд үнэлгээ, нөхөх олговрыг батлах
   хүртэл нэг цахим системд хяналттай явуулахад зориулсан вэб систем.</p>
   <div class="stats s4">
-    <div class="stat"><div class="v">185</div><div class="l">REST API endpoint — үйлчилгээний цэг</div></div>
-    <div class="stat"><div class="v">49</div><div class="l">Өгөгдлийн сангийн хүснэгт</div></div>
+    <div class="stat"><div class="v">187</div><div class="l">REST API endpoint — үйлчилгээний цэг</div></div>
+    <div class="stat"><div class="v">50</div><div class="l">Өгөгдлийн сангийн хүснэгт</div></div>
     <div class="stat"><div class="v">24</div><div class="l">Вэб хуудас (дэлгэц)</div></div>
     <div class="stat"><div class="v">220</div><div class="l">Автомат тест</div></div>
   </div>
@@ -101,16 +101,16 @@
 <section>
   <div class="ch-head"><span class="ch-num">1</span><h2>Ерөнхий тойм</h2></div>
   <div class="stats">
-    <div class="stat"><div class="v">185</div><div class="l">REST API endpoint</div></div>
-    <div class="stat"><div class="v">49</div><div class="l">Хүснэгт (2 сан)</div></div>
-    <div class="stat"><div class="v">58</div><div class="l">Migration</div></div>
+    <div class="stat"><div class="v">187</div><div class="l">REST API endpoint</div></div>
+    <div class="stat"><div class="v">50</div><div class="l">Хүснэгт (2 сан)</div></div>
+    <div class="stat"><div class="v">59</div><div class="l">Migration</div></div>
     <div class="stat"><div class="v">24</div><div class="l">Frontend хуудас</div></div>
-    <div class="stat"><div class="v">~55.4К</div><div class="l">Кодын мөр (Go + TS)</div></div>
+    <div class="stat"><div class="v">~59.5К</div><div class="l">Кодын мөр (Go + TS)</div></div>
     <div class="stat"><div class="v">6</div><div class="l">Хэрэглэгчийн роль</div></div>
   </div>
   <div class="note">Систем нь дөрвөн хэсгээс бүтнэ — таны хөтчид харагдах <b>вэб хуудас</b>, ард нь ажиллаж
   дүрэм шалгадаг <b>сервер</b>, бүх мэдээллийг хадгалдаг <b>өгөгдлийн сан</b>, талбаруудыг зурагладаг
-  <b>газрын зургийн үйлчилгээ</b>. «API endpoint» гэдэг нь эдгээрийн хооронд мэдээлэл дамжих 185 суваг гэсэн үг.</div>
+  <b>газрын зургийн үйлчилгээ</b>. «API endpoint» гэдэг нь эдгээрийн хооронд мэдээлэл дамжих 187 суваг гэсэн үг.</div>
 </section>
 
 <!-- 2 -->
@@ -121,12 +121,12 @@
     <div class="fdown">↓</div>
     <div class="fbox"><b>Сервер(Backend) — Go 1.25 / Gin</b><span>Handler → Service → Repository гэсэн 3 давхарга · JWT нэвтрэлт, эрхийн шалгалт, түгжээ · Swagger баримт</span></div>
     <div class="fdown">↓</div>
-    <div class="fbox" style="border-left-color:var(--green)"><b style="color:var(--green)">Өгөгдлийн сан — PostgreSQL 16</b><span>Бизнесийн сан (41 хүснэгт, газарзүйн PostGIS өргөтгөлтэй) + Хэрэглэгчийн сан (8 хүснэгт) — хоёр тусдаа</span></div>
+    <div class="fbox" style="border-left-color:var(--green)"><b style="color:var(--green)">Өгөгдлийн сан — PostgreSQL 16</b><span>Бизнесийн сан (42 хүснэгт, газарзүйн PostGIS өргөтгөлтэй) + Хэрэглэгчийн сан (8 хүснэгт) — хоёр тусдаа</span></div>
     <div class="fdown">↓</div>
     <div class="fbox" style="border-left-color:var(--cyan)"><b style="color:var(--cyan)">Газрын зураг — GeoServer 2.25</b><span>Талбаруудын хил, статусын давхаргуудыг зураг болгон түгээнэ</span></div>
   </div>
   <div class="cols2">
-    <div class="card"><b class="ttl">Кодын хэмжээ</b><ul class="t"><li>Сервер (Go): <b>29 586 мөр</b></li><li>Вэб (TypeScript): <b>25 850+ мөр</b></li></ul></div>
+    <div class="card"><b class="ttl">Кодын хэмжээ</b><ul class="t"><li>Сервер (Go): <b>30 529 мөр</b></li><li>Вэб (TypeScript): <b>28 978 мөр</b></li></ul></div>
     <div class="card"><b class="ttl">Онцлог</b><ul class="t"><li>Давхарга бүр тусдаа — засвар, өргөтгөлд тэсвэртэй</li><li>Хэрэглэгчийн сан тусгаарлагдсан — нууц мэдээлэл салангид</li></ul></div>
   </div>
 </section>
@@ -149,26 +149,26 @@
 <!-- 4 -->
 <section>
   <div class="ch-head"><span class="ch-num">4</span><h2>Мэдээллийн сангийн бүтэц</h2></div>
-  <p class="sub">Хоёр тусдаа сан: бизнес (41 хүснэгт, PostGIS) + хэрэглэгч/эрх (8 хүснэгт) · 58 migration</p>
+  <p class="sub">Хоёр тусдаа сан: бизнес (42 хүснэгт, PostGIS) + хэрэглэгч/эрх (8 хүснэгт) · 59 migration</p>
   <div class="card chart">
-    <b class="ttl">Хүснэгтүүд — сэдвээр (нийт 49)</b>
+    <b class="ttl">Хүснэгтүүд — сэдвээр (нийт 50)</b>
     <svg viewBox="0 0 520 172">
       <g font-size="9.5" fill="#c3c2b7" text-anchor="end">
         <text x="145" y="17">Нэгж талбар</text><text x="145" y="38">Газар чөлөөлөлт</text>
         <text x="145" y="59">Үнэлгээ, байгууламж</text><text x="145" y="80">Хэрэглэгч, эрх</text>
         <text x="145" y="101">Төлөвлөгөө, лавлах</text><text x="145" y="122">Нөхөх олговор</text>
-        <text x="145" y="143">Баримт бичиг</text><text x="145" y="164">Мэдэгдэл, аудит</text>
+        <text x="145" y="143">Баримт бичиг</text><text x="145" y="164">Мэдэгдэл, аудит лог</text>
       </g>
       <g fill="#199e70">
         <rect x="152" y="7" width="320" height="13" rx="3"/><rect x="152" y="28" width="288" height="13" rx="3"/>
         <rect x="152" y="49" width="288" height="13" rx="3"/><rect x="152" y="70" width="224" height="13" rx="3"/>
         <rect x="152" y="91" width="192" height="13" rx="3"/><rect x="152" y="112" width="128" height="13" rx="3"/>
-        <rect x="152" y="133" width="64" height="13" rx="3"/><rect x="152" y="154" width="64" height="13" rx="3"/>
+        <rect x="152" y="133" width="64" height="13" rx="3"/><rect x="152" y="154" width="96" height="13" rx="3"/>
       </g>
       <g font-size="9.5" font-weight="700" fill="#f2f2ef">
         <text x="478" y="17">10</text><text x="446" y="38">9</text><text x="446" y="59">9</text>
         <text x="382" y="80">7</text><text x="350" y="101">6</text><text x="286" y="122">4</text>
-        <text x="222" y="143">2</text><text x="222" y="164">2</text>
+        <text x="222" y="143">2</text><text x="254" y="164">3</text>
       </g>
     </svg>
   </div>
@@ -178,7 +178,7 @@
     <li><b>Түүхжүүлэлт</b> — өөрчлөлт бүр түүхийн хүснэгтэд үлддэг · <b>SHA-256</b> — Excel давхардлын хамгаалалт</li>
   </ul>
   <div class="note">«Хүснэгт» гэдэг нь нэг төрлийн мэдээллийг эмх цэгцтэй хадгалах Excel-ийн хуудастай төстэй
-  бүтэц. «Migration» нь сангийн бүтцийн өөрчлөлт бүрийг дугаарлан хадгалсан 58 алхам — шинэ орчинд сан
+  бүтэц. «Migration» нь сангийн бүтцийн өөрчлөлт бүрийг дугаарлан хадгалсан 59 алхам — шинэ орчинд сан
   ямар ч үед мөр дараалан ижил бүтэцтэй босдог гэсэн үг.</div>
   <div class="note"><b>Газарзүйн багана</b> — талбарын давхцал, чөлөөлөх хэсгийн хэмжээг гараар
   хэмжихгүй: сан өөрөө координатаас нь томьёогоор бодно, хүний алдаа арилна. <b>3 зэрэгцээ
@@ -191,7 +191,7 @@
 
 <!-- 5 -->
 <section>
-  <div class="ch-head"><span class="ch-num">5</span><h2>API интерфейс — 185 endpoint</h2></div>
+  <div class="ch-head"><span class="ch-num">5</span><h2>API интерфейс — 187 endpoint</h2></div>
   <div class="card chart">
     <b class="ttl">Endpoint-ууд — бүлгээр</b>
     <svg viewBox="0 0 520 172">
@@ -204,13 +204,13 @@
       <g fill="#3987e5">
         <rect x="152" y="7" width="320" height="13" rx="3"/><rect x="152" y="28" width="226" height="13" rx="3"/>
         <rect x="152" y="49" width="189" height="13" rx="3"/><rect x="152" y="70" width="84" height="13" rx="3"/>
-        <rect x="152" y="91" width="58" height="13" rx="3"/><rect x="152" y="112" width="32" height="13" rx="3"/>
-        <rect x="152" y="133" width="32" height="13" rx="3"/><rect x="152" y="154" width="32" height="13" rx="3"/>
+        <rect x="152" y="91" width="63" height="13" rx="3"/><rect x="152" y="112" width="32" height="13" rx="3"/>
+        <rect x="152" y="133" width="32" height="13" rx="3"/><rect x="152" y="154" width="37" height="13" rx="3"/>
       </g>
       <g font-size="9.5" font-weight="700" fill="#f2f2ef">
         <text x="478" y="17">61</text><text x="384" y="38">43</text><text x="347" y="59">36</text>
-        <text x="242" y="80">16</text><text x="216" y="101">11</text><text x="190" y="122">6</text>
-        <text x="190" y="143">6</text><text x="190" y="164">6</text>
+        <text x="242" y="80">16</text><text x="221" y="101">12</text><text x="190" y="122">6</text>
+        <text x="190" y="143">6</text><text x="195" y="164">7</text>
       </g>
     </svg>
   </div>
@@ -364,30 +364,35 @@
 <!-- 11 -->
 <section>
   <div class="ch-head"><span class="ch-num">11</span><h2>Хөгжүүлэлтийн явц</h2></div>
-  <p class="sub">2026.06.15 – 07.12 · нийт 177 commit (өөрчлөлтийн багц) · 58 migration</p>
+  <p class="sub">2026.06.15 – 07.25 · нийт 194 commit (өөрчлөлтийн багц) · 56 migration</p>
   <div class="card chart">
-    <div class="legend"><span><span class="sw" style="background:#3987e5"></span>Вэб (frontend) — 116</span><span><span class="sw" style="background:#199e70"></span>Сервер (backend) — 61</span></div>
+    <div class="legend"><span><span class="sw" style="background:#3987e5"></span>Вэб (frontend) — 127</span><span><span class="sw" style="background:#199e70"></span>Сервер (backend) — 67</span></div>
     <svg viewBox="0 0 520 122">
       <line x1="28" y1="100" x2="502" y2="100" stroke="#3a3b38"/>
       <g fill="#3987e5">
-        <rect x="58" y="60" width="30" height="40" rx="3"/><rect x="174" y="29" width="30" height="71" rx="3"/>
-        <rect x="290" y="9" width="30" height="91" rx="3"/><rect x="406" y="91" width="30" height="9" rx="3"/>
+        <rect x="38" y="60" width="30" height="40" rx="3"/><rect x="141" y="29" width="30" height="71" rx="3"/>
+        <rect x="244" y="9" width="30" height="91" rx="3"/><rect x="347" y="91" width="30" height="9" rx="3"/>
+        <rect x="450" y="80" width="30" height="20" rx="3"/>
       </g>
       <g fill="#199e70">
-        <rect x="92" y="69" width="30" height="31" rx="3"/><rect x="208" y="60" width="30" height="40" rx="3"/>
-        <rect x="324" y="73" width="30" height="27" rx="3"/><rect x="440" y="87" width="30" height="13" rx="3"/>
+        <rect x="72" y="69" width="30" height="31" rx="3"/><rect x="175" y="60" width="30" height="40" rx="3"/>
+        <rect x="278" y="73" width="30" height="27" rx="3"/><rect x="381" y="87" width="30" height="13" rx="3"/>
+        <rect x="484" y="89" width="30" height="11" rx="3"/>
       </g>
       <g font-size="9" font-weight="700" fill="#f2f2ef" text-anchor="middle">
-        <text x="73" y="56">22</text><text x="107" y="65">17</text><text x="189" y="25">39</text><text x="223" y="56">22</text>
-        <text x="305" y="6" dy="1">50</text><text x="339" y="69">15</text><text x="421" y="87">5</text><text x="455" y="83">7</text>
+        <text x="53" y="56">22</text><text x="87" y="65">17</text><text x="156" y="25">39</text><text x="190" y="56">22</text>
+        <text x="259" y="6" dy="1">50</text><text x="293" y="69">15</text><text x="362" y="87">5</text><text x="396" y="83">7</text>
+        <text x="465" y="76">11</text><text x="499" y="85">6</text>
       </g>
       <g font-size="9" fill="#8b8d88" text-anchor="middle">
-        <text x="90" y="115">06/15–21</text><text x="206" y="115">06/22–28</text><text x="322" y="115">06/29–07/5</text><text x="438" y="115">07/06–12</text>
+        <text x="70" y="115">06/15–21</text><text x="173" y="115">06/22–28</text><text x="276" y="115">06/29–07/5</text><text x="379" y="115">07/06–12</text><text x="482" y="115">07/13–25</text>
       </g>
     </svg>
   </div>
-  <div class="note">Дөрөвхөн долоо хоногт бүрэн ажиллагаатай систем хүргэгдсэн бөгөөд жижиг, ойр ойрхон
-  өөрчлөлтөөр явсан тул алдаа мөрдөх, буцаах бүрэн түүхтэй.</div>
+  <div class="note">Зургаан долоо хоногт бүрэн ажиллагаатай систем хүргэгдсэн бөгөөд жижиг, ойр ойрхон
+  өөрчлөлтөөр явсан тул алдаа мөрдөх, буцаах бүрэн түүхтэй. 07.13–07.25 хооронд нэмэгдсэн: бүтэцлэгдсэн
+  лог/алдааны хяналт, гэрээ цахимаар хэвлэх урсгал, тайлангийн статистик + гүйцэтгэлийн засвар, 3D
+  газрын зургийн дүрслэл.</div>
 </section>
 
 <!-- 12 -->
@@ -395,54 +400,59 @@
   <div class="ch-head"><span class="ch-num">12</span><h2>Төлөвлөгөөний биелэлт</h2></div>
   <p class="sub">Хөгжүүлэлтийн нарийвчилсан төлөвлөгөөний задаргаа түвшний 50 ажил (гарчиг мөрүүд тооцоогүй)</p>
   <div class="big80">
-    <div class="n">82%</div>
-    <p><b style="color:var(--ink)">50 ажлын 41 нь системийн талаас хэрэгжсэн.</b><br>
-    14 бүрэн дууссан + 27 нь системд бэлэн боловч Газрын удирдлагын системийн (ГУС) холболт нээгдэхийг хүлээж байна.</p>
+    <div class="n">66%</div>
+    <p><b style="color:var(--ink)">Жинтэй гүйцэтгэл: 32.8/50 ажил (66%).</b><br>
+    16 бүрэн (100%) + 21 ажлын мок-оор бэлэн урсгал (80% гүйцэтгэлтэй тооцов) — доор 12.1-д
+    гүйцэтгэлийн төлөвлөгөө дэлгэрэнгүй.</p>
   </div>
   <div class="stats s4">
-    <div class="stat" style="border-top-color:#3fa53f"><div class="v" style="color:#4ade80">14</div><div class="l">Бүрэн хийгдсэн (28%)</div></div>
-    <div class="stat" style="border-top-color:#eda100"><div class="v" style="color:#eda100">27</div><div class="l">ГУС холболт хүлээж буй (54%)</div></div>
-    <div class="stat" style="border-top-color:#5598e7"><div class="v" style="color:#5598e7">4</div><div class="l">ГУС-аас хамааралтай хүлээгдэж (8%)</div></div>
-    <div class="stat" style="border-top-color:#6b6c66"><div class="v" style="color:#a9aaa3">5</div><div class="l">Бусад хүлээгдэж байгаа (10%)</div></div>
+    <div class="stat" style="border-top-color:#3fa53f"><div class="v" style="color:#4ade80">16</div><div class="l">Бүрэн хийгдсэн (32%)</div></div>
+    <div class="stat" style="border-top-color:#eda100"><div class="v" style="color:#eda100">21</div><div class="l">ГУС интеграци хүлээгдэж буй — мок-оор бэлэн урсгалтай (42%)</div></div>
+    <div class="stat" style="border-top-color:#5598e7"><div class="v" style="color:#5598e7">10</div><div class="l">ГУС-аас хамааралтай хүлээгдэж — холболт хийгдээгүй (20%)</div></div>
+    <div class="stat" style="border-top-color:#6b6c66"><div class="v" style="color:#a9aaa3">3</div><div class="l">Бусад хүлээгдэж байгаа (6%)</div></div>
   </div>
   <div class="card chart">
-    <div class="legend"><span><span class="sw" style="background:#3fa53f"></span>Бүрэн</span><span><span class="sw" style="background:#eda100"></span>ГУС хүлээгдэж</span><span><span class="sw" style="background:#5598e7"></span>ГУС хамааралтай хүлээгдэж</span><span><span class="sw" style="background:#6b6c66"></span>Бусад хүлээгдэж</span></div>
+    <div class="legend"><span><span class="sw" style="background:#3fa53f"></span>Бүрэн</span><span><span class="sw" style="background:#eda100"></span>ГУС хүлээгдэж (мок бэлэн)</span><span><span class="sw" style="background:#5598e7"></span>ГУС хамааралтай (холболтгүй)</span><span><span class="sw" style="background:#6b6c66"></span>Бусад хүлээгдэж</span></div>
     <svg viewBox="0 0 520 64">
       <text x="126" y="18" text-anchor="end" font-size="9.5" fill="#c3c2b7">Бичиг баримт</text>
       <rect x="134" y="7" width="15" height="14" rx="3" fill="#3fa53f"/><text x="156" y="18" font-size="9" font-weight="700" fill="#f2f2ef">2 / 2</text>
       <text x="126" y="48" text-anchor="end" font-size="9.5" fill="#c3c2b7">Систем хөгжүүлэлт</text>
-      <rect x="134" y="37" width="87" height="14" rx="3" fill="#3fa53f"/><text x="178" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">12</text>
-      <rect x="223" y="37" width="196" height="14" rx="3" fill="#eda100"/><text x="321" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#1a1b1a">27</text>
-      <rect x="421" y="37" width="29" height="14" rx="3" fill="#5598e7"/><text x="436" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">4</text>
-      <rect x="452" y="37" width="36" height="14" rx="3" fill="#6b6c66"/><text x="470" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#f2f2ef">5</text>
+      <rect x="134" y="37" width="101" height="14" rx="3" fill="#3fa53f"/><text x="184" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">14</text>
+      <rect x="235" y="37" width="152" height="14" rx="3" fill="#eda100"/><text x="311" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#1a1b1a">21</text>
+      <rect x="387" y="37" width="73" height="14" rx="3" fill="#5598e7"/><text x="423" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">10</text>
+      <rect x="460" y="37" width="22" height="14" rx="3" fill="#6b6c66"/><text x="471" y="48" text-anchor="middle" font-size="9" font-weight="700" fill="#f2f2ef">3</text>
       <text x="500" y="48" font-size="9.5" font-weight="700" fill="#f2f2ef">48</text>
     </svg>
   </div>
 
-  <h2 style="font-size:16px;margin:20px 0 4px">12.1 ГУС-ийн холболт хүлээж буй 27 ажил</h2>
+  <h2 style="font-size:16px;margin:20px 0 4px">12.1 ГУС интеграци хүлээгдэж буй — мок-оор бэлэн урсгалтай 21 ажил, гүйцэтгэлийн төлөвлөгөө</h2>
+  <p class="sub">Эдгээр ажлын техникийн урсгал (бүртгэл, тохиргоо, тооцоолол) бодит ГУС холболтгүйгээр backend-д суулгасан (seeded) өгөгдөл эсвэл дотоод бүртгэлээр бүрэн ажиллаж байгааг баталгаажуулсан — ГУС нээгдэхэд зөвхөн өгөгдлийн эх сурвалжийг сольход хангалттай. Гүйцэтгэлийн тооцоонд <b>80%</b> гэж үзэв (үлдэх 20% нь ГУС-ийн бодит холболтоор баталгаажина):</p>
+  <div class="tbl-scroll"><table>
+    <tr><th>Бүлэг</th><th class="c">Тоо</th><th>Ажлууд</th></tr>
+    <tr><td><b>Системийн удирдлага, үндсэн бүртгэл</b></td><td class="c" style="color:#eda100;font-weight:700">7</td><td>Хэрэглэгчийн бүртгэл (2.2.1), эрхийн бүртгэл (2.2.2), эрхийн тохиргоо (2.2.3), ажилтны бүртгэл (2.3.1), ажилтны лавлах (2.3.2), хуулийн этгээдийн бүртгэл (2.3.3), үнэлгээний байгууллагын бүртгэл (2.3.4)</td></tr>
+    <tr><td><b>Жилийн төлөвлөгөөний давхаргаас татах</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Гэр хороолол (2.2.1.1), авто зам/шугам сүлжээ (2.2.1.2), нийгмийн дэд бүтэц (2.2.1.3)</td></tr>
+    <tr><td><b>ГУС-ийн бүрэлдэхүүн системүүдийн холболт</b></td><td class="c" style="color:#eda100;font-weight:700">5</td><td>ГЗБ/хот төлөвлөлт (2.3.1), кадастр (2.3.2), үнэлгээ (2.3.3), хот байгуулалтын кадастр (2.3.4), мониторинг (2.3.5)</td></tr>
+    <tr><td><b>Кадастрын давхцал, зөрчлийн давхарга</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Зөрчлийн давхарга үүсгэх (2.4.1.1), холбох (2.4.1.2), давхцал шалгах (2.9.1)</td></tr>
+    <tr><td><b>Эрх, захирамжийн урсгал</b></td><td class="c" style="color:#eda100;font-weight:700">2</td><td>Чиг үүргээр эрх тохируулах (2.4.3.1), захирамжийн төсөл (2.4.4.3)</td></tr>
+    <tr><td><b>Давхаргыг динамикаар үүсгэх, тохируулах</b></td><td class="c" style="color:#eda100;font-weight:700">1</td><td>ГУС каталогоос давхарга нэмэх (2.8.6)</td></tr>
+    <tr><td colspan="3" style="text-align:right;font-weight:700">Нийт 21 × 80% = 16.8</td></tr>
+  </table></div>
+
+  <h2 style="font-size:16px;margin:20px 0 4px">12.2 ГУС-аас бүрэн хамааралтай хүлээгдэж байгаа 10 ажил</h2>
+  <p class="sub">Эдгээр ажилд ГУС-тай холбогдох ямар ч код (мок ч, бодит ч) одоогоор бичигдээгүй — техникийн хөгжүүлэлт ГУС-ийн API нээгдсэний дараа л эхлэх боломжтой.</p>
   <div class="tbl-scroll"><table>
     <tr><th>Хамрах хэсэг</th><th class="c">Тоо</th><th>Ажлууд</th></tr>
-    <tr><td><b>Удирдлага, үндсэн бүртгэл</b></td><td class="c" style="color:#eda100;font-weight:700">7</td><td>Хэрэглэгч/эрх, ажилтан, хуулийн этгээд, үнэлгээний байгууллагын бүртгэл</td></tr>
-    <tr><td><b>Төлөвлөгөөний давхаргаас татах</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Гэр хороолол, авто зам, нийгмийн дэд бүтэц ангиллаар</td></tr>
-    <tr><td><b>ГУС-ийн бүрэлдэхүүн системүүд</b></td><td class="c" style="color:#eda100;font-weight:700">5</td><td>Кадастр, үнэлгээ, хот төлөвлөлт, мониторингийн системүүд</td></tr>
-    <tr><td><b>Кадастрын давхцал</b></td><td class="c" style="color:#eda100;font-weight:700">3</td><td>Зөрчилтэй талбарын давхарга, давхцал шалгах</td></tr>
-    <tr><td><b>Эрх, захирамж</b></td><td class="c" style="color:#eda100;font-weight:700">2</td><td>Чиг үүргийн эрх, захирамжийн төсөл</td></tr>
-    <tr><td><b>Дундын мэдээллийн сан</b></td><td class="c" style="color:#eda100;font-weight:700">6</td><td>УБЕГ, Татвар, ШШГЕГ, үнийн сан, E-Mongolia, динамик давхарга</td></tr>
-    <tr><td><b>Бусад</b></td><td class="c" style="color:#eda100;font-weight:700">1</td><td>Бусад системд өгөгдөл холбох</td></tr>
+    <tr><td><b>Дундын мэдээллийн сан</b></td><td class="c" style="color:#5598e7;font-weight:700">5</td><td>УБЕГ (2.8.1), Татвар (2.8.2), ШШГЕГ (2.8.3), үнийн мэдээний сан (2.8.4), E-Mongolia (2.8.5)</td></tr>
+    <tr><td><b>Бусад</b></td><td class="c" style="color:#5598e7;font-weight:700">1</td><td>Бусад системд өгөгдөл холбох (2.9.2)</td></tr>
+    <tr><td><b>E-Mongolia шаардсан нэмэлт</b></td><td class="c" style="color:#5598e7;font-weight:700">4</td><td>НЭЗ судалгаа (2.4.2.1), мэдэгдэх хуудас (2.4.2.2), албан бичиг (2.4.2.3), 2010–2025 түүхэн өгөгдөл (2.7.1)</td></tr>
   </table></div>
-  <div class="note">Эдгээр 27 ажлын <b>системийн тал нь бүрэн бэлэн</b> — зөвхөн төрийн бусад системээс
-  мэдээлэл өгөх «цонх» нээгдэхийг хүлээж байна. Холболт нээгдмэгц богино хугацаанд ашиглалтад орно.</div>
 
-  <h2 style="font-size:16px;margin:20px 0 4px">12.2 Хүлээгдэж буй ба нэмэлт хийгдсэн</h2>
-  <div class="cols3">
-    <div class="card" style="border-top:3px solid var(--blue)"><b class="ttl" style="color:var(--blue)">ГУС-аас хамааралтай — дараа хийгдэх боломжтой 4 ажил</b>
-      <ul class="t" style="font-size:13px"><li>НЭЗ судалгааг цахимаар авах (2.4.2.1)</li><li>Мэдэгдэх хуудас цахимаар хүргүүлэх (2.4.2.2)</li><li>Албан бичиг хүргүүлэх (2.4.2.3)</li><li>2010–2025 оны түүхэн өгөгдөл нөхөж оруулах (2.7.1)</li></ul></div>
-    <div class="card" style="border-top:3px solid var(--gray)"><b class="ttl" style="color:#a9aaa3">Бусад хүлээгдэж байгаа 5 ажил</b>
-      <ul class="t" style="font-size:13px"><li>Зураг төслийн түүхэн өөрчлөлт харах (2.2.2.2)</li><li>Тооцооллын журам, аргачлалын бүртгэл (2.4.3.2)</li><li>Гэрээг цахим системээр хэвлэх (2.4.4.2)</li><li>Агаар сансрын зураг шинэчлэх (2.6.1)</li><li>Дроны мэдээлэл (2.6.2)</li></ul></div>
-    <div class="card" style="border-top:3px solid var(--green)"><b class="ttl" style="color:#4ade80">Төлөвлөгөөнөөс гадуур хийгдсэн 5 ажил</b>
-      <ul class="t" style="font-size:13px"><li><b>Excel-ээс үнэлгээ импортлох</b> — давхардлын хамгаалалттай</li><li><b>Гадны байгууллагын портал</b> — 43 суваг</li><li><b>Бүрэн түүхжүүлэлт</b></li><li><b>Аюулгүй байдлын өргөтгөлүүд</b></li><li><b>Бодит цагийн мэдэгдэл</b></li></ul></div>
-  </div>
-  <div class="note">«Газар чөлөөлсөн тухай акт үйлдэх» (2.4.4.4) ажил Эх хэвлэлийн 11 загварын нэг («Чөлөөлсөн газрыг хүлээлцсэн акт») болж хэрэгжсэн тул одоо <b>бүрэн хийгдсэн</b> ажилд шилжсэн.</div>
+  <h2 style="font-size:16px;margin:20px 0 4px">12.3 Бусад хүлээгдэж байгаа 3 ажил</h2>
+  <ul class="t"><li>Тооцооллын журам, аргачлалын бүртгэл (2.4.3.2)</li><li>Агаар сансрын зураг шинэчлэх (2.6.1)</li><li>Дроны мэдээлэл (2.6.2)</li></ul>
+
+  <h2 style="font-size:16px;margin:20px 0 4px">12.4 Төлөвлөгөөнөөс гадуур хийгдсэн 9 ажил</h2>
+  <ul class="t"><li><b>3D газрын зургийн дүрслэл</b> — CesiumJS, 2D/3D сонголт</li><li><b>Excel-ээс үнэлгээ импортлох</b> — давхардлын хамгаалалттай</li><li><b>Бүрэн түүхжүүлэлт</b></li><li><b>Аюулгүй байдлын өргөтгөлүүд</b></li><li><b>Grafana систем</b> — хяналтын самбар</li><li><b>Логжуулалт</b> — Loki/Promtail бүтэцлэгдсэн лог</li><li><b>Ажиллах эрхийн зохицуулалтууд</b></li><li><b>Гадны байгууллага буюу санхүүгийн албаны баталгаажуулалт, хяналтын хэсэг</b></li><li><b>Төлөвлөгөөнд ороогүй хавсралтуудын хэвлэл болон утгын тохиргоонууд, уялдаа холбоо</b></li></ul>
+  <div class="note">«Газар чөлөөлсөн тухай акт үйлдэх» (2.4.4.4) Эх хэвлэлийн 11 загварын нэг («Чөлөөлсөн газрыг хүлээлцсэн акт»), «Гэрээг цахим системээр хэвлэх» (2.4.4.2) мөн Эх хэвлэлийн шинэ загвар (acquisition_contract), «Зураг төслийн түүхэн өөрчлөлт харах» (2.2.2.2) тус бүр <b>бүрэн хийгдсэн</b> ажилд шилжсэн.</div>
 </section>
 
 <!-- 13-14 -->

@@ -43,6 +43,55 @@ const nextConfig = {
           ],
         }),
       );
+
+      // cesium-3d.ts нь "cesium"/"olcs" сангуудыг import() динамикаар (chunk-оор)
+      // ачаалдаг тул тэдгээрийн эх код (жишээ нь @cesium/engine-ийн хамааралт
+      // @spz-loader/core WASM/binary өгөгдөл шингэсэн Emscripten glue) энгийн
+      // webpack chunk болж bundle-д ордог — дээрх CopyPlugin-ий static хуулбар
+      // биш тул info.minimized:true-гаар хамгаалагдахгүй. Production minifier
+      // (Terser/SWC) энэ chunk доторх хоёртын өгөгдлийг string-ээс
+      // template-literal рүү хувиргах гэж оролдоход "Octal escape sequences
+      // are not allowed in template strings" синтакс алдаа үүсгэдэг (зөвхөн
+      // `next build`/Docker-д илэрдэг). splitChunks.cacheGroups-оор тодорхой
+      // нэртэй chunk болгож тусгаарлах оролдлого Next-ийн өөрийн splitChunks
+      // тохиргоотой зөрчилдөж найдвартай ажиллаагүй тул chunk бүрийн ЖИНХЭНЭ
+      // модулиудыг (chunkGraph-аар) шалгаж, cesium/olcs/spz-loader агуулсан
+      // ямар ч chunk-ийг нэрнээс үл хамааран шууд info.minimized=true болгож
+      // minify-гээс алгасуулна.
+      const SKIP_MINIFY_RE = /[\\/]node_modules[\\/].*(cesium|olcs|spz-loader)[\\/]/i;
+      config.plugins.push({
+        apply(compiler) {
+          compiler.hooks.compilation.tap("SkipCesiumVendorMinify", (compilation) => {
+            compilation.hooks.processAssets.tap(
+              {
+                name: "SkipCesiumVendorMinify",
+                stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_ADDITIONAL,
+              },
+              () => {
+                const { chunkGraph } = compilation;
+                for (const chunk of compilation.chunks) {
+                  let matched = false;
+                  for (const mod of chunkGraph.getChunkModulesIterable(chunk)) {
+                    const resource = mod.resource || mod.rootModule?.resource || "";
+                    if (SKIP_MINIFY_RE.test(resource)) {
+                      matched = true;
+                      break;
+                    }
+                  }
+                  if (!matched) continue;
+                  for (const file of chunk.files) {
+                    if (!/\.js$/.test(file)) continue;
+                    const asset = compilation.getAsset(file);
+                    if (asset) {
+                      compilation.updateAsset(file, asset.source, (info) => ({ ...info, minimized: true }));
+                    }
+                  }
+                }
+              },
+            );
+          });
+        },
+      });
     }
     return config;
   },
