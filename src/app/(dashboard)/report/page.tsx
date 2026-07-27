@@ -1,9 +1,9 @@
 "use client";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportApi, landApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
-import { RIGHT_TYPE_LABELS } from "@/types";
+import { RIGHT_TYPE_LABELS, getParcelStatusStyle } from "@/types";
 import type { ReportParcelRow } from "@/types";
 import {
   Search,
@@ -14,10 +14,82 @@ import {
   ChevronDown,
   FileSpreadsheet,
   Calendar,
+  FileText,
+  MapPinned,
+  Banknote,
+  ListChecks,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+
+// Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
+// толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
+const REPORT_TABLE_GROUP_HEADERS: { label: string; colSpan?: number; rowSpan?: number }[] = [
+  { label: "№", rowSpan: 2 },
+  { label: "Бүтээн байгуулалтын төрөл", rowSpan: 2 },
+  { label: "Бүтээн байгуулалтын ажлын нэр", rowSpan: 2 },
+  { label: "Нөхөх олговор олгосон НЗД-ын захирамжийн огноо дугаар", rowSpan: 2 },
+  { label: "Газар өмчлөгч, эзэмшигчийн нэр, регистрийн дугаар", rowSpan: 2 },
+  { label: "Хаяг", rowSpan: 2 },
+  { label: "Нэгж талбарын дугаар", rowSpan: 2 },
+  { label: "Үндсэн талбайн хэмжээ /м2/", rowSpan: 2 },
+  { label: "Эдэлбэрийн хэлбэр", rowSpan: 2 },
+  { label: "Нөлөөлөлд өртсөн газрын үнэлгээ", colSpan: 2 },
+  { label: "Хөрөнгийн нөхөх олговрын хэмжээ, үнэ /төгрөг/", colSpan: 2 },
+  { label: "Нийт нөхөх олговор /төгрөг/", rowSpan: 2 },
+  { label: "Үлдэх газрын хэмжээ /м2/", rowSpan: 2 },
+  { label: "Мэдээллийн санд өөрчлөлт хийгдсэн байдал", colSpan: 3 },
+];
+
+const REPORT_TABLE_SUB_HEADERS = [
+  "Хэмжээ /м2/",
+  "Үнэ /төгрөг/",
+  "Үл хөдлөх хөрөнгө",
+  "Эд хөрөнгө",
+  "Мэдээллийн санд өөрчлөлт орсон эсхүл устгагдсан эсэх",
+  "Өөрчлөгдсөн нэгж талбарын дугаар",
+  "Талбайн хэмжээ",
+];
+
+const REPORT_TABLE_COLUMN_COUNT = 18;
+
+// Хяналтын самбарын "НЭГЖ ТАЛБАРЫН МЭДЭЭЛЭЛ" хэсэгтэй ижил хэвтээ баарын элемент.
+function HBar({
+  label,
+  value,
+  maxVal,
+  color,
+}: {
+  label: string;
+  value: number;
+  maxVal: number;
+  color: string;
+}) {
+  const pct = Math.max(3, (value / Math.max(maxVal, 1)) * 100);
+  return (
+    <div className="flex items-center gap-2" title={label}>
+      <span
+        className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 text-right leading-tight truncate"
+        style={{ width: 86 }}
+      >
+        {label}
+      </span>
+      <div className="flex-1 h-[14px] rounded-sm overflow-hidden bg-slate-100 dark:bg-white/[0.05]">
+        <div
+          className="h-full rounded-sm transition-all"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+      <span
+        className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200 shrink-0 text-right"
+        style={{ width: 36 }}
+      >
+        {value.toLocaleString()}
+      </span>
+    </div>
+  );
+}
 
 const PAGE_SIZE = 20;
 
@@ -606,6 +678,39 @@ export default function ReportPage() {
   const totalPages = data?.total_pages ?? 1;
   const total = data?.total ?? 0;
 
+  // Дээд хэсгийн статистикийн картуудад одоогийн хайлтын БҮХ (хуудаслаагүй) үр
+  // дүнгээр тооцох шаардлагатай — backend дээр нэг л дуудлагаар нэгтгэж тооцоолно
+  // (өмнө нь бүх хуудсыг client талд дараалан татдаг байсан нь report/download-ыг
+  // 10+ дахин дуудуулж байсан тул /report/summary болгож зассан).
+  const { page: _summaryPage, page_size: _summaryPageSize, ...summaryFilter } = filter;
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ["report-summary", summaryFilter],
+    queryFn: () => reportApi.summary(summaryFilter),
+    staleTime: 30_000,
+  });
+
+  const stats = useMemo(
+    () => ({
+      acquisitionCount: summary?.acquisition_count ?? 0,
+      parcelCount: summary?.parcel_count ?? 0,
+      totalArea: summary?.total_area_m2 ?? 0,
+      totalParcelArea: summary?.total_parcel_area_m2 ?? 0,
+      totalComp: summary?.total_compensation ?? 0,
+      landComp: summary?.land_compensation ?? 0,
+      realStateComp: summary?.real_state_compensation ?? 0,
+      propertyComp: summary?.property_compensation ?? 0,
+      otherComp: summary?.other_compensation ?? 0,
+      years: (summary?.year_breakdown ?? []).map((y) => ({ year: y.year, count: y.count })),
+      statuses: (summary?.status_breakdown ?? []).map((s) => ({
+        status: s.status,
+        name: s.status_name,
+        count: s.count,
+      })),
+    }),
+    [summary],
+  );
+
   const filtered = parcels;
 
   const handleSearch = () => {
@@ -747,6 +852,141 @@ export default function ReportPage() {
         </button>
       </div>
 
+      {/* Хайлтын үр дүнгийн статистик картууд */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="ap-card relative overflow-hidden p-5 flex flex-col">
+          <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: "#02c0ce" }} />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Нийт чөлөөлөлт
+            </p>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#02c0ce]/10">
+              <FileText className="h-[18px] w-[18px] text-[#02c0ce]" />
+            </div>
+          </div>
+          <div className="flex-1 flex items-center justify-between gap-3">
+            <span className="text-[30px] font-black tabular-nums leading-none text-slate-800 dark:text-white">
+              {summaryLoading ? "…" : stats.acquisitionCount.toLocaleString()}
+            </span>
+            <div className="text-right">
+              <p className="text-[17px] text-slate-400 dark:text-slate-500">Талбай</p>
+              <p className="text-[21px] font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                {summaryLoading
+                  ? "…"
+                  : `${(stats.totalParcelArea / 10000).toLocaleString("mn-MN", { maximumFractionDigits: 1 })} га`}
+              </p>
+            </div>
+          </div>
+          {stats.years.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-[#37394d]">
+              {stats.years.slice(0, 5).map((y) => (
+                <span
+                  key={y.year}
+                  className="text-[11px] font-medium px-1.5 py-0.5 rounded bg-[#02c0ce]/10 text-[#02c0ce]"
+                >
+                  {y.year}: {y.count}
+                </span>
+              ))}
+              {stats.years.length > 5 && (
+                <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                  …
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="ap-card relative overflow-hidden p-5 flex flex-col">
+          <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: "#a855f7" }} />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Нэгж талбар (статусаар)
+            </p>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#a855f7]/10">
+              <ListChecks className="h-[18px] w-[18px] text-[#a855f7]" />
+            </div>
+          </div>
+          <div className="flex-1 flex items-center gap-4 mt-2.5">
+            <span className="text-[30px] font-black tabular-nums leading-none text-slate-800 dark:text-white shrink-0">
+              {summaryLoading ? "…" : stats.parcelCount.toLocaleString()}
+            </span>
+            {stats.statuses.length > 0 && (
+              <div className="flex-1 min-w-0 space-y-1.5">
+                {stats.statuses.map((s) => (
+                  <HBar
+                    key={s.status}
+                    label={s.name || "—"}
+                    value={s.count}
+                    maxVal={Math.max(...stats.statuses.map((x) => x.count))}
+                    color={getParcelStatusStyle(s.status, s.name).color}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="ap-card relative overflow-hidden p-5 flex flex-col">
+          <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: "#f9bc0b" }} />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Нөлөөлөлд өртсөн талбай
+            </p>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f9bc0b]/10">
+              <MapPinned className="h-[18px] w-[18px] text-[#f9bc0b]" />
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col justify-center">
+            <span className="text-[30px] font-black tabular-nums leading-none text-slate-800 dark:text-white block">
+              {summaryLoading ? "…" : (stats.totalArea / 10000).toLocaleString("mn-MN", { maximumFractionDigits: 1 })} га
+            </span>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+              {summaryLoading ? "…" : stats.totalArea.toLocaleString("mn-MN", { maximumFractionDigits: 0 })} м²
+            </p>
+          </div>
+        </div>
+
+        <div className="ap-card relative overflow-hidden p-5 flex flex-col">
+          <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: "#0acf97" }} />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Нийт нөхөх олговор
+            </p>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0acf97]/10">
+              <Banknote className="h-[18px] w-[18px] text-[#0acf97]" />
+            </div>
+          </div>
+          <div className="flex-1 flex flex-col justify-center">
+            <span className="text-[24px] font-black tabular-nums leading-none text-slate-800 dark:text-white block">
+              {summaryLoading ? "…" : (stats.totalComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 3 })} тэрбум ₮
+            </span>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+              {summaryLoading ? "…" : `${formatMoney(stats.totalComp)} ₮`}
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-x-2 mt-3 pt-3 border-t border-slate-100 dark:border-[#37394d]">
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Газар</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
+                {summaryLoading ? "…" : (stats.landComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Үл хөдлөх</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
+                {summaryLoading ? "…" : (stats.realStateComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Эд хөрөнгө</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
+                {summaryLoading ? "…" : (stats.propertyComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Table card */}
       <div className="ap-card overflow-hidden">
         {/* Filters */}
@@ -883,26 +1123,25 @@ export default function ReportPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full text-[13px] border-collapse">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                {[
-                  "№",
-                  "Нэгж талбарын дугаар",
-                  "Чөлөөлөлтийн нэр",
-                  "Төлөвлөгөө",
-                  "Ерөнхий ангилал",
-                  "Дэд ангилал",
-                  "Өмчлөгч, эзэмшигч",
-                  "Регистр",
-                  "Талбай (м²)",
-                  "Чөлөөлөх (м²)",
-                  "Эрхийн төрөл",
-                  "Нөхөн төлбөрийн дүн",
-                ].map((h) => (
+              <tr className="bg-slate-50/50 dark:bg-[#1a1d20]">
+                {REPORT_TABLE_GROUP_HEADERS.map((h) => (
+                  <th
+                    key={h.label}
+                    rowSpan={h.rowSpan}
+                    colSpan={h.colSpan}
+                    className="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 align-bottom border border-slate-200 dark:border-[#37394d]"
+                  >
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+              <tr className="bg-slate-50/50 dark:bg-[#1a1d20]">
+                {REPORT_TABLE_SUB_HEADERS.map((h) => (
                   <th
                     key={h}
-                    className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                    className="px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-[#37394d]"
                   >
                     {h}
                   </th>
@@ -913,8 +1152,8 @@ export default function ReportPage() {
               {isLoading ? (
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 12 }).map((__, j) => (
-                      <td key={j} className="px-5 py-3.5">
+                    {Array.from({ length: REPORT_TABLE_COLUMN_COUNT }).map((__, j) => (
+                      <td key={j} className="px-3 py-3.5">
                         <div className="h-4 bg-slate-100 dark:bg-white/[0.06] rounded w-3/4" />
                       </td>
                     ))}
@@ -923,7 +1162,7 @@ export default function ReportPage() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={REPORT_TABLE_COLUMN_COUNT}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     Мэдээлэл олдсонгүй
@@ -932,58 +1171,81 @@ export default function ReportPage() {
               ) : (
                 filtered.map((p, idx) => {
                   const rowNum = (page - 1) * PAGE_SIZE + idx + 1;
-                  const holderName = [p.holder_last_name, p.holder_name]
+                  const constructionType = [p.general_category_name, p.sub_category_name]
                     .filter(Boolean)
-                    .join(" ");
+                    .join(" / ");
+                  const decreeText = [formatDate(p.decree_date), p.decree_number]
+                    .filter((v) => v && v !== "—")
+                    .join(" / ");
+                  const holderFull = [
+                    [p.holder_last_name, p.holder_name].filter(Boolean).join(" "),
+                    p.holder_register_no,
+                  ]
+                    .filter(Boolean)
+                    .join(", ");
                   return (
                     <tr
                       key={`${p.acquisition_id}-${p.parcel_id}-${idx}`}
                       className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
-                      <td className="px-5 py-3.5 text-slate-400 tabular-nums">
+                      <td className="px-3 py-3.5 text-slate-400 tabular-nums">
                         {rowNum}
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">
-                        {p.parcel_id}
+                      <td className="px-3 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
+                        <span className="truncate block">{constructionType || "—"}</span>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-3 py-3.5">
                         <p className="text-slate-700 dark:text-slate-200 truncate max-w-[200px]">
                           {p.acquisition_name}
                         </p>
                       </td>
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono text-[11px] text-[#02c0ce] bg-[#02c0ce]/10 px-2 py-0.5 rounded">
-                          {p.plan_code}
-                        </span>
+                      <td className="px-3 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        {decreeText || "—"}
                       </td>
-                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
-                        <span className="truncate block">{p.general_category_name || "—"}</span>
-                      </td>
-                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
-                        <span className="truncate block">{p.sub_category_name || "—"}</span>
-                      </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-3 py-3.5">
                         <p
-                          className="text-slate-700 dark:text-slate-200 truncate max-w-[180px]"
-                          title={holderName}
+                          className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]"
+                          title={holderFull}
                         >
-                          {holderName || "—"}
+                          {holderFull || "—"}
                         </p>
                       </td>
-                      <td className="px-5 py-3.5 font-mono text-[12px] text-slate-600 dark:text-slate-300">
-                        {p.holder_register_no || "—"}
+                      <td className="px-3 py-3.5 text-slate-400">—</td>
+                      <td className="px-3 py-3.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">
+                        {p.parcel_id}
                       </td>
-                      <td className="px-5 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
                         {p.area_m2?.toLocaleString()}
                       </td>
-                      <td className="px-5 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                        {p.acquisition_area_m2?.toLocaleString()}
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300">
+                      <td className="px-3 py-3.5 text-slate-600 dark:text-slate-300">
                         {RIGHT_TYPE_LABELS[p.right_type] ?? "—"}
                       </td>
-                      <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {p.acquisition_area_m2?.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {formatMoney(p.land_comp)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {formatMoney(p.real_state_comp)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {formatMoney(p.property_comp)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">
                         {formatMoney(p.total_comp)}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {p.remaining_area_m2 > 0 ? p.remaining_area_m2.toLocaleString() : "—"}
+                      </td>
+                      <td className="px-3 py-3.5 text-slate-600 dark:text-slate-300">
+                        {p.db_changed ? "Тийм" : "Үгүй"}
+                      </td>
+                      <td className="px-3 py-3.5 font-mono text-[12px] text-slate-600 dark:text-slate-300">
+                        {p.changed_parcel_id || "—"}
+                      </td>
+                      <td className="px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                        {p.remaining_area_m2 > 0 ? p.remaining_area_m2.toLocaleString() : "—"}
                       </td>
                     </tr>
                   );

@@ -6,16 +6,21 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
-import { fromLonLat } from "ol/proj";
+import { fromLonLat, toLonLat } from "ol/proj";
+import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent";
 import type { Coordinate } from "ol/coordinate";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
+import { Box, Map as MapIcon } from "lucide-react";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import FeaturePopup from './feature-popup'
+import FullscreenButton from './fullscreen-button'
+import { useFullscreen } from './use-fullscreen'
 import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
+import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
 
 const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -62,14 +67,20 @@ interface MapViewProps {
 
 export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
+  const containerRef   = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
   const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
   const wmsLayersAdded = useRef(false)
+  // 3D (cesium-3d.ts): Байршил табтай ижил зарчим — зөвхөн хэрэглэгч сонгоход л ачаална
+  const cesium3D       = useRef<Cesium3DHandle | null>(null)
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
+  const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
+  const [loading3D, setLoading3D] = useState(false)
 
   const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') =>
     new ImageLayer({
@@ -162,12 +173,64 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
 
     olMap.current = map
     return () => {
+      cesium3D.current?.destroy()
+      cesium3D.current = null
       map.setTarget(undefined)
       olMap.current = null
       wmsLayers.current = {}
       wmsLayersAdded.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Fullscreen горим сольсны дараа OL-д контейнерийн шинэ хэмжээг мэдэгдэнэ (өөрөө анзаардаггүй)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => olMap.current?.updateSize())
+    return () => cancelAnimationFrame(raf)
+  }, [isFullscreen])
+
+  /* ── 3D сонголт: одоогийн 2D харагдацыг (ямар ч шүүлтүүр/зумтай байсан) камерын
+     эхлэлийн байршил, хязгаар болгож Cesium-ийг идэвхжүүлнэ. Давхарга/шүүлтүүрийн
+     логикт нөлөөгүй — зөвхөн харагдацын горим сольж байгаа юм. ── */
+  const handleSelectMode = useCallback(async (mode: "2d" | "3d") => {
+    setMapMode(mode)
+    if (mode === "2d") {
+      cesium3D.current?.setEnabled(false)
+      return
+    }
+    if (cesium3D.current) {
+      cesium3D.current.setEnabled(true)
+      return
+    }
+    const map = olMap.current
+    if (!map) return
+    setLoading3D(true)
+    try {
+      const view = map.getView()
+      const size = map.getSize()
+      const extent3857 = size ? view.calculateExtent(size) : undefined
+      if (!extent3857) return
+      const extentSize = Math.max(extent3857[2] - extent3857[0], extent3857[3] - extent3857[1])
+      const paddedExt = bufferExtent(extent3857, extentSize)
+
+      // 3D (Cesium) горимд зөвхөн энэ хүрээгээр tile татаж, дэлхий даяар render хийхээс
+      // сэргийлнэ. Үгүй бол olcs 11 WMS давхарга тус бүрийг whole-world tiling scheme-ээр
+      // sync хийж, dev proxy-г tile хүсэлтээр дүүргэж, зэрэгцээ dashboard API дуудлагыг
+      // (жишээ нь "Харах" дарахад) 30с timeout хүртэл түгжиж, /server-error рүү шидэж байсан.
+      Object.values(wmsLayers.current).forEach((layer) => layer.set("olcs_extent", paddedExt))
+
+      const [west, south] = toLonLat([paddedExt[0], paddedExt[1]])
+      const [east, north] = toLonLat([paddedExt[2], paddedExt[3]])
+      const [lon, lat] = toLonLat(getExtentCenter(extent3857))
+      cesium3D.current = await activateCesium3D({
+        map,
+        center: { lon, lat },
+        range: Math.min(Math.max(extentSize * 0.8, 300), 30000),
+        bounds: { west, south, east, north },
+      })
+    } finally {
+      setLoading3D(false)
+    }
   }, [])
 
   /* ── WMS layers: created lazily after filter is ready, updated on filter change ── */
@@ -250,13 +313,44 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const panelLayers = [...standaloneL, ...groupedL]
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-lg">
+    <div
+      ref={containerRef}
+      className={`relative h-full w-full overflow-hidden bg-white dark:bg-[#1e1f27] ${isFullscreen ? "" : "rounded-lg"}`}
+    >
       <div ref={mapRef} className="h-full w-full" />
       <LayerPanel
         layers={panelLayers}
         groups={[PARCEL_GROUP]}
         onToggle={handleToggle}
       />
+      <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
+        <button
+          type="button"
+          onClick={() => void handleSelectMode("2d")}
+          className={`flex h-full items-center gap-1.5 px-3 text-[12px] font-semibold transition-colors ${
+            mapMode === "2d"
+              ? "bg-[#02c0ce] text-white"
+              : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+          }`}
+        >
+          <MapIcon className="h-4 w-4" />
+          2D
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSelectMode("3d")}
+          disabled={loading3D}
+          className={`flex h-full items-center gap-1.5 px-3 text-[12px] font-semibold transition-colors disabled:opacity-60 ${
+            mapMode === "3d"
+              ? "bg-[#02c0ce] text-white"
+              : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+          }`}
+        >
+          <Box className="h-4 w-4" />
+          {loading3D ? "Ачаалж байна..." : "3D"}
+        </button>
+      </div>
+      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
       {popup && (
         <FeaturePopup
           layer={popup.layer}

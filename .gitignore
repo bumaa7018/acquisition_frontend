@@ -4,6 +4,9 @@ node_modules
 .next/
 out/
 
+# CesiumJS static assets (3D турш), webpack-ээр node_modules-ээс хуулагдана
+public/cesium/
+
 # Local environment
 .env
 .env*.local
