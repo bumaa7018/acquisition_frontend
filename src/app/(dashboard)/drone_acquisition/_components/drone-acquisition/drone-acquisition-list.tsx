@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Layers, Pencil, Plus, Trash2, X, Save, Upload } from "lucide-react";
-import { droneAcquisitionApi } from "@/lib/api";
+import { droneAcquisitionApi, dronePublishApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import type { DroneAcquisition, DroneAcquisitionStatus } from "@/types";
@@ -52,7 +52,11 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
   }, [droneAcquisitions, acquisitionId]);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => droneAcquisitionApi.delete(id),
+    mutationFn: async (id: number) => {
+      // Best-effort — a GeoServer hiccup shouldn't block removing the row itself.
+      await dronePublishApi.unpublish(id).catch(() => {});
+      await droneAcquisitionApi.delete(id);
+    },
     onSuccess: () => {
       toast.success("Явцын зураг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
@@ -186,12 +190,17 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         acquisition_id: acquisitionId,
         captured_at: capturedAt || undefined,
       }),
-    onSuccess: () => {
-      toast.success("Явцын зураг үүслээ");
+    onSuccess: (acq) => {
+      toast.success("Явцын зураг үүслээ, GeoServer рүү нийтлэгдэж байна");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
+      // Detached — modal already closed, the row shows "processing" until this settles.
+      dronePublishApi
+        .publish(acq.id)
+        .catch((err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")))
+        .finally(() => queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] }));
     },
-    onError: (err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")),
+    onError: (err) => toast.error(getApiError(err, "Файл байршуулахад алдаа гарлаа")),
   });
 
   const canSubmit = !!file && !!user?.id && !uploadMutation.isPending;
@@ -281,7 +290,7 @@ function EditDroneAcquisitionModal({
         file: file ?? undefined,
         captured_at: capturedAt || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (acq) => {
       toast.success(
         file
           ? "Шинэ .tif GeoServer рүү нийтлэгдэж эхэллээ, өмнөх давхарга солигдоно"
@@ -289,6 +298,13 @@ function EditDroneAcquisitionModal({
       );
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
+      if (file) {
+        // Detached — modal already closed, the row shows "processing" until this settles.
+        dronePublishApi
+          .publish(acq.id)
+          .catch((err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")))
+          .finally(() => queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] }));
+      }
     },
     onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
   });

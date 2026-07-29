@@ -699,10 +699,10 @@ export const droneAcquisitionApi = {
     ...data,
     captured_at: toRFC3339Date(data.captured_at),
   }).then(r => r.data.data),
-  // Uploads a .tif/.tiff — the backend generates the preview synchronously (fast) and
-  // returns immediately with status "processing", publishing the file to GeoServer as
-  // a coverage layer in the background, so this just needs enough headroom for the
-  // upload itself + preview generation.
+  // Uploads a .tif/.tiff — the backend stores it and derives tif_path/preview/bbox
+  // synchronously, returning status "processing" with an empty geoserver_layer. The
+  // caller is responsible for following up with dronePublishApi.publish(id) to
+  // actually push it to GeoServer and flip status to "ready"/"failed".
   createFromTif: (data: {
     file: File
     owner_id: string
@@ -750,6 +750,33 @@ export const droneAcquisitionApi = {
     captured_at: toRFC3339Date(data.captured_at),
   }).then(r => r.data.data),
   delete: (id: number) => api.delete(`/drone-acquisitions/${id}`),
+}
+
+// Publishes/unpublishes a drone_acquisitions row's stored .tif to/from GeoServer.
+// This goes through a Next.js server route (not the Go backend, not the `api`
+// axios instance's /api/v1 base) because it needs GeoServer *admin* REST
+// credentials that must never reach the browser — see
+// src/app/api/drone-acquisitions/[id]/publish/route.ts.
+export const dronePublishApi = {
+  publish: async (id: number): Promise<DroneAcquisition> => {
+    const res = await fetch(`/api/drone-acquisitions/${id}/publish`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authStorage.getAccessToken() ?? ''}` },
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error ?? 'GeoServer-т нийтлэхэд алдаа гарлаа')
+    return json.data
+  },
+  unpublish: async (id: number): Promise<void> => {
+    const res = await fetch(`/api/drone-acquisitions/${id}/publish`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authStorage.getAccessToken() ?? ''}` },
+    })
+    if (!res.ok && res.status !== 204) {
+      const json = await res.json().catch(() => ({}))
+      throw new Error(json.error ?? 'GeoServer давхарга устгахад алдаа гарлаа')
+    }
+  },
 }
 
 export const planApi = {
