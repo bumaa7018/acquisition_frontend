@@ -150,7 +150,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   }, []);
 
   const makeDroneTileLayer = useCallback(
-    (acq: DroneAcquisition & { bbox_wkt: string }) => {
+    (acq: DroneAcquisition & { bbox_wkt: string }, zIndex: number) => {
       const geom = wktFormat.current.readGeometry(acq.bbox_wkt, {
         dataProjection: "EPSG:4326",
         featureProjection: "EPSG:3857",
@@ -166,7 +166,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       if (tifUrl) {
         return new WebGLTileLayer({
           visible: false,
-          zIndex: 91,
+          zIndex,
           extent,
           opacity: tileOpacity,
           source: new GeoTIFFSource({
@@ -178,7 +178,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
 
       return new ImageLayer({
         visible: false,
-        zIndex: 91,
+        zIndex,
         extent,
         opacity: tileOpacity,
         source: acq.geoserver_layer
@@ -351,10 +351,13 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   useEffect(() => {
     const map = olMap.current;
     if (!map || !relevantDroneTiles.length) return;
-    relevantDroneTiles.forEach((acq) => {
+    relevantDroneTiles.forEach((acq, i) => {
       const id = `tile-${acq.id}`;
       if (droneTileLayers.current[id]) return;
-      const layer = makeDroneTileLayer(acq);
+      // relevantDroneTiles is sorted newest-first, so the newest capture (index 0) gets the
+      // highest zIndex — it renders on top when multiple dates are toggled visible together.
+      const zIndex = 91 + (relevantDroneTiles.length - i);
+      const layer = makeDroneTileLayer(acq, zIndex);
       droneTileLayers.current[id] = layer;
       map.addLayer(layer);
     });
