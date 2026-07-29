@@ -42,7 +42,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const droneTileLayers = useRef<Record<string, WebGLTileLayer | ImageLayer<ImageWMS>>>({});
+  const droneTileLayers = useRef<Record<string, WebGLTileLayer>>({});
   const droneTileExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
@@ -158,42 +158,18 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       const extent = geom.getExtent();
       droneTileExtents.current[`tile-${acq.id}`] = extent;
 
-      // Prefer rendering the uploaded .tif directly (client-side, via OpenLayers' GeoTIFF
-      // source) so a tile pyramid is visible as soon as it's uploaded, without waiting on
-      // the GeoServer publish step. Only fall back to the published WMS layer for older
-      // rows that predate tif_path being stored.
-      const tifUrl = resolveImageUrl(acq.tif_path);
-      if (tifUrl) {
-        return new WebGLTileLayer({
-          visible: false,
-          zIndex,
-          extent,
-          opacity: tileOpacity,
-          source: new GeoTIFFSource({
-            sources: [{ url: tifUrl }],
-            loadMissingProjection: true,
-          }),
-        });
-      }
-
-      return new ImageLayer({
+      // Renders the uploaded .tif directly, client-side, via OpenLayers' GeoTIFF source —
+      // createFromTif/updateFromTif (the only ways this app creates acquisition-type rows)
+      // always derive tif_path alongside bbox_wkt, so no GeoServer WMS fallback is needed.
+      return new WebGLTileLayer({
         visible: false,
         zIndex,
         extent,
         opacity: tileOpacity,
-        source: acq.geoserver_layer
-          ? new ImageWMS({
-              url: GS_WMS,
-              params: {
-                LAYERS: acq.geoserver_layer,
-                FORMAT: "image/png",
-                TRANSPARENT: true,
-              },
-              ratio: 1,
-              serverType: "geoserver",
-              imageLoadFunction: wmsPostLoad,
-            })
-          : undefined,
+        source: new GeoTIFFSource({
+          sources: [{ url: resolveImageUrl(acq.tif_path) ?? "" }],
+          loadMissingProjection: true,
+        }),
       });
     },
     [tileOpacity],
