@@ -688,9 +688,7 @@ export const droneAcquisitionApi = {
     api.get<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`).then(r => r.data.data),
   create: (data: {
     owner_id: string
-    tile_root_path: string
-    min_zoom?: number
-    max_zoom?: number
+    geoserver_layer: string
     bbox_wkt?: string
     status?: string
     type: 'parcel' | 'acquisition'
@@ -702,16 +700,15 @@ export const droneAcquisitionApi = {
     captured_at: toRFC3339Date(data.captured_at),
   }).then(r => r.data.data),
   // Uploads a .tif/.tiff — the backend generates the preview synchronously (fast) and
-  // returns immediately with status "processing", tiling the pyramid in the background,
-  // so this just needs enough headroom for the upload itself + preview generation.
+  // returns immediately with status "processing", publishing the file to GeoServer as
+  // a coverage layer in the background, so this just needs enough headroom for the
+  // upload itself + preview generation.
   createFromTif: (data: {
     file: File
     owner_id: string
     type: 'parcel' | 'acquisition'
     parcel_id?: string
     acquisition_id?: string
-    min_zoom?: number
-    max_zoom?: number
     captured_at?: string
   }) => {
     const fd = new FormData()
@@ -720,26 +717,20 @@ export const droneAcquisitionApi = {
     fd.append('type', data.type)
     if (data.parcel_id) fd.append('parcel_id', data.parcel_id)
     if (data.acquisition_id) fd.append('acquisition_id', data.acquisition_id)
-    if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
-    if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
     const capturedAt = toRFC3339Date(data.captured_at)
     if (capturedAt) fd.append('captured_at', capturedAt)
     return api
       .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 5 * 60 * 1000 })
       .then(r => r.data.data)
   },
-  // Replaces an existing acquisition's tile pyramid/preview from a new .tif — the old
-  // ones are deleted on the backend once the new pyramid finishes tiling. `file` is
-  // optional: omit it to patch only captured_at and leave the existing tile pyramid/
-  // preview (and zoom range) untouched (the backend supports a file-less multipart
-  // request for exactly this — metadata-only update). min_zoom/max_zoom only take
-  // effect when `file` is also present — the backend silently ignores them otherwise,
-  // since the zoom range only makes sense alongside an actual re-tile.
-  updateFromTif: (id: number, data: { file?: File; min_zoom?: number; max_zoom?: number; captured_at?: string }) => {
+  // Replaces an existing acquisition's GeoServer layer/preview from a new .tif — the old
+  // ones are removed on the backend once the new layer finishes publishing. `file` is
+  // optional: omit it to patch only captured_at and leave the existing layer/preview
+  // untouched (the backend supports a file-less multipart request for exactly this —
+  // metadata-only update).
+  updateFromTif: (id: number, data: { file?: File; captured_at?: string }) => {
     const fd = new FormData()
     if (data.file) fd.append('file', data.file)
-    if (data.min_zoom !== undefined) fd.append('min_zoom', String(data.min_zoom))
-    if (data.max_zoom !== undefined) fd.append('max_zoom', String(data.max_zoom))
     const capturedAt = toRFC3339Date(data.captured_at)
     if (capturedAt) fd.append('captured_at', capturedAt)
     return api
@@ -747,9 +738,7 @@ export const droneAcquisitionApi = {
       .then(r => r.data.data)
   },
   update: (id: number, data: Partial<{
-    tile_root_path: string
-    min_zoom: number
-    max_zoom: number
+    geoserver_layer: string
     bbox_wkt: string
     status: string
     type: 'parcel' | 'acquisition'

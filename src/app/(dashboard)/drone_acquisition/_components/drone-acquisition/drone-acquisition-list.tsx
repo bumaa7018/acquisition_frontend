@@ -175,8 +175,6 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [minZoom, setMinZoom] = useState("14");
-  const [maxZoom, setMaxZoom] = useState("20");
   const [capturedAt, setCapturedAt] = useState(todayStr);
 
   const uploadMutation = useMutation({
@@ -186,8 +184,6 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         owner_id: user?.id ?? "",
         type: "acquisition",
         acquisition_id: acquisitionId,
-        min_zoom: minZoom ? Number(minZoom) : undefined,
-        max_zoom: maxZoom ? Number(maxZoom) : undefined,
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
@@ -195,7 +191,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
     },
-    onError: (err) => toast.error(getApiError(err, "Tiling хийхэд алдаа гарлаа")),
+    onError: (err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")),
   });
 
   const canSubmit = !!file && !!user?.id && !uploadMutation.isPending;
@@ -233,29 +229,9 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
             className={inp}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Min zoom</p>
-            <input
-              type="number"
-              value={minZoom}
-              onChange={(e) => setMinZoom(e.target.value)}
-              className={inp}
-            />
-          </div>
-          <div>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">Max zoom</p>
-            <input
-              type="number"
-              value={maxZoom}
-              onChange={(e) => setMaxZoom(e.target.value)}
-              className={inp}
-            />
-          </div>
-        </div>
         {uploadMutation.isPending && (
           <p className="text-[12px] text-amber-600 dark:text-amber-400">
-            Явцын зураг боловсруулж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
+            Явцын зураг GeoServer рүү нийтлэгдэж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
           </p>
         )}
       </div>
@@ -295,8 +271,6 @@ function EditDroneAcquisitionModal({
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [minZoom, setMinZoom] = useState(acquisition.min_zoom?.toString() ?? "");
-  const [maxZoom, setMaxZoom] = useState(acquisition.max_zoom?.toString() ?? "");
   const [capturedAt, setCapturedAt] = useState(
     acquisition.captured_at ? acquisition.captured_at.slice(0, 10) : todayStr(),
   );
@@ -305,17 +279,12 @@ function EditDroneAcquisitionModal({
     mutationFn: () =>
       droneAcquisitionApi.updateFromTif(acquisition.id, {
         file: file ?? undefined,
-        // Zoom өөрчлөлт зөвхөн шинэ файлтай хамт л утга учиртай (backend
-        // файлгүй бол үүнийг тоохгүй) — гэхдээ inputs нь file сонгогдоогүй үед
-        // disabled байгаа тул энд шалгах шаардлагагүй ч давхар хамгаалалт.
-        min_zoom: file && minZoom ? Number(minZoom) : undefined,
-        max_zoom: file && maxZoom ? Number(maxZoom) : undefined,
         captured_at: capturedAt || undefined,
       }),
     onSuccess: () => {
       toast.success(
         file
-          ? "Шинэ .tif боловсруулагдаж эхэллээ, өмнөх tile-ууд солигдоно"
+          ? "Шинэ .tif GeoServer рүү нийтлэгдэж эхэллээ, өмнөх давхарга солигдоно"
           : "Мэдээлэл шинэчлэгдлээ",
       );
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
@@ -364,8 +333,8 @@ function EditDroneAcquisitionModal({
             </button>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               {file
-                ? `Одоогийн явцын зураг (${acquisition.tile_root_path || "замгүй"}) энэ файлаар бүрэн солигдож, хуучин tile файлууд серверээс устгагдана.`
-                : "Файл сонгохгүй бол зөвхөн доорх огноо шинэчлэгдэж, одоогийн tile болон zoom хэвээр үлдэнэ."}
+                ? `Одоогийн давхарга (${acquisition.geoserver_layer || "давхаргагүй"}) энэ файлаар бүрэн солигдож, хуучин давхарга GeoServer-ээс устгагдана.`
+                : "Файл сонгохгүй бол зөвхөн доорх огноо шинэчлэгдэж, одоогийн давхарга хэвээр үлдэнэ."}
             </p>
           </div>
           <div>
@@ -377,35 +346,9 @@ function EditDroneAcquisitionModal({
               className={inp}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-                Min zoom {!file && <span className="text-slate-400">(шинэ файл сонговол засварлана)</span>}
-              </p>
-              <input
-                type="number"
-                value={minZoom}
-                onChange={(e) => setMinZoom(e.target.value)}
-                disabled={!file || updateMutation.isPending}
-                className={`${inp} disabled:opacity-50 disabled:cursor-not-allowed`}
-              />
-            </div>
-            <div>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-                Max zoom {!file && <span className="text-slate-400">(шинэ файл сонговол засварлана)</span>}
-              </p>
-              <input
-                type="number"
-                value={maxZoom}
-                onChange={(e) => setMaxZoom(e.target.value)}
-                disabled={!file || updateMutation.isPending}
-                className={`${inp} disabled:opacity-50 disabled:cursor-not-allowed`}
-              />
-            </div>
-          </div>
           {updateMutation.isPending && (
             <p className="text-[12px] text-amber-600 dark:text-amber-400">
-              Шинэ явцын зураг боловсруулж байна. Цонхыг бүү хаа.
+              Шинэ явцын зураг GeoServer рүү нийтлэгдэж байна. Цонхыг бүү хаа.
             </p>
           )}
         </div>

@@ -17,7 +17,7 @@ import { SlidersHorizontal } from "lucide-react";
 import "ol/ol.css";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { landApi, droneAcquisitionApi } from "@/lib/api";
-import { formatDate, resolveImageUrl } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import type { BoundaryHistory, DroneAcquisition } from "@/types";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "@/components/map/layer-panel";
 
@@ -37,7 +37,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const droneTileLayers = useRef<Record<string, TileLayer<XYZ>>>({});
+  const droneTileLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const droneTileExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
@@ -150,18 +150,22 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       });
       const extent = geom.getExtent();
       droneTileExtents.current[`tile-${acq.id}`] = extent;
-      const root = resolveImageUrl(acq.tile_root_path)?.replace(/\/$/, "");
-      return new TileLayer({
+      return new ImageLayer({
         visible: false,
         zIndex: 91,
         extent,
         opacity: tileOpacity,
-        source: root
-          ? new XYZ({
-              url: `${root}/{z}/{x}/{y}.png`,
-              minZoom: acq.min_zoom,
-              maxZoom: acq.max_zoom,
-              crossOrigin: "anonymous",
+        source: acq.geoserver_layer
+          ? new ImageWMS({
+              url: GS_WMS,
+              params: {
+                LAYERS: acq.geoserver_layer,
+                FORMAT: "image/png",
+                TRANSPARENT: true,
+              },
+              ratio: 1,
+              serverType: "geoserver",
+              imageLoadFunction: wmsPostLoad,
             })
           : undefined,
       });
