@@ -4,11 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ArrowLeft, Maximize2 } from "lucide-react";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
-import { DroneAcquisitionCompare } from "../_components/drone-acquisition/drone-acquisition-compare";
-import { DroneAcquisitionList } from "../_components/drone-acquisition/drone-acquisition-list";
+import { DroneAcquisitionCompare } from "./_components/drone-acquisition/drone-acquisition-compare";
+import { DroneAcquisitionList } from "./_components/drone-acquisition/drone-acquisition-list";
 
 const DroneAcquisitionMap = dynamic(
-  () => import("../_components/drone-acquisition/drone-acquisition-map").then((m) => m.DroneAcquisitionMap),
+  () => import("./_components/drone-acquisition/drone-acquisition-map").then((m) => m.DroneAcquisitionMap),
   {
     ssr: false,
     loading: () => (
@@ -40,7 +40,7 @@ function DroneAcquisitionsPageContent() {
     const params = new URLSearchParams(searchParams);
     if (id) params.set("acq", id);
     else params.delete("acq");
-    router.replace(`/drone/acquisitions${params.toString() ? `?${params.toString()}` : ""}`, {
+    router.replace(`/drone_acquisition${params.toString() ? `?${params.toString()}` : ""}`, {
       scroll: false,
     });
   }
