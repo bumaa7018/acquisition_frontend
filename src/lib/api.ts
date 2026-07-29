@@ -37,6 +37,7 @@ import type {
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  DroneImage,
   ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
 } from '@/types'
@@ -562,6 +563,40 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
+
+  // ── Дроны ортофото (.tif) ──────────────────────────────────────────────
+  // Нэг хүсэлтэд НЭГ файл — олон зургийг дараалан байршуулна.
+  listDroneImages: (acqId: string) =>
+    api.get<ApiResponse<DroneImage[]>>(`/land-acquisitions/${acqId}/drone-images`)
+      .then(r => r.data.data ?? []),
+  uploadDroneImage: (acqId: string, file: File, onProgress?: (percent: number) => void) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<ApiResponse<DroneImage>>(`/land-acquisitions/${acqId}/drone-images`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // Ортофото том тул 30 секунд хүрэлцэхгүй; явцыг мөн хардаг болгоно.
+      timeout: 0,
+      onUploadProgress: (e) => {
+        if (!onProgress || !e.total) return
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      },
+    }).then(r => r.data.data)
+  },
+  // Зураг байршуулсны ДАРАА автоматаар дуудна — GeoServer-ийн мозайкийг
+  // шинэчилж (harvest + reset) шинэ зургийг давхаргад харагдахаар болгоно.
+  //
+  // _silent: true — GeoServer унасан/тохиргоо эвдэрсэн үед 500 буцаж болно.
+  // Тэр үед хэрэглэгчийг /server-error хуудас руу ШИДЭХГҮЙ: зураг аль хэдийн
+  // файлын системд хадгалагдсан, зөвхөн давхаргад бүртгэгдээгүй байна. Дуудагч
+  // алдааг барьж анхааруулга харуулж, "GeoServer шинэчлэх" товчоор дахин
+  // оролдох боломж үлдэнэ.
+  refreshDroneImages: (acqId: string) =>
+    api.post<ApiResponse<DroneImage[]>>(`/land-acquisitions/${acqId}/drone-images/refresh`, undefined, {
+      timeout: 0,
+      _silent: true,
+    }).then(r => r.data.data ?? []),
+  deleteDroneImage: (acqId: string, imageId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/drone-images/${imageId}`),
 
   getAssignees: (acquisitionId: string): Promise<AcquisitionAssignee[]> =>
     api.get<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`)

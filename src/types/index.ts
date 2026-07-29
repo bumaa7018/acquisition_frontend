@@ -270,6 +270,35 @@ export interface Document {
   document_type_id?: number;
 }
 
+/**
+ * Дроны ортофото (.tif). GeoServer дээр БҮХ зураг НЭГ ImageMosaic давхаргад
+ * (layer_name, ж: "land:drone") granule болж бүртгэгддэг тул зураг нэмэгдэхэд
+ * шинэ давхарга үүсэхгүй. Тухайн зургийг харуулахдаа WMS хүсэлтэд
+ * `CQL_FILTER=cql_filter` явуулна.
+ */
+export interface DroneImage {
+  id: string;
+  acquisition_id: string;
+  /** Хуваалцсан хавтас дахь файлын нэр = мозайкийн `location` */
+  file_name: string;
+  original_name: string;
+  content_type: string;
+  size_bytes: number;
+  /** GeoServer-ээс уншсан WGS84 хүрээ — "зураг дээр очих"-д. Байхгүй байж болно. */
+  min_x?: number;
+  min_y?: number;
+  max_x?: number;
+  max_y?: number;
+  /** Мозайкийн индекст granule болж бүртгэгдсэн эсэх */
+  published: boolean;
+  uploaded_at: string;
+  uploaded_by?: string;
+  /** WMS-д явуулах давхаргын нэр (бүх зурагт ижил) */
+  layer_name: string;
+  /** Зөвхөн тухайн зургийг харуулах CQL шүүлтүүр */
+  cql_filter: string;
+}
+
 export interface ParcelStatusHistory {
   id: number;
   parcel_id: string;

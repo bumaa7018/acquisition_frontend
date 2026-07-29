@@ -1,8 +1,10 @@
 import path from "node:path";
 import CopyPlugin from "copy-webpack-plugin";
 
-// Docker сүлжээнд: NEXT_API_URL=http://api:8080, NEXT_GS_URL=http://geoserver:8080
-// Локал хөгжүүлэлтэд:  NEXT_API_URL=http://localhost:8080, NEXT_GS_URL=http://localhost:8600
+// Docker сүлжээнд: NEXT_API_URL=http://api:8080, NEXT_GS_URL=http://geoserver:8080,
+//                  NEXT_S3_ENDPOINT=http://minio:9000
+// Локал хөгжүүлэлтэд:  NEXT_API_URL=http://localhost:8080, NEXT_GS_URL=http://localhost:8600,
+//                      NEXT_S3_ENDPOINT=http://localhost:9000
 const API_URL = process.env.NEXT_API_URL ?? "http://localhost:8080";
 const GS_URL = process.env.NEXT_GS_URL ?? "http://localhost:8600";
 

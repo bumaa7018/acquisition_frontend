@@ -35,8 +35,10 @@ import Link from "next/link";
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 
-const AcquisitionMap = dynamic(
-  () => import("@/components/map/acquisition-map").then((m) => m.AcquisitionMap),
+// Байршил таб — газрын зураг + дроны ортофотогийн жагсаалт/байршуулалт.
+// Cesium/OpenLayers их жинтэй тул зөвхөн таб сонгогдох үед ачаална.
+const LocationTab = dynamic(
+  () => import("./_components/location-tab").then((m) => m.LocationTab),
   {
     ssr: false,
     loading: () => (
@@ -314,9 +316,7 @@ export default function AcquisitionDetailPage() {
       {activeTab === "assignees" && <AssigneesTab id={id} canEdit={canEdit} />}
       {activeTab === "financing" && <FinancingTab id={id} canEdit={canEdit} />}
       {activeTab === "map" && (
-        <div className="ap-card p-5">
-          <AcquisitionMap acquisitionId={id} aus={acq.aus} />
-        </div>
+        <LocationTab id={id} aus={acq.aus} canEdit={canEdit && !isExternal} />
       )}
     </div>
   );
