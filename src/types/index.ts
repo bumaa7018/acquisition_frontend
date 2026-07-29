@@ -265,6 +265,7 @@ export type DroneAcquisitionStatus = "processing" | "ready" | "failed";
 export interface DroneAcquisition {
   id: number;
   owner_id: string;
+  tif_path?: string;
   geoserver_layer: string;
   preview_image_path?: string;
   bbox_wkt?: string;
