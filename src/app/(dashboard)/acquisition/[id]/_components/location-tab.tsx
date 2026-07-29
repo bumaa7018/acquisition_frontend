@@ -132,7 +132,15 @@ export function LocationTab({
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       setProgress(0);
-      const created = await landApi.uploadDroneImage(id, file, setProgress);
+      // 1. Backend-ээс байршуулах зөвшөөрөл. 2. Файлыг ШУУД файлын систем руу
+      // (backend-ээр дамжихгүй). 3. Backend объектыг шалгаж бүртгэнэ.
+      const ticket = await landApi.createDroneUploadUrl(id, file.name);
+      await landApi.putDroneFileDirect(ticket, file, setProgress);
+      const created = await landApi.registerDroneImage(
+        id,
+        ticket.stored_name,
+        file.name,
+      );
       setProgress(null);
       // Зураг байршуулсны ДАРАА GeoServer-ийг автоматаар шинэчилнэ — ингэснээр
       // шинэ зураг мозайкийн granule болж давхаргад шууд харагдана.
@@ -214,6 +222,8 @@ export function LocationTab({
       toast.error("Зөвхөн GeoTIFF (.tif / .tiff) файл байршуулна");
       return;
     }
+    // Хэмжээний хязгаар ТАВИХГҮЙ: файл backend-ээр дамжихгүй, шууд файлын
+    // систем руу явдаг тул хэдэн GB ортофото ч байршина.
     uploadMutation.mutate(file);
   }
 

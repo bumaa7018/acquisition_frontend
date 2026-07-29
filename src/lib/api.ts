@@ -38,6 +38,7 @@ import type {
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
+  DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
 } from '@/types'
@@ -566,22 +567,45 @@ export const landApi = {
 
   // ── Дроны ортофото (.tif) ──────────────────────────────────────────────
   // Нэг хүсэлтэд НЭГ файл — олон зургийг дараалан байршуулна.
+  //
+  // Файл BACKEND-ЭЭР ДАМЖИХГҮЙ. Гурван алхам:
+  //   1. createDroneUploadUrl  — backend-ээс байршуулах зөвшөөрөл (presigned URL)
+  //   2. putDroneFileDirect    — browser файлыг ШУУД файлын систем руу PUT
+  //   3. registerDroneImage    — backend объектыг шалгаж чөлөөлөлтөд холбоно
+  // Ингэснээр хэдэн GB ортофото ч API-ийн санах ой, хугацаа, хүсэлтийн
+  // хэмжээний хязгаараас хамаарахгүй — хэмжээний хязгаар байхгүй.
   listDroneImages: (acqId: string) =>
     api.get<ApiResponse<DroneImage[]>>(`/land-acquisitions/${acqId}/drone-images`)
       .then(r => r.data.data ?? []),
-  uploadDroneImage: (acqId: string, file: File, onProgress?: (percent: number) => void) => {
-    const fd = new FormData()
-    fd.append('file', file)
-    return api.post<ApiResponse<DroneImage>>(`/land-acquisitions/${acqId}/drone-images`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      // Ортофото том тул 30 секунд хүрэлцэхгүй; явцыг мөн хардаг болгоно.
+  createDroneUploadUrl: (acqId: string, fileName: string) =>
+    api.post<ApiResponse<DroneUploadTicket>>(
+      `/land-acquisitions/${acqId}/drone-images/upload-url`,
+      { file_name: fileName },
+    ).then(r => r.data.data),
+  // `api` instance-ыг ЗОРИУДААР хэрэглэхгүй: presigned URL нь өөрөө зөвшөөрөл
+  // агуулдаг тул бидний Authorization header шаардлагагүй, мөн response
+  // interceptor (loader, /server-error redirect) файлын серверийн хариуд
+  // хөндлөнгөөс оролцох ёсгүй.
+  putDroneFileDirect: (
+    ticket: DroneUploadTicket,
+    file: File,
+    onProgress?: (percent: number) => void,
+  ) =>
+    axios.put(ticket.url, file, {
+      headers: { 'Content-Type': 'image/tiff' },
       timeout: 0,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
       onUploadProgress: (e) => {
         if (!onProgress || !e.total) return
         onProgress(Math.round((e.loaded / e.total) * 100))
       },
-    }).then(r => r.data.data)
-  },
+    }).then(() => undefined),
+  registerDroneImage: (acqId: string, storedName: string, originalName: string) =>
+    api.post<ApiResponse<DroneImage>>(`/land-acquisitions/${acqId}/drone-images`, {
+      stored_name: storedName,
+      original_name: originalName,
+    }).then(r => r.data.data),
   // Зураг байршуулсны ДАРАА автоматаар дуудна — GeoServer-ийн мозайкийг
   // шинэчилж (harvest + reset) шинэ зургийг давхаргад харагдахаар болгоно.
   //

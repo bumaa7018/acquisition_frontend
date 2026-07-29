@@ -276,6 +276,23 @@ export interface Document {
  * шинэ давхарга үүсэхгүй. Тухайн зургийг харуулахдаа WMS хүсэлтэд
  * `CQL_FILTER=cql_filter` явуулна.
  */
+/**
+ * Дроны зургийг файлын систем руу ШУУД байршуулах зөвшөөрөл.
+ *
+ * Backend-ээс гардаг presigned URL — browser файлыг API-аар дамжуулахгүйгээр
+ * тавьдаг тул файлын хэмжээ хязгаарлагдахгүй.
+ */
+export interface DroneUploadTicket {
+  /** Browser ЭНЭ URL руу PUT хийнэ (зөвшөөрөл нь URL дотор) */
+  url: string;
+  method: string;
+  /** Байршуулалт бүтсэний дараа DB-д бичигдэх зам */
+  file_url: string;
+  /** Хадгалалтад үүсэх файлын нэр — бүртгүүлэхэд буцааж явуулна */
+  stored_name: string;
+  expires_in_seconds: number;
+}
+
 export interface DroneImage {
   id: string;
   acquisition_id: string;
