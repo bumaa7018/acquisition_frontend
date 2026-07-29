@@ -5,8 +5,10 @@ import OLMap from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
+import WebGLTileLayer from "ol/layer/WebGLTile";
 import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
+import GeoTIFFSource from "ol/source/GeoTIFF";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import { fromLonLat, transformExtent } from "ol/proj";
@@ -16,10 +18,13 @@ import { SlidersHorizontal } from "lucide-react";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
+import { ensureGeoTiffProjections } from "@/lib/geotiff-proj";
 import { landApi, droneAcquisitionApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveImageUrl } from "@/lib/utils";
 import type { BoundaryHistory, DroneAcquisition } from "@/types";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "@/components/map/layer-panel";
+
+ensureGeoTiffProjections();
 
 const PLAN_LAYER_ID = "plan";
 const HISTORY_GROUP: LayerGroupConfig = { id: "boundary_history", label: "Хилийн өөрчлөлт", color: "#02c0ce" };
@@ -37,7 +42,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const droneTileLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  const droneTileLayers = useRef<Record<string, WebGLTileLayer>>({});
   const droneTileExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
@@ -62,7 +67,9 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
     );
   }, [boundaryHistory]);
 
-  // Only ready tile pyramids ("acquisition"-type) tied to this specific acquisition.
+  // Tile pyramids ("acquisition"-type) tied to this specific acquisition. Rendered straight
+  // from tif_path (see makeDroneTileLayer), so "processing" rows are included too — they
+  // don't need to wait on the separate GeoServer publish step that "ready" used to gate on.
   const relevantDroneTiles = useMemo(() => {
     return droneAcquisitions
       .filter(
@@ -70,7 +77,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
           !!acq.bbox_wkt &&
           acq.type === "acquisition" &&
           acq.acquisition_id === acquisitionId &&
-          acq.status === "ready",
+          acq.status !== "failed",
       )
       .sort(
         (a, b) =>
@@ -151,24 +158,18 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       const extent = geom.getExtent();
       droneTileExtents.current[`tile-${acq.id}`] = extent;
 
-      return new ImageLayer({
+      // Renders the uploaded .tif directly, client-side, via OpenLayers' GeoTIFF source —
+      // createFromTif/updateFromTif (the only ways this app creates acquisition-type rows)
+      // always derive tif_path alongside bbox_wkt, so no GeoServer WMS fallback is needed.
+      return new WebGLTileLayer({
         visible: false,
         zIndex,
         extent,
         opacity: tileOpacity,
-        source: acq.geoserver_layer
-          ? new ImageWMS({
-              url: GS_WMS,
-              params: {
-                LAYERS: acq.geoserver_layer,
-                FORMAT: "image/png",
-                TRANSPARENT: true,
-              },
-              ratio: 1,
-              serverType: "geoserver",
-              imageLoadFunction: wmsPostLoad,
-            })
-          : undefined,
+        source: new GeoTIFFSource({
+          sources: [{ url: resolveImageUrl(acq.tif_path) ?? "" }],
+          loadMissingProjection: true,
+        }),
       });
     },
     [tileOpacity],
