@@ -4,16 +4,19 @@ import { resolveImageUrl } from "@/lib/utils";
 
 // Publishes a drone_acquisitions row's stored .tif to GeoServer as a coverage
 // layer, and PATCHes geoserver_layer/status back onto the row — this is the
-// GeoServer-admin-credentialed half of the upload flow that intentionally
-// does NOT live in the Go backend (see acquisition_backend's drone_acquisitions
-// service comment): GS_ADMIN_USER/GS_ADMIN_PASSWORD are server-only env vars
-// here, never sent to the browser, and NEXT_GS_URL is the same GeoServer
-// instance src/lib/geoserver.ts already proxies WMS/WFS reads through.
+// REST-admin half of the upload flow that intentionally does NOT live in the
+// Go backend (see acquisition_backend's drone_acquisitions service comment).
+// NEXT_GS_URL is the same GeoServer instance src/lib/geoserver.ts already
+// proxies WMS/WFS reads through. GS_ADMIN_USER/GS_ADMIN_PASSWORD are
+// server-only env vars, never sent to the browser — optional: this
+// deployment's GeoServer REST API doesn't enforce auth, so they're only
+// attached when actually set (leave GS_ADMIN_PASSWORD unset to skip Basic
+// Auth entirely rather than sending an empty/garbage credential).
 
 const BACKEND = process.env.NEXT_API_URL ?? "http://localhost:8080";
 const GS_URL = process.env.NEXT_GS_URL ?? "http://localhost:8600";
 const GS_WORKSPACE = process.env.GS_WORKSPACE ?? "land";
-const GS_ADMIN_USER = process.env.GS_ADMIN_USER ?? "admin";
+const GS_ADMIN_USER = process.env.GS_ADMIN_USER ?? "";
 const GS_ADMIN_PASSWORD = process.env.GS_ADMIN_PASSWORD ?? "";
 
 interface DroneAcquisitionRow {
@@ -22,8 +25,10 @@ interface DroneAcquisitionRow {
   geoserver_layer?: string;
 }
 
-function gsAuthHeader(): string {
-  return "Basic " + Buffer.from(`${GS_ADMIN_USER}:${GS_ADMIN_PASSWORD}`).toString("base64");
+function gsAuthHeaders(): Record<string, string> {
+  if (!GS_ADMIN_USER && !GS_ADMIN_PASSWORD) return {};
+  const token = Buffer.from(`${GS_ADMIN_USER}:${GS_ADMIN_PASSWORD}`).toString("base64");
+  return { Authorization: `Basic ${token}` };
 }
 
 // storeNameFromTifPath derives a coverage-store name from the backend's
@@ -63,7 +68,7 @@ async function patchAcquisition(id: string, authorization: string, body: Record<
 async function deleteCoverageStore(storeName: string) {
   await fetch(
     `${GS_URL}/geoserver/rest/workspaces/${GS_WORKSPACE}/coveragestores/${storeName}?purge=all&recurse=true`,
-    { method: "DELETE", headers: { Authorization: gsAuthHeader() } },
+    { method: "DELETE", headers: gsAuthHeaders() },
   ).catch(() => {});
 }
 
@@ -93,7 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const gsRes = await fetch(publishUrl, {
       method: "PUT",
-      headers: { Authorization: gsAuthHeader(), "Content-Type": "image/tiff" },
+      headers: { ...gsAuthHeaders(), "Content-Type": "image/tiff" },
       body: tifBytes,
     });
 
