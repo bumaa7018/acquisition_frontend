@@ -8,6 +8,21 @@ import {
   canViewAcquisitionTabForActor,
   canViewParcelTabForActor,
   canViewValuationSubTabForActor,
+  actorHasPermission,
+  canCreateRole,
+  canCreateUser,
+  canDeactivateUser,
+  canDeleteRole,
+  canDeleteUserRow,
+  canGrantPermissionForActor,
+  canGrantRoleForActor,
+  canManageRolePermissions,
+  canManageUserRoles,
+  canUpdateRole,
+  canUpdateUser,
+  canViewPermissions,
+  canViewRolesPage,
+  canViewUsersPage,
 } from "../src/lib/access-policy.ts";
 import { isExternalAuthorization } from "../src/lib/server-auth.ts";
 import {
@@ -429,4 +444,107 @@ test("давхардсан хилийн давхаргаас WKT болон та
     "POLYGON((0 0,5 0,5 5,0 5,0 0))",
   );
   assert.equal(layerTextToWkt(JSON.stringify(geoJson)), geoJsonToWkt(geoJson));
+});
+
+// ── Хэрэглэгч / роль / эрхийн удирдлагын хандалт ─────────────────────────────
+
+const ALL_ADMIN_PERMS = [
+  "users:read",
+  "users:create",
+  "users:update",
+  "users:delete",
+  "roles:read",
+  "roles:create",
+  "roles:update",
+  "roles:delete",
+  "permissions:read",
+];
+
+const admin = {
+  userId: "admin-user",
+  roles: ["admin"],
+  permissions: [...ALL_ADMIN_PERMS, "admin:read", "audit:read", "land:read"],
+};
+const readOnlyAdmin = {
+  userId: "readonly-user",
+  roles: ["employee"],
+  permissions: ["users:read", "roles:read", "permissions:read"],
+};
+const plainEmployee = {
+  userId: "employee-user",
+  roles: ["employee"],
+  permissions: ["land:read"],
+};
+// Эрх санамсаргүй олгогдсон гадаад хэрэглэгч — цэс нь бүрэн хаалттай байх ёстой.
+const externalWithAdminPerms = {
+  userId: "external-user",
+  roles: ["professional_org"],
+  permissions: ALL_ADMIN_PERMS,
+};
+
+test("удирдлагын хуудсууд эрхгүй хэрэглэгчид хаалттай", () => {
+  assert.equal(canViewUsersPage(admin), true);
+  assert.equal(canViewRolesPage(admin), true);
+  assert.equal(canViewPermissions(admin), true);
+
+  assert.equal(canViewUsersPage(plainEmployee), false);
+  assert.equal(canViewRolesPage(plainEmployee), false);
+  assert.equal(canViewPermissions(plainEmployee), false);
+
+  // permissions талбар байхгүй actor — шалгалт бүр false
+  assert.equal(canViewUsersPage({ userId: "x", roles: ["admin"] }), false);
+  assert.equal(actorHasPermission({ userId: "x" }, "users:read"), false);
+});
+
+test("гадаад ролиуд эрхтэй байсан ч удирдлагын цэсэд хандахгүй", () => {
+  assert.equal(canViewUsersPage(externalWithAdminPerms), false);
+  assert.equal(canViewRolesPage(externalWithAdminPerms), false);
+  assert.equal(canCreateUser(externalWithAdminPerms), false);
+  assert.equal(canUpdateUser(externalWithAdminPerms), false);
+  assert.equal(canDeleteUserRow(externalWithAdminPerms, "someone-else"), false);
+  assert.equal(canManageRolePermissions(externalWithAdminPerms), false);
+});
+
+test("зөвхөн харах эрхтэй хэрэглэгч засах үйлдэл хийхгүй", () => {
+  assert.equal(canViewUsersPage(readOnlyAdmin), true);
+  assert.equal(canCreateUser(readOnlyAdmin), false);
+  assert.equal(canUpdateUser(readOnlyAdmin), false);
+  assert.equal(canDeleteUserRow(readOnlyAdmin, "other-user"), false);
+  assert.equal(canCreateRole(readOnlyAdmin), false);
+  assert.equal(canUpdateRole(readOnlyAdmin), false);
+  assert.equal(canDeleteRole(readOnlyAdmin), false);
+  assert.equal(canManageRolePermissions(readOnlyAdmin), false);
+});
+
+test("өөрийгөө устгах / идэвхгүй болгох / роль өөрчлөх хаалттай", () => {
+  // Бусад хэрэглэгч дээр зөвшөөрөгдөнө
+  assert.equal(canDeleteUserRow(admin, "other-user"), true);
+  assert.equal(canDeactivateUser(admin, "other-user"), true);
+  assert.equal(canManageUserRoles(admin, "other-user"), true);
+
+  // Өөрөө дээрээ хориотой (backend user.go-ийн isSelf шалгалттай ижил)
+  assert.equal(canDeleteUserRow(admin, admin.userId), false);
+  assert.equal(canDeactivateUser(admin, admin.userId), false);
+  assert.equal(canManageUserRoles(admin, admin.userId), false);
+});
+
+test("эрх нэмэгдүүлэлт: өөрт байхгүй эрхийг олгохгүй", () => {
+  assert.equal(canGrantPermissionForActor(admin, "users:delete"), true);
+  assert.equal(canGrantPermissionForActor(readOnlyAdmin, "users:delete"), false);
+
+  // Ролийн эрх БҮГД дуудагчид байх ёстой
+  assert.equal(canGrantRoleForActor(admin, ["users:read", "users:delete"]), true);
+  assert.equal(
+    canGrantRoleForActor(readOnlyAdmin, ["users:read", "users:delete"]),
+    false,
+  );
+  // Эрхгүй роль (хоосон багц) — хэн ч олгож болно
+  assert.equal(canGrantRoleForActor(readOnlyAdmin, []), true);
+  assert.equal(canGrantRoleForActor(readOnlyAdmin, null), true);
+  assert.equal(canGrantRoleForActor(readOnlyAdmin, undefined), true);
+  // Ганц ч эрх дутвал бүхэлдээ татгалзана
+  assert.equal(
+    canGrantRoleForActor(readOnlyAdmin, ["users:read", "roles:update"]),
+    false,
+  );
 });

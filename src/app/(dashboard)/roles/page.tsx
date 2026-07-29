@@ -1,426 +1,502 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rolesApi, permissionsApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
-import { Shield, Plus, X, Trash2, Pencil, Check } from "lucide-react";
+import {
+  canEditRolePermissions,
+  canGrantPermission,
+  canListPermissions,
+  canViewRoles,
+} from "@/lib/role-utils";
+import { Shield, ShieldCheck, Lock, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
+// Backend seed-ийн `resource` нэрсийн монгол тайлбар. Байхгүй бол түүхий
+// нэрийг харуулна (шинэ resource нэмэгдэхэд ч UI эвдрэхгүй).
+const RESOURCE_LABELS: Record<string, string> = {
+  users: "Хэрэглэгч",
+  roles: "Роль",
+  permissions: "Эрх",
+  admin: "Системийн тохиргоо",
+  audit: "Үйлдлийн лог",
+  land: "Газар чөлөөлөлт",
+  compensation: "Нөхөх олговор / үнэлгээ",
+  бусад: "Бусад",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  read: "Харах",
+  create: "Нэмэх",
+  update: "Засах",
+  delete: "Устгах",
+};
+
+function splitPermission(name: string): { resource: string; action: string } {
+  const sep = name.includes(":") ? ":" : name.includes(".") ? "." : null;
+  if (!sep) return { resource: "бусад", action: name };
+  const [resource, ...rest] = name.split(sep);
+  return { resource, action: rest.join(sep) };
+}
+
 export default function RolesPage() {
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editDesc, setEditDesc] = useState("");
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
+  // Эрхийн сонголтыг дарангуут хадгалахгүй — локал төлөвт хуримтлуулж,
+  // "Хадгалах" дарахад л сервэрт нэг мөр илгээнэ.
+  const [draftPerms, setDraftPerms] = useState<string[]>([]);
   const queryClient = useQueryClient();
+
+  // Эрх нь token-оос уншигддаг тул mount-ийн дараа тодорхой болно.
+  const [ready, setReady] = useState(false);
+  const [perms, setPerms] = useState({
+    view: false,
+    managePerms: false,
+    listPerms: false,
+  });
+
+  useEffect(() => {
+    setPerms({
+      view: canViewRoles(),
+      managePerms: canEditRolePermissions(),
+      listPerms: canListPermissions(),
+    });
+    setReady(true);
+  }, []);
 
   const { data: rolesData, isLoading } = useQuery({
     queryKey: ["roles"],
     queryFn: () => rolesApi.list(),
+    enabled: ready && perms.view,
   });
   const { data: permsData } = useQuery({
     queryKey: ["permissions"],
     queryFn: () => permissionsApi.list(),
+    // permissions:read эрхгүй бол 403 болох тул дуудахгүй.
+    enabled: ready && perms.view && perms.listPerms,
   });
   const { data: roleDetail, isLoading: roleLoading } = useQuery({
     queryKey: ["role", selectedRole],
     queryFn: () => rolesApi.getById(selectedRole!),
-    enabled: !!selectedRole,
+    enabled: !!selectedRole && ready && perms.view,
   });
 
-  const createRoleMutation = useMutation({
-    mutationFn: ({
-      name,
-      description,
+  const invalidateRoles = () => {
+    queryClient.invalidateQueries({ queryKey: ["roles"] });
+    queryClient.invalidateQueries({ queryKey: ["role"] });
+    // Хэрэглэгчийн жагсаалтын роль badge-ууд ч хамаарна.
+    queryClient.invalidateQueries({ queryKey: ["users"] });
+  };
+
+  // Зөвхөн ЗӨРҮҮГ (нэмэгдсэн/хасагдсаныг) илгээнэ.
+  const savePermsMutation = useMutation({
+    mutationFn: async ({
+      roleId,
+      added,
+      removed,
     }: {
-      name: string;
-      description?: string;
-    }) => rolesApi.create({ name, description }),
-    onSuccess: () => {
-      toast.success("Роль үүслээ");
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
-      setShowCreate(false);
-      setNewName("");
-      setNewDesc("");
+      roleId: string;
+      added: string[];
+      removed: string[];
+    }) => {
+      for (const permId of added) {
+        await rolesApi.assignPermission(roleId, permId);
+      }
+      for (const permId of removed) {
+        await rolesApi.removePermission(roleId, permId);
+      }
     },
-  });
-  const updateRoleMutation = useMutation({
-    mutationFn: ({
-      id,
-      name,
-      description,
-    }: {
-      id: string;
-      name: string;
-      description?: string;
-    }) => rolesApi.update(id, { name, description }),
     onSuccess: () => {
-      toast.success("Хадгалагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
-      setEditingId(null);
+      toast.success("Эрхийн тохиргоо хадгалагдлаа");
+      invalidateRoles();
     },
-    onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
-  });
-  const deleteRoleMutation = useMutation({
-    mutationFn: (id: string) => rolesApi.delete(id),
-    onSuccess: () => {
-      toast.success("Устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["roles"] });
-      setSelectedRole(null);
+    onError: (err) => {
+      toast.error(getApiError(err, "Эрх хадгалахад алдаа гарлаа"));
+      // Хэсэгчлэн биелсэн байж мэдэх тул сервэрийн бодит төлөвийг татна.
+      invalidateRoles();
     },
-  });
-  const assignPermMutation = useMutation({
-    mutationFn: ({ roleId, permId }: { roleId: string; permId: string }) =>
-      rolesApi.assignPermission(roleId, permId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles"] }),
-    onError: (err) => toast.error(getApiError(err, "Эрх нэмэхэд алдаа")),
-  });
-  const removePermMutation = useMutation({
-    mutationFn: ({ roleId, permId }: { roleId: string; permId: string }) =>
-      rolesApi.removePermission(roleId, permId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["roles"] }),
   });
 
-  const assignedIds = new Set(roleDetail?.permissions?.map((p) => p.id) ?? []);
-
-  const groupedPerms = Object.entries(
-    (permsData?.data ?? []).reduce<
-      Record<string, NonNullable<typeof permsData>["data"]>
-    >((acc, perm) => {
-      const sep = perm.name.includes(":")
-        ? ":"
-        : perm.name.includes(".")
-          ? "."
-          : null;
-      const key = sep ? perm.name.split(sep)[0] : "бусад";
-      if (!acc[key]) acc[key] = [];
-      acc[key]!.push(perm);
-      return acc;
-    }, {}),
+  const assignedIds = useMemo(
+    () => (roleDetail?.permissions ?? []).map((p) => p.id),
+    [roleDetail],
   );
 
-  const submit = () => {
-    if (newName.trim())
-      createRoleMutation.mutate({
-        name: newName.trim(),
-        description: newDesc.trim() || undefined,
+  // Роль сонгогдох / сервэрийн төлөв шинэчлэгдэхэд драфтыг тэгшитгэнэ.
+  useEffect(() => {
+    setDraftPerms(assignedIds);
+  }, [assignedIds, selectedRole]);
+
+  const permsAdded = draftPerms.filter((id) => !assignedIds.includes(id));
+  const permsRemoved = assignedIds.filter((id) => !draftPerms.includes(id));
+  const permsDirty = permsAdded.length > 0 || permsRemoved.length > 0;
+
+  function togglePerm(permId: string) {
+    setDraftPerms((prev) =>
+      prev.includes(permId)
+        ? prev.filter((id) => id !== permId)
+        : [...prev, permId],
+    );
+  }
+
+  /** Роль солих — хадгалаагүй өөрчлөлт байвал асууна. */
+  function selectRole(roleId: string) {
+    const next = roleId === selectedRole ? null : roleId;
+    if (permsDirty) {
+      setPendingConfirm({
+        title: "Хадгалаагүй өөрчлөлт байна",
+        description:
+          "Өөр рольд шилжвэл хадгалаагүй эрхийн өөрчлөлт хаягдана. Үргэлжлүүлэх үү?",
+        confirmLabel: "Үргэлжлүүлэх",
+        confirmColor: "#f59e0b",
+        onConfirm: () => {
+          setDraftPerms(assignedIds);
+          setSelectedRole(next);
+        },
       });
-  };
+      return;
+    }
+    setSelectedRole(next);
+  }
+
+  /** Хадгалах — бусад хэсэгтэй ижил ConfirmDialog-оор батлуулна. */
+  function confirmSavePerms() {
+    if (!selectedRole || !permsDirty) return;
+    const permNameById = new Map(
+      (permsData?.data ?? []).map((p) => [p.id, p.name]),
+    );
+    const list = (ids: string[]) =>
+      ids.map((id) => permNameById.get(id) ?? id).join(", ");
+    const parts: string[] = [];
+    if (permsAdded.length)
+      parts.push(`Нэмэх (${permsAdded.length}): ${list(permsAdded)}`);
+    if (permsRemoved.length)
+      parts.push(`Хасах (${permsRemoved.length}): ${list(permsRemoved)}`);
+
+    setPendingConfirm({
+      title: `"${roleDetail?.name ?? ""}" ролийн эрхийг хадгалах уу?`,
+      description: parts.join(" · "),
+      confirmLabel: "Хадгалах",
+      confirmColor: "#02c0ce",
+      onConfirm: () =>
+        savePermsMutation.mutate({
+          roleId: selectedRole,
+          added: permsAdded,
+          removed: permsRemoved,
+        }),
+    });
+  }
+
+  const groupedPerms = useMemo(
+    () =>
+      Object.entries(
+        (permsData?.data ?? []).reduce<
+          Record<string, NonNullable<typeof permsData>["data"]>
+        >((acc, perm) => {
+          const { resource } = splitPermission(perm.name);
+          if (!acc[resource]) acc[resource] = [];
+          acc[resource]!.push(perm);
+          return acc;
+        }, {}),
+      ),
+    [permsData],
+  );
+
+  if (!ready) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="h-16 animate-pulse rounded-xl bg-slate-100 dark:bg-[#252630]" />
+        <div className="h-64 animate-pulse rounded-xl bg-slate-100 dark:bg-[#252630]" />
+      </div>
+    );
+  }
+
+  if (!perms.view) {
+    return (
+      <div className="ap-card p-8 text-center">
+        <ShieldCheck className="mx-auto mb-3 h-8 w-8 text-slate-300 dark:text-[#37394d]" />
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Энэ хуудсыг харах эрх байхгүй байна.
+        </p>
+        <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+          Ролийн тохиргоо харахад <code>roles:read</code> эрх шаардлагатай.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
-    <div className="flex flex-col gap-5">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Эрх & Роль
-          </h1>
-          <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
-            Системийн хандалтын эрхийн тохиргоо
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
-        >
-          {showCreate ? (
-            <X className="h-4 w-4" />
-          ) : (
-            <Plus className="h-4 w-4" />
-          )}
-          Роль нэмэх
-        </button>
-      </div>
-
-      {/* Create form */}
-      {showCreate && (
-        <div className="ap-card p-5">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white mb-3">
-            Шинэ роль
-          </p>
-          <div className="flex flex-col gap-3 max-w-md">
-            <input
-              placeholder="Ролийн нэр *"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-            />
-            <input
-              placeholder="Тайлбар (заавал биш)"
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-              className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={submit}
-                disabled={createRoleMutation.isPending}
-                className="rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
-              >
-                Үүсгэх
-              </button>
-              <button
-                onClick={() => {
-                  setShowCreate(false);
-                  setNewName("");
-                  setNewDesc("");
-                }}
-                className="rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-slate-300 transition-colors"
-              >
-                Болих
-              </button>
-            </div>
+      <div className="flex flex-col gap-5">
+        {/* Page header */}
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-white">
+              Эрх &amp; Роль
+            </h1>
+            <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+              Системд бүртгэлтэй ролиудын хандах эрхийн тохиргоо
+            </p>
+          </div>
+          <div className="text-[13px] text-slate-400 dark:text-slate-500">
+            Нийт:{" "}
+            <span className="font-semibold text-slate-700 dark:text-slate-200">
+              {rolesData?.data?.length ?? 0}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Main grid */}
-      <div className="grid gap-5 lg:grid-cols-3">
-        {/* Roles list */}
-        <div className="ap-card p-5">
-          <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
-            Ролиуд
-          </p>
-          {isLoading ? (
-            <div className="space-y-2 animate-pulse">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="h-14 rounded-lg bg-slate-100 dark:bg-[#252630]"
-                />
-              ))}
-            </div>
-          ) : !rolesData?.data?.length ? (
-            <p className="text-[13px] text-slate-400 dark:text-slate-500 text-center py-6">
-              Роль олдсонгүй
+        {/* Main grid */}
+        <div className="grid gap-5 lg:grid-cols-3">
+          {/* Roles list */}
+          <div className="ap-card p-5">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Ролиуд
             </p>
-          ) : (
-            <div className="space-y-1.5">
-              {rolesData.data.map((r) => (
-                <div
-                  key={r.id}
-                  className={`w-full rounded-lg border transition-all ${
-                    r.id === selectedRole
-                      ? "bg-[#02c0ce]/10 border-[#02c0ce]/30"
-                      : "bg-slate-50 dark:bg-[#252630] border-transparent hover:border-slate-200 dark:hover:border-[#37394d]"
-                  }`}
-                >
-                  {editingId === r.id ? (
-                    <div className="p-3" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        autoFocus
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="w-full rounded-md border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 mb-2"
-                        placeholder="Ролийн нэр *"
-                      />
-                      <input
-                        value={editDesc}
-                        onChange={(e) => setEditDesc(e.target.value)}
-                        className="w-full rounded-md border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 mb-2"
-                        placeholder="Тайлбар (заавал биш)"
-                      />
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() =>
-                            editName.trim() &&
-                            updateRoleMutation.mutate({
-                              id: r.id,
-                              name: editName.trim(),
-                              description: editDesc.trim() || undefined,
-                            })
-                          }
-                          disabled={updateRoleMutation.isPending}
-                          className="flex items-center gap-1 rounded-md bg-[#02c0ce] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
-                        >
-                          <Check className="h-3 w-3" />
-                          Хадгалах
-                        </button>
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="flex items-center gap-1 rounded-md border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-2.5 py-1 text-[11px] text-slate-500 dark:text-slate-400 hover:border-slate-300 transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                          Болих
-                        </button>
-                      </div>
+            {isLoading ? (
+              <div className="space-y-2 animate-pulse">
+                {[...Array(4)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-14 rounded-lg bg-slate-100 dark:bg-[#252630]"
+                  />
+                ))}
+              </div>
+            ) : !rolesData?.data?.length ? (
+              <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                Роль олдсонгүй
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {rolesData.data.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => selectRole(r.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg border p-3.5 text-left transition-all ${
+                      r.id === selectedRole
+                        ? "border-[#02c0ce]/30 bg-[#02c0ce]/10"
+                        : "border-transparent bg-slate-50 hover:border-slate-200 dark:bg-[#252630] dark:hover:border-[#37394d]"
+                    }`}
+                  >
+                    <Shield
+                      className={`h-4 w-4 shrink-0 ${
+                        r.id === selectedRole
+                          ? "text-[#02c0ce]"
+                          : "text-slate-400 dark:text-slate-500"
+                      }`}
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className={`truncate text-[13px] font-medium ${
+                          r.id === selectedRole
+                            ? "text-[#02c0ce]"
+                            : "text-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        {r.name}
+                      </p>
+                      {r.description && (
+                        <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                          {r.description}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {r.permissions?.length ?? 0} эрх
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Permissions panel */}
+          <div className="lg:col-span-2">
+            {!perms.listPerms ? (
+              <div className="ap-card flex h-64 items-center justify-center p-6">
+                <div className="text-center">
+                  <Lock className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-[#37394d]" />
+                  <p className="text-[13px] text-slate-500 dark:text-slate-400">
+                    Эрхийн жагсаалт харах эрх байхгүй байна.
+                  </p>
+                  <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">
+                    <code>permissions:read</code> эрх шаардлагатай.
+                  </p>
+                </div>
+              </div>
+            ) : !selectedRole ? (
+              <div className="ap-card flex h-64 items-center justify-center">
+                <div className="text-center">
+                  <Shield className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-[#37394d]" />
+                  <p className="text-[13px] text-slate-400 dark:text-slate-500">
+                    Роль сонгоно уу
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="ap-card overflow-hidden">
+                <div className="border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+                  <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+                    {roleDetail?.name}
+                    {roleDetail?.description ? ` — ${roleDetail.description}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
+                    {perms.managePerms
+                      ? "Дарж эрх нэмэх / хасаад Хадгалах дарна. Танд байхгүй эрхийг олгох боломжгүй."
+                      : "Зөвхөн харах — эрх өөрчлөхөд roles:update шаардлагатай."}
+                  </p>
+                </div>
+
+                <div className="p-5">
+                  {roleLoading ? (
+                    <div className="grid grid-cols-2 gap-2 animate-pulse">
+                      {[...Array(6)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-11 rounded-lg bg-slate-100 dark:bg-[#252630]"
+                        />
+                      ))}
                     </div>
                   ) : (
-                    <div
-                      className="flex items-center justify-between p-3.5 cursor-pointer"
-                      onClick={() =>
-                        setSelectedRole(r.id === selectedRole ? null : r.id)
-                      }
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Shield
-                          className={`h-4 w-4 shrink-0 ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-400 dark:text-slate-500"}`}
-                        />
-                        <div className="min-w-0">
-                          <p
-                            className={`text-[13px] font-medium truncate ${r.id === selectedRole ? "text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
-                          >
-                            {r.name}
+                    <div className="flex flex-col gap-4">
+                      {groupedPerms.map(([resource, resourcePerms]) => (
+                        <div key={resource}>
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            {RESOURCE_LABELS[resource] ?? resource}
                           </p>
-                          {r.permissions?.length > 0 && (
-                            <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                              {r.permissions.length} эрх
-                            </p>
-                          )}
+                          <div className="grid grid-cols-2 gap-2">
+                            {resourcePerms!.map((perm) => {
+                              const has = draftPerms.includes(perm.id);
+                              const changed =
+                                has !== assignedIds.includes(perm.id);
+                              const { action } = splitPermission(perm.name);
+                              // Өөрт байхгүй эрхийг олгох/хураах боломжгүй —
+                              // backend-ийн escalation шалгалттай ижил.
+                              const grantable = canGrantPermission(perm.name);
+                              const editable = perms.managePerms && grantable;
+                              return (
+                                <button
+                                  key={perm.id}
+                                  type="button"
+                                  disabled={
+                                    !editable || savePermsMutation.isPending
+                                  }
+                                  title={
+                                    !perms.managePerms
+                                      ? "Эрх өөрчлөхөд roles:update шаардлагатай"
+                                      : !grantable
+                                        ? "Танд байхгүй эрхийг олгох боломжгүй"
+                                        : perm.description || perm.name
+                                  }
+                                  onClick={() =>
+                                    editable && togglePerm(perm.id)
+                                  }
+                                  className={`flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
+                                    has
+                                      ? "border-[#02c0ce]/40 bg-[#02c0ce]/5"
+                                      : "border-slate-200 dark:border-[#37394d]"
+                                  } ${changed ? "ring-2 ring-amber-400/40" : ""} ${
+                                    editable
+                                      ? "hover:border-[#02c0ce]/30 hover:bg-[#02c0ce]/5"
+                                      : "cursor-not-allowed opacity-60"
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                                      {ACTION_LABELS[action] ?? action}
+                                    </p>
+                                    <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                                      {perm.name}
+                                    </p>
+                                  </div>
+                                  {has ? (
+                                    <span
+                                      className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                                      style={{ background: "#02c0ce" }}
+                                    >
+                                      ✓
+                                    </span>
+                                  ) : (
+                                    !editable && (
+                                      <Lock className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" />
+                                    )
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingId(r.id);
-                            setEditName(r.name);
-                            setEditDesc(r.description ?? "");
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-[#37394d] text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-[#444] transition-colors"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPendingConfirm({
-                              title: "Устгах уу?",
-                              confirmLabel: "Устгах",
-                              confirmColor: "#f1556c",
-                              onConfirm: () => deleteRoleMutation.mutate(r.id),
-                            });
-                          }}
-                          className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 dark:bg-red-500/10 text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
+                      ))}
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Permissions panel */}
-        <div className="lg:col-span-2">
-          {!selectedRole ? (
-            <div className="ap-card flex h-64 items-center justify-center">
-              <div className="text-center">
-                <Shield className="mx-auto mb-2 h-8 w-8 text-slate-300 dark:text-[#37394d]" />
-                <p className="text-[13px] text-slate-400 dark:text-slate-500">
-                  Роль сонгоно уу
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="ap-card overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                  {roleDetail?.name}
-                  {roleDetail?.description
-                    ? ` — ${roleDetail.description}`
-                    : ""}
-                </p>
-                {/* <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
-                  Дарж эрх нэмэх / хасах
-                </p> */}
-              </div>
-              <div className="p-5">
-                {roleLoading ? (
-                  <div className="grid grid-cols-2 gap-2 animate-pulse">
-                    {[...Array(6)].map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-11 rounded-lg bg-slate-100 dark:bg-[#252630]"
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {groupedPerms.map(([resource, perms]) => (
-                      <div key={resource}>
-                        <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">
-                          {resource}
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {perms!.map((perm) => {
-                            const has = assignedIds.has(perm.id);
-                            const action = perm.name.includes(":")
-                              ? perm.name.split(":").slice(1).join(":")
-                              : perm.name.includes(".")
-                                ? perm.name.split(".").slice(1).join(".")
-                                : perm.name;
-                            return (
-                              <button
-                                key={perm.id}
-                                onClick={() => {
-                                  if (has)
-                                    removePermMutation.mutate({
-                                      roleId: selectedRole,
-                                      permId: perm.id,
-                                    });
-                                  else
-                                    assignPermMutation.mutate({
-                                      roleId: selectedRole,
-                                      permId: perm.id,
-                                    });
-                                }}
-                                className={`flex items-center justify-between p-3 rounded-lg border text-left transition-all ${
-                                  has
-                                    ? "border-[#02c0ce]/40 bg-[#02c0ce]/5"
-                                    : "border-slate-200 dark:border-[#37394d] hover:border-[#02c0ce]/30 hover:bg-[#02c0ce]/5"
-                                }`}
-                              >
-                                <div className="min-w-0">
-                                  <p className="font-mono text-[12px] text-slate-600 dark:text-slate-300 truncate">
-                                    {action}
-                                  </p>
-                                  {perm.description && (
-                                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                                      {perm.description}
-                                    </p>
-                                  )}
-                                </div>
-                                {has && (
-                                  <span
-                                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ml-2"
-                                    style={{ background: "#02c0ce" }}
-                                  >
-                                    ✓
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                {/* Хадгалах / Болих — өөрчлөлт байгаа үед л гарна */}
+                {perms.managePerms && (
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+                    <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                      {permsDirty ? (
+                        <>
+                          Хадгалаагүй өөрчлөлт:{" "}
+                          {permsAdded.length > 0 && (
+                            <span className="font-semibold text-[#02c0ce]">
+                              +{permsAdded.length}
+                            </span>
+                          )}
+                          {permsAdded.length > 0 && permsRemoved.length > 0 && " / "}
+                          {permsRemoved.length > 0 && (
+                            <span className="font-semibold text-[#f1556c]">
+                              −{permsRemoved.length}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "Өөрчлөлт байхгүй"
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      {permsDirty && (
+                        <button
+                          type="button"
+                          onClick={() => setDraftPerms(assignedIds)}
+                          disabled={savePermsMutation.isPending}
+                          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:border-slate-300 disabled:opacity-60 dark:border-[#37394d] dark:bg-[#1e1f27] dark:text-slate-300"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Болих
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={confirmSavePerms}
+                        disabled={!permsDirty || savePermsMutation.isPending}
+                        className="flex items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#02a3af] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                        {savePermsMutation.isPending
+                          ? "Хадгалж байна…"
+                          : "Хадгалах"}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
-    </div>
-    <ConfirmDialog
-      open={!!pendingConfirm}
-      title={pendingConfirm?.title ?? ""}
-      description={pendingConfirm?.description}
-      confirmLabel={pendingConfirm?.confirmLabel}
-      confirmColor={pendingConfirm?.confirmColor}
-      onConfirm={() => pendingConfirm?.onConfirm()}
-      onClose={() => setPendingConfirm(null)}
-    />
+
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </>
   );
 }

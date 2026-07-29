@@ -5,7 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { authStorage } from "@/lib/auth";
 import { authApi } from "@/lib/api";
-import { isExternalSpecialRole, hasPermission, isProfessionalOrg } from "@/lib/role-utils";
+import {
+  isExternalSpecialRole,
+  hasPermission,
+  isProfessionalOrg,
+  canViewUsers,
+  canViewRoles,
+} from "@/lib/role-utils";
 import {
   LayoutDashboard,
   Map,
@@ -40,6 +46,7 @@ const NAV_MAIN = [
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
 ];
 
+// Хэрэглэгч/ролийн цэс нь эрхээр шүүгдэнэ (доорх canViewUsers/canViewRoles).
 const NAV_ADMIN = [
   { href: "/users", label: "Хэрэглэгчид", icon: Users },
   { href: "/roles", label: "Эрх & Роль", icon: Shield },
@@ -144,6 +151,7 @@ export function Sidebar() {
   const [isProfOrg, setIsProfOrg] = useState(false);
   const [canViewConfig, setCanViewConfig] = useState(false);
   const [canViewAudit, setCanViewAudit] = useState(false);
+  const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
@@ -160,6 +168,13 @@ export function Sidebar() {
     setIsProfOrg(isProfessionalOrg());
     setCanViewConfig(hasPermission("admin:read"));
     setCanViewAudit(hasPermission("audit:read"));
+    // Хэрэглэгч/роль цэс — эрхтэй хэрэглэгчид л харагдана. Эрхгүй хэрэглэгч
+    // цэсээр орж 403 toast-той хоосон хуудас харахаас сэргийлнэ.
+    setAdminNav(
+      NAV_ADMIN.filter((item) =>
+        item.href === "/users" ? canViewUsers() : canViewRoles(),
+      ),
+    );
     setReady(true);
   }, []);
 
@@ -250,8 +265,9 @@ export function Sidebar() {
           </div>
         )}
 
-        {/* Удирдлага dropdown — hidden for external special roles */}
-        {ready && !isExternal && (
+        {/* Удирдлага dropdown — гадаад ролиудад, мөн дотор нь харах юмгүй
+            (эрхгүй) хэрэглэгчид харагдахгүй */}
+        {ready && !isExternal && (adminNav.length > 0 || canViewAudit || canViewConfig) && (
           <div>
             <button
               onClick={() => setAdminOpen((v) => !v)}
@@ -284,7 +300,7 @@ export function Sidebar() {
             >
               <div className="overflow-hidden">
                 <nav className="space-y-0.5">
-                  {NAV_ADMIN.map((item) => (
+                  {adminNav.map((item) => (
                     <NavItem
                       key={item.href}
                       {...item}

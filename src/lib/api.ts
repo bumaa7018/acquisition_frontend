@@ -313,15 +313,23 @@ export const authApi = {
 
 // ── Users ────────────────────────────────────────────
 export const usersApi = {
-  list: (params?: { page?: number; page_size?: number; search?: string }) =>
+  list: (params?: { page?: number; page_size?: number; search?: string; role?: string; is_active?: boolean }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_names?: string[] }) =>
+  // role_ids — backend хэрэглэгчийг үүсгэхтэй зэрэг ролиудыг оноож,
+  // олгох эрхгүй роль дурдвал хэрэглэгчийг ҮҮСГЭХГҮЙ (хагас биелэхээс сэргийлнэ).
+  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_ids?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
-  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean; role_names: string[] }>) =>
+  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
   changePassword: (id: string, password: string) =>
     api.put(`/users/${id}/password`, { password }),
+  // Роль олгох/хураах нь тусдаа маршрут — backend дээр эрх нэмэгдүүлэлт болон
+  // өөрийн ролийг өөрөө өөрчлөхөөс хамгаалсан шалгалттай.
+  assignRole: (userId: string, roleId: string) =>
+    api.post(`/users/${userId}/roles`, { role_id: roleId }),
+  removeRole: (userId: string, roleId: string) =>
+    api.delete(`/users/${userId}/roles/${roleId}`),
   delete: (id: string) => api.delete(`/users/${id}`),
 }
 
