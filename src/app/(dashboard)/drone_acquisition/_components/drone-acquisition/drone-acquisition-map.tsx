@@ -42,7 +42,7 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
   const olMap = useRef<OLMap | null>(null);
   const planLayer = useRef<ImageLayer<ImageWMS> | null>(null);
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  const droneTileLayers = useRef<Record<string, WebGLTileLayer>>({});
+  const droneTileLayers = useRef<Record<string, WebGLTileLayer | ImageLayer<ImageWMS>>>({});
   const droneTileExtents = useRef<Record<string, number[]>>({});
   const wktFormat = useRef(new WKT());
 
@@ -67,9 +67,10 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
     );
   }, [boundaryHistory]);
 
-  // Tile pyramids ("acquisition"-type) tied to this specific acquisition. Rendered straight
-  // from tif_path (see makeDroneTileLayer), so "processing" rows are included too — they
-  // don't need to wait on the separate GeoServer publish step that "ready" used to gate on.
+  // Tile pyramids ("acquisition"-type) tied to this specific acquisition. "processing" rows
+  // are included too (see makeDroneTileLayer) — they render from tif_path directly until the
+  // background GeoServer publish finishes and geoserver_layer switches them to WMS; only
+  // "failed" rows (no usable tif_path either) are excluded.
   const relevantDroneTiles = useMemo(() => {
     return droneAcquisitions
       .filter(
@@ -158,9 +159,32 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       const extent = geom.getExtent();
       droneTileExtents.current[`tile-${acq.id}`] = extent;
 
-      // Renders the uploaded .tif directly, client-side, via OpenLayers' GeoTIFF source —
-      // createFromTif/updateFromTif (the only ways this app creates acquisition-type rows)
-      // always derive tif_path alongside bbox_wkt, so no GeoServer WMS fallback is needed.
+      // Prefer the published GeoServer WMS layer — server-rendered, so the browser doesn't
+      // have to download/decode the full orthomosaic. The backend publishes tif_path to
+      // GeoServer in the background after upload (see acquisition_backend's
+      // drone_acquisition service), so geoserver_layer is empty until that finishes (or if
+      // GeoServer publishing isn't configured, or it failed) — fall back to rendering the
+      // raw .tif directly, client-side, via OpenLayers' GeoTIFF source in that case.
+      if (acq.geoserver_layer) {
+        return new ImageLayer({
+          visible: false,
+          zIndex,
+          extent,
+          opacity: tileOpacity,
+          source: new ImageWMS({
+            url: GS_WMS,
+            params: {
+              LAYERS: acq.geoserver_layer,
+              FORMAT: "image/png",
+              TRANSPARENT: true,
+            },
+            ratio: 1,
+            serverType: "geoserver",
+            imageLoadFunction: wmsPostLoad,
+          }),
+        });
+      }
+
       return new WebGLTileLayer({
         visible: false,
         zIndex,
