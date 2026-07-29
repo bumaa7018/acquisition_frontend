@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Layers, Pencil, Plus, Trash2, X, Save, Upload } from "lucide-react";
-import { droneAcquisitionApi, dronePublishApi } from "@/lib/api";
+import { droneAcquisitionApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import type { DroneAcquisition, DroneAcquisitionStatus } from "@/types";
@@ -52,11 +52,7 @@ export function DroneAcquisitionList({ acquisitionId }: Props) {
   }, [droneAcquisitions, acquisitionId]);
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      // Best-effort — a GeoServer hiccup shouldn't block removing the row itself.
-      await dronePublishApi.unpublish(id).catch(() => {});
-      await droneAcquisitionApi.delete(id);
-    },
+    mutationFn: (id: number) => droneAcquisitionApi.delete(id),
     onSuccess: () => {
       toast.success("Явцын зураг устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
@@ -190,15 +186,10 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         acquisition_id: acquisitionId,
         captured_at: capturedAt || undefined,
       }),
-    onSuccess: (acq) => {
-      toast.success("Явцын зураг үүслээ, GeoServer рүү нийтлэгдэж байна");
+    onSuccess: () => {
+      toast.success("Явцын зураг үүслээ");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
-      // Detached — modal already closed, the row shows "processing" until this settles.
-      dronePublishApi
-        .publish(acq.id)
-        .catch((err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")))
-        .finally(() => queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] }));
     },
     onError: (err) => toast.error(getApiError(err, "Файл байршуулахад алдаа гарлаа")),
   });
@@ -240,7 +231,7 @@ function TifUploadForm({ acquisitionId, onClose }: { acquisitionId: string; onCl
         </div>
         {uploadMutation.isPending && (
           <p className="text-[12px] text-amber-600 dark:text-amber-400">
-            Явцын зураг GeoServer рүү нийтлэгдэж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
+            Файл байршуулж байна, файлын хэмжээнээс шалтгаалж хэдэн минут үргэлжилж болно. Цонхыг бүү хаа.
           </p>
         )}
       </div>
@@ -290,21 +281,10 @@ function EditDroneAcquisitionModal({
         file: file ?? undefined,
         captured_at: capturedAt || undefined,
       }),
-    onSuccess: (acq) => {
-      toast.success(
-        file
-          ? "Шинэ .tif GeoServer рүү нийтлэгдэж эхэллээ, өмнөх давхарга солигдоно"
-          : "Мэдээлэл шинэчлэгдлээ",
-      );
+    onSuccess: () => {
+      toast.success(file ? "Шинэ .tif байршуулагдлаа" : "Мэдээлэл шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] });
       onClose();
-      if (file) {
-        // Detached — modal already closed, the row shows "processing" until this settles.
-        dronePublishApi
-          .publish(acq.id)
-          .catch((err) => toast.error(getApiError(err, "GeoServer-т нийтлэхэд алдаа гарлаа")))
-          .finally(() => queryClient.invalidateQueries({ queryKey: ["drone-acquisitions"] }));
-      }
     },
     onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
   });
@@ -349,8 +329,8 @@ function EditDroneAcquisitionModal({
             </button>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               {file
-                ? `Одоогийн давхарга (${acquisition.geoserver_layer || "давхаргагүй"}) энэ файлаар бүрэн солигдож, хуучин давхарга GeoServer-ээс устгагдана.`
-                : "Файл сонгохгүй бол зөвхөн доорх огноо шинэчлэгдэж, одоогийн давхарга хэвээр үлдэнэ."}
+                ? "Шинэ .tif файл хуучныг нь орлоно. GeoServer давхарга хэвээр үлдэх тул шинэ файл дээр давхаргыг гараар дахин тохируулах шаардлагатай."
+                : "Файл сонгохгүй бол зөвхөн доорх огноо шинэчлэгдэнэ."}
             </p>
           </div>
           <div>
@@ -364,7 +344,7 @@ function EditDroneAcquisitionModal({
           </div>
           {updateMutation.isPending && (
             <p className="text-[12px] text-amber-600 dark:text-amber-400">
-              Шинэ явцын зураг GeoServer рүү нийтлэгдэж байна. Цонхыг бүү хаа.
+              Шинэ файл байршуулж байна. Цонхыг бүү хаа.
             </p>
           )}
         </div>
