@@ -25,6 +25,13 @@ services:
       NODE_ENV: production
       NEXT_API_URL: ${NEXT_API_URL}
       NEXT_GS_URL: ${NEXT_GS_URL}
+      # Файлын систем — /api/files proxy ЭНЭ хаягаар MinIO-с файл тараана
+      # (баримт, зураг, тайлан, дроны ортофото). Заагаагүй бол код нь
+      # localhost:9000 гэж үзэх ба container дотор тэнд юу ч байхгүй тул
+      # БҮХ файл татах линк эвдэрнэ. Build arg биш — server-side route тул
+      # runtime env хүрэлцэнэ.
+      NEXT_S3_ENDPOINT: ${NEXT_S3_ENDPOINT:-http://minio:9000}
+      NEXT_S3_BUCKET: ${NEXT_S3_BUCKET:-gov-files}
     restart: on-failure
     logging: *default-logging
     networks:
