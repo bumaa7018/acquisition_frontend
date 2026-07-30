@@ -609,11 +609,22 @@ export const landApi = {
         onProgress(Math.round((e.loaded / e.total) * 100))
       },
     }).then(() => undefined),
+  // timeout: 0 — бүртгэл нь GeoServer-т давхарга нийтлэхийг ДОТРОО хийдэг тул
+  // ердийн 30 сек-ийн хязгаарт багтахгүй байж болно. GeoServer растрын толгойг
+  // (IFD) HTTP Range-ээр уншина: жинхэнэ COG дээр 1-2 сек, харин COG БИШ
+  // GeoTIFF-ийн толгой файлын төгсгөлд байдаг тул файлыг эхнээс дуустал мөлхөж
+  // уншиж, хэмжээнээсээ хамаарч минут хүрч болно.
+  //
+  // 30 сек-ийн хязгаар нь ЯГ ЭНЭ ШАЛТГААНААР 138 MB, COG биш ортофотог
+  // оруулахад алдаа гаргаж байсан: browser 30 сек-т таслахад backend-ийн
+  // context цуцлагдаж нийтлэлт хагасаас тасарч, хэрэглэгчид "сервер алдаа"
+  // харагдаж байв (харин 190 MB-ийн COG нь 1 сек-т нийтлэгдэж хэвийн ордог —
+  // ХЭМЖЭЭ биш, ФАЙЛЫН БҮТЭЦ шалтгаан болж байсан).
   registerDroneImage: (acqId: string, storedName: string, originalName: string) =>
     api.post<ApiResponse<DroneImage>>(`/land-acquisitions/${acqId}/drone-images`, {
       stored_name: storedName,
       original_name: originalName,
-    }).then(r => r.data.data),
+    }, { timeout: 0 }).then(r => r.data.data),
   // Зураг байршуулсны ДАРАА автоматаар дуудна — GeoServer-ийн мозайкийг
   // шинэчилж (harvest + reset) шинэ зургийг давхаргад харагдахаар болгоно.
   //
