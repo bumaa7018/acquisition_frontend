@@ -80,11 +80,16 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
           acq.acquisition_id === acquisitionId &&
           acq.status !== "failed",
       )
-      .sort(
-        (a, b) =>
-          new Date(b.captured_at ?? b.created_at).getTime() -
-          new Date(a.captured_at ?? a.created_at).getTime(),
-      );
+      .sort((a, b) => {
+        const bTime = new Date(b.captured_at ?? b.created_at).getTime();
+        const aTime = new Date(a.captured_at ?? a.created_at).getTime();
+        // Fall back to id (higher = newer) if a date is missing/unparseable — otherwise
+        // the comparator returns NaN and the sort silently keeps the API's original order.
+        if (!Number.isFinite(aTime) || !Number.isFinite(bTime) || aTime === bTime) {
+          return b.id - a.id;
+        }
+        return bTime - aTime;
+      });
   }, [droneAcquisitions, acquisitionId]);
 
   const [layers, setLayers] = useState<LayerConfig[]>([
