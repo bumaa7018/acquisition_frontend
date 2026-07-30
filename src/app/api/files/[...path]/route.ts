@@ -56,7 +56,33 @@ async function proxy(
     Reflect.set(init, 'duplex', 'half')
   }
 
-  const res = await fetch(url, init)
+  let res: Response
+  try {
+    res = await fetch(url, init)
+  } catch (err) {
+    // Холболт огт хийгдээгүй (DNS, refused, timeout). ЛОГЛОХГҮЙ бол Next нь
+    // production дээр хүсэлтийг логлодоггүй тул `docker logs` дээр юу ч
+    // харагдахгүй — асуудлыг олох боломжгүй болно.
+    console.error(
+      `[files] ${req.method} ${key} → холбогдсонгүй  upstream=${S3_ENDPOINT}`,
+      err instanceof Error ? err.message : err,
+    )
+    return NextResponse.json(
+      { error: 'файлын серверт холбогдсонгүй', upstream: S3_ENDPOINT },
+      { status: 502 },
+    )
+  }
+
+  if (!res.ok) {
+    // Upstream-ийн алдааг ХАРАГДАХУЙЦ болгоно: MinIO нь шалтгааныг XML биед
+    // бичдэг (SignatureDoesNotMatch, MissingContentLength, AccessDenied г.м.)
+    // — түүнийг логлохгүй бол зөвхөн статус л мэдэгдэнэ.
+    const detail = await res.clone().text().catch(() => '')
+    console.error(
+      `[files] ${req.method} ${key} → ${res.status}  upstream=${S3_ENDPOINT}  ` +
+        `len=${req.headers.get('content-length') ?? '-'}  ${detail.slice(0, 400)}`,
+    )
+  }
 
   const headers = new Headers()
   for (const h of PASS_THROUGH) {
