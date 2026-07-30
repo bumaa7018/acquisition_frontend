@@ -290,12 +290,6 @@ export interface Document {
 }
 
 /**
- * Дроны ортофото (.tif). GeoServer дээр БҮХ зураг НЭГ ImageMosaic давхаргад
- * (layer_name, ж: "land:drone") granule болж бүртгэгддэг тул зураг нэмэгдэхэд
- * шинэ давхарга үүсэхгүй. Тухайн зургийг харуулахдаа WMS хүсэлтэд
- * `CQL_FILTER=cql_filter` явуулна.
- */
-/**
  * Дроны зургийг файлын систем руу ШУУД байршуулах зөвшөөрөл.
  *
  * Backend-ээс гардаг presigned URL — browser файлыг API-аар дамжуулахгүйгээр
@@ -312,10 +306,15 @@ export interface DroneUploadTicket {
   expires_in_seconds: number;
 }
 
+/**
+ * Дроны ортофото (.tif). Зураг тус бүр GeoServer дээр ӨӨРИЙН давхаргатай
+ * (`layer_name`, ж: "land:drone_orto_ab12cd34"). GeoServer растрыг файлын
+ * системээс HTTP Range хүсэлтээр шууд уншдаг тул backend дээр хуулбар байхгүй.
+ */
 export interface DroneImage {
   id: string;
   acquisition_id: string;
-  /** Хуваалцсан хавтас дахь файлын нэр = мозайкийн `location` */
+  /** Файлын системд хадгалагдсан нэр (давхаргын нэр эндээс тооцогдоно) */
   file_name: string;
   original_name: string;
   content_type: string;
@@ -329,10 +328,14 @@ export interface DroneImage {
   published: boolean;
   uploaded_at: string;
   uploaded_by?: string;
-  /** WMS-д явуулах давхаргын нэр (бүх зурагт ижил) */
+  /** WMS-д явуулах давхаргын нэр — зураг тус бүрт ӨӨР */
   layer_name: string;
-  /** Зөвхөн тухайн зургийг харуулах CQL шүүлтүүр */
-  cql_filter: string;
+  /**
+   * GeoServer-т давхарга үүсгэхэд гарсан алдаа (бүртгэх үед л ирнэ).
+   * Зураг хадгалалтад бүтэн орсон тул алдаа биш — гэхдээ шалтгааныг
+   * хэрэглэгчид харуулж, "Шинэчлэх"-ээр дахин оролдох боломж үлдээнэ.
+   */
+  publish_error?: string;
 }
 
 export interface ParcelStatusHistory {

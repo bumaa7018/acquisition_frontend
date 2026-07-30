@@ -104,8 +104,8 @@ export function LocationTab({
 
   const list = useMemo(() => images ?? [], [images]);
 
-  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Бүгд НЭГ мозайк давхаргаас
-  // (layer_name) CQL_FILTER-ээр шүүгдэнэ.
+  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Зураг тус бүр өөрийн
+  // GeoServer давхаргатай (layer_name).
   //
   // Хүрээ (bbox) МЭДЭГДЭЖ байгаа зургийг л давхарлана: extent нь давхаргыг
   // зургийн гадна зурахгүй байлгах хамгаалалт (acquisition-map-ийн тайлбарыг
@@ -121,7 +121,6 @@ export function LocationTab({
           {
             id: img.id,
             layerName: img.layer_name,
-            cqlFilter: img.cql_filter,
             extent,
           },
         ];
@@ -136,23 +135,14 @@ export function LocationTab({
       // (backend-ээр дамжихгүй). 3. Backend объектыг шалгаж бүртгэнэ.
       const ticket = await landApi.createDroneUploadUrl(id, file.name);
       await landApi.putDroneFileDirect(ticket, file, setProgress);
+      // Бүртгэх дуудлага нь GeoServer-т давхаргыг ӨӨРӨӨ нийтэлж, хүрээг
+      // буцаадаг — тусад нь refresh дуудах шаардлагагүй (давхар дуудлага байв).
       const created = await landApi.registerDroneImage(
         id,
         ticket.stored_name,
         file.name,
       );
       setProgress(null);
-      // Зураг байршуулсны ДАРАА GeoServer-ийг автоматаар шинэчилнэ — ингэснээр
-      // шинэ зураг мозайкийн granule болж давхаргад шууд харагдана.
-      try {
-        await landApi.refreshDroneImages(id);
-      } catch (err) {
-        // Файл хадгалагдсан — зөвхөн GeoServer-т бүртгэгдээгүй. Хэрэглэгчид
-        // мэдэгдэж, "Шинэчлэх" товчоор дахин оролдох боломж үлдээнэ.
-        toast.warning(
-          getApiError(err, "GeoServer-т бүртгэж чадсангүй. Шинэчлэх товчийг дарна уу."),
-        );
-      }
       return created;
     },
     onSuccess: (created) => {
@@ -160,6 +150,17 @@ export function LocationTab({
       queryClient.invalidateQueries({ queryKey: ["drone-images", id] });
       // Шинэ зургийг шууд харуулна
       setVisibleIds((prev) => new Set(prev).add(created.id));
+      if (!created.published) {
+        // Файл хадгалагдсан — зөвхөн GeoServer-т давхарга үүсээгүй.
+        // ШАЛТГААНЫГ харуулна: эс тэгвээс зөвхөн серверийн лог дээр үлдэж,
+        // хэрэглэгч юу засахаа мэдэхгүй болно.
+        toast.warning("GeoServer-т давхарга үүсгэж чадсангүй", {
+          description: created.publish_error
+            ? `${created.publish_error} — "Шинэчлэх" товчоор дахин оролдоно уу.`
+            : 'Шинэчлэх товчийг дарна уу.',
+          duration: 15000,
+        });
+      }
     },
     onError: (err) => {
       setProgress(null);

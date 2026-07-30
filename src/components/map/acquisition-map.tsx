@@ -22,7 +22,13 @@ import { landApi } from "@/lib/api";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 import FullscreenButton from "./fullscreen-button";
 import { useFullscreen } from "./use-fullscreen";
-import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
+import {
+  BASE_Z_INDEX,
+  DRONE_Z_INDEX,
+  fitLayerToMap,
+  layerDef,
+  type MapLayerDef,
+} from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
 
@@ -93,14 +99,12 @@ const LAYER_DEFS: (MapLayerDef & {
 ];
 
 /**
- * Дроны ортофотогийн давхцуулалт. GeoServer дээр БҮХ зураг НЭГ ImageMosaic
- * давхаргад байдаг тул зураг тус бүрийг `cqlFilter`-ээр (location) шүүж
- * тусад нь ImageLayer болгон харуулна.
+ * Дроны ортофотогийн давхцуулалт. Зураг тус бүр GeoServer дээр ӨӨРИЙН
+ * давхаргатай тул шүүлтүүр шаардахгүй — давхаргын нэрээрээ шууд дуудна.
  */
 export type DroneOverlay = {
   id: string;
   layerName: string;
-  cqlFilter: string;
   /**
    * Зургийн WGS84 хүрээ [minX, minY, maxX, maxY] — ЗААВАЛ.
    *
@@ -112,9 +116,6 @@ export type DroneOverlay = {
    */
   extent: [number, number, number, number];
 };
-
-// Ортофото нь вектор хилүүдийн ДООР байх ёстой (хил дарагдахгүй).
-const DRONE_Z_INDEX = 5;
 
 /**
  * WGS84 хүрээ бодит талбай эзэлж байгааг шалгана.
@@ -390,6 +391,8 @@ export function AcquisitionMap({
       target: mapRef.current,
       layers: [
         new TileLayer({
+          // Хамгийн доод давхарга — дрон болон бусад бүх давхарга үүний дээр
+          zIndex: BASE_Z_INDEX,
           source: new XYZ({
             urls: [
               "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
@@ -537,8 +540,6 @@ export function AcquisitionMap({
             LAYERS: overlay.layerName,
             FORMAT: "image/png",
             TRANSPARENT: true,
-            // Нэг мозайк давхаргаас ЗӨВХӨН тухайн зургийг шүүнэ
-            CQL_FILTER: overlay.cqlFilter,
           },
           ratio: 1,
           serverType: "geoserver",
@@ -674,7 +675,7 @@ export function AcquisitionMap({
       {Array.isArray(aus) && aus.length > 0 && (
         <div>
           <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wider">
-            Давхцаж буй нутаг дэвсгэр
+            Байршил
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {aus.map((au) => (

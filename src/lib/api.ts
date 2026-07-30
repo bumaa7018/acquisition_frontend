@@ -575,16 +575,24 @@ export const landApi = {
       `/land-acquisitions/${acqId}/drone-images/upload-url`,
       { file_name: fileName },
     ).then(r => r.data.data),
-  // `api` instance-ыг ЗОРИУДААР хэрэглэхгүй: presigned URL нь өөрөө зөвшөөрөл
-  // агуулдаг тул бидний Authorization header шаардлагагүй, мөн response
-  // interceptor (loader, /server-error redirect) файлын серверийн хариуд
+  // Файлыг ӨӨРИЙН origin-ий `/api/files/...` руу тавина. Next-ийн route нь
+  // биеийг урсгалаар MinIO руу дамжуулна.
+  //
+  // ЯАГААД MinIO-руу ШУУД БИШ: presigned URL-ийн host нь backend-ийн хаяг
+  // (container-т `minio:9000`) — browser түүнийг шийдэж чаддаггүй. Мөн шууд
+  // хандвал MinIO-ийн порт гадаад сүлжээнд нээлттэй байх, CORS ажиллах
+  // шаардлагатай болдог. Өөрийн origin-руу тавихад тэр гурав нь бүгд арилна.
+  //
+  // Зөвшөөрөл нь presigned URL-ийн query (X-Amz-*) дотор — түүнийг хэвээр
+  // дамжуулж, MinIO өөрөө шалгана. `api` instance-ыг хэрэглэхгүй: Authorization
+  // header нь гарын үсэгтэй зөрчилдөж, interceptor нь файлын серверийн хариуд
   // хөндлөнгөөс оролцох ёсгүй.
   putDroneFileDirect: (
     ticket: DroneUploadTicket,
     file: File,
     onProgress?: (percent: number) => void,
   ) =>
-    axios.put(ticket.url, file, {
+    axios.put(ticket.file_url + '?' + new URL(ticket.url).search.replace(/^\?/, ''), file, {
       headers: { 'Content-Type': 'image/tiff' },
       timeout: 0,
       maxBodyLength: Infinity,
