@@ -93,14 +93,12 @@ const LAYER_DEFS: (MapLayerDef & {
 ];
 
 /**
- * Дроны ортофотогийн давхцуулалт. GeoServer дээр БҮХ зураг НЭГ ImageMosaic
- * давхаргад байдаг тул зураг тус бүрийг `cqlFilter`-ээр (location) шүүж
- * тусад нь ImageLayer болгон харуулна.
+ * Дроны ортофотогийн давхцуулалт. Зураг тус бүр GeoServer дээр ӨӨРИЙН
+ * давхаргатай тул шүүлтүүр шаардахгүй — давхаргын нэрээрээ шууд дуудна.
  */
 export type DroneOverlay = {
   id: string;
   layerName: string;
-  cqlFilter: string;
   /**
    * Зургийн WGS84 хүрээ [minX, minY, maxX, maxY] — ЗААВАЛ.
    *
@@ -537,8 +535,6 @@ export function AcquisitionMap({
             LAYERS: overlay.layerName,
             FORMAT: "image/png",
             TRANSPARENT: true,
-            // Нэг мозайк давхаргаас ЗӨВХӨН тухайн зургийг шүүнэ
-            CQL_FILTER: overlay.cqlFilter,
           },
           ratio: 1,
           serverType: "geoserver",

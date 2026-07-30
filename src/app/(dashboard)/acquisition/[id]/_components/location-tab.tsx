@@ -104,8 +104,8 @@ export function LocationTab({
 
   const list = useMemo(() => images ?? [], [images]);
 
-  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Бүгд НЭГ мозайк давхаргаас
-  // (layer_name) CQL_FILTER-ээр шүүгдэнэ.
+  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Зураг тус бүр өөрийн
+  // GeoServer давхаргатай (layer_name).
   //
   // Хүрээ (bbox) МЭДЭГДЭЖ байгаа зургийг л давхарлана: extent нь давхаргыг
   // зургийн гадна зурахгүй байлгах хамгаалалт (acquisition-map-ийн тайлбарыг
@@ -121,7 +121,6 @@ export function LocationTab({
           {
             id: img.id,
             layerName: img.layer_name,
-            cqlFilter: img.cql_filter,
             extent,
           },
         ];
@@ -143,7 +142,7 @@ export function LocationTab({
       );
       setProgress(null);
       // Зураг байршуулсны ДАРАА GeoServer-ийг автоматаар шинэчилнэ — ингэснээр
-      // шинэ зураг мозайкийн granule болж давхаргад шууд харагдана.
+      // шинэ зурагт давхарга үүсч шууд харагдана.
       try {
         await landApi.refreshDroneImages(id);
       } catch (err) {
