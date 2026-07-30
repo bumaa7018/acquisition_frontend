@@ -28,6 +28,12 @@ ARG NEXT_PUBLIC_CESIUM_ION_TOKEN=
 ENV NEXT_API_URL=$NEXT_API_URL
 ENV NEXT_GS_URL=$NEXT_GS_URL
 ENV NEXT_PUBLIC_CESIUM_ION_TOKEN=$NEXT_PUBLIC_CESIUM_ION_TOKEN
+# Build-ийн санах ойг ХЯЗГААРЛАНА. Cesium/OpenLayers-тэй bundle нь их зардаг
+# бөгөөд Node анхдагчаар боломжтой санах ойн талыг heap болгон авдаг тул
+# 4GB-тай орчинд (Docker Desktop-ийн анхдагч) build нь SIGKILL-ээр унадаг.
+# Тодорхой хязгаар тавихад Node GC-г эрт хийж, унахын оронд бүтдэг.
+ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 

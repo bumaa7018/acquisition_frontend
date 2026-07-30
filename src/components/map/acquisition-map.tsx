@@ -670,7 +670,7 @@ export function AcquisitionMap({
       {Array.isArray(aus) && aus.length > 0 && (
         <div>
           <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wider">
-            Давхцаж буй нутаг дэвсгэр
+            Байршил
           </p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {aus.map((au) => (
