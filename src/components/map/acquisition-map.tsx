@@ -92,12 +92,65 @@ const LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("v_parcel_s5"), defaultVisible: true, cqlKey: "acquisition" },
 ];
 
+/**
+ * Дроны ортофотогийн давхцуулалт. GeoServer дээр БҮХ зураг НЭГ ImageMosaic
+ * давхаргад байдаг тул зураг тус бүрийг `cqlFilter`-ээр (location) шүүж
+ * тусад нь ImageLayer болгон харуулна.
+ */
+export type DroneOverlay = {
+  id: string;
+  layerName: string;
+  cqlFilter: string;
+  /**
+   * Зургийн WGS84 хүрээ [minX, minY, maxX, maxY] — ЗААВАЛ.
+   *
+   * Яагаад: мозайк нь өөр өөр CRS-тэй granule агуулах үед (HeterogeneousCRS)
+   * GeoServer нь granule БАЙХГҮЙ хэсэгт тунгалаг биш ХАР пиксел буцаадаг
+   * (BackgroundValues, OutputTransparentColor, FootprintBehavior аль нь ч
+   * үүнийг зассангүй). Давхаргад extent тавьснаар OpenLayers зургийн ГАДНА
+   * талыг хэзээ ч зурахгүй болж, газрын зураг харлахаас сэргийлнэ.
+   */
+  extent: [number, number, number, number];
+};
+
+// Ортофото нь вектор хилүүдийн ДООР байх ёстой (хил дарагдахгүй).
+const DRONE_Z_INDEX = 5;
+
+/**
+ * WGS84 хүрээ бодит талбай эзэлж байгааг шалгана.
+ *
+ * Хүчингүй хүрээг OpenLayers-т өгвөл view-ийн resolution NaN болж, газрын
+ * зураг ЦАГААН болоод хязгааргүй хүсэлтийн эргэлтэд ордог. Тиймээс extent
+ * болон fit хоёуланд нь эндээс өнгөрсөн хүрээг л хэрэглэнэ.
+ */
+function isValidLonLatExtent(e: [number, number, number, number]): boolean {
+  const [minX, minY, maxX, maxY] = e;
+  return (
+    e.every(Number.isFinite) &&
+    Math.abs(minX) <= 180 &&
+    Math.abs(maxX) <= 180 &&
+    Math.abs(minY) <= 90 &&
+    Math.abs(maxY) <= 90 &&
+    minX < maxX &&
+    minY < maxY
+  );
+}
+
 interface Props {
   acquisitionId: string;
   aus?: AU[];
+  /** Харагдах дроны зургууд — хоосон бол давхарга нэмэгдэхгүй */
+  droneOverlays?: DroneOverlay[];
+  /** [minX, minY, maxX, maxY] WGS84 — өөрчлөгдөх бүрд тэр хүрээ рүү нүүнэ */
+  droneFocus?: [number, number, number, number] | null;
 }
 
-export function AcquisitionMap({ acquisitionId, aus: ausProp }: Props) {
+export function AcquisitionMap({
+  acquisitionId,
+  aus: ausProp,
+  droneOverlays,
+  droneFocus,
+}: Props) {
   // API заримдаа aus талбарыг undefined биш null-ээр буцаадаг тул destructuring default
   // (aus = []) ажиллахгүй — 'null' үед ч тогтвортой хоосон array болгож хамгаална
   const aus = useMemo(() => ausProp ?? [], [ausProp]);
@@ -106,6 +159,8 @@ export function AcquisitionMap({ acquisitionId, aus: ausProp }: Props) {
   const olMap       = useRef<OLMap | null>(null);
   const wmsLayers   = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
+  // Дроны ортофото — зургийн id-аар индексжсэн ImageWMS давхаргууд
+  const droneLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const wktFormat   = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
   // 3D (cesium-3d.ts): OL давхаргуудыг globe дээр давхарлана, зөвхөн хэрэглэгч сонгоход л ачаална
@@ -449,6 +504,76 @@ export function AcquisitionMap({ acquisitionId, aus: ausProp }: Props) {
     const raf = requestAnimationFrame(() => olMap.current?.updateSize());
     return () => cancelAnimationFrame(raf);
   }, [isFullscreen]);
+
+  // ── Дроны ортофотогийн давхаргууд ─────────────────────────────────────────
+  // Сонгогдсон зураг тус бүрд ImageWMS давхарга нэмж, сонголтоос хасагдсаныг
+  // устгана. Газрын зургийг бүхэлд нь дахин барихгүй — зөвхөн зөрүүг нөхнө.
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map) return;
+
+    const wanted = droneOverlays ?? [];
+    const wantedIds = new Set(wanted.map((o) => o.id));
+
+    // Сонголтоос хасагдсаныг зурагнаас авна
+    Object.entries(droneLayers.current).forEach(([id, layer]) => {
+      if (wantedIds.has(id)) return;
+      map.removeLayer(layer);
+      delete droneLayers.current[id];
+    });
+
+    // Шинээр сонгогдсоныг нэмнэ
+    wanted.forEach((overlay) => {
+      if (droneLayers.current[overlay.id]) return;
+      // Хүчингүй хүрээтэй давхарга нэмбэл газрын зураг эвдэрнэ — өнгөрөөнө.
+      if (!isValidLonLatExtent(overlay.extent)) return;
+      const layer = new ImageLayer({
+        zIndex: DRONE_Z_INDEX,
+        // Зөвхөн зургийн хүрээн дотор зурна (дээрх тайлбарыг үзнэ үү)
+        extent: transformExtent(overlay.extent, "EPSG:4326", "EPSG:3857"),
+        source: new ImageWMS({
+          url: GS_WMS,
+          params: {
+            LAYERS: overlay.layerName,
+            FORMAT: "image/png",
+            TRANSPARENT: true,
+            // Нэг мозайк давхаргаас ЗӨВХӨН тухайн зургийг шүүнэ
+            CQL_FILTER: overlay.cqlFilter,
+          },
+          ratio: 1,
+          serverType: "geoserver",
+          imageLoadFunction: wmsPostLoad,
+        }),
+      });
+      droneLayers.current[overlay.id] = layer;
+      map.addLayer(layer);
+    });
+  }, [droneOverlays, extentReady]);
+
+  // Компонент устахад дроны давхаргуудыг цэвэрлэнэ
+  useEffect(
+    () => () => {
+      droneLayers.current = {};
+    },
+    [],
+  );
+
+  // "Харах"/"Зураг дээр очих" — сонгосон ортофотогийн хүрээ рүү нүүнэ.
+  //
+  // extentReady-г хамаарал болгосон нь санамсаргүй биш: газрын зураг ачаалахдаа
+  // чөлөөлөлтийн хүрээ рүү өөрөө нүүж, ДАРАА нь extentReady=true болгодог.
+  // Хэрэв хэрэглэгч тэр хооронд "Харах" дарвал дроны fit нь дарагдана — иймд
+  // extentReady болмогц дахин fit хийж, дроны зураг рүү шилжсэн хэвээр байлгана.
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map || !droneFocus) return;
+    if (!isValidLonLatExtent(droneFocus)) return;
+    const [minX, minY, maxX, maxY] = droneFocus;
+    map.getView().fit(
+      transformExtent([minX, minY, maxX, maxY], "EPSG:4326", "EPSG:3857"),
+      { padding: [40, 40, 40, 40], duration: 400, maxZoom: 20 },
+    );
+  }, [droneFocus, extentReady]);
 
   return (
     <div className="flex flex-col gap-4">

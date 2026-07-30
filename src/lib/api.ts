@@ -38,6 +38,8 @@ import type {
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
    DroneAcquisition,
   CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  DroneImage,
+  DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
 } from '@/types'
@@ -314,15 +316,23 @@ export const authApi = {
 
 // ── Users ────────────────────────────────────────────
 export const usersApi = {
-  list: (params?: { page?: number; page_size?: number; search?: string }) =>
+  list: (params?: { page?: number; page_size?: number; search?: string; role?: string; is_active?: boolean }) =>
     api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
-  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_names?: string[] }) =>
+  // role_ids — backend хэрэглэгчийг үүсгэхтэй зэрэг ролиудыг оноож,
+  // олгох эрхгүй роль дурдвал хэрэглэгчийг ҮҮСГЭХГҮЙ (хагас биелэхээс сэргийлнэ).
+  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_ids?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
-  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean; role_names: string[] }>) =>
+  update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
   changePassword: (id: string, password: string) =>
     api.put(`/users/${id}/password`, { password }),
+  // Роль олгох/хураах нь тусдаа маршрут — backend дээр эрх нэмэгдүүлэлт болон
+  // өөрийн ролийг өөрөө өөрчлөхөөс хамгаалсан шалгалттай.
+  assignRole: (userId: string, roleId: string) =>
+    api.post(`/users/${userId}/roles`, { role_id: roleId }),
+  removeRole: (userId: string, roleId: string) =>
+    api.delete(`/users/${userId}/roles/${roleId}`),
   delete: (id: string) => api.delete(`/users/${id}`),
 }
 
@@ -547,6 +557,63 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
+
+  // ── Дроны ортофото (.tif) ──────────────────────────────────────────────
+  // Нэг хүсэлтэд НЭГ файл — олон зургийг дараалан байршуулна.
+  //
+  // Файл BACKEND-ЭЭР ДАМЖИХГҮЙ. Гурван алхам:
+  //   1. createDroneUploadUrl  — backend-ээс байршуулах зөвшөөрөл (presigned URL)
+  //   2. putDroneFileDirect    — browser файлыг ШУУД файлын систем руу PUT
+  //   3. registerDroneImage    — backend объектыг шалгаж чөлөөлөлтөд холбоно
+  // Ингэснээр хэдэн GB ортофото ч API-ийн санах ой, хугацаа, хүсэлтийн
+  // хэмжээний хязгаараас хамаарахгүй — хэмжээний хязгаар байхгүй.
+  listDroneImages: (acqId: string) =>
+    api.get<ApiResponse<DroneImage[]>>(`/land-acquisitions/${acqId}/drone-images`)
+      .then(r => r.data.data ?? []),
+  createDroneUploadUrl: (acqId: string, fileName: string) =>
+    api.post<ApiResponse<DroneUploadTicket>>(
+      `/land-acquisitions/${acqId}/drone-images/upload-url`,
+      { file_name: fileName },
+    ).then(r => r.data.data),
+  // `api` instance-ыг ЗОРИУДААР хэрэглэхгүй: presigned URL нь өөрөө зөвшөөрөл
+  // агуулдаг тул бидний Authorization header шаардлагагүй, мөн response
+  // interceptor (loader, /server-error redirect) файлын серверийн хариуд
+  // хөндлөнгөөс оролцох ёсгүй.
+  putDroneFileDirect: (
+    ticket: DroneUploadTicket,
+    file: File,
+    onProgress?: (percent: number) => void,
+  ) =>
+    axios.put(ticket.url, file, {
+      headers: { 'Content-Type': 'image/tiff' },
+      timeout: 0,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      onUploadProgress: (e) => {
+        if (!onProgress || !e.total) return
+        onProgress(Math.round((e.loaded / e.total) * 100))
+      },
+    }).then(() => undefined),
+  registerDroneImage: (acqId: string, storedName: string, originalName: string) =>
+    api.post<ApiResponse<DroneImage>>(`/land-acquisitions/${acqId}/drone-images`, {
+      stored_name: storedName,
+      original_name: originalName,
+    }).then(r => r.data.data),
+  // Зураг байршуулсны ДАРАА автоматаар дуудна — GeoServer-ийн мозайкийг
+  // шинэчилж (harvest + reset) шинэ зургийг давхаргад харагдахаар болгоно.
+  //
+  // _silent: true — GeoServer унасан/тохиргоо эвдэрсэн үед 500 буцаж болно.
+  // Тэр үед хэрэглэгчийг /server-error хуудас руу ШИДЭХГҮЙ: зураг аль хэдийн
+  // файлын системд хадгалагдсан, зөвхөн давхаргад бүртгэгдээгүй байна. Дуудагч
+  // алдааг барьж анхааруулга харуулж, "GeoServer шинэчлэх" товчоор дахин
+  // оролдох боломж үлдэнэ.
+  refreshDroneImages: (acqId: string) =>
+    api.post<ApiResponse<DroneImage[]>>(`/land-acquisitions/${acqId}/drone-images/refresh`, undefined, {
+      timeout: 0,
+      _silent: true,
+    }).then(r => r.data.data ?? []),
+  deleteDroneImage: (acqId: string, imageId: string) =>
+    api.delete(`/land-acquisitions/${acqId}/drone-images/${imageId}`),
 
   getAssignees: (acquisitionId: string): Promise<AcquisitionAssignee[]> =>
     api.get<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`)

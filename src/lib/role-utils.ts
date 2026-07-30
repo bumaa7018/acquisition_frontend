@@ -3,10 +3,22 @@ import { authStorage, decodeJwtPayload } from "./auth";
 import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
+  canCreateUser,
+  canDeactivateUser,
+  canDeleteUserRow,
   canEditValuationSubTabForActor,
+  canGrantPermissionForActor,
+  canGrantRoleForActor,
+  canManageRolePermissions,
+  canManageUserRoles,
+  canUpdateUser,
   canViewAcquisitionTabForActor,
   canViewParcelTabForActor,
+  canViewPermissions,
+  canViewRolesPage,
+  canViewUsersPage,
   canViewValuationSubTabForActor,
+  actorHasPermission,
   hasAccessRole,
   isExternalSpecialActor,
   isFinanceSpecialistActor,
@@ -30,6 +42,9 @@ export function getCurrentActor(): AccessActor {
   return {
     userId: (payload?.user_id as string) ?? null,
     roles: Array.isArray(payload?.roles) ? (payload.roles as string[]) : [],
+    permissions: Array.isArray(payload?.permissions)
+      ? (payload.permissions as string[])
+      : [],
   };
 }
 
@@ -38,12 +53,7 @@ export function hasRole(...names: string[]): boolean {
 }
 
 export function hasPermission(name: string): boolean {
-  const payload = getTokenPayload();
-  if (!payload) return false;
-  return (
-    Array.isArray(payload.permissions) &&
-    (payload.permissions as string[]).includes(name)
-  );
+  return actorHasPermission(getCurrentActor(), name);
 }
 
 export function getCurrentUserId(): string | null {
@@ -163,6 +173,66 @@ export function canAccessAcquisition(
     { professional_org_id: acquisitionProfOrgId },
     parcels,
   );
+}
+
+// ── Хэрэглэгч / роль / эрхийн удирдлагын цэс ────────────────────────────────
+
+export function canViewUsers(): boolean {
+  return canViewUsersPage(getCurrentActor());
+}
+
+export function canAddUser(): boolean {
+  return canCreateUser(getCurrentActor());
+}
+
+export function canEditUser(): boolean {
+  return canUpdateUser(getCurrentActor());
+}
+
+/** Устгах товч — өөрийгөө устгахыг хориглоно. */
+export function canRemoveUser(targetUserId: string | null | undefined): boolean {
+  return canDeleteUserRow(getCurrentActor(), targetUserId);
+}
+
+/** Идэвхгүй болгох — өөрийгөө хаахыг хориглоно. */
+export function canToggleUserActive(
+  targetUserId: string | null | undefined,
+): boolean {
+  return canDeactivateUser(getCurrentActor(), targetUserId);
+}
+
+/** Роль олгох/хураах — өөрийн ролийг өөрөө өөрчлөхийг хориглоно. */
+export function canEditUserRoles(
+  targetUserId: string | null | undefined,
+): boolean {
+  return canManageUserRoles(getCurrentActor(), targetUserId);
+}
+
+/** Тухайн ролийг олгох/хураах эрх дуудагчид байгаа эсэх (escalation хамгаалалт). */
+export function canGrantRole(
+  rolePermissionNames: string[] | null | undefined,
+): boolean {
+  return canGrantRoleForActor(getCurrentActor(), rolePermissionNames);
+}
+
+export function canViewRoles(): boolean {
+  return canViewRolesPage(getCurrentActor());
+}
+
+// Роль нэмэх/устгах/нэр засах нь UI-д байхгүй — Эрх & Роль хуудас нь зөвхөн
+// бүртгэлтэй ролиудын эрхийг тохируулна. (Backend-ийн roles:create/delete
+// маршрутууд хэвээр байгаа тул access-policy-д нь дүрэм үлдсэн.)
+export function canEditRolePermissions(): boolean {
+  return canManageRolePermissions(getCurrentActor());
+}
+
+export function canListPermissions(): boolean {
+  return canViewPermissions(getCurrentActor());
+}
+
+/** Тухайн эрхийг роль-д олгох боломжтой эсэх (өөрт байгаа эрхийг л олгоно). */
+export function canGrantPermission(permissionName: string): boolean {
+  return canGrantPermissionForActor(getCurrentActor(), permissionName);
 }
 
 // Check if a professional_org user can access a specific parcel

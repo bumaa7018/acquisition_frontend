@@ -289,6 +289,52 @@ export interface Document {
   document_type_id?: number;
 }
 
+/**
+ * Дроны ортофото (.tif). GeoServer дээр БҮХ зураг НЭГ ImageMosaic давхаргад
+ * (layer_name, ж: "land:drone") granule болж бүртгэгддэг тул зураг нэмэгдэхэд
+ * шинэ давхарга үүсэхгүй. Тухайн зургийг харуулахдаа WMS хүсэлтэд
+ * `CQL_FILTER=cql_filter` явуулна.
+ */
+/**
+ * Дроны зургийг файлын систем руу ШУУД байршуулах зөвшөөрөл.
+ *
+ * Backend-ээс гардаг presigned URL — browser файлыг API-аар дамжуулахгүйгээр
+ * тавьдаг тул файлын хэмжээ хязгаарлагдахгүй.
+ */
+export interface DroneUploadTicket {
+  /** Browser ЭНЭ URL руу PUT хийнэ (зөвшөөрөл нь URL дотор) */
+  url: string;
+  method: string;
+  /** Байршуулалт бүтсэний дараа DB-д бичигдэх зам */
+  file_url: string;
+  /** Хадгалалтад үүсэх файлын нэр — бүртгүүлэхэд буцааж явуулна */
+  stored_name: string;
+  expires_in_seconds: number;
+}
+
+export interface DroneImage {
+  id: string;
+  acquisition_id: string;
+  /** Хуваалцсан хавтас дахь файлын нэр = мозайкийн `location` */
+  file_name: string;
+  original_name: string;
+  content_type: string;
+  size_bytes: number;
+  /** GeoServer-ээс уншсан WGS84 хүрээ — "зураг дээр очих"-д. Байхгүй байж болно. */
+  min_x?: number;
+  min_y?: number;
+  max_x?: number;
+  max_y?: number;
+  /** Мозайкийн индекст granule болж бүртгэгдсэн эсэх */
+  published: boolean;
+  uploaded_at: string;
+  uploaded_by?: string;
+  /** WMS-д явуулах давхаргын нэр (бүх зурагт ижил) */
+  layer_name: string;
+  /** Зөвхөн тухайн зургийг харуулах CQL шүүлтүүр */
+  cql_filter: string;
+}
+
 export interface ParcelStatusHistory {
   id: number;
   parcel_id: string;

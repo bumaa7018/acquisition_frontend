@@ -21,6 +21,8 @@ export type AccessRole = string;
 export type AccessActor = {
   userId?: string | null;
   roles?: AccessRole[] | null;
+  /** JWT-ийн `permissions` claim. Байхгүй бол эрх шалгалт бүр false. */
+  permissions?: string[] | null;
 };
 
 export type AccessAcquisition = {
@@ -214,4 +216,139 @@ export function canEditValuationSubTabForActor(
   }
 
   return isMikaActor(actor);
+}
+
+// ── Хэрэглэгч / роль / эрхийн удирдлага ─────────────────────────────────────
+// Эрхийн нэрс backend-ийн router.go-той нэг мөр байх ёстой. Frontend-ийн
+// шалгалт нь ЗӨВХӨН UI-г цэвэрхэн болгох зорилготой — жинхэнэ хамгаалалт
+// backend-ийн RequirePermission middleware дээр байна.
+export const ADMIN_PERMISSIONS = {
+  USERS_READ: "users:read",
+  USERS_CREATE: "users:create",
+  USERS_UPDATE: "users:update",
+  USERS_DELETE: "users:delete",
+  ROLES_READ: "roles:read",
+  ROLES_CREATE: "roles:create",
+  ROLES_UPDATE: "roles:update",
+  ROLES_DELETE: "roles:delete",
+  PERMISSIONS_READ: "permissions:read",
+} as const;
+
+export function actorHasPermission(actor: AccessActor, name: string): boolean {
+  return (actor.permissions ?? []).includes(name);
+}
+
+/**
+ * Гадаад ролиуд (мэрг. байгууллага, МИКА, санхүү) удирдлагын цэсэд хэзээ ч
+ * хандахгүй — тэдэнд эрх санамсаргүй олгогдсон ч UI-д харагдахгүй.
+ */
+function canEnterAdminConsole(actor: AccessActor): boolean {
+  return !isExternalSpecialActor(actor);
+}
+
+function canDo(actor: AccessActor, permission: string): boolean {
+  return canEnterAdminConsole(actor) && actorHasPermission(actor, permission);
+}
+
+export function canViewUsersPage(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.USERS_READ);
+}
+
+export function canCreateUser(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.USERS_CREATE);
+}
+
+export function canUpdateUser(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.USERS_UPDATE);
+}
+
+export function canDeleteUser(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.USERS_DELETE);
+}
+
+export function canViewRolesPage(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_READ);
+}
+
+export function canCreateRole(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_CREATE);
+}
+
+export function canUpdateRole(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE);
+}
+
+export function canDeleteRole(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_DELETE);
+}
+
+/** Роль-д эрх нэмэх/хасах — backend-д roles:update шаарддаг. */
+export function canManageRolePermissions(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE);
+}
+
+export function canViewPermissions(actor: AccessActor): boolean {
+  return canDo(actor, ADMIN_PERMISSIONS.PERMISSIONS_READ);
+}
+
+/**
+ * Эрх нэмэгдүүлэлтээс сэргийлэх (backend role.go/user.go-ийн
+ * callerHasPermission-той ижил): дуудагч зөвхөн өөрт нь байгаа эрхийг л
+ * бусдад олгож/хураана.
+ */
+export function canGrantPermissionForActor(
+  actor: AccessActor,
+  permissionName: string,
+): boolean {
+  return actorHasPermission(actor, permissionName);
+}
+
+/**
+ * Ролийг бүхэлд нь олгож/хураах боломжтой эсэх — ролийн эрх БҮГД дуудагчид
+ * байх ёстой (backend-ийн callerCanGrantRole).
+ */
+export function canGrantRoleForActor(
+  actor: AccessActor,
+  rolePermissionNames: string[] | null | undefined,
+): boolean {
+  return (rolePermissionNames ?? []).every((name) =>
+    actorHasPermission(actor, name),
+  );
+}
+
+/**
+ * Хэрэглэгчийн ролийг өөрчилж болох эсэх. Өөрийн ролийг өөрөө өөрчлөхийг
+ * хориглоно — backend-тэй ижил (self-escalation / self-lockout).
+ */
+export function canManageUserRoles(
+  actor: AccessActor,
+  targetUserId: string | null | undefined,
+): boolean {
+  if (!canUpdateUser(actor)) return false;
+  return !isSelfTarget(actor, targetUserId);
+}
+
+/** Өөрийгөө устгахыг хориглоно (backend Delete-ийн шалгалттай ижил). */
+export function canDeleteUserRow(
+  actor: AccessActor,
+  targetUserId: string | null | undefined,
+): boolean {
+  if (!canDeleteUser(actor)) return false;
+  return !isSelfTarget(actor, targetUserId);
+}
+
+/** Өөрийгөө идэвхгүй болгохыг хориглоно (backend Update-ийн шалгалттай ижил). */
+export function canDeactivateUser(
+  actor: AccessActor,
+  targetUserId: string | null | undefined,
+): boolean {
+  if (!canUpdateUser(actor)) return false;
+  return !isSelfTarget(actor, targetUserId);
+}
+
+function isSelfTarget(
+  actor: AccessActor,
+  targetUserId: string | null | undefined,
+): boolean {
+  return !!actor.userId && !!targetUserId && actor.userId === targetUserId;
 }
