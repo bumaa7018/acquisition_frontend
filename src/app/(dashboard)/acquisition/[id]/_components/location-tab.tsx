@@ -29,6 +29,17 @@ const AcquisitionMap = dynamic(
   },
 );
 
+/**
+ * Дроны зургийн ХАМГИЙН ИХ хэмжээ.
+ *
+ * Файл нь backend-ээр дамждаггүй ч (шууд файлын систем рүү) хязгааргүй байлгаж
+ * болохгүй: хэт том ортофото байршуулалт нь удаан сүлжээн дээр таслагдаж,
+ * GeoServer-ийн COG уншилт удааширч, дискний зай тооцоолохгүй өсдөг. Хязгаарыг
+ * ТОДОРХОЙ мессежээр урьдчилан хэлэх нь хагас байршсаны дараа унахаас дээр.
+ */
+const MAX_DRONE_SIZE = 500 * 1024 * 1024;
+const MAX_DRONE_SIZE_LABEL = "500 MB";
+
 function formatSize(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -223,8 +234,18 @@ export function LocationTab({
       toast.error("Зөвхөн GeoTIFF (.tif / .tiff) файл байршуулна");
       return;
     }
-    // Хэмжээний хязгаар ТАВИХГҮЙ: файл backend-ээр дамжихгүй, шууд файлын
-    // систем руу явдаг тул хэдэн GB ортофото ч байршина.
+    if (file.size > MAX_DRONE_SIZE) {
+      toast.error(
+        `Зургийн хэмжээ хэтэрсэн — ${formatSize(file.size)}. ` +
+          `Дээд хязгаар ${MAX_DRONE_SIZE_LABEL}.`,
+        {
+          description:
+            "Ортофотог жижиглэж хуваах, эсвэл COG болгон шахаж (gdal_translate -co COMPRESS=DEFLATE) оруулна уу.",
+          duration: 10000,
+        },
+      );
+      return;
+    }
     uploadMutation.mutate(file);
   }
 
@@ -317,7 +338,8 @@ export function LocationTab({
                 )}
 
                 <p className="mt-2 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
-                  Нэг файлыг нэг удаад. Олон зургийг дараалан оруулна.
+                  Нэг файлыг нэг удаад, дээд тал нь {MAX_DRONE_SIZE_LABEL}.
+                  Олон зургийг дараалан оруулна.
                 </p>
 
                 <button
