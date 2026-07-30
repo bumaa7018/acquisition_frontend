@@ -152,10 +152,14 @@ export function LocationTab({
       setVisibleIds((prev) => new Set(prev).add(created.id));
       if (!created.published) {
         // Файл хадгалагдсан — зөвхөн GeoServer-т давхарга үүсээгүй.
-        // "Шинэчлэх" товчоор дахин оролдох боломж үлдэнэ.
-        toast.warning(
-          "GeoServer-т давхарга үүсгэж чадсангүй. Шинэчлэх товчийг дарна уу.",
-        );
+        // ШАЛТГААНЫГ харуулна: эс тэгвээс зөвхөн серверийн лог дээр үлдэж,
+        // хэрэглэгч юу засахаа мэдэхгүй болно.
+        toast.warning("GeoServer-т давхарга үүсгэж чадсангүй", {
+          description: created.publish_error
+            ? `${created.publish_error} — "Шинэчлэх" товчоор дахин оролдоно уу.`
+            : 'Шинэчлэх товчийг дарна уу.',
+          duration: 15000,
+        });
       }
     },
     onError: (err) => {

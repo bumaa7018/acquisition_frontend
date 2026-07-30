@@ -22,7 +22,13 @@ import { landApi } from "@/lib/api";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 import FullscreenButton from "./fullscreen-button";
 import { useFullscreen } from "./use-fullscreen";
-import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
+import {
+  BASE_Z_INDEX,
+  DRONE_Z_INDEX,
+  fitLayerToMap,
+  layerDef,
+  type MapLayerDef,
+} from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
 
@@ -110,9 +116,6 @@ export type DroneOverlay = {
    */
   extent: [number, number, number, number];
 };
-
-// Ортофото нь вектор хилүүдийн ДООР байх ёстой (хил дарагдахгүй).
-const DRONE_Z_INDEX = 5;
 
 /**
  * WGS84 хүрээ бодит талбай эзэлж байгааг шалгана.
@@ -388,6 +391,8 @@ export function AcquisitionMap({
       target: mapRef.current,
       layers: [
         new TileLayer({
+          // Хамгийн доод давхарга — дрон болон бусад бүх давхарга үүний дээр
+          zIndex: BASE_Z_INDEX,
           source: new XYZ({
             urls: [
               "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",

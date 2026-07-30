@@ -311,6 +311,12 @@ export interface DroneImage {
   uploaded_by?: string;
   /** WMS-д явуулах давхаргын нэр — зураг тус бүрт ӨӨР */
   layer_name: string;
+  /**
+   * GeoServer-т давхарга үүсгэхэд гарсан алдаа (бүртгэх үед л ирнэ).
+   * Зураг хадгалалтад бүтэн орсон тул алдаа биш — гэхдээ шалтгааныг
+   * хэрэглэгчид харуулж, "Шинэчлэх"-ээр дахин оролдох боломж үлдээнэ.
+   */
+  publish_error?: string;
 }
 
 export interface ParcelStatusHistory {
