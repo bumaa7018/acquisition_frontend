@@ -15,6 +15,24 @@ const nextConfig = {
   httpAgentOptions: { keepAlive: false },
   experimental: {
     serverComponentsExternalPackages: ['exceljs'],
+    // rewrites-ийн proxy-ийн хугацааны хязгаар (мс).
+    //
+    // ЗААВАЛ ТОХИРУУЛАХ: Next-ийн анхдагч нь ЗӨВХӨН 30 СЕКУНД
+    // (`proxy-request.js`: `proxyTimeout || 30000`) ба тэр нь `/api/v1/*`
+    // хүсэлт БҮРИЙГ 30 секундэд алдаг — client талын axios timeout ямар ч
+    // байсан хамаагүй, backend хэвийн ажиллаж байсан ч.
+    //
+    // Дроны ортофотог бүртгэх дуудлага нь GeoServer-т давхарга нийтлэхийг
+    // ДОТРОО хийдэг ба COG биш том растр дээр тэр нь 30 секундээс давдаг.
+    // Тэр үед proxy хүсэлтийг тасалж, backend-ийн context цуцлагдан
+    // нийтлэлт хагасаас үхэж, хэрэглэгчид "GeoServer-т давхарга үүсгэж
+    // чадсангүй" гэж харагддаг байв (лог дээр `latency: 30.19s` +
+    // `context canceled` гэж давтагдан бичигдсэн).
+    //
+    // 0 нь УНТРААХГҮЙ (`0 || 30000` = 30000); зөвхөн `null` унтраадаг ч тэр нь
+    // тохиргооны schema (`z.number()`)-д тэнцэхгүй. Иймд том тодорхой утга
+    // тавина — backend-ийн GeoServer client-ийн 10 минуттай зэрэгцүүлэв.
+    proxyTimeout: 600_000,
   },
   // standalone зөвхөн production-д хэрэгтэй, dev-д disc идэх тул хасав
   ...(process.env.NODE_ENV === "production" && { output: "standalone" }),

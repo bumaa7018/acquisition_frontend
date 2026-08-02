@@ -29,7 +29,7 @@ import {
   layerDef,
   type MapLayerDef,
 } from "./layers";
-import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql } from "@/lib/geoserver";
+import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
@@ -160,8 +160,8 @@ export function AcquisitionMap({
   const olMap       = useRef<OLMap | null>(null);
   const wmsLayers   = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const historyLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
-  // Дроны ортофото — зургийн id-аар индексжсэн ImageWMS давхаргууд
-  const droneLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
+  // Дроны ортофото — зургийн id-аар индексжсэн ТАЙЛТ давхаргууд
+  const droneLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const wktFormat   = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
   // 3D (cesium-3d.ts): OL давхаргуудыг globe дээр давхарлана, зөвхөн хэрэглэгч сонгоход л ачаална
@@ -509,8 +509,23 @@ export function AcquisitionMap({
   }, [isFullscreen]);
 
   // ── Дроны ортофотогийн давхаргууд ─────────────────────────────────────────
-  // Сонгогдсон зураг тус бүрд ImageWMS давхарга нэмж, сонголтоос хасагдсаныг
-  // устгана. Газрын зургийг бүхэлд нь дахин барихгүй — зөвхөн зөрүүг нөхнө.
+  // Сонгогдсон зураг тус бүрд ТАЙЛТ (TileWMS) давхарга нэмж, сонголтоос
+  // хасагдсаныг устгана. Газрын зургийг бүхэлд нь дахин барихгүй — зөвхөн
+  // зөрүүг нөхнө.
+  //
+  // ЯАГААД ImageWMS БИШ TileWMS: ImageWMS нь харагдац бүрд БҮТЭН зургийг нэг
+  // хүсэлтээр рендерлүүлдэг — pan/zoom бүрд эхнээс дахин, кэш байхгүй.
+  // Ортофото нь том растр тул энэ нь секундээр хэмжигдэнэ. Тайл нь:
+  //   - ЗЭРЭГ (parallel) татагдаж, ЭХНИЙ тайл 0.03-0.12 сек-т гарна (ImageWMS
+  //     дээр хэрэглэгч бүтэн рендер дуустал ХООСОН дэлгэц хардаг)
+  //   - GeoWebCache-д кэшлэгдэнэ (TILED=true) — дахин харахад 7 дахин хурдан
+  //   - OL-ийн санах ойн кэшэд хадгалагдана — pan/zoom дээр дахин татахгүй
+  // Хэмжсэн (138 MB ортофото, 1600x900 харагдац ≈ 35 тайл):
+  //   ImageWMS 1 харагдац 2.8-11.7 сек / 5 удаа pan = 14.2 сек
+  //   TileWMS  cold 0.3-4.7 сек, warm 0.6-1.5 сек / 5 удаа pan = 4.0 сек
+  //
+  // extent нь ЗААВАЛ: үүнгүйгээр OL нь зургийн ГАДНА талын хоосон тайлуудыг ч
+  // дуудаж, хүсэлтийн тоо олон дахин хөөрөгдөнө.
   useEffect(() => {
     const map = olMap.current;
     if (!map) return;
@@ -530,20 +545,17 @@ export function AcquisitionMap({
       if (droneLayers.current[overlay.id]) return;
       // Хүчингүй хүрээтэй давхарга нэмбэл газрын зураг эвдэрнэ — өнгөрөөнө.
       if (!isValidLonLatExtent(overlay.extent)) return;
-      const layer = new ImageLayer({
+      const layer = new TileLayer({
         zIndex: DRONE_Z_INDEX,
         // Зөвхөн зургийн хүрээн дотор зурна (дээрх тайлбарыг үзнэ үү)
         extent: transformExtent(overlay.extent, "EPSG:4326", "EPSG:3857"),
-        source: new ImageWMS({
-          url: GS_WMS,
-          params: {
-            LAYERS: overlay.layerName,
-            FORMAT: "image/png",
-            TRANSPARENT: true,
-          },
-          ratio: 1,
-          serverType: "geoserver",
-          imageLoadFunction: wmsPostLoad,
+        source: new XYZ({
+          url: droneTileUrl(overlay.layerName),
+          // GWC-ийн gridset-д байхгүй түвшнээс тайл ЭРЭХГҮЙ (эрвэл 400 буцна).
+          maxZoom: GS_GWC_MAX_ZOOM,
+          // wmsPostLoad ХЭРЭГЛЭХГҮЙ: тэр нь POST-оор татдаг ба урт CQL_FILTER-тэй
+          // вектор давхаргад л хэрэгтэй. Тайлын хүсэлт богино тул GET-ээр явж,
+          // GWC-д кэшлэгдэнэ.
         }),
       });
       droneLayers.current[overlay.id] = layer;
