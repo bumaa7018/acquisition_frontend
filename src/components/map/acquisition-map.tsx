@@ -29,7 +29,7 @@ import {
   layerDef,
   type MapLayerDef,
 } from "./layers";
-import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
+import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
@@ -428,7 +428,7 @@ export function AcquisitionMap({
     });
     fetch(GS_WFS, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
       body: params.toString(),
     })
       .then((r) => r.json())
@@ -470,7 +470,7 @@ export function AcquisitionMap({
       outputFormat: "application/json",
       propertyName: "geometry,parcel_id,status",
     });
-    fetch(`${GS_WFS}?${parcelParams.toString()}`)
+    fetch(`${GS_WFS}?${parcelParams.toString()}`, { headers: gsAuthHeaders() })
       .then((r) => r.json())
       .then((json) => {
         const cesiumParcels: Cesium3DParcel[] = [];

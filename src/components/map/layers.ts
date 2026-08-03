@@ -2,6 +2,7 @@ import type OLMap from "ol/Map";
 import GeoJSON from 'ol/format/GeoJSON'
 import { createEmpty, extend as extendExtent, isEmpty } from 'ol/extent'
 import { logger } from '@/lib/logger'
+import { gsAuthHeaders } from '@/lib/geoserver'
 import { type MapLayerId } from './layer-config'
 
 // Тохиргоо нь ./layer-config-т (OL-гүй, тестээр хамгаалагдсан). Дуудагчид
@@ -46,7 +47,7 @@ export async function fitLayerToMap({
   try {
     const res = await fetch(wfsUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
       body: params.toString(),
     })
     const json = await res.json()

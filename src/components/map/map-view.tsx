@@ -18,7 +18,7 @@ import FeaturePopup from './feature-popup'
 import FullscreenButton from './fullscreen-button'
 import { useFullscreen } from './use-fullscreen'
 import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
-import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql } from '@/lib/geoserver'
+import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
 
@@ -153,10 +153,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         try {
           const qIdx   = url.indexOf('?')
           const res    = qIdx === -1
-            ? await fetch(url)
+            ? await fetch(url, { headers: gsAuthHeaders() })
             : await fetch(url.slice(0, qIdx), {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
                 body: url.slice(qIdx + 1),
               })
           const json = await res.json()

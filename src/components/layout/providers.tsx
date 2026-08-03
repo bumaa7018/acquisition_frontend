@@ -2,8 +2,9 @@
 import { QueryCache, QueryClient, QueryClientProvider, MutationCache } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { logger } from "@/lib/logger";
+import { authStorage } from "@/lib/auth";
 
 // axios interceptor нь HTTP хүсэлт бүрийг логлодог, гэхдээ query/mutation-ий
 // `onError` бичээгүй компонент query-г interceptor-ийн лог дараа юу болсныг
@@ -50,6 +51,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       }),
   );
+  // Session cookie-г апп ачаалах бүрд синк хийнэ. ЯАГААД ЗААВАЛ: `/api/files`
+  // болон `/api/geoserver` proxy нь httpOnly `gov_sess` cookie-гоор эрх шалгадаг
+  // (`<img>`/`<a>`/OpenLayers WMS-POST/XYZ tile нь Authorization header зөөж
+  // чадахгүй тул). Аль хэдийн нэвтэрсэн (localStorage-д токентой ч cookie-гүй)
+  // хэрэглэгч дахин login хийхгүйгээр map/файл ажиллуулахын тулд энд синк хийнэ.
+  // Токен байхгүй бол юу ч хийхгүй.
+  useEffect(() => {
+    const token = authStorage.getAccessToken();
+    if (token) void authStorage.startSession(token);
+  }, []);
+
   return (
     <ThemeProvider
       attribute="class"

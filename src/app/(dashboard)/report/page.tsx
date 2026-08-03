@@ -774,46 +774,73 @@ export default function ReportPage() {
     if (compType) params.set("compensation_type", compType);
     if (genCatId) params.set("general_category_id", String(genCatId));
     if (subCatId) params.set("sub_category_id", String(subCatId));
-    if (token) params.set("token", token);
+
+    // Нэг SSE мессежийг боловсруулна. Дуусахад true буцаана (унших давталтыг зогсооно).
+    const handleMsg = (msg: { type: string; total?: number; current?: number; base64?: string; filename?: string; message?: string }): boolean => {
+      if (msg.type === "total") {
+        setDlTotal(msg.total ?? 0);
+      } else if (msg.type === "progress") {
+        setDlProgress(msg.current ?? 0);
+      } else if (msg.type === "generating") {
+        setDlStatus("generating");
+      } else if (msg.type === "done") {
+        setDlStatus("done");
+        const bytes = Uint8Array.from(atob(msg.base64 ?? ""), (c) => c.charCodeAt(0));
+        const blob = new Blob([bytes], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = msg.filename ?? "тайлан.xlsx";
+        a.click();
+        URL.revokeObjectURL(url);
+        return true;
+      } else if (msg.type === "error") {
+        setDlStatus("error");
+        toast.error(msg.message ?? "Тайлан үүсгэхэд алдаа гарлаа");
+        return true;
+      }
+      return false;
+    };
 
     try {
-      const es = new EventSource(`/api/report/download?${params.toString()}`);
-
-      es.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "total") {
-          setDlTotal(msg.total);
-        } else if (msg.type === "progress") {
-          setDlProgress(msg.current);
-        } else if (msg.type === "generating") {
-          setDlStatus("generating");
-        } else if (msg.type === "done") {
-          es.close();
-          setDlStatus("done");
-          const bytes = Uint8Array.from(atob(msg.base64), (c) =>
-            c.charCodeAt(0),
-          );
-          const blob = new Blob([bytes], {
-            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = msg.filename ?? "тайлан.xlsx";
-          a.click();
-          URL.revokeObjectURL(url);
-        } else if (msg.type === "error") {
-          es.close();
-          setDlStatus("error");
-          toast.error(msg.message ?? "Тайлан үүсгэхэд алдаа гарлаа");
-        }
-      };
-
-      es.onerror = () => {
-        es.close();
+      // ЯАГААД EventSource БИШ fetch: EventSource нь Authorization header дэмждэггүй
+      // тул өмнө нь токеныг URL query-д (`?token=`) дамжуулдаг байсан — тэр нь
+      // browser history, referrer, proxy/container логд алдагддаг аюултай.
+      // fetch нь header дэмждэг тул токен зөвхөн header-т явж, URL-д орохгүй.
+      const res = await fetch(`/api/report/download?${params.toString()}`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, "")}` } : {},
+      });
+      if (!res.ok || !res.body) {
         setDlStatus("error");
         toast.error("Холболт тасарлаа");
-      };
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finished = false;
+      while (!finished) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        // SSE frame бүр `\n\n`-ээр тусгаарлагдана.
+        let sep: number;
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const frame = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const line = frame.replace(/^data:\s*/, "").trim();
+          if (!line) continue;
+          if (handleMsg(JSON.parse(line))) {
+            finished = true;
+            break;
+          }
+        }
+      }
+      reader.cancel().catch(() => {});
     } catch (err) {
       logger.error("report download stream setup failed", { error: String(err) });
       setDlStatus("error");
