@@ -4,6 +4,8 @@ import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
   canCreateUser,
+  canCreateHrRecord,
+  canDeleteHrRecord,
   canDeactivateUser,
   canDeleteUserRow,
   canEditValuationSubTabForActor,
@@ -12,7 +14,9 @@ import {
   canManageRolePermissions,
   canManageUserRoles,
   canUpdateUser,
+  canUpdateHrRecord,
   canViewAcquisitionTabForActor,
+  canViewHrRegistry,
   canViewParcelTabForActor,
   canViewPermissions,
   canViewRolesPage,
@@ -183,6 +187,22 @@ export function canViewUsers(): boolean {
 
 export function canAddUser(): boolean {
   return canCreateUser(getCurrentActor());
+}
+
+export function canViewHr(): boolean {
+  return canViewHrRegistry(getCurrentActor());
+}
+
+export function canAddHr(): boolean {
+  return canCreateHrRecord(getCurrentActor());
+}
+
+export function canEditHr(): boolean {
+  return canUpdateHrRecord(getCurrentActor());
+}
+
+export function canRemoveHr(): boolean {
+  return canDeleteHrRecord(getCurrentActor());
 }
 
 export function canEditUser(): boolean {

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { usersApi } from "@/lib/api";
+import { employeeApi } from "@/lib/api";
 import { ChevronDown, X } from "lucide-react";
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -55,7 +55,7 @@ export function EmployeeSelect({
 
   const { data, isFetching } = useQuery({
     queryKey: ["employee-select", debounced],
-    queryFn: () => usersApi.list({ search: debounced.trim() || undefined, page_size: 40 }),
+    queryFn: () => employeeApi.list({ search: debounced.trim() || undefined, page_size: 40 }),
     enabled: open,
     staleTime: 30_000,
   });
@@ -71,11 +71,11 @@ export function EmployeeSelect({
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  function select(user: { id: string; first_name: string; last_name: string; position?: string }) {
-    const label = `${user.last_name} ${user.first_name}`;
+  function select(employee: { id: string; person_name?: string; position_name?: string }) {
+    const label = employee.person_name || employee.id;
     setQuery("");
     setDisplayLabel(label);
-    onSelect(user.id, label);
+    onSelect(employee.id, label);
     setOpen(false);
   }
 
@@ -133,17 +133,17 @@ export function EmployeeSelect({
             ) : results.length === 0 ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">Олдсонгүй</div>
             ) : (
-              results.map((user) => (
+              results.map((employee) => (
                 <button
-                  key={user.id}
-                  onMouseDown={(e) => { e.preventDefault(); select(user); }}
+                  key={employee.id}
+                  onMouseDown={(e) => { e.preventDefault(); select(employee); }}
                   className="w-full px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
                 >
                   <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200 block">
-                    <Highlight text={`${user.last_name} ${user.first_name}`} query={query} />
+                    <Highlight text={employee.person_name || employee.id} query={query} />
                   </span>
-                  {user.position && (
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">{user.position}</span>
+                  {employee.position_name && (
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">{employee.department_name ? `${employee.department_name} · ` : ""}{employee.position_name}</span>
                   )}
                 </button>
               ))

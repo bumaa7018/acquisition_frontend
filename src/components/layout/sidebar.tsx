@@ -11,6 +11,7 @@ import {
   isProfessionalOrg,
   canViewUsers,
   canViewRoles,
+  canViewHr,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -34,6 +35,11 @@ import {
   FolderOpen,
   Calculator,
   History,
+  IdCard,
+  UserCog,
+  Building2,
+  Network,
+  BadgeCheck,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -89,14 +95,22 @@ const NAV_CONFIG = [
   },
   {
     href: "/asset_spec_type",
-    label: "Байгааламжийн чанарын төрөл",
+    label: "Байгууламжийн чанарын төрөл",
     icon: Layers,
   },
   {
     href: "/asset_calc_type",
-    label: "Байгааламжийн тооцооллын төрөл",
+    label: "Байгууламжийн тооцооллын төрөл",
     icon: Calculator,
   },
+];
+
+const NAV_HR = [
+  { href: "/person", label: "Иргэн, хуулийн этгээд", icon: IdCard },
+  { href: "/employee", label: "Ажилтан", icon: UserCog },
+  { href: "/organization", label: "Байгууллага", icon: Building2 },
+  { href: "/department", label: "Алба, хэлтэс", icon: Network },
+  { href: "/position", label: "Албан тушаал", icon: BadgeCheck },
 ];
 
 function NavItem({
@@ -150,15 +164,19 @@ export function Sidebar() {
   const [isExternal, setIsExternal] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
   const [canViewConfig, setCanViewConfig] = useState(false);
+  const [canViewHrNav, setCanViewHrNav] = useState(false);
   const [canViewAudit, setCanViewAudit] = useState(false);
   const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
 
-  const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG].map((i) => i.href);
+  const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG, ...NAV_HR].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
     allAdminHrefs.some((href) => pathname.startsWith(href)),
   );
   const [configOpen, setConfigOpen] = useState(
     NAV_CONFIG.some((item) => pathname.startsWith(item.href)),
+  );
+  const [hrOpen, setHrOpen] = useState(
+    NAV_HR.some((item) => pathname.startsWith(item.href)),
   );
   const [collapsed, setCollapsed] = useState(false);
 
@@ -167,6 +185,7 @@ export function Sidebar() {
     setIsExternal(isExternalSpecialRole());
     setIsProfOrg(isProfessionalOrg());
     setCanViewConfig(hasPermission("admin:read"));
+    setCanViewHrNav(canViewHr());
     setCanViewAudit(hasPermission("audit:read"));
     // Хэрэглэгч/роль цэс — эрхтэй хэрэглэгчид л харагдана. Эрхгүй хэрэглэгч
     // цэсээр орж 403 toast-той хоосон хуудас харахаас сэргийлнэ.
@@ -267,7 +286,7 @@ export function Sidebar() {
 
         {/* Удирдлага dropdown — гадаад ролиудад, мөн дотор нь харах юмгүй
             (эрхгүй) хэрэглэгчид харагдахгүй */}
-        {ready && !isExternal && (adminNav.length > 0 || canViewAudit || canViewConfig) && (
+        {ready && !isExternal && (adminNav.length > 0 || canViewAudit || canViewConfig || canViewHrNav) && (
           <div>
             <button
               onClick={() => setAdminOpen((v) => !v)}
@@ -318,6 +337,55 @@ export function Sidebar() {
                       />
                     ))}
                 </nav>
+
+                {canViewHrNav && (
+                  <div className="mt-0.5">
+                    <button
+                      onClick={() => setHrOpen((v) => !v)}
+                      title={collapsed ? "Хүний нөөц" : undefined}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+                        collapsed ? "justify-center px-3" : "px-3",
+                      )}
+                    >
+                      <UserCog className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+                      {!collapsed && (
+                        <>
+                          <span className="flex-1 text-left text-[13px] font-medium text-slate-500 dark:text-[#97aac1]">
+                            Хүний нөөц
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                              hrOpen ? "rotate-180" : "rotate-0",
+                            )}
+                          />
+                        </>
+                      )}
+                    </button>
+
+                    <div
+                      className={cn(
+                        "grid transition-[grid-template-rows] duration-200",
+                        hrOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                      )}
+                    >
+                      <div className="overflow-hidden">
+                        <nav className="space-y-0.5">
+                          {NAV_HR.map((item) => (
+                            <NavItem
+                              key={item.href}
+                              {...item}
+                              active={isActive(item.href)}
+                              collapsed={collapsed}
+                              indent
+                            />
+                          ))}
+                        </nav>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
                 {canViewConfig && (

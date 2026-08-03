@@ -30,6 +30,7 @@ function showAccessDenied(title: string, description: string, withLoginBtn = fal
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission,
+  Organization, Department, Position, Person, Employee,
   AuditLog,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
   AcquisitionProgress, Document, StatusOption,
@@ -320,7 +321,7 @@ export const usersApi = {
   getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
   // role_ids — backend хэрэглэгчийг үүсгэхтэй зэрэг ролиудыг оноож,
   // олгох эрхгүй роль дурдвал хэрэглэгчийг ҮҮСГЭХГҮЙ (хагас биелэхээс сэргийлнэ).
-  create: (body: { username: string; email: string; password: string; first_name: string; last_name: string; position?: string; is_active?: boolean; role_ids?: string[] }) =>
+  create: (body: { username: string; email: string; password: string; first_name?: string; last_name?: string; position?: string; employee_id?: string; employee?: EmployeePayload; is_active?: boolean; role_ids?: string[] }) =>
     api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
   update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean }>) =>
     api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
@@ -333,6 +334,67 @@ export const usersApi = {
   removeRole: (userId: string, roleId: string) =>
     api.delete(`/users/${userId}/roles/${roleId}`),
   delete: (id: string) => api.delete(`/users/${id}`),
+}
+
+export type HRListParams = {
+  page?: number
+  page_size?: number
+  search?: string
+  organization_id?: string
+  department_id?: string
+  is_active?: boolean
+}
+
+export type PersonPayload = Partial<Omit<Person, 'id' | 'created_at' | 'updated_at'>> & {
+  person_type: 'citizen' | 'legal'
+  register_no: string
+}
+
+export type EmployeePayload = Partial<Omit<Employee, 'id' | 'created_at' | 'updated_at' | 'person'>> & {
+  person_id?: string
+  person?: PersonPayload
+  organization_id: string
+  position_id: string
+}
+
+export type OrganizationPayload = Partial<Omit<Organization, 'id' | 'created_at' | 'updated_at'>> & { name: string }
+export type DepartmentPayload = Partial<Omit<Department, 'id' | 'created_at' | 'updated_at'>> & { organization_id: string; name: string }
+export type PositionPayload = Partial<Omit<Position, 'id' | 'created_at' | 'updated_at'>> & { name: string }
+
+export const organizationApi = {
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Organization>>('/organizations', { params }).then(r => r.data),
+  create: (body: OrganizationPayload) => api.post<ApiResponse<Organization>>('/organizations', body).then(r => r.data.data),
+  update: (id: string, body: Partial<OrganizationPayload>) => api.put<ApiResponse<Organization>>(`/organizations/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/organizations/${id}`),
+}
+
+export const departmentApi = {
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Department>>('/departments', { params }).then(r => r.data),
+  create: (body: DepartmentPayload) => api.post<ApiResponse<Department>>('/departments', body).then(r => r.data.data),
+  update: (id: string, body: Partial<DepartmentPayload>) => api.put<ApiResponse<Department>>(`/departments/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/departments/${id}`),
+}
+
+export const positionApi = {
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Position>>('/positions', { params }).then(r => r.data),
+  create: (body: PositionPayload) => api.post<ApiResponse<Position>>('/positions', body).then(r => r.data.data),
+  update: (id: string, body: Partial<PositionPayload>) => api.put<ApiResponse<Position>>(`/positions/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/positions/${id}`),
+}
+
+export const personApi = {
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Person>>('/persons', { params }).then(r => r.data),
+  create: (body: PersonPayload) => api.post<ApiResponse<Person>>('/persons', body).then(r => r.data.data),
+  update: (id: string, body: Partial<PersonPayload>) => api.put<ApiResponse<Person>>(`/persons/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/persons/${id}`),
+}
+
+export const employeeApi = {
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Employee>>('/employees', { params }).then(r => r.data),
+  getById: (id: string) => api.get<ApiResponse<Employee>>(`/employees/${id}`).then(r => r.data.data),
+  create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', body).then(r => r.data.data),
+  update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/employees/${id}`),
 }
 
 // ── Roles ─────────────────────────────────────────────

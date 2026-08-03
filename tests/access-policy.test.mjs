@@ -21,6 +21,10 @@ import {
   canUpdateRole,
   canUpdateUser,
   canViewPermissions,
+  canViewHrRegistry,
+  canCreateHrRecord,
+  canUpdateHrRecord,
+  canDeleteHrRecord,
   canViewRolesPage,
   canViewUsersPage,
 } from "../src/lib/access-policy.ts";
@@ -257,6 +261,25 @@ test("report API route external token-ийг 403 болгох боломжтой
     isExternalAuthorization(`Bearer header.${internalPayload}.signature`),
     false,
   );
+});
+
+test("хүний нөөцийн бүртгэл зөвхөн admin роль болон hr эрхтэй үед нээгдэнэ", () => {
+  const admin = {
+    userId: "admin-user",
+    roles: ["admin"],
+    permissions: ["hr:read", "hr:create", "hr:update", "hr:delete"],
+  };
+  assert.equal(canViewHrRegistry(admin), true);
+  assert.equal(canCreateHrRecord(admin), true);
+  assert.equal(canUpdateHrRecord(admin), true);
+  assert.equal(canDeleteHrRecord(admin), true);
+
+  const employee = { userId: "employee-user", roles: ["employee"], permissions: ["hr:read"] };
+  assert.equal(canViewHrRegistry(employee), false);
+  assert.equal(canCreateHrRecord(employee), false);
+
+  assert.equal(canViewHrRegistry(finance), false);
+  assert.equal(canCreateHrRecord(primaryProfessional), false);
 });
 
 test("нөхөх төлбөрийн seeder нь үндсэн жишээ төрлүүдийг хамарсан байна", () => {

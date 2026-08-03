@@ -35,7 +35,7 @@ const STATUS_CFG: Record<number, { color: string; bg: string }> = {
 const PAGE_SIZE = 15;
 
 import { hasPermission, hasRole, isProfessionalOrg, isExternalSpecialRole, getCurrentUserId } from "@/lib/role-utils";
-import { EmployeeSelect } from "@/components/ui/employee-select";
+import { UserSelect as EmployeeSelect } from "@/components/ui/user-select";
 import { PlanSelect } from "../parcel/_components/plan_select";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 

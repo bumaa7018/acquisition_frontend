@@ -1,6 +1,7 @@
 export const EVALUATION_STATUS_NAME = "Үнэлгээ хийх";
 
 export const ACCESS_ROLE_CODES = {
+  ADMIN: "admin",
   PROFESSIONAL_ORG: "professional_org",
   MIKA: "mika",
   FINANCE_SPECIALIST: "finance_specialist",
@@ -94,6 +95,10 @@ export function isSeniorSpecialistActor(actor: AccessActor): boolean {
     ACCESS_ROLE_CODES.SENIOR_SPECIALIST,
     ACCESS_ROLE_NAMES.SENIOR_SPECIALIST,
   );
+}
+
+export function isAdminActor(actor: AccessActor): boolean {
+  return hasAccessRole(actor, ACCESS_ROLE_CODES.ADMIN);
 }
 
 export function isExternalSpecialActor(actor: AccessActor): boolean {
@@ -234,6 +239,13 @@ export const ADMIN_PERMISSIONS = {
   PERMISSIONS_READ: "permissions:read",
 } as const;
 
+export const HR_PERMISSIONS = {
+  HR_READ: "hr:read",
+  HR_CREATE: "hr:create",
+  HR_UPDATE: "hr:update",
+  HR_DELETE: "hr:delete",
+} as const;
+
 export function actorHasPermission(actor: AccessActor, name: string): boolean {
   return (actor.permissions ?? []).includes(name);
 }
@@ -250,8 +262,28 @@ function canDo(actor: AccessActor, permission: string): boolean {
   return canEnterAdminConsole(actor) && actorHasPermission(actor, permission);
 }
 
+function canDoHr(actor: AccessActor, permission: string): boolean {
+  return canEnterAdminConsole(actor) && isAdminActor(actor) && actorHasPermission(actor, permission);
+}
+
 export function canViewUsersPage(actor: AccessActor): boolean {
   return canDo(actor, ADMIN_PERMISSIONS.USERS_READ);
+}
+
+export function canViewHrRegistry(actor: AccessActor): boolean {
+  return canDoHr(actor, HR_PERMISSIONS.HR_READ);
+}
+
+export function canCreateHrRecord(actor: AccessActor): boolean {
+  return canDoHr(actor, HR_PERMISSIONS.HR_CREATE);
+}
+
+export function canUpdateHrRecord(actor: AccessActor): boolean {
+  return canDoHr(actor, HR_PERMISSIONS.HR_UPDATE);
+}
+
+export function canDeleteHrRecord(actor: AccessActor): boolean {
+  return canDoHr(actor, HR_PERMISSIONS.HR_DELETE);
 }
 
 export function canCreateUser(actor: AccessActor): boolean {
