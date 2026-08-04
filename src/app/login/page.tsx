@@ -41,6 +41,9 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(data.email, data.password);
       authStorage.setTokens(res.access_token, res.refresh_token);
+      // Cookie тохирсоныг навигацаас ӨМНӨ баталгаажуулна — эхний map/файл
+      // хүсэлт cookie-гүй явж 401 болох race-аас сэргийлнэ.
+      await authStorage.startSession(res.access_token);
       const me = await authApi.me();
       authStorage.setUser(me);
       toast.success("Амжилттай нэвтэрлээ");

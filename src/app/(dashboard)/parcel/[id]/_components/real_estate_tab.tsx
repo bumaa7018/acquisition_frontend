@@ -1657,12 +1657,12 @@ export function RealEstateTab({
                 </div>
               )}
 
-              {/* Байгааламжийн өртгийн хандлагаарх тооцоолол — real_state type only */}
+              {/* Байгууламжийн өртгийн хандлагаарх тооцоолол — real_state type only */}
               {form.asset_type === "real_state" && (
                 <div className="mt-4">
                   <div className="mb-2 flex items-center gap-2">
                     <Calculator className="h-3.5 w-3.5 text-sky-500" />
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Байгааламжийн өртгийн хандлагаарх тооцоолол</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Байгууламжийн өртгийн хандлагаарх тооцоолол</p>
                   </div>
                   <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]">
                     <table className="w-full text-[12px]">

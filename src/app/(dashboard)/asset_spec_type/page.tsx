@@ -28,7 +28,7 @@ export default function AssetSpecTypePage() {
         sort_order: form.sort_order ? parseInt(form.sort_order) : 0,
       }),
     onSuccess: () => {
-      toast.success("Байгааламжийн чанарын мэдээллийн төрөл үүслээ");
+      toast.success("Байгууламжийн чанарын мэдээллийн төрөл үүслээ");
       queryClient.invalidateQueries({ queryKey: ["asset-spec-types"] });
       setShowCreate(false);
       setForm({ code: "", name: "", sort_order: "" });
@@ -94,7 +94,7 @@ export default function AssetSpecTypePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Байгааламжийн чанарын мэдээллийн төрлүүд
+            Байгууламжийн чанарын мэдээллийн төрлүүд
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
             Барилгын чанарын мэдээллийн ангилалуудыг тохируулна

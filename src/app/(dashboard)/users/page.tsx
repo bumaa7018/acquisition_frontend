@@ -33,6 +33,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { EmployeeSelect } from "@/components/ui/employee-select";
 
 const PAGE_SIZE = 20;
 
@@ -57,8 +58,8 @@ const passwordField = z
 
 const createSchema = z
   .object({
-    first_name: z.string().trim().min(1, "Нэр оруулна уу"),
-    last_name: z.string().trim().min(1, "Овог оруулна уу"),
+    first_name: z.string().trim().optional(),
+    last_name: z.string().trim().optional(),
     username: z
       .string()
       .trim()
@@ -118,6 +119,8 @@ const secondaryBtn =
 const HEADERS = [
   "Хэрэглэгч",
   "Хэрэглэгчийн нэр",
+  "Ажилтан",
+  "Алба, хэлтэс",
   "Албан тушаал",
   "Имэйл",
   "Роль",
@@ -211,6 +214,7 @@ function RolePicker({
 
 export default function UsersPage() {
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState({ id: "", label: "" });
   const [createRoles, setCreateRoles] = useState<string[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editRoles, setEditRoles] = useState<string[]>([]);
@@ -304,6 +308,7 @@ export default function UsersPage() {
 
   function resetForms() {
     setShowCreate(false);
+    setSelectedEmployee({ id: "", label: "" });
     setCreateRoles([]);
     setEditingUser(null);
     setEditRoles([]);
@@ -320,6 +325,7 @@ export default function UsersPage() {
     }: CreateForm) =>
       usersApi.create({
         ...body,
+        employee_id: selectedEmployee.id,
         position: body.position || undefined,
         role_ids: createRoles.length ? createRoles : undefined,
       }),
@@ -596,6 +602,23 @@ export default function UsersPage() {
               className="grid grid-cols-2 gap-4"
               autoComplete="off"
             >
+              <div className="col-span-2">
+                <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                  Ажилтан *
+                </label>
+                <EmployeeSelect
+                  selectedId={selectedEmployee.id}
+                  selectedLabel={selectedEmployee.label}
+                  onSelect={(id, label) => setSelectedEmployee({ id, label })}
+                  onClear={() => setSelectedEmployee({ id: "", label: "" })}
+                  placeholder="Ажилтан хайх…"
+                />
+                {!selectedEmployee.id && (
+                  <p className="mt-1 text-[11px] text-[#f1556c]">
+                    Хэрэглэгч үүсгэхийн өмнө ажилтан сонгоно уу
+                  </p>
+                )}
+              </div>
               {fields.map(([field, label, type, autoComplete]) => (
                 <div key={field}>
                   <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
@@ -686,7 +709,7 @@ export default function UsersPage() {
               <div className="col-span-2 flex gap-2 pt-1">
                 <button
                   type="submit"
-                  disabled={createMutation.isPending}
+                  disabled={createMutation.isPending || !selectedEmployee.id}
                   className={primaryBtn}
                 >
                   {createMutation.isPending ? "Үүсгэж байна…" : "Үүсгэх"}
@@ -975,7 +998,13 @@ export default function UsersPage() {
                           {user.username || "—"}
                         </td>
                         <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
-                          {user.position || "—"}
+                          {user.employee?.person_name || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                          {user.employee?.department_name || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                          {user.employee?.position_name || user.position || "—"}
                         </td>
                         <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
                           {user.email}

@@ -23,6 +23,8 @@ export interface User {
   first_name: string;
   last_name: string;
   position?: string;
+  employee_id?: string;
+  employee?: Employee;
   is_active?: boolean;
   roles: Role[];
 }
@@ -98,6 +100,86 @@ export interface DocumentType {
   updated_at: string;
   created_by?: string;
   updated_by?: string;
+}
+
+export interface Organization {
+  id: string;
+  parent_id?: string;
+  name: string;
+  short_name?: string;
+  register_no?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  external_id?: string;
+  source?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Department {
+  id: string;
+  organization_id: string;
+  organization_name?: string;
+  parent_id?: string;
+  code?: string;
+  name: string;
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Position {
+  id: string;
+  code?: string;
+  name: string;
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Person {
+  id: string;
+  person_type: "citizen" | "legal";
+  register_no: string;
+  last_name?: string;
+  first_name?: string;
+  legal_name?: string;
+  civil_id?: string;
+  birth_date?: string;
+  gender?: "M" | "F";
+  phone?: string;
+  email?: string;
+  address?: string;
+  external_id?: string;
+  source?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Employee {
+  id: string;
+  person_id: string;
+  person?: Person;
+  person_name?: string;
+  organization_id: string;
+  organization_name?: string;
+  department_id?: string;
+  department_name?: string;
+  position_id: string;
+  position_name?: string;
+  employee_no?: string;
+  work_email?: string;
+  work_phone?: string;
+  hired_at?: string;
+  released_at?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AcquisitionAssignee {

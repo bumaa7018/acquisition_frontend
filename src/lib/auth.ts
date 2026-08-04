@@ -56,7 +56,37 @@ function userFromAccessToken(token: string | null) {
   };
 }
 
+// httpOnly session cookie-г тохируулах/цэвэрлэх серверийн route.
+//
+// ЯАГААД ЭНЭ COOKIE ХЭРЭГТЭЙ: `/api/files` (баримт, зураг) болон
+// `/api/geoserver` (газрын зургийн tile) нь browser-ийн ЭХ ХАНДАЛТААР
+// (`<img src>`, `<a href download>`, OpenLayers XYZ) ачаалагддаг ба тэдгээр нь
+// Authorization header зөөж чаддаггүй. Cookie нь ижил origin-д автоматаар
+// явдаг тул proxy эрхийг ЭНЭ cookie-гоор шалгана. Токен нь httpOnly тул
+// JS-ээс (XSS) уншигдахгүй — localStorage-оос ч аюулгүй.
+const SESSION_ENDPOINT = "/api/session";
+
+async function startSession(access: string): Promise<void> {
+  if (!access || typeof window === "undefined") return;
+  try {
+    await fetch(SESSION_ENDPOINT, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${access}` },
+    });
+  } catch (err) {
+    logger.warn("session cookie set failed", { error: String(err) });
+  }
+}
+
+function endSession(): void {
+  if (typeof window === "undefined") return;
+  fetch(SESSION_ENDPOINT, { method: "DELETE" }).catch(() => {});
+}
+
 export const authStorage = {
+  // Login flow-д cookie тохирсоныг БАТЛАХ (навигацаас өмнө await хийнэ) —
+  // үгүй бол эхний map/файл хүсэлт cookie-гүй явж 401 болох race үүснэ.
+  startSession,
   getAccessToken: () => {
     if (typeof window === "undefined") return null;
     const t = localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -85,6 +115,9 @@ export const authStorage = {
       localStorage.setItem(ACCESS_TOKEN_KEY, access);
       const tokenUser = userFromAccessToken(access);
       if (tokenUser) localStorage.setItem(USER_KEY, JSON.stringify(tokenUser));
+      // Login БОЛОН refresh (api.ts interceptor) бүрд cookie-г шинэчилнэ —
+      // доторх access token 15 мин-д хүчингүй болдог тул синк байлгана.
+      void startSession(access);
     }
     if (refresh) localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
   },
@@ -96,5 +129,6 @@ export const authStorage = {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    endSession();
   },
 };

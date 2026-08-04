@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireSession } from '@/lib/server/session-guard'
 
 // Файлын систем (MinIO/S3) руу гарц. Backend файлыг өөр дээрээ хадгалахгүй —
 // бүх файл эндээс тараагдаж, эндээр байршина. DB-д хадгалагдсан file_url нь
@@ -28,6 +29,16 @@ async function proxy(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  // ЭРХ ШАЛГАЛТ: өмнө нь энэ route эрх шалгадаггүй "хоолой" байсан ба MinIO-ийн
+  // bucket policy anonymous read байсан тул хэн ч нэвтрэлтгүйгээр бүх баримт,
+  // үнэлгээний тайлан, ортофотог татаж чаддаг байв (аудитаар батлагдсан).
+  // Одоо нэвтэрсэн хэрэглэгчийг session cookie/Bearer-ээр шаардана. Browser-ийн
+  // <img>/<a>/tile хүсэлт cookie-г автоматаар зөөнө; upload PUT (presigned) мөн
+  // ижил origin тул cookie явна.
+  if (!(await requireSession(req))) {
+    return NextResponse.json({ error: 'Нэвтрэх шаардлагатай' }, { status: 401 })
+  }
+
   const { path } = await params
   // Сегмент бүрийг escape хийнэ — нэрэнд кирилл, зай, '%' орсон файл ч ажиллана.
   const key = path.map((segment) => encodeURIComponent(segment)).join('/')

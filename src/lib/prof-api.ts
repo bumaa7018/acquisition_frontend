@@ -252,7 +252,7 @@ class ProfApiService {
     )
   }
 
-  // ── Байгааламж ──────────────────────────────────────────────────────────────
+  // ── Байгууламж ──────────────────────────────────────────────────────────────
 
   profListAssets(acqId: string, params?: ProfAssetListParams): Promise<PaginatedResponse<Asset>> {
     return apiClient
@@ -308,7 +308,7 @@ class ProfApiService {
     )
   }
 
-  // ── Байгааламжийн төрлүүд (лавлах) ─────────────────────────────────────────
+  // ── Байгууламжийн төрлүүд (лавлах) ─────────────────────────────────────────
 
   profListAssetSpecTypes(): Promise<AssetSpecType[]> {
     return apiClient

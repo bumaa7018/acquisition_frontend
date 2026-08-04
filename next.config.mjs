@@ -10,10 +10,37 @@ const GS_URL = process.env.NEXT_GS_URL ?? "http://localhost:8600";
 
 const CESIUM_SRC = path.resolve(process.cwd(), "node_modules/cesium/Build/Cesium");
 
+// Docker-ийн builder stage-д (Dockerfile: BUILD_IN_DOCKER=1) build-ийн санах ойг
+// хэмнэх тохиргоо. Локал `npm run build`-д ЭНЭ УТГА ТАВИГДАХГҮЙ тул бүх шалгалт
+// хэвийн ажиллана.
+const IN_DOCKER_BUILD = process.env.BUILD_IN_DOCKER === "1";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   httpAgentOptions: { keepAlive: false },
+
+  // ── Docker build-ийн санах ойн хязгаарлалт ────────────────────────────
+  // Docker Desktop-ийн VM нь 3.9GB, түүний ~1.5GB-ыг backend-ийн контейнерууд
+  // (geoserver, loki, minio, postgres…) эзэлдэг тул build-д ~2GB л сул үлддэг.
+  // `next build` нь compile дараа lint+typecheck-ийг ТУСДАА Node процессоор
+  // ажиллуулдаг ба тэр үед webpack-ийн эх процесс санах ойгоо БАРИАД байдаг.
+  // Cesium/OpenLayers-ийн .d.ts нь асар том тул tsc дээр нэмэлт хэдэн зуун MB
+  // шаардагдана — үр дүнд нь cgroup хязгаарт хүрч SIGKILL болдог
+  // ("npm error signal SIGKILL", ямар ч TypeScript алдаа хэвлэгдэхгүйгээр).
+  //
+  // Иймд image build-ийн үед шалгалтуудыг алгасна. Төрөл/lint-ийн шалгалт
+  // УСТААГҮЙ — локал `npm run build`, `make lint`, `make test` дээр хэвээрээ
+  // ажиллана (BUILD_IN_DOCKER тавигдаагүй тул).
+  eslint: { ignoreDuringBuilds: IN_DOCKER_BUILD },
+  typescript: { ignoreBuildErrors: IN_DOCKER_BUILD },
+
   experimental: {
+    // "Generating static pages" фаз нь анхдагчаар (CPU - 1) = 7 хүү Node процесс
+    // үүсгэдэг ба тус бүр нь NODE_OPTIONS-ийн heap хязгаарыг ӨВЛӨН авдаг. 2GB
+    // сул орчинд тэр нь дахин SIGKILL-ийн шалтгаан болдог тул хязгаарлана.
+    // 34 хуудсанд 2 worker хүрэлцээтэй (build-д ~2 секундын зөрүү).
+    ...(IN_DOCKER_BUILD && { cpus: 2 }),
+
     serverComponentsExternalPackages: ['exceljs'],
     // rewrites-ийн proxy-ийн хугацааны хязгаар (мс).
     //

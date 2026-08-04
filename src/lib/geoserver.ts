@@ -1,5 +1,14 @@
 import type ImageWrapper from "ol/Image";
 import { logger } from "./logger";
+import { authStorage } from "./auth";
+
+// GeoServer proxy-ийн эрхийн header. WMS-POST/WFS нь fetch тул header зөөж
+// чадна — session cookie тохироогүй байсан ч (mount дараах race) энэ header-ээр
+// эрх дамжина. (XYZ дроны tile нь <img> тул зөвхөн cookie-гоор явна.)
+export function gsAuthHeaders(base: Record<string, string> = {}): Record<string, string> {
+  const token = authStorage.getAccessToken();
+  return token ? { ...base, Authorization: `Bearer ${token}` } : base;
+}
 
 export const GS_WMS = '/api/geoserver/land/wms'
 export const GS_WFS = '/api/geoserver/land/ows'
@@ -46,7 +55,7 @@ export function wmsPostLoad(image: ImageWrapper, src: string) {
   if (qIdx === -1) { img.src = src; return }
   fetch(src.slice(0, qIdx), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
     body: src.slice(qIdx + 1),
   })
     .then(r => r.blob())

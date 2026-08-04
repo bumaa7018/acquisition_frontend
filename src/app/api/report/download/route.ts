@@ -30,14 +30,18 @@ function sse(data: object): string {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  const rawToken = searchParams.get("token") ?? "";
-  const token =
-    request.headers.get("authorization") ??
-    (rawToken
-      ? rawToken.toLowerCase().startsWith("bearer ")
-        ? rawToken
-        : `Bearer ${rawToken}`
-      : "");
+  // Токеныг ЗӨВХӨН Authorization header-ээс авна. Хуучин `?token=` query
+  // fallback-ыг АЮУЛГҮЙ БАЙДЛЫН УЧРААС хассан: URL дахь токен нь browser
+  // history, referrer, proxy/container логд алдагддаг. Client fetch-ээр header
+  // дамжуулна (EventSource биш).
+  const token = request.headers.get("authorization") ?? "";
+
+  if (!token) {
+    return new Response(JSON.stringify({ error: "Нэвтрэх шаардлагатай" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   if (isExternalAuthorization(token)) {
     return new Response(JSON.stringify({ error: "Тайлан татах эрхгүй" }), {

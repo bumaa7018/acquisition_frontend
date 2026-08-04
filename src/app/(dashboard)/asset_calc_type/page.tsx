@@ -29,7 +29,7 @@ export default function AssetCalcTypePage() {
         sort_order: form.sort_order ? parseInt(form.sort_order) : 0,
       }),
     onSuccess: () => {
-      toast.success("Байгааламжийн тооцооллын мэдээллийн төрөл үүслээ");
+      toast.success("Байгууламжийн тооцооллын мэдээллийн төрөл үүслээ");
       queryClient.invalidateQueries({ queryKey: ["asset-calc-types"] });
       setShowCreate(false);
       setForm({ code: "", name: "", default_unit: "", sort_order: "" });
@@ -96,7 +96,7 @@ export default function AssetCalcTypePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Байгааламжийн тооцооллын мэдээллийн төрлүүд
+            Байгууламжийн тооцооллын мэдээллийн төрлүүд
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
             Өртгийн хандлагаарх тооцооллын ангилалуудыг тохируулна

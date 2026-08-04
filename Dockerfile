@@ -32,8 +32,22 @@ ENV NEXT_PUBLIC_CESIUM_ION_TOKEN=$NEXT_PUBLIC_CESIUM_ION_TOKEN
 # бөгөөд Node анхдагчаар боломжтой санах ойн талыг heap болгон авдаг тул
 # 4GB-тай орчинд (Docker Desktop-ийн анхдагч) build нь SIGKILL-ээр унадаг.
 # Тодорхой хязгаар тавихад Node GC-г эрт хийж, унахын оронд бүтдэг.
-ENV NODE_OPTIONS=--max-old-space-size=2048
+#
+# 2048 нь ХЭТ ТОМ байсан: Docker Desktop-ийн VM 3.9GB, түүний ~1.5GB-ыг
+# backend-ийн контейнерууд эзэлдэг тул build-д ~2GB л сул үлддэг ба swap бараг
+# дүүрсэн байдаг. Ө.х. heap-ийн хязгаар нь СУЛ САНАХ ОЙТОЙ ТЭНЦҮҮ байсан тул
+# webpack-ийн native хуваарилалт нэмэгдэхэд cgroup хязгаарт хүрч "npm error
+# signal SIGKILL" болдог (заримдаа 4+ минут зүтгэсний дараа — swap-д орсноос).
+# Хязгаарыг доошлуулахад Node эрт GC хийж, compile нь ~42 секундэд бүтнэ.
+#
+# Санамж: хэрэв build дахин SIGKILL болвол Docker Desktop-ийн санах ойг
+# (Settings → Resources → Memory) 6GB болгож, дараа нь энэ утгыг 2048-3072
+# болгож ӨСГӨвөл build бүр ХУРДАН болно.
+ENV NODE_OPTIONS=--max-old-space-size=1280
 ENV NEXT_TELEMETRY_DISABLED=1
+# lint/typecheck-ийг image build дотор алгасах, static-gen worker-ийг хязгаарлах
+# (шалтгаан: next.config.mjs дээрх IN_DOCKER_BUILD-ийн тайлбар).
+ENV BUILD_IN_DOCKER=1
 RUN --mount=type=cache,target=/app/.next/cache \
     npm run build
 

@@ -1,5 +1,5 @@
-.PHONY: dev build start lint install clear \
-        docker-build docker-up docker-down docker-run docker-restart docker-logs docker-clean \
+.PHONY: dev build start lint test e2e install clear \
+        docker-build docker-build-clean docker-up docker-down docker-run docker-restart docker-logs docker-clean \
         docker-dev docker-dev-down docker-dev-logs docker-fg \
         deploy docker-rebuild reload
 
@@ -19,6 +19,12 @@ start:
 lint:
 	npm run lint
 
+test:
+	npm test
+
+e2e:
+	npm run test:e2e
+
 install:
 	npm install
 
@@ -35,11 +41,18 @@ docker-check-network:
 		(echo "gov_network олдсонгүй. Эхлээд backend-г асаана уу:" && \
 		 echo "  cd ../government/deployments && docker compose up -d" && exit 1)
 
+# --no-cache-гүй: Docker layer cache + npm cache + .next/cache (webpack)
+# дахин хэрэглэгдэнэ. package.json өөрчлөгдвөл npm ci автоматаар дахин
+# ажиллах тул --no-cache шаардлагагүй — тэр нь build-ийг 4-5 дахин удаашруулна.
 docker-build:
+	$(COMPOSE) build
+
+# cache-г бүрэн үл хэрэгсэх (зөвхөн cache гэмтсэн гэж таамаглах үед)
+docker-build-clean:
 	$(COMPOSE) build --no-cache
 
 up: docker-check-network
-	$(COMPOSE) build --no-cache
+	$(COMPOSE) build
 	$(COMPOSE) up -d
 
 # build хийгээд foreground-д ажиллуулна (лог шууд харагдана, Ctrl+C-р зогсоно)
