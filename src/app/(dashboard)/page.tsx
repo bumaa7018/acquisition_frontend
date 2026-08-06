@@ -18,7 +18,7 @@ import {
   Cell,
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
-import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg } from "@/lib/role-utils";
+import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
@@ -35,7 +35,11 @@ import {
   X,
   ChevronDown,
   Calendar,
+  FileSpreadsheet,
 } from "lucide-react";
+import { toast } from "sonner";
+import { authStorage } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 const MapView = dynamic(() => import("@/components/map/map-view"), {
   ssr: false,
@@ -984,9 +988,13 @@ export default function DashboardPage() {
   const [roleReady, setRoleReady] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
   const [isOtherExternal, setIsOtherExternal] = useState(false);
+  // "Мэдээ татах" — ЗӨВХӨН ахлах мэргэжилтэнд. Энэ нь UI-ийн нуулт;
+  // жинхэнэ хоригийг /api/report/gchh2 route нь `/users/me`-ээр шалгана.
+  const [isSenior, setIsSenior] = useState(false);
   useEffect(() => {
     setIsProfOrg(isProfessionalOrg());
     setIsOtherExternal(isExternalSpecialRole() && !isProfessionalOrg());
+    setIsSenior(isSeniorSpecialist());
     setRoleReady(true);
   }, []);
 
@@ -1039,6 +1047,48 @@ export default function DashboardPage() {
     setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0); setInEmployeeId(""); setInEmployeeName("");
     setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0, employeeId: "", employeeName: "" });
   };
+
+  /* ── ГЧХ АЖЛЫН МЭДЭЭ (Excel) — ХЭРЭГЛЭСЭН шүүлтээр татна ──────────────
+     appliedFilter-ийг ашиглана (inXxx биш): дашбоард дээр ХАРАГДАЖ байгаа
+     мэдээлэлтэй ижил хүрээтэй байхын тулд. Токеныг header-ээр дамжуулна —
+     URL query-д хэзээ ч тавихгүй (тэр нь логд алдагддаг). */
+  const [dlBusy, setDlBusy] = useState(false);
+  const handleDownloadGchh2 = useCallback(async () => {
+    setDlBusy(true);
+    try {
+      const token = authStorage.getAccessToken() ?? "";
+      const p = new URLSearchParams();
+      if (appliedFilter.acqId) p.set("acquisition_id", appliedFilter.acqId);
+      if (appliedFilter.acqName) p.set("acquisition_name", appliedFilter.acqName);
+      if (appliedFilter.planCode) p.set("plan_code", appliedFilter.planCode);
+      if (appliedFilter.genCatId) p.set("general_category_id", String(appliedFilter.genCatId));
+      if (appliedFilter.subCatId) p.set("sub_category_id", String(appliedFilter.subCatId));
+      if (appliedFilter.employeeId) p.set("assigned_user_id", appliedFilter.employeeId);
+      appliedFilter.years.forEach((y) => p.append("year", y));
+
+      const res = await fetch(`/api/report/gchh2?${p.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token.replace(/^Bearer\s+/i, "")}` } : {},
+      });
+      if (!res.ok) {
+        const msg = await res.json().catch(() => null);
+        toast.error(msg?.error ?? "Мэдээ татахад алдаа гарлаа");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ГЧХ-2_АЖЛЫН_МЭДЭЭ_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Мэдээ татагдлаа");
+    } catch (err) {
+      toast.error("Мэдээ татахад алдаа гарлаа");
+      logger.error("gchh2 download failed", { error: String(err) });
+    } finally {
+      setDlBusy(false);
+    }
+  }, [appliedFilter]);
 
   /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
   const { data: dashData, isLoading } = useQuery({
@@ -1146,10 +1196,14 @@ export default function DashboardPage() {
     <div className="flex flex-col gap-4">
 
       {/* ── Filter card ───────────────────────────────── */}
-      <div className="ap-card px-4 py-3">
-        {/* grid ашигласнаар багана тоо тогтмол болж, 13 инчийн лаптоп зэрэг завсрын
-            хэмжээст "Харах" товч ганцаараа шинэ мөр рүү үсэрч гарахаа больсон */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
+      <div className="ap-card w-full px-4 py-3">
+        {/* Талбарууд БҮТЭН ӨРГӨНИЙГ эзэлнэ (flex-1), товчнууд grid-ийн ГАДНА,
+            хажууд бэхлэгдэнэ.
+            ЯАГААД: өмнө нь товчнууд ч grid-ийн элемент байсан тул "Дэд ангилал"
+            гарч ирэхэд 6 баганад 7 элемент болж товчнууд ганцаараа шинэ мөрт
+            үсэрч, шүүлт дутуу/тасарсан харагддаг байв. */}
+        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end flex-1 min-w-0">
           {/* Acquisition select */}
           <div className="flex flex-col gap-1 min-w-0">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
@@ -1229,7 +1283,9 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Action buttons */}
+        </div>
+
+          {/* Action buttons — grid-ийн гадна, хажууд бэхлэгдсэн */}
           <div className="flex gap-2 shrink-0">
             <button
               onClick={handleView}
@@ -1257,13 +1313,29 @@ export default function DashboardPage() {
             {filterLabel}
           </p>
         </div>
-        <div className="shrink-0 text-right border-l border-slate-100 dark:border-[#37394d] pl-4">
-          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
-            {filteredAcqs.length} чөлөөлөлт
-          </p>
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-            {isLoading ? "…" : `${totalParcels} нэгж талбар`}
-          </p>
+        <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
+          <div className="text-right">
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
+              {filteredAcqs.length} чөлөөлөлт
+            </p>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+              {isLoading ? "…" : `${totalParcels} нэгж талбар`}
+            </p>
+          </div>
+          {/* ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил (хэрэглэсэн) шүүлтээр татна.
+              Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
+          {isSenior && (
+            <button
+              onClick={handleDownloadGchh2}
+              disabled={dlBusy}
+              title="ГЧХ АЖЛЫН МЭДЭЭ (Excel)"
+              className="h-9 px-4 rounded-lg text-[13px] font-semibold text-white flex items-center gap-1.5 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
+              style={{ background: "#0f9ed5" }}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {dlBusy ? "Татаж байна…" : "Мэдээ татах"}
+            </button>
+          )}
         </div>
       </div>
 
