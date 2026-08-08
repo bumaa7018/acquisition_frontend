@@ -99,12 +99,12 @@ const LAYER_DEFS: (MapLayerDef & {
 ];
 
 /**
- * Дроны ортофотогийн давхцуулалт. Зураг тус бүр GeoServer дээр ӨӨРИЙН
- * давхаргатай тул шүүлтүүр шаардахгүй — давхаргын нэрээрээ шууд дуудна.
+ * Дроны ортофотогийн давхцуулалт. Client GeoServer-ийн `layer_name`-ийг шууд
+ * tile URL-д оруулахгүй; Next route нь imageId/acquisitionId-аар эрх шалгаад
+ * сервер талдаа layer_name-г олж дамжуулна.
  */
 export type DroneOverlay = {
   id: string;
-  layerName: string;
   /**
    * Зургийн WGS84 хүрээ [minX, minY, maxX, maxY] — ЗААВАЛ.
    *
@@ -550,7 +550,7 @@ export function AcquisitionMap({
         // Зөвхөн зургийн хүрээн дотор зурна (дээрх тайлбарыг үзнэ үү)
         extent: transformExtent(overlay.extent, "EPSG:4326", "EPSG:3857"),
         source: new XYZ({
-          url: droneTileUrl(overlay.layerName),
+          url: droneTileUrl(acquisitionId, overlay.id),
           // GWC-ийн gridset-д байхгүй түвшнээс тайл ЭРЭХГҮЙ (эрвэл 400 буцна).
           maxZoom: GS_GWC_MAX_ZOOM,
           // wmsPostLoad ХЭРЭГЛЭХГҮЙ: тэр нь POST-оор татдаг ба урт CQL_FILTER-тэй
@@ -561,7 +561,7 @@ export function AcquisitionMap({
       droneLayers.current[overlay.id] = layer;
       map.addLayer(layer);
     });
-  }, [droneOverlays, extentReady]);
+  }, [acquisitionId, droneOverlays, extentReady]);
 
   // Компонент устахад дроны давхаргуудыг цэвэрлэнэ
   useEffect(

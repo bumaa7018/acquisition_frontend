@@ -16,10 +16,15 @@ export const GS_WFS = '/api/geoserver/land/ows'
 /**
  * Дроны ортофотог ТАЙЛААР дуудах URL загвар (OpenLayers XYZ source).
  *
- * GeoWebCache-ийн WMTS рүү явна — ингэснээр тайл GeoServer дээр КЭШЛЭГДЭНЭ.
+ * `/api/drone-tiles/...` нь сервер талдаа эрх шалгаад GeoWebCache-ийн WMTS рүү
+ * дамжуулна — ингэснээр тайл GeoServer дээр КЭШЛЭГДЭНЭ.
  * Хэмжсэн: нэг тайл MISS 10.5 сек → HIT 0.27 сек (39 дахин хурдан).
  *
- * ЯАГААД WMTS-ийн KVP (query) хэлбэр:
+ * ЯАГААД шууд `/api/geoserver/gwc/...` биш тусдаа route вэ:
+ *   - client GeoServer-ийн layer_name-г tile URL-д ил гаргахгүй.
+ *   - route нь imageId/acquisitionId-аар backend authorization шалгана.
+ *
+ * Сервер талдаа WMTS-ийн KVP (query) хэлбэр ашигладаг:
  *   - WMTS-ийн REST хэлбэр (`/wmts/rest/<layer>//EPSG:900913/...`) нь хоосон
  *     style-ийн улмаас ХОЁР ЗУРААС агуулах ба Next-ийн proxy түүнийг
  *     нормчилж 308 redirect буцаана — тайл ирэхгүй.
@@ -34,19 +39,8 @@ export const GS_WFS = '/api/geoserver/land/ows'
  */
 export const GS_GWC_MAX_ZOOM = 30 // EPSG:900913 gridset-ийн түвшин: 0..30
 
-export function droneTileUrl(layerName: string): string {
-  const p = new URLSearchParams({
-    Service: 'WMTS',
-    Version: '1.0.0',
-    Request: 'GetTile',
-    Layer: layerName,
-    Style: '',
-    Format: 'image/png',
-    TileMatrixSet: 'EPSG:900913',
-  })
-  // {z}/{y}/{x}-ыг OL өөрөө орлуулах тул encode хийлгэхгүй — тусад нь залгана.
-  return `/api/geoserver/gwc/service/wmts?${p.toString()}` +
-    '&TileMatrix=EPSG:900913:{z}&TileRow={y}&TileCol={x}'
+export function droneTileUrl(acquisitionId: string, imageId: string): string {
+  return `/api/drone-tiles/${encodeURIComponent(acquisitionId)}/${encodeURIComponent(imageId)}/{z}/{x}/{y}`
 }
 
 export function wmsPostLoad(image: ImageWrapper, src: string) {
