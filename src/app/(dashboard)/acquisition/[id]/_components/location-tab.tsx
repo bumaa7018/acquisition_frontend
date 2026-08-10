@@ -115,8 +115,8 @@ export function LocationTab({
 
   const list = useMemo(() => images ?? [], [images]);
 
-  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Зураг тус бүр өөрийн
-  // GeoServer давхаргатай (layer_name).
+  // Сонгогдсон зургууд → газрын зургийн давхаргууд. Tile хүсэлт нь imageId-аар
+  // явна; GeoServer-ийн layer_name-г client tile URL-д ил гаргахгүй.
   //
   // Хүрээ (bbox) МЭДЭГДЭЖ байгаа зургийг л давхарлана: extent нь давхаргыг
   // зургийн гадна зурахгүй байлгах хамгаалалт (acquisition-map-ийн тайлбарыг
@@ -131,7 +131,6 @@ export function LocationTab({
         return [
           {
             id: img.id,
-            layerName: img.layer_name,
             extent,
           },
         ];
