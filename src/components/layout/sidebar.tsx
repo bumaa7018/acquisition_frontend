@@ -12,6 +12,7 @@ import {
   canViewUsers,
   canViewRoles,
   canViewHr,
+  canViewDecisionDrafts,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -40,6 +41,9 @@ import {
   Building2,
   Network,
   BadgeCheck,
+  Gavel,
+  Hammer,
+  Wallet,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -49,6 +53,7 @@ const NAV_MAIN = [
   { href: "/report", label: "Тайлан", icon: BarChart3 },
   { href: "/map", label: "Газрын зураг", icon: Map },
   { href: "/parcel", label: "Нэгж талбарын түүх", icon: Grid2x2 },
+  { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
 ];
 
@@ -102,6 +107,16 @@ const NAV_CONFIG = [
     href: "/asset_calc_type",
     label: "Байгууламжийн тооцооллын төрөл",
     icon: Calculator,
+  },
+  {
+    href: "/decision_work_type",
+    label: "Ажлын төрөл",
+    icon: Hammer,
+  },
+  {
+    href: "/decision_budget",
+    label: "Төсөв",
+    icon: Wallet,
   },
 ];
 
@@ -167,6 +182,10 @@ export function Sidebar() {
   const [canViewHrNav, setCanViewHrNav] = useState(false);
   const [canViewAudit, setCanViewAudit] = useState(false);
   const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
+  // Захирамжийн төсөл — decision:read эрхтэй ажилтанд л харагдана.
+  const [mainNav, setMainNav] = useState<typeof NAV_MAIN>(
+    NAV_MAIN.filter((item) => item.href !== "/decision_draft"),
+  );
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG, ...NAV_HR].map((i) => i.href);
   const [adminOpen, setAdminOpen] = useState(
@@ -193,6 +212,12 @@ export function Sidebar() {
       NAV_ADMIN.filter((item) =>
         item.href === "/users" ? canViewUsers() : canViewRoles(),
       ),
+    );
+    // Захирамжийн төсөл нь тусдаа decision:* эрхтэй — эрхгүй ажилтанд цэс
+    // харуулбал 403-той хоосон хуудас нээгдэнэ.
+    const showDecision = canViewDecisionDrafts();
+    setMainNav(
+      NAV_MAIN.filter((item) => item.href !== "/decision_draft" || showDecision),
     );
     setReady(true);
   }, []);
@@ -271,7 +296,7 @@ export function Sidebar() {
                       { href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText },
                     ]
                   : NAV_MAIN.filter((item) => item.href === "/" || item.href === "/acquisition")
-                : NAV_MAIN
+                : mainNav
               ).map((item) => (
                 <NavItem
                   key={item.href}

@@ -1,4 +1,16 @@
-const ONES = ["", "нэг", "хоёр", "гурав", "дөрөв", "тав", "зургаа", "долоо", "найм", "ес"];
+// Тоог монгол хэлний үгээр бичих (гэрээ, акт, захирамжийн төсөлд "2,561 (хоёр мянга
+// таван зуун жаран нэг)" гэж бичихэд хэрэглэнэ).
+//
+// Монгол хэлний тооны нэр хоёр хэлбэртэй:
+//   - БИЕ ДААСАН (standalone): гурав, арав, хорь, зуу, мянга — тоо ТЭНД дуусах үед
+//   - ХОЛБООСНЫ (linked): гурван, арван, хорин, зуун, мянган — ард нь өөр үг үргэлжлэх үед
+// Тиймээс 561 = "таван зуун жаран нэг", харин 500 = "таван зуу".
+// Зэрэглэлийн үгийн (мянга/сая) дараа ӨӨР ТОО үргэлжлэх бол бие даасан хэлбэр
+// хэвээр байна: 2561 = "хоёр мянга таван зуун жаран нэг". Харин ард нь НЭР үг орвол
+// холбоосны хэлбэрт орно: 5,000 төгрөг = "таван мянган төгрөг".
+
+const ONES_STANDALONE = ["", "нэг", "хоёр", "гурав", "дөрөв", "тав", "зургаа", "долоо", "найм", "ес"];
+const ONES_LINKED = ["", "нэг", "хоёр", "гурван", "дөрвөн", "таван", "зургаан", "долоон", "найман", "есөн"];
 const TENS_STANDALONE = ["", "арав", "хорь", "гуч", "дөч", "тавь", "жар", "дал", "ная", "ер"];
 const TENS_LINKED = ["", "арван", "хорин", "гучин", "дөчин", "тавин", "жаран", "далан", "наян", "ерэн"];
 
@@ -10,10 +22,12 @@ const SCALES = [
   { value: 1, standalone: "", linked: "" },
 ];
 
-// 0-999 хүртэлх тоог үгээр — outerHasTrailing нь энэ гурван оронтой бүлгийн ард
-// өөр үг (жишээ нь мянга/сая гэсэн үлгэр үг, эсвэл доод бүлэг) орох эсэхийг илэрхийлнэ;
-// энэ нь "зуу/зуун", "тавь/тавин" зэрэг холбох хэлбэрийг сонгоход шаардлагатай.
-function threeDigitWords(n: number, outerHasTrailing: boolean): string {
+const MAX_SUPPORTED = 1_000 * SCALES[0].value;
+
+// 0-999 хүртэлх тоог үгээр — hasTrailing нь энэ бүлгийн ард өөр үг (зэрэглэлийн үг,
+// доод бүлгийн тоо, эсвэл "төгрөг" гэх мэт нэр) орох эсэхийг илэрхийлнэ; холбоосны
+// хэлбэрийг сонгоход шаардлагатай.
+function threeDigitWords(n: number, hasTrailing: boolean): string {
   if (n === 0) return "";
   const hundreds = Math.floor(n / 100);
   const rem = n % 100;
@@ -22,25 +36,29 @@ function threeDigitWords(n: number, outerHasTrailing: boolean): string {
   const parts: string[] = [];
 
   if (hundreds > 0) {
-    const hundredHasTrailing = rem > 0 || outerHasTrailing;
-    parts.push(ONES[hundreds], hundredHasTrailing ? "зуун" : "зуу");
+    // "зуу(н)" нь өмнөх тоог үргэлж холбоосны хэлбэрт оруулна: таван зуу, есөн зуун.
+    parts.push(ONES_LINKED[hundreds], rem > 0 || hasTrailing ? "зуун" : "зуу");
   }
   if (tens > 0) {
-    const tenHasTrailing = ones > 0 || outerHasTrailing;
-    parts.push((tenHasTrailing ? TENS_LINKED : TENS_STANDALONE)[tens]);
+    parts.push((ones > 0 || hasTrailing ? TENS_LINKED : TENS_STANDALONE)[tens]);
   }
   if (ones > 0) {
-    parts.push(ONES[ones]);
+    parts.push((hasTrailing ? ONES_LINKED : ONES_STANDALONE)[ones]);
   }
   return parts.join(" ");
 }
 
-// Тоог монгол хэлний үгээр бичнэ (жишээ: 123456789 → "нэг зуун хорин гурван сая...").
-// Мөнгөн дүнг гэрээ/актад бичихэд ашиглана; бүхэл тоо руу дугуйруулна.
-export function numberToMongolianWords(input: number): string {
-  const n = Math.round(input);
+// linked: true — ард нь нэр үг (жишээ "төгрөг") орох тул холбоосны хэлбэрээр төгсгөнө.
+// Бүхэл тоо руу дугуйруулна.
+export function numberToMongolianWords(input: number, options: { linked?: boolean } = {}): string {
+  const numeric = Number(input);
+  if (!Number.isFinite(numeric)) return "тэг";
+  const n = Math.round(numeric);
   if (n === 0) return "тэг";
+
   const abs = Math.abs(n);
+  // Их наядаас дээш тоог үгээр бичих зэрэглэлийн үг байхгүй — тоогоор буцаана.
+  if (abs >= MAX_SUPPORTED) return String(abs);
 
   const chunks = SCALES.map((scale) => ({ scale, value: 0 }));
   let remaining = abs;
@@ -54,15 +72,18 @@ export function numberToMongolianWords(input: number): string {
     const { scale, value } = chunks[i];
     if (value === 0) continue;
     const hasLowerNonZero = chunks.slice(i + 1).some((c) => c.value > 0);
-    const chunkWords = threeDigitWords(value, hasLowerNonZero || scale.value > 1);
-    words.push(chunkWords);
-    if (scale.value > 1) words.push(hasLowerNonZero ? scale.linked : scale.standalone);
+    const isScaled = scale.value > 1;
+    // Бүлгийн ард зэрэглэлийн үг, эсвэл доод бүлэг, эсвэл нэр үг орох эсэх.
+    words.push(threeDigitWords(value, isScaled || hasLowerNonZero || !!options.linked));
+    // Зэрэглэлийн үг: дараа нь тоо орвол бие даасан ("мянга"), зөвхөн нэр үг орвол
+    // холбоосны ("мянган") хэлбэрээр.
+    if (isScaled) words.push(!hasLowerNonZero && options.linked ? scale.linked : scale.standalone);
   }
 
-  return (n < 0 ? "хасах " : "") + words.join(" ");
+  return (n < 0 ? "хасах " : "") + words.filter(Boolean).join(" ");
 }
 
 export function amountToMongolianWords(amount: number, unit = "төгрөг"): string {
-  const words = numberToMongolianWords(amount);
+  const words = numberToMongolianWords(amount, { linked: !!unit });
   return unit ? `${words} ${unit}` : words;
 }

@@ -52,6 +52,7 @@ export type ParcelTabKey =
   | "progress"
   | "realEstate"
   | "documents"
+  | "decree"
   | "print";
 
 export type ValuationSubTabKey = "asset" | "independent" | "mika";
@@ -155,6 +156,9 @@ export function canViewParcelTabForActor(
   actor: AccessActor,
   tab: ParcelTabKey,
 ): boolean {
+  // "Захирамж" таб нь захирамжийн төслийн өгөгдлийг татдаг (decision:read)
+  // — эрхгүй ажилтанд хоосон, 403-той таб харуулахгүй.
+  if (tab === "decree") return canViewDecisionDraftsForActor(actor);
   if (!isExternalSpecialActor(actor)) return true;
   // Мэргэжлийн байгууллага эзэмшигчийн мэдээллийг нэмж харна
   if (isProfessionalOrgActor(actor) && tab === "holder") return true;
@@ -246,8 +250,43 @@ export const HR_PERMISSIONS = {
   HR_DELETE: "hr:delete",
 } as const;
 
+// Захирамжийн төсөл — тусдаа эрхийн бүлэг. Захирамжийн төсөлтэй ажиллах
+// мэргэжилтэн ЗӨВХӨН эдгээрээр ажиллана; land:* эрх энд хүчинтэй БИШ
+// (backend-ийн decision-drafts маршрутууд ч мөн decision:*-ийг шаардана).
+export const DECISION_PERMISSIONS = {
+  DECISION_READ: "decision:read",
+  DECISION_CREATE: "decision:create",
+  DECISION_UPDATE: "decision:update",
+  DECISION_DELETE: "decision:delete",
+} as const;
+
 export function actorHasPermission(actor: AccessActor, name: string): boolean {
   return (actor.permissions ?? []).includes(name);
+}
+
+/**
+ * Захирамжийн төслийн эрх. Гадаад ролиуд (мэрг. байгууллага, МИКА, санхүү)
+ * зөвхөн нөхөх олговрын урсгалд ажилладаг тул эрх санамсаргүй олгогдсон ч
+ * захирамжийн төсөлд хүрэхгүй.
+ */
+function canDoDecision(actor: AccessActor, permission: string): boolean {
+  return !isExternalSpecialActor(actor) && actorHasPermission(actor, permission);
+}
+
+export function canViewDecisionDraftsForActor(actor: AccessActor): boolean {
+  return canDoDecision(actor, DECISION_PERMISSIONS.DECISION_READ);
+}
+
+export function canCreateDecisionDraftForActor(actor: AccessActor): boolean {
+  return canDoDecision(actor, DECISION_PERMISSIONS.DECISION_CREATE);
+}
+
+export function canUpdateDecisionDraftForActor(actor: AccessActor): boolean {
+  return canDoDecision(actor, DECISION_PERMISSIONS.DECISION_UPDATE);
+}
+
+export function canDeleteDecisionDraftForActor(actor: AccessActor): boolean {
+  return canDoDecision(actor, DECISION_PERMISSIONS.DECISION_DELETE);
 }
 
 /**

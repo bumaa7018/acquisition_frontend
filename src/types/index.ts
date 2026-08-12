@@ -897,3 +897,159 @@ export interface AppNotification {
   created_at: string;
   read_at?: string;
 }
+
+// ── Захирамжийн төсөл ────────────────────────────────
+export const DECISION_DRAFT_STATUS_DRAFT = 1;
+export const DECISION_DRAFT_STATUS_CONFIRMED = 2;
+
+export const DECISION_DRAFT_STATUS_LABELS: Record<number, string> = {
+  [DECISION_DRAFT_STATUS_DRAFT]: "Төсөл",
+  [DECISION_DRAFT_STATUS_CONFIRMED]: "Баталгаажсан",
+};
+
+// Жагсаалт/дэлгэрэнгүй дээрх төлөвийн badge — parcel-ийн STATUS_CFG-тэй адил
+// өнгөний схем (улбар шар = хүлээгдэж буй, ногоон = дууссан).
+export const DECISION_DRAFT_STATUS_STYLES: Record<number, { color: string; bg: string }> = {
+  [DECISION_DRAFT_STATUS_DRAFT]: { color: "#f59e0b", bg: "#f59e0b18" },
+  [DECISION_DRAFT_STATUS_CONFIRMED]: { color: "#0acf97", bg: "#0acf9718" },
+};
+
+// Ажлын төрөл / Төсөв — Тохиргооноос удирдагдах сонголт (ижил бүтэцтэй)
+export interface DecisionOption {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+}
+
+export interface DecisionDraft {
+  id: string;
+  proposal_no: string;
+  decree_number: string;
+  decision_date?: string;
+  location: string;
+  duration_year?: number;
+  status: number;
+  acquisition_id?: string;
+  work_type_id?: number;
+  budget_id?: number;
+  current_progress_history_id?: string;
+  confirmed_at?: string;
+  confirmed_by: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+  // JOIN-оос ирэх нэрс
+  acquisition_name: string;
+  plan_code: string;
+  work_type_name: string;
+  budget_name: string;
+  parcel_count: number;
+  parcel_area_m2: number;
+  // Санхүүгийн эх үүсвэр — үүсгэсний ДАРАА олноор нэмнэ. Жагсаалтад тоо/нэрсийн
+  // нийлбэр, дэлгэрэнгүйд бүтэн жагсаалт ирнэ.
+  funding_source_count: number;
+  funding_source_names: string;
+  funding_local_amount: number;
+  funding_international_amount: number;
+  funding_source_amounts: Record<string, number>;
+  funding_source_compensation_amounts: Record<string, number>;
+  funding_source_parcel_counts: Record<string, number>;
+  funding_source_parcel_areas: Record<string, number>;
+  funding_sources?: DecisionDraftFundingLink[];
+  current_progress_type: string;
+  current_progress_type_name: string;
+  current_progress_recipient: string;
+  current_progress_date?: string;
+  current_progress_note: string;
+}
+
+// Захирамж ↔ санхүүгийн эх үүсвэрийн холбоос
+export interface DecisionDraftFundingLink {
+  id: string;
+  decision_draft_id: string;
+  funding_source_id: string;
+  created_at: string;
+  created_by: string;
+  // funding_sources-оос JOIN-оор ирэх мэдээлэл
+  acquisition_id: string;
+  acquisition_name: string;
+  organization_name: string;
+  source_type: string;
+  amount?: number;
+  currency: string;
+  note: string;
+}
+
+export const DECISION_DRAFT_PROGRESS_REVIEWING = "reviewing";
+export const DECISION_DRAFT_PROGRESS_CONFIRMING = "confirming";
+
+export const DECISION_DRAFT_PROGRESS_LABELS: Record<string, string> = {
+  [DECISION_DRAFT_PROGRESS_REVIEWING]: "Хянагдаж буй",
+  [DECISION_DRAFT_PROGRESS_CONFIRMING]: "Баталгаажуулах",
+};
+
+export interface DecisionDraftProgressHistory {
+  id: string;
+  decision_draft_id: string;
+  progress_type: string;
+  progress_type_name: string;
+  recipient: string;
+  progress_date: string;
+  note: string;
+  created_at: string;
+  created_by: string;
+}
+
+// Захирамж ↔ нэгж талбарын холбоос. removed_at байвал хасагдсан (түүх).
+export interface DecisionDraftParcel {
+  id: string;
+  decision_draft_id: string;
+  parcel_uuid: string;
+  linked_at: string;
+  linked_by: string;
+  removed_at?: string;
+  removed_by: string;
+  // Тухайн нэгж талбарыг санхүүжүүлэх эх үүсвэр (холбох үед сонгож, дараа нь солино)
+  funding_link_id?: string;
+  funding_source_id?: string;
+  funding_organization?: string;
+  funding_source_type?: string;
+  // Нэгж талбарын мэдээлэл
+  parcel_id: string;
+  acquisition_id: string;
+  acquisition_name: string;
+  area_m2: number;
+  acquisition_area_m2: number;
+  compensation_amount: number;
+  parcel_status: number;
+  parcel_status_name: string;
+  landuse: string;
+  // Нэгж талбарын "Захирамж" таб дээр захирамжийн мэдээллийг хамт буцаана
+  proposal_no?: string;
+  decree_number?: string;
+  decision_date?: string;
+  decision_status?: number;
+  work_type_name?: string;
+  budget_name?: string;
+  location?: string;
+  duration_year?: number;
+  current_progress_type?: string;
+  current_progress_type_name?: string;
+  current_progress_recipient?: string;
+  current_progress_date?: string;
+  current_progress_note?: string;
+}
+
+// Санхүүгийн эх үүсвэрийн сонголт (бүх чөлөөлөлтөөр)
+export interface FundingSourceOption {
+  id: string;
+  acquisition_id: string;
+  acquisition_name: string;
+  plan_code: string;
+  organization_name: string;
+  source_type: string;
+  amount?: number;
+  currency: string;
+}

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { RIGHT_TYPE_LABELS, ACQ_STATUS } from "@/types";
-import { ArrowLeft, Info, Paperclip, Building2, Printer, Activity, UserCheck } from "lucide-react";
+import { ArrowLeft, Info, Paperclip, Building2, Printer, Activity, UserCheck, Gavel } from "lucide-react";
 import Link from "next/link";
 import { type Tab } from "./_components/constants";
 import { GeneralTab } from "./_components/general_tab";
@@ -14,6 +14,7 @@ import { ProgressTab } from "./_components/progress_tab";
 import { RealEstateTab } from "./_components/real_estate_tab";
 import { DocumentsTab } from "./_components/documents_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
+import { DecreeTab } from "./_components/decree_tab";
 import { canAccessParcel, canViewParcelTab, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { Users } from "lucide-react";
 
@@ -62,6 +63,7 @@ export default function ParcelDetailPage() {
     { key: "holder", label: "Эзэмшигч", icon: <UserCheck className="h-4 w-4" /> },
     { key: "realEstate", label: "Нөхөх олговор", icon: <Building2 className="h-4 w-4" /> },
     { key: "documents", label: "Баримт бичиг", icon: <Paperclip className="h-4 w-4" /> },
+    { key: "decree", label: "Захирамж", icon: <Gavel className="h-4 w-4" /> },
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
   ];
@@ -230,6 +232,7 @@ export default function ParcelDetailPage() {
       {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
       {activeTab === "documents" && <DocumentsTab parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "decree" && <DecreeTab parcelId={id} />}
       {activeTab === "print" && <PrintTemplatesTab parcel={parcel} />}
     </div>
   );
