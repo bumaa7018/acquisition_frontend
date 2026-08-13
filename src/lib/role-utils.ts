@@ -3,11 +3,15 @@ import { authStorage, decodeJwtPayload } from "./auth";
 import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
+  canCreateDecisionDraftForActor,
   canCreateUser,
   canCreateHrRecord,
+  canDeleteDecisionDraftForActor,
   canDeleteHrRecord,
   canDeactivateUser,
   canDeleteUserRow,
+  canUpdateDecisionDraftForActor,
+  canViewDecisionDraftsForActor,
   canEditValuationSubTabForActor,
   canGrantPermissionForActor,
   canGrantRoleForActor,
@@ -177,6 +181,25 @@ export function canAccessAcquisition(
     { professional_org_id: acquisitionProfOrgId },
     parcels,
   );
+}
+
+// ── Захирамжийн төсөл ───────────────────────────────────────────────────────
+// Захирамжийн төсөлтэй ажиллах мэргэжилтэн decision:* эрхээр ажиллана.
+
+export function canViewDecisionDrafts(): boolean {
+  return canViewDecisionDraftsForActor(getCurrentActor());
+}
+
+export function canCreateDecisionDraft(): boolean {
+  return canCreateDecisionDraftForActor(getCurrentActor());
+}
+
+export function canUpdateDecisionDraft(): boolean {
+  return canUpdateDecisionDraftForActor(getCurrentActor());
+}
+
+export function canDeleteDecisionDraft(): boolean {
+  return canDeleteDecisionDraftForActor(getCurrentActor());
 }
 
 // ── Хэрэглэгч / роль / эрхийн удирдлагын цэс ────────────────────────────────

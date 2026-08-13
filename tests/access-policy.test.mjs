@@ -4,6 +4,10 @@ import {
   EVALUATION_STATUS_NAME,
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
+  canCreateDecisionDraftForActor,
+  canDeleteDecisionDraftForActor,
+  canUpdateDecisionDraftForActor,
+  canViewDecisionDraftsForActor,
   canEditValuationSubTabForActor,
   canViewAcquisitionTabForActor,
   canViewParcelTabForActor,
@@ -65,6 +69,12 @@ const finance = {
 const senior = {
   userId: "senior-user",
   roles: ["senior_specialist"],
+};
+// Захирамжийн төсөлтэй ажиллах мэргэжилтэн — decision:* эрхтэй
+const decisionSpecialist = {
+  userId: "decision-user",
+  roles: ["senior_specialist"],
+  permissions: ["land:read", "decision:read", "decision:create", "decision:update"],
 };
 
 const acquisition = { professional_org_id: "professional-primary" };
@@ -142,6 +152,57 @@ test("external role-ууд зөвхөн зөвшөөрөгдсөн tab-ууды�
   assert.equal(canViewParcelTabForActor(primaryProfessional, "documents"), false);
   assert.equal(canViewParcelTabForActor(senior, "print"), true);
   assert.equal(canViewParcelTabForActor(senior, "holder"), true);
+  // "Захирамж" таб — зөвхөн decision:read эрхтэй ДОТООД ажилтан харна
+  assert.equal(canViewParcelTabForActor(decisionSpecialist, "decree"), true);
+  // Эрхгүй дотоод ажилтанд ч харагдахгүй (таб нь decision-drafts API-г дуудна)
+  assert.equal(canViewParcelTabForActor(senior, "decree"), false);
+  assert.equal(canViewParcelTabForActor(finance, "decree"), false);
+  assert.equal(canViewParcelTabForActor(mika, "decree"), false);
+  assert.equal(canViewParcelTabForActor(primaryProfessional, "decree"), false);
+});
+
+test("захирамжийн төсөл зөвхөн decision:* эрхээр удирдагдана", () => {
+  // Захирамжийн төсөлтэй ажиллах мэргэжилтэн
+  assert.equal(canViewDecisionDraftsForActor(decisionSpecialist), true);
+  assert.equal(canCreateDecisionDraftForActor(decisionSpecialist), true);
+  assert.equal(canUpdateDecisionDraftForActor(decisionSpecialist), true);
+  // decision:delete олгогдоогүй тул устгахгүй
+  assert.equal(canDeleteDecisionDraftForActor(decisionSpecialist), false);
+
+  // land:* эрх нь захирамжийн төсөлд ХҮЧИНГҮЙ (backend ч мөн адил)
+  const landOnly = {
+    userId: "land-user",
+    roles: ["senior_specialist"],
+    permissions: ["land:read", "land:create", "land:update", "land:delete"],
+  };
+  assert.equal(canViewDecisionDraftsForActor(landOnly), false);
+  assert.equal(canCreateDecisionDraftForActor(landOnly), false);
+  assert.equal(canUpdateDecisionDraftForActor(landOnly), false);
+  assert.equal(canDeleteDecisionDraftForActor(landOnly), false);
+
+  // Админ — бүх decision эрхтэй (seed-ээр олгогдоно)
+  const admin = {
+    userId: "admin-user",
+    roles: ["admin"],
+    permissions: ["decision:read", "decision:create", "decision:update", "decision:delete"],
+  };
+  assert.equal(canViewDecisionDraftsForActor(admin), true);
+  assert.equal(canDeleteDecisionDraftForActor(admin), true);
+
+  // Гадаад ролиуд — эрх санамсаргүй олгогдсон ч захирамжийн төсөлд хүрэхгүй
+  for (const actor of [mika, finance, primaryProfessional]) {
+    const withDecision = {
+      ...actor,
+      permissions: ["decision:read", "decision:create", "decision:update", "decision:delete"],
+    };
+    assert.equal(canViewDecisionDraftsForActor(withDecision), false, actor.roles[0]);
+    assert.equal(canCreateDecisionDraftForActor(withDecision), false, actor.roles[0]);
+    assert.equal(canUpdateDecisionDraftForActor(withDecision), false, actor.roles[0]);
+    assert.equal(canDeleteDecisionDraftForActor(withDecision), false, actor.roles[0]);
+  }
+
+  // Эрхгүй хэрэглэгч
+  assert.equal(canViewDecisionDraftsForActor({ userId: "x", roles: [] }), false);
 });
 
 test("нөхөх олговорын дэд tab харах эрхүүд зөв байна", () => {

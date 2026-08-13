@@ -21,8 +21,10 @@ const RESOURCE_LABELS: Record<string, string> = {
   permissions: "Эрх",
   admin: "Системийн тохиргоо",
   audit: "Үйлдлийн лог",
+  hr: "Хүний нөөц",
   land: "Газар чөлөөлөлт",
   compensation: "Нөхөх олговор / үнэлгээ",
+  decision: "Захирамжийн төсөл",
   бусад: "Бусад",
 };
 

@@ -43,6 +43,7 @@ import type {
   DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
   AssetSpecType, AssetCalcType,
+  DecisionDraft, DecisionDraftParcel, DecisionDraftFundingLink, DecisionDraftProgressHistory, DecisionOption, FundingSourceOption,
 } from '@/types'
 
 // Backend алдаа/timeout үед НЭГ л удаа алдааны хуудас руу шилжинэ (давхар дуудлага зогсоно)
@@ -70,6 +71,8 @@ type ParcelListParams = {
   acquisition_name?: string
   plan_code?: string
   status?: number
+  status_id?: number
+  unlinked_only?: boolean
   years?: number[]
 }
 
@@ -122,6 +125,8 @@ function parcelListSearchParams(params?: ParcelListParams): URLSearchParams {
   if (params.acquisition_name) q.set('acquisition_name', params.acquisition_name)
   if (params.plan_code) q.set('plan_code', params.plan_code)
   if (params.status != null) q.set('status', String(params.status))
+  if (params.status_id != null) q.set('status_id', String(params.status_id))
+  if (params.unlinked_only) q.set('unlinked_only', 'true')
   params.years?.forEach(year => q.append('year', String(year)))
 
   return q
@@ -186,6 +191,7 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
   const filtered = parcelPages.flat().filter(parcel => {
     if (params?.right_type && parcel.right_type !== params.right_type) return false
     if (params?.au3_code && parcel.au3_code !== params.au3_code) return false
+    if (params?.status_id && parcel.status_id !== params.status_id) return false
     return true
   })
 
@@ -1052,6 +1058,144 @@ export const acquisitionCategoryApi = {
     api.put<ApiResponse<AcquisitionCategory>>(`/acquisition-categories/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/acquisition-categories/${id}`),
 }
+
+// ── Захирамжийн төсөл ─────────────────────────────────
+export type DecisionDraftListParams = {
+  page?: number
+  page_size?: number
+  proposal_no?: string
+  decree_number?: string
+  location?: string
+  parcel_id?: string
+  date_from?: string
+  date_to?: string
+  duration_year?: number
+  status?: number
+  acquisition_id?: string
+  funding_source_id?: string
+  work_type_id?: number
+  budget_id?: number
+}
+
+// parcelListSearchParams-ийн адил — хоосон/0 утгыг query-д огт оруулахгүй.
+function decisionDraftSearchParams(params?: DecisionDraftListParams): URLSearchParams {
+  const q = new URLSearchParams()
+  if (!params) return q
+  if (params.page) q.set('page', String(params.page))
+  if (params.page_size) q.set('page_size', String(params.page_size))
+  if (params.proposal_no) q.set('proposal_no', params.proposal_no)
+  if (params.decree_number) q.set('decree_number', params.decree_number)
+  if (params.location) q.set('location', params.location)
+  if (params.parcel_id) q.set('parcel_id', params.parcel_id)
+  if (params.date_from) q.set('date_from', params.date_from)
+  if (params.date_to) q.set('date_to', params.date_to)
+  if (params.duration_year) q.set('duration_year', String(params.duration_year))
+  if (params.status) q.set('status', String(params.status))
+  if (params.acquisition_id) q.set('acquisition_id', params.acquisition_id)
+  if (params.funding_source_id) q.set('funding_source_id', params.funding_source_id)
+  if (params.work_type_id) q.set('work_type_id', String(params.work_type_id))
+  if (params.budget_id) q.set('budget_id', String(params.budget_id))
+  return q
+}
+
+// Санхүүгийн эх үүсвэр энд БАЙХГҮЙ — үүсгэсний дараа addFundingSource-оор
+// олноор нэмнэ.
+export type DecisionDraftBody = {
+  proposal_no: string
+  location?: string
+  duration_year?: number | null
+  work_type_id?: number | null
+  budget_id?: number | null
+}
+
+export const decisionDraftApi = {
+  list: (params?: DecisionDraftListParams) => {
+    const suffix = decisionDraftSearchParams(params).toString()
+    return api
+      .get<PaginatedResponse<DecisionDraft>>(`/decision-drafts${suffix ? `?${suffix}` : ''}`)
+      .then(r => r.data)
+  },
+  get: (id: string) =>
+    api.get<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}`).then(r => r.data.data),
+  create: (body: DecisionDraftBody) =>
+    api.post<ApiResponse<DecisionDraft>>('/decision-drafts', body).then(r => r.data.data),
+  update: (id: string, body: DecisionDraftBody) =>
+    api.put<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}`, body).then(r => r.data.data),
+  delete: (id: string) => api.delete(`/decision-drafts/${id}`),
+  // Явц нэмэх — захирамжийн дугаар/огноог бөглөж баталгаажуулна
+  confirm: (id: string, body: { decree_number: string; decision_date: string; note: string }) =>
+    api.post<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}/confirm`, body).then(r => r.data.data),
+  addProgress: (id: string, body: { progress_type: string; recipient: string; progress_date: string; note: string }) =>
+    api.post<ApiResponse<DecisionDraftProgressHistory>>(`/decision-drafts/${id}/progress`, body).then(r => r.data.data),
+  listProgressHistory: (id: string) =>
+    api.get<ApiResponse<DecisionDraftProgressHistory[]>>(`/decision-drafts/${id}/progress-history`).then(r => r.data.data ?? []),
+
+  listParcels: (id: string) =>
+    api.get<ApiResponse<DecisionDraftParcel[]>>(`/decision-drafts/${id}/parcels`).then(r => r.data.data ?? []),
+  // Нэгж талбар холбохдоо түүнийг санхүүжүүлэх эх үүсвэрийг заавал сонгоно
+  linkParcel: (id: string, parcelUuid: string, fundingLinkId: string) =>
+    api.post<ApiResponse<DecisionDraftParcel[]>>(`/decision-drafts/${id}/parcels`, {
+      parcel_uuid: parcelUuid,
+      funding_link_id: fundingLinkId,
+    }).then(r => r.data.data ?? []),
+  // Холбогдсон нэгж талбарын эх үүсвэрийг солих
+  setParcelFundingSource: (id: string, linkId: string, fundingLinkId: string) =>
+    api.patch<ApiResponse<DecisionDraftParcel[]>>(`/decision-drafts/${id}/parcels/${linkId}/funding-source`, {
+      funding_link_id: fundingLinkId,
+    }).then(r => r.data.data ?? []),
+  unlinkParcel: (id: string, linkId: string) =>
+    api.delete<ApiResponse<DecisionDraftParcel[]>>(`/decision-drafts/${id}/parcels/${linkId}`)
+      .then(r => r.data.data ?? []),
+
+  // Санхүүгийн эх үүсвэр — олон нэмж болно. Нэмэх/хасах бүгд шинэчлэгдсэн
+  // жагсаалтыг буцаана.
+  listFundingSources: (id: string) =>
+    api.get<ApiResponse<DecisionDraftFundingLink[]>>(`/decision-drafts/${id}/funding-sources`)
+      .then(r => r.data.data ?? []),
+  addFundingSource: (id: string, fundingSourceId: string, amount: number) =>
+    api.post<ApiResponse<DecisionDraftFundingLink[]>>(`/decision-drafts/${id}/funding-sources`, {
+      funding_source_id: fundingSourceId,
+      amount,
+    })
+      .then(r => r.data.data ?? []),
+  removeFundingSource: (id: string, linkId: string) =>
+    api.delete<ApiResponse<DecisionDraftFundingLink[]>>(`/decision-drafts/${id}/funding-sources/${linkId}`)
+      .then(r => r.data.data ?? []),
+
+  // Нэгж талбарын "Захирамж" таб
+  listByParcel: (parcelUuid: string) =>
+    api.get<ApiResponse<DecisionDraftParcel[]>>(`/parcels/${parcelUuid}/decision-drafts`).then(r => r.data.data ?? []),
+}
+
+// Санхүүгийн эх үүсвэрийн сонголт — бүх чөлөөлөлтийн funding_sources
+export const fundingSourceOptionApi = {
+  list: () =>
+    api.get<ApiResponse<FundingSourceOption[]>>('/funding-sources').then(r => r.data.data ?? []),
+  // Гараар шинэ эх үүсвэр бүртгэнэ — funding_sources хүснэгтэд чөлөөлөлтгүй
+  // (бие даасан) мөр болж бичигдэнэ.
+  create: (body: {
+    organization_name: string
+    source_type: string
+    amount?: number | null
+    currency?: string
+    note?: string
+  }) => api.post<ApiResponse<FundingSourceOption>>('/funding-sources', body).then(r => r.data.data),
+}
+
+// Ажлын төрөл / Төсөв — parcelStatusApi-тай ижил хэв маяг
+function decisionOptionApi(path: string) {
+  return {
+    list: () => api.get<ApiResponse<DecisionOption[]>>(path).then(r => r.data.data ?? []),
+    create: (body: { code: string; name: string; sort_order?: number }) =>
+      api.post<ApiResponse<DecisionOption>>(path, body).then(r => r.data.data),
+    update: (id: number, body: { code?: string; name?: string; sort_order?: number }) =>
+      api.put<ApiResponse<DecisionOption>>(`${path}/${id}`, body).then(r => r.data.data),
+    delete: (id: number) => api.delete(`${path}/${id}`),
+  }
+}
+
+export const decisionWorkTypeApi = decisionOptionApi('/decision-work-types')
+export const decisionBudgetApi = decisionOptionApi('/decision-budgets')
 
 // ── Мэдэгдэл ────────────────────────────────────────
 // Бүх хүсэлт _silent — хонхны арын шинэчлэлт бүтэн дэлгэцийн
