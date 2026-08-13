@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker network *)",
+      "Bash(ps -p 18280 -o pid,command=)",
+      "Bash(ps -p 17586 -o pid,command=)",
+      "Bash(lsof -nP -iTCP -sTCP:LISTEN)",
+      "Bash(awk '{print $1,$9}')",
+      "Bash(ls -la /Users/admin/Documents/GitHub/acquisition_backend/ 2>/dev/null | head -30; echo \"---env---\"; cat /Users/admin/Documents/GitHub/acquisition_backend/.env 2>/dev/null || echo \"no .env readable\")",
+      "Read(//Users/admin/Documents/GitHub/acquisition_backend/**)"
+    ]
+  }
+}
