@@ -67,6 +67,13 @@ export interface Plan {
   area_m2?: number;
   status?: number;
   boundary_wkt?: string;
+  // Дундын сервисийн (middleware /plan/project) нэмэлт талбарууд
+  code?: string;
+  project_id?: string;
+  plan_type_name?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  approved_date?: string | null;
 }
 
 export interface ConstructionType {
@@ -480,6 +487,21 @@ export interface AcquisitionWorkflow {
 export interface AcquisitionStatusItem {
   id: number;
   name: string;
+}
+
+/**
+ * Чөлөөлөх хилээр ГУС-аас нэгж талбарын ДУГААР татаж бүртгэсний үр дүн
+ * (POST /land-acquisitions/:id/parcels/by-acquisition).
+ *
+ * skipped — өөр чөлөөлөлтөд аль хэдийн бүртгэгдсэн тул алгасагдсан дугаарууд
+ * (нэгж талбарын дугаар систем даяар давхардахгүй).
+ */
+export interface ParcelDiscoveryResult {
+  total: number;
+  created: number;
+  existing: number;
+  skipped: number;
+  parcel_ids: string[];
 }
 
 export interface ParcelFull extends Parcel {

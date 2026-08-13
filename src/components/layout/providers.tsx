@@ -39,12 +39,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30_000,
-            // Сервер алдаа (5xx), холболтгүй/timeout, эрхийн алдаа (401/403) үед
-            // дахин оролдохгүй — interceptor алдааны хуудас руу шилжүүлнэ.
+            // Алдаа гарахад хэрэглэгчийг алдааны хуудас руу ШИДЭХЭЭ больсон тул
+            // (lib/api.ts — зөвхөн toast) түр зуурын алдаа өөрөө сэргэх ёстой:
+            //   - 401/403: эрхийн алдаа, дахин оролдох нь дэмий
+            //   - бусад 4xx: нэг удаа
+            //   - 5xx / холболтгүй / timeout: түр зуурын байж болох тул 2 хүртэл
             retry: (failureCount, error) => {
               const status = (error as { response?: { status?: number } })?.response?.status;
-              if (!status || status >= 500 || status === 401 || status === 403) return false;
-              return failureCount < 1;
+              if (status === 401 || status === 403) return false;
+              if (typeof status === "number" && status < 500) return failureCount < 1;
+              return failureCount < 2;
             },
             refetchOnWindowFocus: false,
           },
