@@ -7,7 +7,17 @@
       "Bash(lsof -nP -iTCP -sTCP:LISTEN)",
       "Bash(awk '{print $1,$9}')",
       "Bash(ls -la /Users/admin/Documents/GitHub/acquisition_backend/ 2>/dev/null | head -30; echo \"---env---\"; cat /Users/admin/Documents/GitHub/acquisition_backend/.env 2>/dev/null || echo \"no .env readable\")",
-      "Read(//Users/admin/Documents/GitHub/acquisition_backend/**)"
+      "Read(//Users/admin/Documents/GitHub/acquisition_backend/**)",
+      "Bash(curl -s -u admin:geoserver \"http://localhost:8600/geoserver/rest/workspaces/land/featuretypes.json\")",
+      "Bash(curl -s -u admin:TempRecover2026! \"http://localhost:8600/geoserver/rest/workspaces/land/featuretypes.json\")",
+      "Bash(curl -s -u admin:TempRecover2026! \"http://localhost:8600/geoserver/rest/layers.json\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -u admin:TempRecover2026! \"http://localhost:8600/geoserver/rest/workspaces/land/coveragestores.json\")",
+      "Bash(curl -s -u admin:TempRecover2026! \"http://localhost:8600/geoserver/rest/workspaces/land/datastores/land/featuretypes/building.json\")",
+      "Bash(grep -rn \"\\\\bbuilding\\\\b\" /Users/admin/Documents/GitHub/acquisition_backend --include=\"*.go\" -i 2>/dev/null | grep -vi \"^Binary\" | head -30)",
+      "Bash(node --test tests/map-layers.test.mjs)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/map)",
+      "Bash(curl -s http://localhost:3000/map)"
     ]
   }
 }

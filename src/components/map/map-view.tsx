@@ -4,8 +4,12 @@ import OLMap from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
+import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
+import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
+import WKT from "ol/format/WKT";
+import { Fill, Stroke, Style } from "ol/style";
 import { fromLonLat, toLonLat } from "ol/proj";
 import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent";
 import type { Coordinate } from "ol/coordinate";
@@ -48,6 +52,13 @@ const PARCEL_GROUP: LayerGroupConfig = {
   color: '#22c55e',
 }
 
+// ЖИШЭЭ: GeoServer/PostGIS-гүй, статик WKT-аас зурсан демо давхарга (Сүхбаатарын
+// талбайн орчим) — WMS биш тул CQL_FILTER/backend шаардлагагүй, шууд browser
+// дээр рендерлэгдэнэ. Шинэ давхарга нэмэх урсгалыг харуулах зорилготой.
+const DEMO_LAYER_DEF = layerDef('demo_marker')
+const DEMO_MARKER_WKT =
+  'POLYGON((106.905 47.913,106.905 47.923,106.925 47.923,106.925 47.913,106.905 47.913))'
+
 interface PopupState {
   layer: string
   properties: Record<string, unknown>
@@ -71,13 +82,15 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const olMap          = useRef<OLMap | null>(null)
   const wmsLayers      = useRef<Record<string, ImageLayer<ImageWMS>>>({})
   const wmsLayersAdded = useRef(false)
+  const demoLayer      = useRef<VectorLayer<VectorSource> | null>(null)
   // 3D (cesium-3d.ts): Байршил табтай ижил зарчим — зөвхөн хэрэглэгч сонгоход л ачаална
   const cesium3D       = useRef<Cesium3DHandle | null>(null)
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
 
-  const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
-  )
+  const [layers, setLayers] = useState<LayerConfig[]>([
+    ...LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group })),
+    { id: DEMO_LAYER_DEF.id, label: DEMO_LAYER_DEF.label, color: DEMO_LAYER_DEF.color, visible: false },
+  ])
   const [popup,   setPopup]   = useState<PopupState | null>(null)
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
@@ -105,6 +118,21 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   useEffect(() => {
     if (!mapRef.current || olMap.current) return
 
+    const demoFeature = new WKT().readFeature(DEMO_MARKER_WKT, {
+      dataProjection: "EPSG:4326",
+      featureProjection: "EPSG:3857",
+    })
+    const demoVectorLayer = new VectorLayer({
+      source: new VectorSource({ features: [demoFeature] }),
+      visible: false,
+      zIndex: DEMO_LAYER_DEF.zIndex,
+      style: new Style({
+        stroke: new Stroke({ color: DEMO_LAYER_DEF.color, width: 2 }),
+        fill: new Fill({ color: `${DEMO_LAYER_DEF.color}33` }),
+      }),
+    })
+    demoLayer.current = demoVectorLayer
+
     const map = new OLMap({
       target: mapRef.current,
       layers: [
@@ -120,6 +148,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
             crossOrigin: "anonymous",
           }),
         }),
+        demoVectorLayer,
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -179,6 +208,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       olMap.current = null
       wmsLayers.current = {}
       wmsLayersAdded.current = false
+      demoLayer.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -292,6 +322,16 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     setLayers(prev => prev.map(l => {
       if (l.id !== id) return l
       const next = { ...l, visible: !l.visible }
+
+      if (id === DEMO_LAYER_DEF.id) {
+        demoLayer.current?.setVisible(next.visible)
+        const extent = demoLayer.current?.getSource()?.getExtent()
+        if (next.visible && extent && olMap.current) {
+          olMap.current.getView().fit(extent, { padding: [64, 64, 64, 64], maxZoom: 17, duration: 500 })
+        }
+        return next
+      }
+
       wmsLayers.current[id]?.setVisible(next.visible)
       const def = LAYER_DEFS.find(d => d.id === id)
       if (next.visible && def && olMap.current) {

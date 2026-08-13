@@ -20,6 +20,7 @@ export type MapLayerId =
   | 'v_parcel_s3'
   | 'v_parcel_s4'
   | 'v_parcel_s5'
+  | 'demo_marker'
 
 export type MapLayerDef = {
   id: MapLayerId
@@ -61,6 +62,9 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   v_parcel_s3: { label: 'Нөлөөлөгдсөн гарсан', color: '#ec4899', zIndex: 33, group: 'parcel_status' },
   v_parcel_s4: { label: 'Татгалзсан',          color: '#ef4444', zIndex: 34, group: 'parcel_status' },
   v_parcel_s5: { label: 'Чөлөөлсөн',          color: '#22c55e', zIndex: 35, group: 'parcel_status' },
+  // ЖИШЭЭ: GeoServer/PostGIS-гүй, статик WKT-аас зурсан демо давхарга — шинэ
+  // давхарга нэмэх урсгалыг харуулах зорилготой (бодит өгөгдөлгүй, mock).
+  demo_marker: { label: 'Жишээ давхарга (mock)', color: '#f59e0b', zIndex: 60 },
 }
 
 export function layerDef(id: MapLayerId): MapLayerDef {
