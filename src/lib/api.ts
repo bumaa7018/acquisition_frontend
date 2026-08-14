@@ -32,7 +32,7 @@ import type {
   User, Role, Permission,
   Organization, Department, Position, Person, Employee,
   AuditLog,
-  Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull,
+  Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
@@ -46,16 +46,29 @@ import type {
   DecisionDraft, DecisionDraftParcel, DecisionDraftFundingLink, DecisionDraftProgressHistory, DecisionOption, FundingSourceOption,
 } from '@/types'
 
-// Backend алдаа/timeout үед НЭГ л удаа алдааны хуудас руу шилжинэ (давхар дуудлага зогсоно)
-let _serverErrorRedirecting = false
-function redirectToServerError() {
-  if (typeof window === 'undefined' || _serverErrorRedirecting) return
-  const path = window.location.pathname
-  // Аль хэдийн алдааны/нэвтрэх хуудсанд байвал дахин шилжүүлэхгүй (loop-оос сэргийлнэ)
-  if (path === '/server-error' || path.startsWith('/login')) return
-  _serverErrorRedirecting = true
-  const from = window.location.pathname + window.location.search
-  window.location.href = `/server-error?from=${encodeURIComponent(from)}`
+// Backend алдаа / timeout / сүлжээ тасрах үед хэрэглэгчийг хуудаснаас ХӨӨХГҮЙ.
+//
+// Өмнө нь дурын 5xx эсвэл timeout бүтэн апп-ыг /server-error руу шиддэг байсан:
+// жижиг алдаа (нэг график, нэг жагсаалт унасан) ч хэрэглэгчийн бөглөж байсан
+// форм, сонголтыг үгүй хийж байв. Одоо зөвхөн НЭГ анхааруулга харуулна —
+// бусад хэсэг ажиллаж, хэрэглэгч ажлаа үргэлжлүүлнэ.
+//
+// /server-error хуудас нь зөвхөн frontend хуудас байхгүй/эвдэрсэн үед
+// (app/not-found.tsx, app/error.tsx) хэрэглэгдэнэ.
+let _serverAlertPending = false
+function showServerError(description: string) {
+  if (typeof window === 'undefined' || _serverAlertPending) return
+  _serverAlertPending = true
+  toast.error('Серверт холбогдоход алдаа гарлаа', {
+    description,
+    duration: 7000,
+    action: {
+      label: 'Дахин ачаалах',
+      onClick: () => window.location.reload(),
+    },
+    onDismiss: () => { _serverAlertPending = false },
+    onAutoClose: () => { _serverAlertPending = false },
+  })
 }
 
 const api = axios.create({ baseURL: '/api/v1', timeout: 30000, headers: { 'Accept-Language': 'mn' } })
@@ -259,13 +272,22 @@ api.interceptors.response.use(
     }
 
     // ── Backend алдаа (5xx) / timeout / холбогдож чадсангүй ──────────────────
-    // Дахин API дуудахгүйгээр алдааны хуудас руу шилжиж зогсоно.
+    // Хуудсыг ХАЯХГҮЙ: анхааруулга харуулж, алдааг дуудсан код өөрөө
+    // (useQuery-ийн error state, mutation-ийн onError) шийднэ.
     const noResponse = !error.response // network error эсвэл timeout (ECONNABORTED)
     const isServerError = typeof status === 'number' && status >= 500
     if (!isAuthRoute && (noResponse || isServerError)) {
-      // Арын (_silent) хүсэлтийн түр алдаа хэрэглэгчийг алдааны хуудас руу
-      // шидэхгүй — дараагийн poll дээр өөрөө сэргэнэ.
-      if (!error.config?._silent) redirectToServerError()
+      // Арын (_silent) хүсэлтийн түр алдаанд анхааруулга харуулахгүй —
+      // дараагийн poll дээр өөрөө сэргэнэ.
+      if (!error.config?._silent) {
+        showServerError(
+          noResponse
+            ? 'Сервер хариу өгсөнгүй эсвэл хүсэлт хугацаа хэтэрлээ. Түр хүлээгээд дахин оролдоно уу.'
+            : error.response?.data?.error ??
+              error.response?.data?.message ??
+              'Сервер дээр алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.',
+        )
+      }
       return Promise.reject(error)
     }
 
@@ -580,8 +602,12 @@ export const landApi = {
     api.get<ApiResponse<GlobalCompensation>>(`/compensations/${id}`).then(r => r.data.data),
   getParcel: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
-  syncParcel: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`),
+  // Чөлөөлөх хилээр ГУС-аас нэгж талбарын ДУГААРУУДЫГ татаж бүртгэнэ.
+  // Дэлгэрэнгүй мэдээлэл татагдахгүй — түүнийг дугаар тус бүрээр syncParcel хийнэ.
+  discoverParcels: (acqId: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelDiscoveryResult>>(`/land-acquisitions/${acqId}/parcels/by-acquisition`, undefined, { _silent: opts?.silent }).then(r => r.data.data),
+  syncParcel: (acqId: string, parcelId: string, opts?: { silent?: boolean }) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`, undefined, { _silent: opts?.silent }),
   syncContractAct: (acqId: string, parcelId: string) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/contract-act`).then(r => r.data),
   syncValuation: (acqId: string, parcelId: string) =>

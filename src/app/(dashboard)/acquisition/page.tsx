@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, planApi, authApi } from "@/lib/api";
@@ -18,8 +18,8 @@ import {
   X,
   Upload,
   CheckCircle,
+  AlertCircle,
   ArrowLeft,
-  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -40,93 +40,131 @@ import { PlanSelect } from "../parcel/_components/plan_select";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 
 // ── Plan combobox ─────────────────────────────────────────────────────────────
-function PlanCombobox({ onSelect }: { onSelect: (plan: Plan) => void }) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+/**
+ * Төлөвлөгөөний КОД оруулж, "Хайх" дарж дундын сервисээс (backend → middleware
+ * /plan/project) татна. Код заавал байх ёстой бөгөөд ЗӨВХӨН олдсон үед л
+ * чөлөөлөлт үүсгэх урсгал үргэлжилнэ.
+ */
+function PlanCodeSearch({
+  plan,
+  onFound,
+  onReset,
+}: {
+  plan: Plan | null;
+  onFound: (plan: Plan) => void;
+  onReset: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [notFound, setNotFound] = useState<string | null>(null);
 
-  const { data: plans = [], isFetching } = useQuery({
-    queryKey: ["plan-suggest", query],
-    queryFn: () => planApi.suggest(query),
-    enabled: query.trim().length > 0,
-    staleTime: 30_000,
+  const searchMutation = useMutation({
+    mutationFn: (value: string) => planApi.search(value),
+    onSuccess: (found) => {
+      if (!found) {
+        setNotFound("Төлөвлөгөө олдсонгүй");
+        onReset();
+        return;
+      }
+      setNotFound(null);
+      onFound(found);
+    },
+    onError: (err) => {
+      setNotFound(getApiError(err, "Төлөвлөгөө олдсонгүй"));
+      onReset();
+    },
   });
 
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
-        setOpen(false);
+  const trimmed = code.trim();
+  const search = () => {
+    if (!trimmed) {
+      setNotFound("Төлөвлөгөөний кодыг оруулна уу");
+      return;
     }
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, []);
+    searchMutation.mutate(trimmed);
+  };
 
   return (
-    <div ref={wrapRef} className="relative">
-      <div
-        className="flex items-center h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 cursor-text focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all"
-        onClick={() => setOpen(true)}
-      >
+    <div className="space-y-2">
+      <div className="flex items-start gap-2">
         <input
           type="text"
-          placeholder="Дугаар эсвэл нэрээр хайх..."
-          value={query}
+          placeholder="Төлөвлөгөөний код"
+          value={code}
           onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
+            setCode(e.target.value);
+            setNotFound(null);
+            // Код өөрчлөгдмөгц өмнөх хайлтын үр дүн хүчингүй — цааш
+            // үргэлжлэхийг дахин хайх хүртэл хаана.
+            if (plan) onReset();
           }}
-          onFocus={() => setOpen(true)}
-          className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 bg-transparent outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              search();
+            }
+          }}
+          className="h-9 flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] font-mono text-slate-800 dark:text-slate-200 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
           autoFocus
         />
-        {isFetching ? (
-          <span className="h-3.5 w-3.5 rounded-full border-2 border-[#02c0ce] border-t-transparent animate-spin shrink-0" />
-        ) : query ? (
-          <button
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setQuery("");
-              setOpen(false);
-            }}
-            className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-        )}
+        <button
+          onClick={search}
+          disabled={!trimmed || searchMutation.isPending}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white hover:bg-[#02aebb] disabled:opacity-50 transition-colors"
+        >
+          {searchMutation.isPending ? (
+            <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+          Хайх
+        </button>
       </div>
 
-      {open && query.trim().length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
-          <div className="max-h-56 overflow-y-auto">
-            {plans.length === 0 && !isFetching ? (
-              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
-                Олдсонгүй
-              </div>
-            ) : (
-              plans.map((p) => (
-                <button
-                  key={p.plan_code}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onSelect(p);
-                    setOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors border-b border-slate-50 dark:border-[#252630] last:border-0"
-                >
-                  <span className="text-[12px] font-mono font-semibold text-[#02c0ce] shrink-0">
-                    {p.plan_code}
-                  </span>
-                  <span className="text-[12px] text-slate-500 dark:text-slate-400 truncate text-right">
-                    {p.name}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
+      {notFound && (
+        <div className="flex items-start gap-2 rounded-lg bg-[#f1556c]/8 border border-[#f1556c]/20 px-3 py-2">
+          <AlertCircle className="h-3.5 w-3.5 text-[#f1556c] mt-0.5 shrink-0" />
+          <p className="text-[12px] text-[#f1556c]">
+            {notFound}. Кодыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол чөлөөлөлт үүсгэх
+            боломжгүй.
+          </p>
         </div>
       )}
+
+      {plan && <PlanInfoCard plan={plan} />}
+    </div>
+  );
+}
+
+/** Олдсон төлөвлөгөөний мэдээлэл */
+function PlanInfoCard({ plan }: { plan: Plan }) {
+  const rows: Array<[string, string | undefined | null]> = [
+    ["Нэр", plan.name],
+    ["Төрөл", plan.plan_type_name],
+    ["Талбай", (plan.area_m2 ?? 0) > 0 ? formatArea(plan.area_m2 ?? 0) : undefined],
+    ["Батлагдсан", plan.approved_date],
+    [
+      "Хугацаа",
+      plan.start_date || plan.end_date ? `${plan.start_date ?? "—"} — ${plan.end_date ?? "—"}` : undefined,
+    ],
+  ];
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-[#02c0ce]/8 dark:bg-[#02c0ce]/10 border border-solid border-[#02c0ce]/20">
+      <CheckCircle className="h-4 w-4 text-[#02c0ce] mt-0.5 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-mono font-semibold text-[#02c0ce]">
+          {plan.plan_code || plan.code}
+        </p>
+        <div className="mt-1 space-y-0.5">
+          {rows
+            .filter(([, value]) => !!value)
+            .map(([label, value]) => (
+              <p key={label} className="text-[11.5px] text-slate-600 dark:text-slate-400">
+                <span className="text-slate-400 dark:text-slate-500">{label}:</span> {value}
+              </p>
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -152,7 +190,6 @@ function CreateModal({ onClose }: CreateModalProps) {
   const [implementingOrg, setImplementingOrg] = useState("");
   const [reason, setReason] = useState("");
   const [responsibleOrg, setResponsibleOrg] = useState("");
-  const [fundingSources, setFundingSources] = useState<string[]>([""]);
   const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
   const [shpFile, setShpFile] = useState<File | null>(null);
@@ -170,21 +207,9 @@ function CreateModal({ onClose }: CreateModalProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (fd: FormData) => {
-      const acq = await landApi.create(fd);
-      const nonEmpty = fundingSources.filter((s) => s.trim());
-      if (nonEmpty.length > 0) {
-        await Promise.all(
-          nonEmpty.map((src) =>
-            landApi.createFundingSource(acq.id, {
-              organization_name: src.trim(),
-              source_type: src.trim(),
-            }),
-          ),
-        );
-      }
-      return acq;
-    },
+    // Санхүүгийн эх үүсвэр энд бүртгэгдэхээ больсон — захирамжийн төсөлд нэгж
+    // талбар холбоход сонгосон эх үүсвэрээр backend өөрөө хадгална.
+    mutationFn: (fd: FormData) => landApi.create(fd),
     onSuccess: (acq) => {
       toast.success("Чөлөөлөлт амжилттай бүртгэгдлээ");
       if (acq.aus?.length) {
@@ -198,7 +223,14 @@ function CreateModal({ onClose }: CreateModalProps) {
   });
 
   const handleSubmit = () => {
-    if (!plan || !shpFile || !startDate || !projectName.trim()) {
+    // Төлөвлөгөө ОЛДООГҮЙ бол чөлөөлөлт үүсгэхгүй (1-р алхмын хамгаалалт).
+    const planCode = plan?.plan_code || plan?.code || "";
+    if (!plan || !planCode) {
+      toast.error("Газар зохион байгуулалтын төлөвлөгөөг кодоор хайж олно уу");
+      setStep(1);
+      return;
+    }
+    if (!shpFile || !startDate || !projectName.trim()) {
       toast.error("Бүх заавал талбаруудыг бөглөнө үү");
       return;
     }
@@ -211,7 +243,7 @@ function CreateModal({ onClose }: CreateModalProps) {
       return;
     }
     const fd = new FormData();
-    fd.append("plan_code", plan.plan_code);
+    fd.append("plan_code", planCode);
     fd.append("start_date", startDate);
     fd.append("acquisition_name", projectName);
     fd.append("implementing_org", implementingOrg);
@@ -289,17 +321,26 @@ function CreateModal({ onClose }: CreateModalProps) {
           {step === 1 ? (
             <div className="space-y-4">
               <p className="text-[13px] text-slate-500 dark:text-slate-400">
-                Газар зохион байгуулалтын төлөвлөгөөний дугаар эсвэл нэрийг
-                бичиж сонгоно уу.
+                Газар зохион байгуулалтын төлөвлөгөөний кодыг оруулж хайна уу.
               </p>
               <div>
-                <label className={labelCls}>Төлөвлөгөө *</label>
-                <PlanCombobox
-                  onSelect={(p) => {
-                    setPlan(p);
-                    setStep(2);
-                  }}
+                <label className={labelCls}>Төлөвлөгөөний код *</label>
+                <PlanCodeSearch
+                  plan={plan}
+                  onFound={setPlan}
+                  onReset={() => setPlan(null)}
                 />
+              </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => plan && setStep(2)}
+                  disabled={!plan}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white hover:bg-[#02aebb] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title={plan ? undefined : "Эхлээд төлөвлөгөө хайж олно уу"}
+                >
+                  Үргэлжлүүлэх
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
             </div>
           ) : (
@@ -404,42 +445,9 @@ function CreateModal({ onClose }: CreateModalProps) {
                 />
               </div>
 
-              <div className="col-span-1 md:col-span-2">
-                <label className={labelCls}>Санхүүжилтийн эх үүсвэр</label>
-                <div className="flex flex-col gap-2">
-                  {fundingSources.map((src, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        value={src}
-                        onChange={(e) => {
-                          const next = [...fundingSources];
-                          next[idx] = e.target.value;
-                          setFundingSources(next);
-                        }}
-                        placeholder="Улсын төсөв / Гадаадын зээл..."
-                        className={inputCls}
-                      />
-                      {fundingSources.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setFundingSources(fundingSources.filter((_, i) => i !== idx))}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10 transition-colors"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setFundingSources([...fundingSources, ""])}
-                    className="inline-flex items-center gap-1.5 self-start rounded-lg border border-dashed border-slate-300 dark:border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-slate-500 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Эх үүсвэр нэмэх
-                  </button>
-                </div>
-              </div>
+              {/* Санхүүжилтийн эх үүсвэрийг ЭНД асуухгүй: захирамжийн төсөлд
+                  нэгж талбар холбоход сонгосон эх үүсвэрээр чөлөөлөлтийн
+                  санхүүжилт бүрдэж, шинэчлэгдэж хадгалагдана. */}
 
               <div>
                 <label className={labelCls}>Чөлөөлөх шалтгаан</label>

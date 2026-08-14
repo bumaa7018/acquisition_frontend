@@ -1,15 +1,16 @@
 "use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Info } from "lucide-react";
+import { AlertCircle, Check, Download, Info, RefreshCw, X } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
+import { runSequentialWithDelay } from "@/lib/sequential-runner";
 import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
-import type { ParcelStatus, ValuationStatus, ValuationType } from "@/types";
+import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const RIGHT_TYPE_OPTIONS = [
@@ -29,6 +30,49 @@ type ParcelFilter = {
 };
 
 const PAGE_SIZE = 20;
+
+// ── Нэгж талбар татах (2 алхамт) ───────────────────────────────────────────
+// 1-р алхам: чөлөөлөх ХИЛЭЭР ГУС-аас нэгж талбарын ДУГААРУУДЫГ авч бүртгэнэ
+//            (backend → дундын сервисийн /parcels/by/acquisition, нэг хүсэлт).
+//            Дугаараар хайж, аль хэдийн бүртгэгдсэнийг давхардуулахгүй.
+// 2-р алхам: 1-р алхмаас ирсэн дугаар тус бүрээр дэлгэрэнгүйг (дундын
+//            сервисийн /parcel/info/:parcel) ДАРААЛАН татна. Хүсэлт хооронд
+//            1 секунд зайлуулна — зэрэг олон хүсэлтээр дундын сервисийг
+//            дүүргэхгүйн тулд.
+const BULK_SYNC_DELAY_MS = 1000;
+
+type BulkSyncFailure = { parcelId: string; message: string };
+
+/** Татах явцын нэг алхмын төлөв */
+type StepState = "pending" | "running" | "done" | "error" | "cancelled";
+
+const STEP_BOX: Record<StepState, string> = {
+  pending: "border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27]",
+  running: "border-blue-300 dark:border-blue-500/40 bg-blue-50/60 dark:bg-blue-500/[0.07]",
+  done: "border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/70 dark:bg-emerald-500/[0.08]",
+  error: "border-red-300 dark:border-red-500/40 bg-red-50/70 dark:bg-red-500/[0.08]",
+  cancelled: "border-slate-200 dark:border-[#37394d] bg-slate-50 dark:bg-[#252630]",
+};
+
+const STEP_ICON_BG: Record<StepState, string> = {
+  pending: "bg-slate-100 dark:bg-[#2d2f3a]",
+  running: "bg-blue-500/15",
+  done: "bg-emerald-500/15",
+  error: "bg-red-500/15",
+  cancelled: "bg-slate-500/10",
+};
+
+function StepIcon({ state, index }: { state: StepState; index: number }) {
+  if (state === "error") return <AlertCircle className="h-4 w-4 text-red-500" />;
+  if (state === "done") return <Check className="h-4 w-4 text-emerald-500" />;
+  if (state === "running") return <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />;
+  if (state === "cancelled") return <X className="h-4 w-4 text-slate-400" />;
+  return (
+    <span className="text-[12px] font-bold tabular-nums text-slate-400 dark:text-slate-500">
+      {index}
+    </span>
+  );
+}
 
 // Нөхөх олговрын үнэлгээний төлөвийн чипийн өнгө
 const VAL_STATUS_CHIP: Record<ValuationStatus, string> = {
@@ -85,6 +129,24 @@ export function ParcelsTab({
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
 
+  // Нэгж талбар татах явц (2 алхам)
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRunning, setImportRunning] = useState(false);
+  const [importCancelled, setImportCancelled] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [step1, setStep1] = useState<StepState>("pending");
+  const [step2, setStep2] = useState<StepState>("pending");
+  const [discovery, setDiscovery] = useState<ParcelDiscoveryResult | null>(null);
+  const [syncTotal, setSyncTotal] = useState(0);
+  const [syncDone, setSyncDone] = useState(0);
+  const [syncOk, setSyncOk] = useState(0);
+  const [syncCurrent, setSyncCurrent] = useState("");
+  const [syncFailed, setSyncFailed] = useState<BulkSyncFailure[]>([]);
+  // "Цуцлах" дарсныг болон алдаа гарсныг гогцоо ШУУД харах ёстой тул state биш ref
+  const cancelRef = useRef(false);
+  const failedRef = useRef(false);
+
   const { data: parcelStatuses = [] } = useQuery<ParcelStatus[]>({
     queryKey: ["parcel-statuses"],
     queryFn: () => parcelStatusApi.list(),
@@ -98,15 +160,104 @@ export function ParcelsTab({
         : landApi.getParcels(id, parcelListParams(filter, page)),
   });
 
-  const syncMutation = useMutation({
-    mutationFn: (parcelId: string) => landApi.syncParcel(id, parcelId),
-    onSuccess: () => {
-      toast.success("Синхрончлогдлоо");
-      queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
-      window.location.reload();
-    },
-    onError: (err) => toast.error(getApiError(err, "Синхрончлоход алдаа гарлаа")),
+  // Бөөн дуудалт ШҮҮЛТҮҮРЭЭС хамааралгүй бүх талбарыг хамардаг тул
+  // баталгаажуулах цонхонд шүүгдээгүй нийт тоог (1 мөрийн хүсэлтээр) харуулна.
+  const { data: allParcelCount } = useQuery({
+    queryKey: ["land-parcels-total", id],
+    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1 }).then((res) => res.total),
+    enabled: !isExternal && !isAcqLocked,
   });
+
+  // Нэгж талбар татах — 1) хилээр дугаар тодорхойлох, 2) дэлгэрэнгүйг дараалан
+  // татах. Алхам бүр дэлгэц дээр тусдаа мөр болж харагдана; алдаа гармагц
+  // процесс ЗОГСОНО (дараагийн алхам руу орохгүй, үлдсэн дугаарыг татахгүй).
+  async function runParcelImport() {
+    cancelRef.current = false;
+    failedRef.current = false;
+    setImportOpen(true);
+    setImportRunning(true);
+    setImportCancelled(false);
+    setCancelRequested(false);
+    setImportError(null);
+    setStep1("running");
+    setStep2("pending");
+    setDiscovery(null);
+    setSyncTotal(0);
+    setSyncDone(0);
+    setSyncOk(0);
+    setSyncCurrent("");
+    setSyncFailed([]);
+
+    // ── 1-р алхам: чөлөөлөх хилээр нэгж талбарыг тодорхойлж бүртгэх ──────────
+    let found: ParcelDiscoveryResult;
+    try {
+      // Бүх хүсэлт silent — явцыг ЭНЭ цонх өөрөө харуулна. Дэлгэц блоклогч
+      // loader асвал хүсэлт бүр дээр анивчиж, унших боломжгүй болно.
+      found = await landApi.discoverParcels(id, { silent: true });
+    } catch (err) {
+      setStep1("error");
+      setImportError(getApiError(err, "Нэгж талбарыг тодорхойлж чадсангүй"));
+      setImportRunning(false);
+      toast.error("Нэгж талбар татахад алдаа гарлаа");
+      return;
+    }
+    setDiscovery(found);
+    setStep1("done");
+    queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
+    queryClient.invalidateQueries({ queryKey: ["land-parcels-total", id] });
+
+    if (cancelRef.current) {
+      setImportCancelled(true);
+      setStep2("cancelled");
+      setImportRunning(false);
+      return;
+    }
+
+    // ── 2-р алхам: дугаар тус бүрээр дэлгэрэнгүйг татах ─────────────────────
+    // ЗӨВХӨН 1-р алхмаас ирсэн жагсаалтаар давтана — чөлөөлөлтөд өмнө нь өөр
+    // замаар нэмэгдсэн, энэ удаагийн хилээр олдоогүй нэгж талбарыг хөндөхгүй.
+    setStep2("running");
+    const codes = Array.from(new Set((found.parcel_ids ?? []).filter(Boolean)));
+    setSyncTotal(codes.length);
+
+    const outcome = await runSequentialWithDelay(codes, (code) => landApi.syncParcel(id, code, { silent: true }), {
+      delayMs: BULK_SYNC_DELAY_MS,
+      // Цуцлах дарсан ЭСВЭЛ нэг ч дугаар унасан бол гогцоог тэр даруй тасална.
+      shouldStop: () => cancelRef.current || failedRef.current,
+      onStart: (code) => setSyncCurrent(code),
+      onSettled: ({ done, ok, failed }) => {
+        setSyncDone(done);
+        setSyncOk(ok);
+        setSyncFailed(failed.map((item) => ({ parcelId: item.item, message: item.message })));
+        if (failed.length > 0) failedRef.current = true;
+      },
+      toMessage: (err) => getApiError(err, "Татаж чадсангүй"),
+    });
+
+    setSyncCurrent("");
+    setImportRunning(false);
+    queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
+
+    if (outcome.failed.length > 0) {
+      const first = outcome.failed[0];
+      setStep2("error");
+      setImportError(`${first.item} — ${first.message}`);
+      toast.error("Дэлгэрэнгүй мэдээлэл татахад алдаа гарлаа");
+      return;
+    }
+    if (outcome.stopped) {
+      setImportCancelled(true);
+      setStep2("cancelled");
+      toast.success(`Цуцлах үед ${outcome.ok} нэгж талбар шинэчлэгдсэн байлаа`);
+      return;
+    }
+    setStep2("done");
+    if (outcome.total === 0) {
+      toast.error("Татах нэгж талбар олдсонгүй");
+    } else {
+      toast.success(`${outcome.ok} нэгж талбарын мэдээлэл шинэчлэгдлээ`);
+    }
+  }
 
   const compensationMutation = useMutation({
     mutationFn: ({ parcelId, paid }: { parcelId: string; paid: boolean }) =>
@@ -117,6 +268,9 @@ export function ParcelsTab({
     },
     onError: (err) => toast.error(getApiError(err, "Нөхөн төлбөр шинэчлэхэд алдаа гарлаа")),
   });
+
+  // Хоёр алхам бүрэн дуусч, алдаа/цуцлалт гараагүй үед л "амжилттай"
+  const importSucceeded = step1 === "done" && step2 === "done" && !importError && !importCancelled;
 
   const inp =
     "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -153,7 +307,8 @@ export function ParcelsTab({
     <>
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div className="flex items-center justify-between flex-wrap gap-3">
+          {/* Жагсаалтын толгой — татах товч гарчгийн ХАЖУУД (шүүлтүүрийн мөрөнд биш) */}
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-2">
             <div>
               <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
                 Нэгж талбарууд
@@ -162,108 +317,136 @@ export function ParcelsTab({
                 {parcels?.total ?? 0} нэгж талбар
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                placeholder="Дугаараар хайх"
-                value={filterForm.parcel_id}
-                onChange={(e) =>
-                  setFilterForm((f) => ({ ...f, parcel_id: e.target.value }))
+            {/* Гадаад ролиуд болон хаалттай чөлөөлөлт дээр дуудалт хийгдэхгүй
+                (backend нь land:create + хаалттай биш байхыг шаардана) */}
+            {!isExternal && !isAcqLocked && (
+              <button
+                onClick={() =>
+                  setPendingConfirm({
+                    title: "Нэгж талбар татах",
+                    description: `Чөлөөлөх хилээр ГУС-аас нэгж талбарыг тодорхойлж, дараа нь дугаар тус бүрийн дэлгэрэнгүйг нэг нэгээр татна. Хүсэлт хооронд 1 секунд зайтай тул ${allParcelCount ? `ойролцоогоор ${Math.max(1, Math.ceil((allParcelCount * (BULK_SYNC_DELAY_MS + 500)) / 60000))} минут` : "хэдэн минут"} шаардана.`,
+                    confirmLabel: "Татах",
+                    confirmColor: "#02c0ce",
+                    onConfirm: () => {
+                      setPendingConfirm(null);
+                      void runParcelImport();
+                    },
+                  })
                 }
-                className={`${inp} w-40`}
-              />
-              <input
-                type="text"
-                placeholder="Аймаг/Нийслэл"
-                value={filterForm.au1_code}
-                onChange={(e) =>
-                  setFilterForm((f) => ({ ...f, au1_code: e.target.value }))
-                }
-                className={`${inp} w-32`}
-              />
-              <input
-                type="text"
-                placeholder="Сум/Дүүрэг"
-                value={filterForm.au2_code}
-                onChange={(e) =>
-                  setFilterForm((f) => ({ ...f, au2_code: e.target.value }))
-                }
-                className={`${inp} w-32`}
-              />
-              <input
-                type="text"
-                placeholder="Баг/Хороо"
-                value={filterForm.au3_code}
-                onChange={(e) =>
-                  setFilterForm((f) => ({ ...f, au3_code: e.target.value }))
-                }
-                className={`${inp} w-32`}
-              />
-              <select
-                value={filterForm.right_type}
-                onChange={(e) =>
-                  setFilterForm((f) => ({
-                    ...f,
-                    right_type: e.target.value ? Number(e.target.value) : 0,
-                  }))
-                }
-                className={`${inp} w-36`}
+                disabled={importRunning}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3.5 text-[12.5px] font-semibold text-[#0acf97] hover:bg-[#0acf97]/20 disabled:opacity-50 transition-colors"
               >
-                <option value="">Эрхийн төрөл</option>
-                {RIGHT_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Газрын зориулалт"
-                value={filterForm.landuse}
-                onChange={(e) =>
-                  setFilterForm((f) => ({ ...f, landuse: e.target.value }))
-                }
-                className={`${inp} w-40`}
-              />
-              <select
-                value={filterForm.status_id}
-                onChange={(e) =>
-                  setFilterForm((f) => ({
-                    ...f,
-                    status_id: e.target.value ? Number(e.target.value) : 0,
-                  }))
-                }
-                className={`${inp} w-36`}
-              >
-                <option value="">Төлөв</option>
-                {parcelStatuses.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                {importRunning ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                Нэгж талбар татах
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex w-full items-center gap-2">
+            <input
+              type="text"
+              placeholder="Дугаараар хайх"
+              value={filterForm.parcel_id}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, parcel_id: e.target.value }))
+              }
+              className={`${inp} flex-[1.4] min-w-0`}
+            />
+            <input
+              type="text"
+              placeholder="Аймаг/Нийслэл"
+              value={filterForm.au1_code}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, au1_code: e.target.value }))
+              }
+              className={`${inp} flex-1 min-w-0`}
+            />
+            <input
+              type="text"
+              placeholder="Сум/Дүүрэг"
+              value={filterForm.au2_code}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, au2_code: e.target.value }))
+              }
+              className={`${inp} flex-1 min-w-0`}
+            />
+            <input
+              type="text"
+              placeholder="Баг/Хороо"
+              value={filterForm.au3_code}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, au3_code: e.target.value }))
+              }
+              className={`${inp} flex-1 min-w-0`}
+            />
+            <select
+              value={filterForm.right_type}
+              onChange={(e) =>
+                setFilterForm((f) => ({
+                  ...f,
+                  right_type: e.target.value ? Number(e.target.value) : 0,
+                }))
+              }
+              className={`${inp} flex-[1.2] min-w-0`}
+            >
+              <option value="">Эрхийн төрөл</option>
+              {RIGHT_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              placeholder="Газрын зориулалт"
+              value={filterForm.landuse}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, landuse: e.target.value }))
+              }
+              className={`${inp} flex-[1.4] min-w-0`}
+            />
+            <select
+              value={filterForm.status_id}
+              onChange={(e) =>
+                setFilterForm((f) => ({
+                  ...f,
+                  status_id: e.target.value ? Number(e.target.value) : 0,
+                }))
+              }
+              className={`${inp} flex-[1.2] min-w-0`}
+            >
+              <option value="">Төлөв</option>
+              {parcelStatuses.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                setFilter({ ...filterForm });
+                setPage(1);
+              }}
+              className="h-8 shrink-0 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
+            >
+              Хайх
+            </button>
+            {hasFilter && (
               <button
                 onClick={() => {
-                  setFilter({ ...filterForm });
+                  setFilterForm(EMPTY_FILTER);
+                  setFilter(EMPTY_FILTER);
                   setPage(1);
                 }}
-                className="h-8 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
+                className="h-8 shrink-0 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors"
               >
-                Хайх
+                Цэвэрлэх
               </button>
-              {hasFilter && (
-                <button
-                  onClick={() => {
-                    setFilterForm(EMPTY_FILTER);
-                    setFilter(EMPTY_FILTER);
-                    setPage(1);
-                  }}
-                  className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] border border-slate-200 dark:border-white/[0.08] transition-colors"
-                >
-                  Цэвэрлэх
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -440,6 +623,191 @@ export function ParcelsTab({
           </div>
         )}
       </div>
+      {/* Нэгж талбар татах явцын цонх — 2 алхам тус тусдаа харагдана */}
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                    importError
+                      ? "bg-red-500/10"
+                      : importSucceeded
+                        ? "bg-emerald-500/15"
+                        : importCancelled
+                          ? "bg-slate-500/10"
+                          : "bg-blue-500/10"
+                  }`}
+                >
+                  {importError ? (
+                    <AlertCircle className="h-4 w-4 text-red-500" />
+                  ) : importSucceeded ? (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  ) : importCancelled ? (
+                    <X className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-slate-800 dark:text-white leading-tight">
+                    Нэгж талбар татах
+                  </p>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+                    {importError
+                      ? "Алдаа гарлаа — процесс зогслоо"
+                      : importSucceeded
+                        ? "Амжилттай дууслаа"
+                        : importCancelled
+                          ? "Цуцлагдлаа"
+                          : "Татаж байна..."}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setImportOpen(false)}
+                disabled={importRunning}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-2.5 bg-slate-50/60 dark:bg-[#191b22] border-b border-slate-100 dark:border-[#37394d]">
+              {/* 1-р алхам — нэгж талбарыг хилээр тодорхойлж бүртгэх */}
+              <div className={`rounded-xl border p-3 transition-colors ${STEP_BOX[step1]}`}>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${STEP_ICON_BG[step1]}`}
+                  >
+                    <StepIcon state={step1} index={1} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 leading-tight">
+                      Нэгж талбарыг тодорхойлох
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                      {step1 === "running"
+                        ? "Чөлөөлөх хилээр ГУС-аас хайж байна..."
+                        : step1 === "done" && discovery
+                          ? `${discovery.total} нэгж талбар олдлоо · ${discovery.created} шинээр бүртгэгдлээ, ${discovery.existing} өмнө нь бүртгэгдсэн${discovery.skipped > 0 ? `, ${discovery.skipped} өөр чөлөөлөлтөд бүртгэлтэй` : ""}`
+                          : step1 === "error"
+                            ? "Тодорхойлж чадсангүй"
+                            : "Хүлээгдэж байна"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2-р алхам — дугаар тус бүрийн дэлгэрэнгүйг дараалан татах */}
+              <div className={`rounded-xl border p-3 transition-colors ${STEP_BOX[step2]}`}>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${STEP_ICON_BG[step2]}`}
+                  >
+                    <StepIcon state={step2} index={2} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 leading-tight">
+                      Дэлгэрэнгүй мэдээлэл татах
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5">
+                      {step2 === "pending"
+                        ? "Хүлээгдэж байна"
+                        : step2 === "done"
+                          ? `${syncOk} нэгж талбарын мэдээлэл шинэчлэгдлээ`
+                          : step2 === "error"
+                            ? "Татаж чадсангүй — процесс зогслоо"
+                            : step2 === "cancelled"
+                              ? `Цуцлагдлаа — ${syncOk} нэгж талбар шинэчлэгдсэн`
+                              : syncTotal === 0
+                                ? "Жагсаалт бэлдэж байна..."
+                                : `${syncCurrent || "—"} дуудаж байна...`}
+                    </p>
+                  </div>
+                </div>
+
+                {step2 !== "pending" && (
+                  <div className="mt-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Явц
+                      </span>
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">
+                        {syncDone} / {syncTotal}
+                        {syncTotal > 0 && ` · ${Math.round((syncDone / syncTotal) * 100)}%`}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-[#2d2f3a] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ease-out ${
+                          step2 === "error"
+                            ? "bg-red-500"
+                            : step2 === "done"
+                              ? "bg-emerald-500"
+                              : step2 === "cancelled"
+                                ? "bg-slate-400"
+                                : "bg-blue-500"
+                        }`}
+                        style={{ width: syncTotal > 0 ? `${(syncDone / syncTotal) * 100}%` : "0%" }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-4 mt-2 text-[11px]">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium tabular-nums">
+                        Амжилттай: {syncOk}
+                      </span>
+                      <span className="text-rose-600 dark:text-rose-400 font-medium tabular-nums">
+                        Алдаатай: {syncFailed.length}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {importSucceeded && (
+              <div className="flex items-center gap-2 px-5 py-3 bg-emerald-50/70 dark:bg-emerald-500/[0.08]">
+                <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                <p className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  Нэгж талбарын мэдээлэл амжилттай татагдлаа
+                </p>
+              </div>
+            )}
+
+            {importError && (
+              <div className="px-5 py-3 max-h-40 overflow-auto">
+                <p className="text-[12px] text-red-500 break-all">{importError}</p>
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  Алдаа гарсан тул татах үйлдэл зогслоо.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 px-5 py-3.5 border-t border-slate-100 dark:border-[#37394d]">
+              {importRunning ? (
+                <button
+                  onClick={() => {
+                    cancelRef.current = true;
+                    setCancelRequested(true);
+                  }}
+                  disabled={cancelRequested}
+                  className="h-8 px-3 rounded-lg text-[12px] font-medium text-slate-500 border border-slate-200 dark:border-[#37394d] hover:bg-slate-50 dark:hover:bg-[#252630] disabled:opacity-50 transition-colors"
+                >
+                  {cancelRequested ? "Цуцалж байна..." : "Цуцлах"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setImportOpen(false)}
+                  className="h-8 px-4 rounded-lg text-[12px] font-semibold text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
+                >
+                  Хаах
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmDialog
         open={!!pendingConfirm}
         title={pendingConfirm?.title ?? ""}
