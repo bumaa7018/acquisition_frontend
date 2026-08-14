@@ -203,8 +203,16 @@ export function ParcelsTab({
     }
     setDiscovery(found);
     setStep1("done");
-    queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
-    queryClient.invalidateQueries({ queryKey: ["land-parcels-total", id] });
+    // Шинэ нэгж талбар 1-Р ХУУДСАНД, шүүлтгүй үед л харагдана. Хэрэглэгч
+    // шүүлттэй/2-р хуудсан дээр байвал invalidate хийсэн ч "шинэчлэгдээгүй"
+    // мэт харагдана — тиймээс жагсаалтыг эхэнд нь буцаана.
+    setFilterForm(EMPTY_FILTER);
+    setFilter(EMPTY_FILTER);
+    setPage(1);
+    // refetchType: "all" — идэвхгүй (сонгогдоогүй хуудас/шүүлтийн) кэшийг ч
+    // хуучирсанд тооцно, эс бөгөөс буцаж очиход хуучин жагсаалт харагдана.
+    await queryClient.invalidateQueries({ queryKey: ["land-parcels", id], refetchType: "all" });
+    await queryClient.invalidateQueries({ queryKey: ["land-parcels-total", id], refetchType: "all" });
 
     if (cancelRef.current) {
       setImportCancelled(true);
@@ -213,7 +221,17 @@ export function ParcelsTab({
       return;
     }
 
-    // ── 2-р алхам: дугаар тус бүрээр дэлгэрэнгүйг татах ─────────────────────
+    // ТҮР ХААСАН: 2-р алхам (дэлгэрэнгүй мэдээлэл татах) идэвхгүй байна.
+    // Одоогоор татах үйлдэл нь ЗӨВХӨН нэгж талбарыг тодорхойлж бүртгэнэ.
+    setImportRunning(false);
+    if (found.total === 0) {
+      toast.error("Чөлөөлөх хилтэй давхцах нэгж талбар олдсонгүй");
+    } else {
+      toast.success(`${found.created} нэгж талбар шинээр бүртгэгдлээ`);
+    }
+    return;
+
+    /* ── 2-р алхам: дугаар тус бүрээр дэлгэрэнгүйг татах ─────────────────────
     // ЗӨВХӨН 1-р алхмаас ирсэн жагсаалтаар давтана — чөлөөлөлтөд өмнө нь өөр
     // замаар нэмэгдсэн, энэ удаагийн хилээр олдоогүй нэгж талбарыг хөндөхгүй.
     setStep2("running");
@@ -257,6 +275,7 @@ export function ParcelsTab({
     } else {
       toast.success(`${outcome.ok} нэгж талбарын мэдээлэл шинэчлэгдлээ`);
     }
+    ── 2-р алхам төгсгөл ── */
   }
 
   const compensationMutation = useMutation({
@@ -269,8 +288,9 @@ export function ParcelsTab({
     onError: (err) => toast.error(getApiError(err, "Нөхөн төлбөр шинэчлэхэд алдаа гарлаа")),
   });
 
-  // Хоёр алхам бүрэн дуусч, алдаа/цуцлалт гараагүй үед л "амжилттай"
-  const importSucceeded = step1 === "done" && step2 === "done" && !importError && !importCancelled;
+  // ТҮР: 2-р алхам хаагдсан тул 1-р алхам дуусмагц "амжилттай" гэж үзнэ.
+  // (2-р алхам эргэж идэвхжихэд `&& step2 === "done"`-ыг буцааж нэмнэ.)
+  const importSucceeded = step1 === "done" && !importError && !importCancelled;
 
   const inp =
     "h-8 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -700,7 +720,9 @@ export function ParcelsTab({
                 </div>
               </div>
 
-              {/* 2-р алхам — дугаар тус бүрийн дэлгэрэнгүйг дараалан татах */}
+              {/* ТҮР ХААСАН: 2-р алхам (дэлгэрэнгүй мэдээлэл татах) идэвхгүй.
+                  Эргэж идэвхжихэд доорх коммент хаалтыг авна. */}
+              {/*
               <div className={`rounded-xl border p-3 transition-colors ${STEP_BOX[step2]}`}>
                 <div className="flex items-center gap-2.5">
                   <div
@@ -764,13 +786,14 @@ export function ParcelsTab({
                   </div>
                 )}
               </div>
+              */}
             </div>
 
             {importSucceeded && (
               <div className="flex items-center gap-2 px-5 py-3 bg-emerald-50/70 dark:bg-emerald-500/[0.08]">
                 <Check className="h-4 w-4 shrink-0 text-emerald-500" />
                 <p className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400">
-                  Нэгж талбарын мэдээлэл амжилттай татагдлаа
+                  Нэгж талбар амжилттай бүртгэгдлээ
                 </p>
               </div>
             )}

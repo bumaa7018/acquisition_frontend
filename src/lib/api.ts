@@ -37,7 +37,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, AuthorizedRepresentative, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
@@ -613,16 +613,31 @@ export const landApi = {
     api.post<ApiResponse<ParcelDiscoveryResult>>(`/land-acquisitions/${acqId}/parcels/by-acquisition`, undefined, { _silent: opts?.silent }).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string, opts?: { silent?: boolean }) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`, undefined, { _silent: opts?.silent }),
-  syncContractAct: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/contract-act`).then(r => r.data),
-  syncValuation: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/valuation`).then(r => r.data),
-  syncSettlementAct: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/settlement-act`).then(r => r.data),
-  syncLocationValuation: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/location-valuation`).then(r => r.data),
-  syncMonitoring: (acqId: string, parcelId: string) =>
-    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/monitoring`).then(r => r.data),
+  syncValuation: (acqId: string, parcelId: string, opts?: { silent?: boolean }) =>
+    api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync/valuation`, undefined,
+      { _silent: opts?.silent }).then(r => r.data),
+  // Нэгж талбарын ХАВСРАЛТ татах. parcelCode нь UUID биш, нэгж талбарын КОД.
+  // roles — баримтын үүргийн код (хоосон бол бүх хавсралт).
+  // Зөвхөн нэмэх үйлдэл тул дахин дарахад аюулгүй.
+  // Эзэмшигч (иргэн, хуулийн этгээд) — /sync-ээс ТУСАД НЬ татагдана.
+  // app_no нь /sync-ээр хадгалагддаг тул түүнийг эхлээд ажиллуулсан байх ёстой (эс бөгөөс 422).
+  syncParcelHolders: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelHolderSyncResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/holders`,
+      undefined,
+      { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  syncParcelDocuments: (acqId: string, parcelCode: string, roles?: string[], opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelDocumentSyncResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/documents`,
+      undefined,
+      {
+        // Backend ?role=10,20 хэлбэрийг задалдаг — axios-ийн массив хэлбэр
+        // (role[]=10) биш тул таслалаар нэгтгэнэ.
+        ...(roles?.length ? { params: { role: roles.join(',') } } : {}),
+        _silent: opts?.silent,
+      },
+    ).then(r => r.data.data),
   updateParcelValuation: (acqId: string, parcelId: string, body: { valuation_zone: string; base_price_per_ha?: number | null; auction_coeff?: number | null; auction_price?: number | null }) =>
     api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation`, body),
   getProgress: (id: string) =>
@@ -763,10 +778,15 @@ export const landApi = {
     api.delete(`/land-acquisitions/${acqId}/funding-sources/${srcId}`),
 
   // AuthorizedRepresentative
+  // Итгэмжлэгдсэн төлөөлөгч нь эзэмшигчийн НЭГ ТӨРӨЛ болж parcel_holder-т
+  // хадгалагдана — тиймээс ParcelHolder буцаана (holder_role='representative').
   listRepresentatives: (acqId: string, parcelId: string) =>
-    api.get<ApiResponse<AuthorizedRepresentative[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`).then(r => r.data.data ?? []),
-  createRepresentative: (acqId: string, parcelId: string, body: Omit<AuthorizedRepresentative, 'id' | 'acquisition_id' | 'parcel_id' | 'created_at' | 'created_by'>) =>
-    api.post<ApiResponse<AuthorizedRepresentative>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`, body).then(r => r.data.data),
+    api.get<ApiResponse<ParcelHolder[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`).then(r => r.data.data ?? []),
+  createRepresentative: (acqId: string, parcelId: string, body: RepresentativeInput) =>
+    api.post<ApiResponse<ParcelHolder>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`, body).then(r => r.data.data),
+  // Нөхөн төлбөр хүлээн авах эзэмшигчийг сонгох (holderId = parcel_holder мөрийн id)
+  setPaymentRecipient: (acqId: string, parcelId: string, holderId: string) =>
+    api.put(`/land-acquisitions/${acqId}/parcels/${parcelId}/payment-recipient`, { holder_id: holderId }),
   deleteRepresentative: (acqId: string, parcelId: string, repId: string) =>
     api.delete(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives/${repId}`),
 

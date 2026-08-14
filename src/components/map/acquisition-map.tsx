@@ -217,14 +217,8 @@ export function AcquisitionMap({
 
   const makeHistoryLayer = useCallback((history: BoundaryHistory) => {
     const features = [];
-    if (history.old_geometry_wkt) {
-      const oldFeature = wktFormat.current.readFeature(history.old_geometry_wkt, {
-        dataProjection: "EPSG:4326",
-        featureProjection: "EPSG:3857",
-      });
-      oldFeature.set("boundary_kind", "old");
-      features.push(oldFeature);
-    }
+    // ЭХЛЭЭД шинэ хил, ДАРАА нь хуучин — OpenLayers эх сурвалжид нэмсэн
+    // дарааллаар зурдаг тул хуучин хил дээр талд үлдэнэ.
     if (history.new_geometry_wkt) {
       const newFeature = wktFormat.current.readFeature(history.new_geometry_wkt, {
         dataProjection: "EPSG:4326",
@@ -233,6 +227,14 @@ export function AcquisitionMap({
       newFeature.set("boundary_kind", "new");
       features.push(newFeature);
     }
+    if (history.old_geometry_wkt) {
+      const oldFeature = wktFormat.current.readFeature(history.old_geometry_wkt, {
+        dataProjection: "EPSG:4326",
+        featureProjection: "EPSG:3857",
+      });
+      oldFeature.set("boundary_kind", "old");
+      features.push(oldFeature);
+    }
 
     return new VectorLayer({
       source: new VectorSource({ features }),
@@ -240,14 +242,17 @@ export function AcquisitionMap({
       style: (feature) => {
         const isOld = feature.get("boundary_kind") === "old";
         return new Style({
+          // Хуучин хил ҮРГЭЛЖ шинийхээ ДЭЭР зурагдана. Солигдсон хуучин хил нь
+          // ихэвчлэн шинэ хилийн ДОТОР бүтнээрээ багтдаг (ST_Within) тул
+          // шинийн дүүргэлт/зураас дор дарагдаж, улаанаар харагдахгүй байсан.
+          zIndex: isOld ? 2 : 1,
           stroke: new Stroke({
             color: isOld ? "#ef4444" : "#02c0ce",
-            width: isOld ? 2 : 3,
+            width: isOld ? 3 : 2,
             lineDash: isOld ? [8, 6] : undefined,
           }),
-          fill: new Fill({
-            color: isOld ? "rgba(239, 68, 68, 0.08)" : "rgba(2, 192, 206, 0.10)",
-          }),
+          // Шинэ хил дүүргэлтгүй — дүүргэлт нь доор орших хуучин хилийг бүрхэнэ.
+          fill: isOld ? new Fill({ color: "rgba(239, 68, 68, 0.12)" }) : undefined,
         });
       },
     });

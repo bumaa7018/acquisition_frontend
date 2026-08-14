@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { RIGHT_TYPE_LABELS, type AU } from "@/types";
+import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
-import { RefreshCw, Calculator, Database, BarChart2, Activity, Check, X, AlertCircle, MapPin } from "lucide-react";
+import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
@@ -20,15 +20,38 @@ const ParcelMap = dynamic(
   },
 );
 
+// ГУС-ийн баримтын ҮҮРГИЙН код. Манай document_type.id-тай ХОЛИХГҮЙ —
+// дугаарлалт нь огт өөр (ж: ГУС 11 = Кадастрын зураг, манай 11 = Нас барсны
+// гэрчилгээ). Тиймээс татсан файлд document_type_id тавихгүй, ГУС-ийн нэрийг
+// шууд хадгална.
+const DOC = {
+  application: "1",
+  idCard: "2",
+  cadastralMap: "11",
+  pledgeContract: "64",
+  contract: "52",
+  landRightCert: "8",
+  settlementAct: "101",
+  auditConclusion: "71",
+  landQualityAudit: "12",
+  orderedAudit: "516",
+} as const;
+
 const SYNC_STEPS = [
   {
     key: "cadastral",
-    label: "Кадастын мэдээлэл",
+    label: "Кадастрын мэдээлэл",
     Icon: Database,
     color: "#3b82f6",
     subSteps: [
-      { label: "Нэгж талбарын ерөнхий мэдээлэл", detail: "Кадастрын системээс нэгж талбарын мэдээлэл татаж байна...", isRealApi: true },
-      { label: "Гэрээ дүгнэсэн акт файл", detail: "Гэрээ дүгнэсэн акт файлыг бэлтгэж байна..." },
+      { label: "Нэгж талбарын дэлгэрэнгүй", detail: "Кадастрын системээс нэгж талбарын мэдээлэл татаж байна..." },
+      { label: "Иргэн, хуулийн этгээдийн мэдээлэл", detail: "Эзэмшигчийн мэдээлэл татаж байна..." },
+      { label: "Өргөдөл", detail: "Өргөдлийн хавсралт татаж байна..." },
+      { label: "Иргэний үнэмлэх, ААН-ийн гэрчилгээ", detail: "Иргэний үнэмлэх, гэрчилгээ татаж байна..." },
+      { label: "Кадастрын зураг", detail: "Кадастрын зураг татаж байна..." },
+      { label: "Барьцааны гэрээ", detail: "Барьцааны гэрээ татаж байна..." },
+      { label: "Гэрээ", detail: "Гэрээ татаж байна..." },
+      { label: "Газар эзэмших эрхийн гэрчилгээ", detail: "Эрхийн гэрчилгээ татаж байна..." },
     ],
   },
   {
@@ -38,20 +61,49 @@ const SYNC_STEPS = [
     color: "#f59e0b",
     subSteps: [
       { label: "Газрын үнэлгээний мэдээлэл", detail: "Газрын үнэлгээний мэдээлэл татаж байна..." },
-      { label: "Тооцоо нийлсэн акт", detail: "Тооцоо нийлсэн акт бэлтгэж байна..." },
-      { label: "Байршлын үнэлгээ тооцоолол", detail: "Газрын үнэлгээг байршлаар тооцоолж байна..." },
+      { label: "Тооцоо нийлсэн акт", detail: "Тооцоо нийлсэн акт татаж байна..." },
     ],
   },
   {
     key: "monitoring",
-    label: "Мониторингийн мэдээлэл",
+    label: "Дүгнэлтийн мэдээлэл",
     Icon: Activity,
     color: "#10b981",
     subSteps: [
-      { label: "Дүгнэлтийн мэдээлэл", detail: "Дүгнэлтийн мэдээллийг файлаар бэлтгэж байна..." },
+      { label: "Хянан баталгааны дүгнэлт", detail: "Хянан баталгааны дүгнэлт татаж байна..." },
+      { label: "Газрын төлөв байдал, чанарын хянан баталгааны дүгнэлт", detail: "Чанарын хянан баталгааны дүгнэлт татаж байна..." },
+      { label: "Захиалгат хянан баталгааны дүгнэлт", detail: "Захиалгат хянан баталгааны дүгнэлт татаж байна..." },
+    ],
+  },
+  {
+    key: "other",
+    label: "Бусад холбоотой хавсралт",
+    Icon: Paperclip,
+    color: "#8b5cf6",
+    subSteps: [
+      // Кодгүй дуудна — үлдсэн БҮХ хавсралтыг хамарна. Дээрх алхмуудад
+      // татагдсан нь source_doc_id-аар алгасагдах тул ЗААВАЛ хамгийн сүүлд.
+      { label: "Үлдсэн хавсралтууд", detail: "Бусад хавсралтыг татаж байна..." },
     ],
   },
 ] as const;
+
+/**
+ * Алхмын үр дүнг хүн уншихаар текст болгоно.
+ *
+ * Хавсралт татах алхам нь ParcelDocumentSyncResult буцаадаг — татах нь ЗӨВХӨН
+ * НЭМЭХ үйлдэл тул дахин дарахад `saved: 0, skipped: N` болно.
+ * Эзэмшигчийн алхам ParcelHolderSyncResult буцаана. Бусад нь тодорхойгүй.
+ */
+function describeSyncResult(result: unknown): string {
+  const r = result as Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult> | undefined;
+  if (!r || typeof r.found !== "number") return "";
+  if (r.found === 0) return "Олдоогүй";
+  if ((r.saved ?? 0) > 0) return `${r.saved} шинэ бичлэг татагдлаа`;
+  return `${r.found} бичлэг — өмнө нь татагдсан`;
+}
+
+const SUB_STEP_MIN_MS = 400;
 
 const TOTAL_SUB_STEPS = SYNC_STEPS.reduce((s, step) => s + step.subSteps.length, 0);
 
@@ -159,6 +211,10 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const [syncCurrentSubStepIdx, setSyncCurrentSubStepIdx] = useState(-1);
   const [syncDoneSubSteps, setSyncDoneSubSteps] = useState<string[]>([]);
   const [syncFailedSubSteps, setSyncFailedSubSteps] = useState<string[]>([]);
+  // Алхам бүрийн серверийн алдааны мессеж (монголоор ирнэ) — subKey → текст
+  const [syncFailMessages, setSyncFailMessages] = useState<Record<string, string>>({});
+  // Амжилттай алхмын үр дүн (subKey → текст). Өмнө нь API-ийн хариуг хаядаг байсан.
+  const [syncResults, setSyncResults] = useState<Record<string, string>>({});
   const [syncDoneSteps, setSyncDoneSteps] = useState<number[]>([]);
   const [syncDetail, setSyncDetail] = useState("");
   const [syncFinished, setSyncFinished] = useState(false);
@@ -173,27 +229,44 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     setSyncCurrentSubStepIdx(0);
     setSyncDoneSubSteps([]);
     setSyncFailedSubSteps([]);
+    setSyncFailMessages({});
+    setSyncResults({});
     setSyncDoneSteps([]);
     setSyncDetail(SYNC_STEPS[0].subSteps[0].detail);
     setSyncFinished(false);
     setSyncError(null);
 
+    // Дэд алхам 6-аас 14 болсон тул 1500ms үед хамгийн багадаа ~21 сек болно.
     const minDelay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
     // API function for each sub-step [stepIdx][subStepIdx]
+    // Бүх дуудалт silent — явцыг ЭНЭ цонх өөрөө харуулна. Дэлгэц блоклогч
+    // "Уншиж байна..." loader асвал 14 хүсэлт дээр анивчиж, унших боломжгүй болно.
+    const SILENT = { silent: true };
+    const docs = (...roles: string[]) => () =>
+      landApi.syncParcelDocuments(acqId, parcelCode, roles, SILENT);
     const apiFns: (() => Promise<unknown>)[][] = [
       [
-        () => landApi.syncParcel(acqId, parcelCode),
-        () => landApi.syncContractAct(acqId, parcelCode),
+        () => landApi.syncParcel(acqId, parcelCode, SILENT),
+        () => landApi.syncParcelHolders(acqId, parcelCode, SILENT),
+        docs(DOC.application),
+        docs(DOC.idCard),
+        docs(DOC.cadastralMap),
+        docs(DOC.pledgeContract),
+        docs(DOC.contract),
+        docs(DOC.landRightCert),
       ],
       [
-        () => landApi.syncValuation(acqId, parcelCode),
-        () => landApi.syncSettlementAct(acqId, parcelCode),
-        () => landApi.syncLocationValuation(acqId, parcelCode),
+        () => landApi.syncValuation(acqId, parcelCode, SILENT),
+        docs(DOC.settlementAct),
       ],
       [
-        () => landApi.syncMonitoring(acqId, parcelCode),
+        docs(DOC.auditConclusion),
+        docs(DOC.landQualityAudit),
+        docs(DOC.orderedAudit),
       ],
+      // Кодгүй — үлдсэн бүх хавсралт
+      [() => landApi.syncParcelDocuments(acqId, parcelCode, undefined, SILENT)],
     ];
 
     let failCount = 0;
@@ -205,14 +278,27 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         setSyncDetail(step.subSteps[ssi].detail);
         const subKey = `${si}-${ssi}`;
         try {
-          await Promise.all([apiFns[si][ssi](), minDelay(1500)]);
+          const [result] = await Promise.all([apiFns[si][ssi](), minDelay(SUB_STEP_MIN_MS)]);
           setSyncDoneSubSteps((prev) => [...prev, subKey]);
+          const text = describeSyncResult(result);
+          if (text) setSyncResults((prev) => ({ ...prev, [subKey]: text }));
         } catch (err) {
           // Дуудсан axios хүсэлт interceptor-оороо аль хэдийн логлогдсон —
           // энд синхрончлолын алхмын context-ыг (аль алхам амжилтгүй болсон) нэмж логлоно.
           logger.error("parcel sync sub-step failed", { step: si, subStep: ssi, key: subKey, error: String(err) });
           failCount++;
           setSyncFailedSubSteps((prev) => [...prev, subKey]);
+          // Серверийн мессеж монголоор ирдэг тул шууд харуулна. 422 = нэгж
+          // талбарт app_no байхгүй — эхлээд ерөнхий мэдээллийг татах хэрэгтэй.
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          const message = getApiError(err, "Татаж чадсангүй");
+          setSyncFailMessages((prev) => ({
+            ...prev,
+            [subKey]:
+              status === 422
+                ? `${message} — эхлээд "Нэгж талбарын ерөнхий мэдээлэл"-ийг амжилттай татна уу.`
+                : message,
+          }));
         }
       }
       setSyncDoneSteps((prev) => [...prev, si]);
@@ -227,6 +313,8 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     );
     queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
     queryClient.invalidateQueries({ queryKey: ["land", acqId] });
+    // Хавсралт татагдсан байж болзошгүй тул "Хавсралт" табын жагсаалтыг ч шинэчилнэ
+    queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
   }, [acqId, data, parcelId, queryClient]);
 
   const handleSyncClose = useCallback(() => {
@@ -319,11 +407,23 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             </div>
           </div>
           {row("Дугаар", <span className="font-mono">{data.parcel_id}</span>)}
+          {/* Хуучин дугаар нь зөвхөн нэгж талбар өөрчлөгдсөн үед ирнэ */}
+          {data.old_parcel_id
+            ? row("Хуучин дугаар", <span className="font-mono">{data.old_parcel_id}</span>)
+            : null}
           {row("Аймаг/Нийслэл", formatAdminUnit(adminUnit?.au1_name, data.au1_code))}
           {row("Сум/Дүүрэг", formatAdminUnit(adminUnit?.au2_name, data.au2_code))}
           {row("Баг/Хороо", formatAdminUnit(adminUnit?.au3_name, data.au3_code))}
           {row("Эрхийн төрөл", RIGHT_TYPE_LABELS[data.right_type])}
-          {row("Газрын зориулалт", data.landuse)}
+          {row(
+            "Газрын зориулалт",
+            data.landuse_name
+              ? `${data.landuse_name}${data.landuse ? ` (${data.landuse})` : ""}`
+              : data.landuse,
+          )}
+          {row("Хашааны хаяг", data.address_khashaa)}
+          {row("Гудамжны нэр", data.address_streetname)}
+          {row("Үл хөдлөх хөрөнгийн дугаар", data.property_no)}
           {row("Эрх эхэлсэн", data.valid_from ? formatDate(data.valid_from) : undefined)}
           {row("Эрх дуусах", data.valid_till ? formatDate(data.valid_till) : undefined)}
           {row("Нийт талбай", formatArea(data.area_m2))}
@@ -504,7 +604,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       {/* Sync progress modal */}
       {syncOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {/* Толгой ба хөл нь тогтмол, зөвхөн алхмуудын хэсэг гүйнэ —
+              14 дэд алхамтай болсон тул цонх дэлгэцээс гарахгүй байх ёстой. */}
+          <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] animate-in fade-in zoom-in-95 duration-200">
 
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
@@ -551,7 +653,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             </div>
 
             {/* Steps */}
-            <div className="px-5 py-4 space-y-5">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-5">
               {SYNC_STEPS.map((step, si) => {
                 const StepIcon = step.Icon;
                 const isDone = syncDoneSteps.includes(si);
@@ -646,7 +748,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                               )}
                             </div>
                             <span
-                              className={`text-[12px] transition-colors duration-300 ${
+                              className={`min-w-0 truncate text-[12px] transition-colors duration-300 ${
                                 subDone
                                   ? "text-slate-600 dark:text-slate-300"
                                   : subFailed
@@ -658,8 +760,29 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                               style={subRunning ? { color: step.color } : {}}
                             >
                               {subStep.label}
-                              {subFailed && <span className="ml-1.5 text-[10px] font-semibold opacity-80">· Амжилтгүй</span>}
                             </span>
+                            {/* Үр дүн/алдааг ШИНЭ МӨРӨНД биш, мөрийн БАРУУН ТАЛД
+                                нэг мөрөнд харуулна — цонх хэт өндөр болохгүйн тулд. */}
+                            {subFailed && (
+                              <span
+                                className="ml-auto shrink-0 truncate text-right text-[10.5px] font-medium text-red-400 dark:text-red-400"
+                                title={syncFailMessages[subKey]}
+                              >
+                                {syncFailMessages[subKey] || "Амжилтгүй"}
+                              </span>
+                            )}
+                            {subDone && syncResults[subKey] && (
+                              <span
+                                className={`ml-auto shrink-0 truncate text-right text-[10.5px] font-medium ${
+                                  syncResults[subKey] === "Олдоогүй"
+                                    ? "text-slate-400 dark:text-slate-500"
+                                    : "text-emerald-600 dark:text-emerald-400"
+                                }`}
+                                title={syncResults[subKey]}
+                              >
+                                {syncResults[subKey]}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
