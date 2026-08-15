@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult } from "@/types";
+import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelSyncCountResult } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
@@ -49,30 +49,34 @@ const SYNC_STEPS = [
       { label: "Өргөдөл", detail: "Өргөдлийн хавсралт татаж байна..." },
       { label: "Иргэний үнэмлэх, ААН-ийн гэрчилгээ", detail: "Иргэний үнэмлэх, гэрчилгээ татаж байна..." },
       { label: "Кадастрын зураг", detail: "Кадастрын зураг татаж байна..." },
-      { label: "Барьцааны гэрээ", detail: "Барьцааны гэрээ татаж байна..." },
       { label: "Гэрээ", detail: "Гэрээ татаж байна..." },
       { label: "Газар эзэмших эрхийн гэрчилгээ", detail: "Эрхийн гэрчилгээ татаж байна..." },
     ],
   },
   {
     key: "valuation",
-    label: "Төлбөр үнэлгээний мэдээлэл",
+    label: "Газрын төлбөр үнэлгээний мэдээлэл",
     Icon: BarChart2,
     color: "#f59e0b",
     subSteps: [
-      { label: "Газрын үнэлгээний мэдээлэл", detail: "Газрын үнэлгээний мэдээлэл татаж байна..." },
+      { label: "Газрын суурь үнийн мэдээлэл", detail: "Газрын суурь үнэ татаж байна..." },
+      { label: "Төлбөрийн мэдээлэл", detail: "Газрын төлбөрийн мэдээлэл татаж байна..." },
+      { label: "Барьцааны мэдээлэл", detail: "Барьцааны бүртгэл татаж байна..." },
+      { label: "Шүүхийн шийдвэрийн мэдээлэл", detail: "Шүүхийн шийдвэр татаж байна..." },
+      { label: "Барьцааны гэрээний хавсралт", detail: "Барьцааны гэрээ татаж байна..." },
       { label: "Тооцоо нийлсэн акт", detail: "Тооцоо нийлсэн акт татаж байна..." },
     ],
   },
   {
     key: "monitoring",
-    label: "Дүгнэлтийн мэдээлэл",
+    label: "Мониторингийн мэдээлэл",
     Icon: Activity,
     color: "#10b981",
     subSteps: [
-      { label: "Хянан баталгааны дүгнэлт", detail: "Хянан баталгааны дүгнэлт татаж байна..." },
-      { label: "Газрын төлөв байдал, чанарын хянан баталгааны дүгнэлт", detail: "Чанарын хянан баталгааны дүгнэлт татаж байна..." },
-      { label: "Захиалгат хянан баталгааны дүгнэлт", detail: "Захиалгат хянан баталгааны дүгнэлт татаж байна..." },
+      { label: "Хянан баталгааны мэдээлэл", detail: "Хянан баталгааны мэдээлэл татаж байна..." },
+      { label: "Хянан баталгааны дүгнэлт хавсралт", detail: "Хянан баталгааны дүгнэлт хавсралт татаж байна..." },
+      { label: "Газрын төлөв байдал, чанарын хянан баталгааны дүгнэлт хавсралт", detail: "Чанарын хянан баталгааны дүгнэлт хавсралт татаж байна..." },
+      { label: "Захиалгат хянан баталгааны дүгнэлт хавсралт", detail: "Захиалгат хянан баталгааны дүгнэлт хавсралт татаж байна..." },
     ],
   },
   {
@@ -96,10 +100,20 @@ const SYNC_STEPS = [
  * Эзэмшигчийн алхам ParcelHolderSyncResult буцаана. Бусад нь тодорхойгүй.
  */
 function describeSyncResult(result: unknown): string {
-  const r = result as Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult> | undefined;
-  if (!r || typeof r.found !== "number") return "";
+  const r = result as
+    | Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult & ParcelBasePrice & ParcelInvoiceSyncResult & ParcelSyncCountResult>
+    | undefined;
+  if (!r) return "";
+  // Газрын суурь үнэ — тоо биш, дүнгээ шууд харуулна
+  if (typeof r.base_price === "number") {
+    return r.base_price > 0
+      ? `${r.base_price.toLocaleString()}₮/га · ${r.calculate_year} он`
+      : "Олдоогүй";
+  }
+  if (typeof r.found !== "number") return "";
   if (r.found === 0) return "Олдоогүй";
   if ((r.saved ?? 0) > 0) return `${r.saved} шинэ бичлэг татагдлаа`;
+  if (Array.isArray(r.invoices)) return `${r.found} нэхэмжлэл`;
   return `${r.found} бичлэг — өмнө нь татагдсан`;
 }
 
@@ -205,6 +219,18 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
+  const monitoringSyncMutation = useMutation({
+    mutationFn: () => {
+      if (!data?.parcel_id) throw new Error("Нэгж талбарын дугаар олдсонгүй");
+      return landApi.syncParcelMonitorings(acqId, data.parcel_id);
+    },
+    onSuccess: () => {
+      toast.success("Хянан баталгааны мэдээлэл шинэчлэгдлээ");
+      queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+    },
+    onError: (err) => toast.error(getApiError(err, "Хянан баталгааны мэдээлэл шинэчлэхэд алдаа гарлаа")),
+  });
+
   const [syncOpen, setSyncOpen] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
   const [syncCurrentStepIdx, setSyncCurrentStepIdx] = useState(-1);
@@ -252,15 +278,19 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         docs(DOC.application),
         docs(DOC.idCard),
         docs(DOC.cadastralMap),
-        docs(DOC.pledgeContract),
         docs(DOC.contract),
         docs(DOC.landRightCert),
       ],
       [
-        () => landApi.syncValuation(acqId, parcelCode, SILENT),
+        () => landApi.syncParcelBasePrice(acqId, parcelCode, SILENT),
+        () => landApi.syncParcelInvoices(acqId, parcelCode, SILENT),
+        () => landApi.syncParcelMortgages(acqId, parcelCode, SILENT),
+        () => landApi.syncParcelCourtDecisions(acqId, parcelCode, SILENT),
+        docs(DOC.pledgeContract),
         docs(DOC.settlementAct),
       ],
       [
+        () => landApi.syncParcelMonitorings(acqId, parcelCode, SILENT),
         docs(DOC.auditConclusion),
         docs(DOC.landQualityAudit),
         docs(DOC.orderedAudit),
@@ -359,6 +389,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     return <div className="ap-card p-10 text-center text-[13px] text-slate-400">Мэдээлэл олдсонгүй</div>;
 
   const adminUnit = findAdminUnit(acquisition?.aus, data.au1_code, data.au2_code, data.au3_code);
+  const monitorings = data.monitorings ?? [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -538,6 +569,64 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             geometryWkt={data.geometry_wkt}
             statusId={data.status_id ?? data.status}
           />
+          <div className="border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+            <div className="mb-3 flex items-center gap-2">
+              <Activity className="h-3.5 w-3.5 text-[#10b981]" />
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                Хянан баталгааны мэдээлэл
+              </p>
+              {!isExternal && !isLocked && (
+                <button
+                  type="button"
+                  onClick={() => monitoringSyncMutation.mutate()}
+                  disabled={monitoringSyncMutation.isPending || !data?.parcel_id}
+                  className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#10b981]/30 bg-[#10b981]/10 px-3 text-[12px] font-semibold text-[#10b981] transition-colors hover:bg-[#10b981]/20 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${monitoringSyncMutation.isPending ? "animate-spin" : ""}`} />
+                  Шинэчлэх
+                </button>
+              )}
+            </div>
+            {monitorings.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-[13px] text-slate-400 dark:border-[#37394d] dark:text-slate-500">
+                Хянан баталгааны мэдээлэл татагдаагүй байна.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-[13px]">
+                  <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400 dark:bg-[#252630] dark:text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 font-semibold">Хуудас</th>
+                      <th className="px-3 py-2 font-semibold">Төлөв</th>
+                      <th className="px-3 py-2 font-semibold">Байгууллага</th>
+                      <th className="px-3 py-2 font-semibold">Огноо</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                    {monitorings.map((item) => {
+                      const isVerified = item.status_name?.trim() === "Баталгаажуулсан";
+                      return (
+                        <tr key={item.monitoring_id} className="text-slate-700 dark:text-slate-200">
+                          <td className="px-3 py-2">{item.page_no || "—"}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-md px-2 py-0.5 text-[12px] font-semibold ${
+                              isVerified
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+                                : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+                            }`}>
+                              {item.status_name || "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{item.company_name || "—"}</td>
+                          <td className="px-3 py-2">{item.created_at ? formatDate(item.created_at) : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

@@ -37,7 +37,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
@@ -626,6 +626,33 @@ export const landApi = {
       `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/holders`,
       undefined,
       { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  // Газрын төлбөр үнэлгээний бүлэг — ГУС-ийн жинхэнэ дуудалтууд
+  syncParcelBasePrice: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelBasePrice>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/base-price`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  // Өмчлөлийн (right_type=3) газарт 422 + анхааруулга буцна
+  syncParcelInvoices: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelInvoiceSyncResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/invoices`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  syncParcelMortgages: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelSyncCountResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/mortgages`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  syncParcelCourtDecisions: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelSyncCountResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/court-decisions`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  syncParcelMonitorings: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelSyncCountResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/monitoring`,
+      undefined, { _silent: opts?.silent },
     ).then(r => r.data.data),
   syncParcelDocuments: (acqId: string, parcelCode: string, roles?: string[], opts?: { silent?: boolean }) =>
     api.post<ApiResponse<ParcelDocumentSyncResult>>(

@@ -182,6 +182,8 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
   // Эзэмшигчийн жагсаалт ирээгүй хуучин өгөгдөл дээр parcel_detail-д хуулагдсан
   // үндсэн эзэмшигчийн талбаруудаар нөхөж харуулна.
   const hasDetailHolder = !!(data.detail?.holder_last_name || data.detail?.holder_name);
+  // Өмчлөх эрх (right_type=3) — гэрээгүй, улсын бүртгэлээр баталгаажина.
+  const isOwnership = data.right_type === 3;
 
   return (
     <div className="flex flex-col gap-5">
@@ -342,34 +344,51 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
               {row("Шийдвэрийн дугаар", data.detail.decision_no)}
               {row("Шийдвэрийн огноо", data.detail.decision_date ? formatDate(data.detail.decision_date) : undefined)}
 
-              <div className="mt-5">
-                <div className="h-px w-full bg-[#e2e8f0] dark:bg-[#37394d]" />
-                <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Гэрээ, гэрчилгээ</p>
-              </div>
-              {row("Гэрээний дугаар", data.detail.contract_no)}
-              {row("Гэрээний огноо", data.detail.contract_date ? formatDate(data.detail.contract_date) : undefined)}
-              {row(
-                "Гэрээний хугацаа",
-                data.detail.contract_begin || data.detail.contract_end
-                  ? `${data.detail.contract_begin ? formatDate(data.detail.contract_begin) : "—"} — ${data.detail.contract_end ? formatDate(data.detail.contract_end) : "—"}`
-                  : undefined,
-              )}
-              {row("Гэрээний төлөв", data.detail.contract_status)}
-              {row("Гэрээний үл хөдлөхийн дугаар", data.detail.contract_property_no)}
-              {row("Гэрчилгээний дугаар", data.detail.certificate_no)}
-              {row("Гэрчилгээний огноо", data.detail.certificate_date ? formatDate(data.detail.certificate_date) : undefined)}
-
-              {/* Улсын бүртгэл — sync-ээр татагддаг ч урьд нь дэлгэцэд гардаггүй байсан */}
-              {(data.detail.record_no || data.detail.record_date || data.detail.record_certificate_no || data.detail.record_status) && (
+              {/* ӨМЧЛӨХ эрхтэй газарт гэрээ байдаггүй — улсын бүртгэлийн
+                  (record_*) утгуудыг "Өмчлөл" нэрээр харуулна. Бусад эрхийн
+                  төрөлд гэрээ, гэрчилгээ + улсын бүртгэл хоёулаа гарна. */}
+              {isOwnership ? (
                 <>
                   <div className="mt-5">
                     <div className="h-px w-full bg-[#e2e8f0] dark:bg-[#37394d]" />
-                    <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Улсын бүртгэл</p>
+                    <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Өмчлөл</p>
                   </div>
                   {row("Бүртгэлийн дугаар", data.detail.record_no)}
                   {row("Бүртгэлийн огноо", data.detail.record_date ? formatDate(data.detail.record_date) : undefined)}
-                  {row("Бүртгэлийн гэрчилгээ", data.detail.record_certificate_no)}
-                  {row("Бүртгэлийн төлөв", data.detail.record_status)}
+                  {row("Гэрчилгээний дугаар", data.detail.record_certificate_no)}
+                  {row("Төлөв", data.detail.record_status)}
+                </>
+              ) : (
+                <>
+                  <div className="mt-5">
+                    <div className="h-px w-full bg-[#e2e8f0] dark:bg-[#37394d]" />
+                    <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Гэрээ, гэрчилгээ</p>
+                  </div>
+                  {row("Гэрээний дугаар", data.detail.contract_no)}
+                  {row("Гэрээний огноо", data.detail.contract_date ? formatDate(data.detail.contract_date) : undefined)}
+                  {row(
+                    "Гэрээний хугацаа",
+                    data.detail.contract_begin || data.detail.contract_end
+                      ? `${data.detail.contract_begin ? formatDate(data.detail.contract_begin) : "—"} — ${data.detail.contract_end ? formatDate(data.detail.contract_end) : "—"}`
+                      : undefined,
+                  )}
+                  {row("Гэрээний төлөв", data.detail.contract_status)}
+                  {row("Гэрээний үл хөдлөхийн дугаар", data.detail.contract_property_no)}
+                  {row("Гэрчилгээний дугаар", data.detail.certificate_no)}
+                  {row("Гэрчилгээний огноо", data.detail.certificate_date ? formatDate(data.detail.certificate_date) : undefined)}
+
+                  {(data.detail.record_no || data.detail.record_date || data.detail.record_certificate_no || data.detail.record_status) && (
+                    <>
+                      <div className="mt-5">
+                        <div className="h-px w-full bg-[#e2e8f0] dark:bg-[#37394d]" />
+                        <p className="pt-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">Улсын бүртгэл</p>
+                      </div>
+                      {row("Бүртгэлийн дугаар", data.detail.record_no)}
+                      {row("Бүртгэлийн огноо", data.detail.record_date ? formatDate(data.detail.record_date) : undefined)}
+                      {row("Бүртгэлийн гэрчилгээ", data.detail.record_certificate_no)}
+                      {row("Бүртгэлийн төлөв", data.detail.record_status)}
+                    </>
+                  )}
                 </>
               )}
               {(data.detail.valuation_zone || data.detail.base_price_per_ha != null || data.detail.auction_price != null) && (

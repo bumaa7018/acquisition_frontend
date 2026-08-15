@@ -392,6 +392,74 @@ export interface ParcelHolderSyncResult {
   skipped: number;
 }
 
+/** Газрын суурь үнэ (ГУС data_cama) */
+export interface ParcelBasePrice {
+  base_price: number;
+  base_price_m2: number;
+  calculate_year: number;
+}
+
+/** Газрын төлбөрийн нэхэмжлэл */
+export interface ParcelInvoice {
+  invoice_no: string;
+  description: string;
+  amount: number;
+  paid_amount: number;
+  status_id: number;
+  status_name: string;
+}
+
+export interface ParcelInvoiceSyncResult {
+  found: number;
+  invoices: ParcelInvoice[];
+}
+
+/** Барьцаа. source_parent_id утгатай бол ДАВХАР барьцаа */
+export interface ParcelMortgage {
+  id: string;
+  source_id: string;
+  source_parent_id: string;
+  app_no: string;
+  start_mortgage_period: string;
+  end_mortgage_period: string;
+  loan_contract_no: string;
+  mortgage_contract_no: string;
+  loan_contract_amount: number;
+  monetary_unit_value: number;
+  unit_type: string;
+  mortgage_type: string;
+  status_id: string;
+  status_name: string;
+}
+
+/** Шүүхийн шийдвэр */
+export interface ParcelCourtDecision {
+  id: string;
+  source_id: string;
+  app_no: string;
+  start_period: string;
+  end_period: string;
+  court_status: string;
+  status_name: string;
+  court_decision_no: string;
+}
+
+/** Хянан баталгааны мэдээлэл */
+export interface ParcelMonitoring {
+  id: string;
+  monitoring_id: string;
+  page_no: string;
+  status_name: string;
+  company_name: string;
+  created_at: string;
+}
+
+/** Татаж хадгалсан бичлэгийн тоо */
+export interface ParcelSyncCountResult {
+  found: number;
+  saved: number;
+}
+
 export interface ParcelDocumentSyncResult {
   /** Эх системд олдсон нийт */
   found: number;
@@ -560,6 +628,14 @@ export interface ParcelFull extends Parcel {
   property_no?: string;
   /** Бүх эзэмшигч (үндсэн + хамтран). detail.holder_* нь зөвхөн үндсэнийг заана. */
   holders?: ParcelHolder[];
+  /** ГУС-аас татагдсан барьцаа. source_parent_id утгатай нь ДАВХАР барьцаа */
+  mortgages?: ParcelMortgage[];
+  /** Шүүхийн шийдвэрүүд */
+  court_decisions?: ParcelCourtDecision[];
+  /** Газрын төлбөрийн нэхэмжлэлүүд */
+  invoices?: ParcelInvoice[];
+  /** Хянан баталгааны мэдээлэл */
+  monitorings?: ParcelMonitoring[];
   geometry_wkt: string;
   acquisition_geom_wkt: string;
   status_id: number;
