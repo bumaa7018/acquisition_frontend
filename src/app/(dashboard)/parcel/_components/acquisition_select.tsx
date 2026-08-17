@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { landApi } from "@/lib/api";
+import { useAcquisitionOptions } from "@/hooks/use-acquisition-options";
 import { X, ChevronDown } from "lucide-react";
 import { Highlight } from "./highlight";
 
@@ -20,13 +19,8 @@ export function AcquisitionSelect({
   const [query, setQuery] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
-  });
+  const { acquisitions } = useAcquisitionOptions();
 
-  const acquisitions = data?.data ?? [];
   const selected = acquisitions.find((a) => a.id === selectedId);
   const displayLabel = selected?.acquisition_name ?? "";
 

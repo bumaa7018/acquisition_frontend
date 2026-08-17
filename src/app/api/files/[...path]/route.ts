@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSession } from '@/lib/server/session-guard'
+import { tokenFromRequest, isSessionValid, authorizeFileKey } from '@/lib/server/session-guard'
 
 // Файлын систем (MinIO/S3) руу гарц. Backend файлыг өөр дээрээ хадгалахгүй —
 // бүх файл эндээс тараагдаж, эндээр байршина. DB-д хадгалагдсан file_url нь
@@ -29,19 +29,32 @@ async function proxy(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
-  // ЭРХ ШАЛГАЛТ: өмнө нь энэ route эрх шалгадаггүй "хоолой" байсан ба MinIO-ийн
-  // bucket policy anonymous read байсан тул хэн ч нэвтрэлтгүйгээр бүх баримт,
-  // үнэлгээний тайлан, ортофотог татаж чаддаг байв (аудитаар батлагдсан).
-  // Одоо нэвтэрсэн хэрэглэгчийг session cookie/Bearer-ээр шаардана. Browser-ийн
-  // <img>/<a>/tile хүсэлт cookie-г автоматаар зөөнө; upload PUT (presigned) мөн
-  // ижил origin тул cookie явна.
-  if (!(await requireSession(req))) {
+  // ЭРХ ШАЛГАЛТ 1 — ТАНИЛТ. Өмнө нь энэ route эрх шалгадаггүй "хоолой" байсан ба
+  // MinIO-ийн bucket policy anonymous read байсан тул хэн ч нэвтрэлтгүйгээр бүх
+  // баримт, үнэлгээний тайлан, ортофотог татаж чаддаг байв (аудитаар батлагдсан).
+  // Browser-ийн <img>/<a>/tile хүсэлт cookie-г автоматаар зөөнө; upload PUT
+  // (presigned) мөн ижил origin тул cookie явна.
+  const token = tokenFromRequest(req)
+  if (!(await isSessionValid(token))) {
     return NextResponse.json({ error: 'Нэвтрэх шаардлагатай' }, { status: 401 })
   }
 
   const { path } = await params
   // Сегмент бүрийг escape хийнэ — нэрэнд кирилл, зай, '%' орсон файл ч ажиллана.
   const key = path.map((segment) => encodeURIComponent(segment)).join('/')
+
+  // ЭРХ ШАЛГАЛТ 2 — ЗӨВШӨӨРӨЛ (объект тус бүрээр). Танилт дангаараа хангалтгүй:
+  // түлхүүр нь `acquisition/<acq_id>/<файлын нэр>` хэлбэртэй бөгөөд баримтын
+  // төрөл заасан үед файлын нэр ЭХ нэр хэвээр үлддэг тул нэвтэрсэн дурын
+  // хэрэглэгч (гадаад байгууллага ч гэсэн) чөлөөлөлтийн ID мэдэж байвал өөр
+  // байгууллагын баримтыг таамаглан татах боломжтой байв.
+  //
+  // Backend нь түлхүүрийн эзнийг чөлөөлөлт/нэгж талбарт буулгаж, харгалзах
+  // маршрутуудын ЯГ ижил дүрмээр шалгана (шинэ эрх нэмээгүй).
+  const rawKey = path.join('/')
+  if (!(await authorizeFileKey(token, rawKey))) {
+    return NextResponse.json({ error: 'Энэ файлд хандах эрхгүй' }, { status: 403 })
+  }
   // Query-г ХЭВЭЭР дамжуулна: байршуулах эрхийг presigned гарын үсэг (X-Amz-*)
   // агуулдаг ба түүнийг MinIO ӨӨРӨӨ шалгана. Иймд энэ route нь эрх шалгадаггүй
   // "хоолой" — гарын үсэггүй PUT-ыг MinIO 403-аар татгалздаг (bucket policy нь

@@ -320,6 +320,16 @@ export interface LandAcquisition {
   funding_sources?: FundingSource[];
 }
 
+// Шүүлтүүрийн dropdown-ы хөнгөн бүтэц (GET /land-acquisitions/filter-options).
+// Үндсэн LandAcquisition-ы 25+ талбарын оронд зөвхөн 4 талбар — dropdown-д
+// хэрэгтэй нь тэр л. Дэлгэрэнгүйг landApi.filterOptions тайлбарт.
+export interface LandAcquisitionOption {
+  id: string;
+  acquisition_name: string;
+  plan_code: string;
+  plan_name: string;
+}
+
 export interface AU {
   au1_code: string;
   au1_name: string;

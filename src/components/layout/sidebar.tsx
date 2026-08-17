@@ -14,6 +14,7 @@ import {
   canViewHr,
   canViewSettings,
   canViewDecisionDrafts,
+  isSeniorSpecialist,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -219,8 +220,15 @@ export function Sidebar() {
     // Захирамжийн төсөл нь тусдаа decision:* эрхтэй — эрхгүй ажилтанд цэс
     // харуулбал 403-той хоосон хуудас нээгдэнэ.
     const showDecision = canViewDecisionDrafts();
+    // Тайлан нь БҮХ чөлөөлөлтийг хуваарилалт үл харгалзан нэгтгэдэг тул
+    // backend дээр ахлах мэргэжилтнээр хязгаарлагдсан — цэсийг мөн тэгш байлгана.
+    const showReport = isSeniorSpecialist();
     setMainNav(
-      NAV_MAIN.filter((item) => item.href !== "/decision_draft" || showDecision),
+      NAV_MAIN.filter(
+        (item) =>
+          (item.href !== "/decision_draft" || showDecision) &&
+          (item.href !== "/report" || showReport),
+      ),
     );
     setReady(true);
   }, []);

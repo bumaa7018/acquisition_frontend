@@ -2,6 +2,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportApi, landApi } from "@/lib/api";
+import {
+  useAcquisitionOptions,
+  useAcquisitionPlanOptions,
+} from "@/hooks/use-acquisition-options";
 import { authStorage } from "@/lib/auth";
 import { RIGHT_TYPE_LABELS, getParcelStatusStyle } from "@/types";
 import type { ReportParcelRow } from "@/types";
@@ -140,13 +144,8 @@ function AcquisitionSelect({
   const [query, setQuery] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
-  });
+  const { acquisitions } = useAcquisitionOptions();
 
-  const acquisitions = data?.data ?? [];
   const selected = acquisitions.find((a) => a.id === selectedId);
   const displayLabel = selected?.acquisition_name ?? "";
 
@@ -271,22 +270,7 @@ function PlanSelect({
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
-  });
-
-  const plans = Array.from(
-    new Map(
-      (data?.data ?? [])
-        .filter((a) => a.plan_code)
-        .map((a) => [
-          a.plan_code,
-          { plan_code: a.plan_code, name: a.plan_name ?? "" },
-        ]),
-    ).values(),
-  );
+  const { plans } = useAcquisitionPlanOptions();
 
   const filtered = query.trim()
     ? plans.filter(

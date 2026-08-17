@@ -27,13 +27,44 @@ function showAccessDenied(title: string, description: string, withLoginBtn = fal
       }
   toast.error(title, opts)
 }
+
+// Backend-ийн алдааны биеэс хэрэглэгчид зориулсан мессежийг гаргана.
+//
+// Бүх алдаа `{code, error, message}` JSON байх ёстой ч proxy/gateway дундаас
+// HTML эсвэл цэвэр текст ирж болно (ж: gin-ийн хуучин "404 page not found").
+// Тийм үед биеийг ХЭРЭГЛЭХГҮЙ — хэрэглэгчид техникийн хог харуулахгүй.
+function serverMessage(error: unknown): string | undefined {
+  const data = (error as { response?: { data?: unknown } })?.response?.data
+  if (!data || typeof data !== 'object') return undefined
+  const { error: e, message: m } = data as { error?: unknown; message?: unknown }
+  const msg = typeof e === 'string' && e ? e : typeof m === 'string' && m ? m : undefined
+  return msg?.trim() || undefined
+}
+
+// 404 нь "сервер унасан" биш — хүсэлт хүрсэн, зүгээр л мэдээлэл байхгүй.
+// Өмнө нь interceptor-т 404-ийн салбар БАЙХГҮЙ байсан тул дуудсан код бүр
+// өөрийн ерөнхий fallback-ыг харуулж, хэрэглэгчид "сервертэй холбогдоход
+// алдаа" мэт төөрөгдүүлсэн мессеж хүрдэг байв.
+let _notFoundAlertPending = false
+function showNotFound(description?: string) {
+  if (typeof window === 'undefined' || _notFoundAlertPending) return
+  _notFoundAlertPending = true
+  const clear = () => { _notFoundAlertPending = false }
+  toast.warning('Мэдээлэл олдсонгүй', {
+    description: description ?? 'Хүссэн мэдээлэл байхгүй эсвэл устгагдсан байна.',
+    duration: 6000,
+    onDismiss: clear,
+    onAutoClose: clear,
+  })
+}
+
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission, Menu,
   Organization, Department, Position, Person, Employee,
   ValuationOrg, ValuationOrgPayload,
   AuditLog,
-  Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull, ParcelDiscoveryResult,
+  Plan, LandAcquisition, LandAcquisitionFilter, LandAcquisitionOption, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
@@ -224,9 +255,14 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
 
 // _silent: true — арын хүсэлтүүд (мэдэгдлийн poll г.м.) бүтэн дэлгэцийн
 // блоклогч loader-ийг асаахгүй байх тохиргоо.
+//
+// _allow404: true — 404-ийг ХҮЛЭЭГДЭЖ БУЙ хариу гэж үзэх дуудалтууд (дуудсан
+// код өөрөө fallback хийдэг). Зөвхөн "Мэдээлэл олдсонгүй" анхааруулгыг
+// унтраана — loader болон бусад зан төлөв хэвээр.
 declare module 'axios' {
   export interface AxiosRequestConfig {
     _silent?: boolean
+    _allow404?: boolean
   }
 }
 
@@ -283,10 +319,20 @@ api.interceptors.response.use(
         showServerError(
           noResponse
             ? 'Сервер хариу өгсөнгүй эсвэл хүсэлт хугацаа хэтэрлээ. Түр хүлээгээд дахин оролдоно уу.'
-            : error.response?.data?.error ??
-              error.response?.data?.message ??
+            : serverMessage(error) ??
               'Сервер дээр алдаа гарлаа. Түр хүлээгээд дахин оролдоно уу.',
         )
+      }
+      return Promise.reject(error)
+    }
+
+    // ── 404: мэдээлэл олдсонгүй ────────────────────────────────────────────
+    // Сервер хариу өгсөн тул холболтын алдаа БИШ. Backend-ийн мессежийг
+    // (`Мэдээлэл олдсонгүй`) шууд харуулна. 404-ийг өөрөө шийддэг дуудалтууд
+    // `_allow404` тэмдэглэгээгээр анхааруулгыг унтраана.
+    if (status === 404 && !isAuthRoute) {
+      if (!error.config?._silent && !error.config?._allow404) {
+        showNotFound(serverMessage(error))
       }
       return Promise.reject(error)
     }
@@ -635,6 +681,19 @@ export const landApi = {
     api.get<ApiResponse<{ id: string; acquisition_name: string; plan_code: string }[]>>(
       '/land-acquisitions/suggest', { params: { q } }
     ).then(r => r.data.data ?? []),
+  // filterOptions — шүүлтүүрийн dropdown-д зориулсан ТУСДАА хөнгөн API.
+  //
+  // ЯАГААД list()-ыг ХЭРЭГЛЭХГҮЙ: `list({ page: 1, page_size: 200 })` нь үндсэн
+  // жагсаалтын endpoint-ыг дуудаж, backend тэнд мөр тутамд
+  // `(SELECT COUNT(*) FROM parcel …)` + acquisition_category + sdplatform join
+  // хийж 25+ багана буцаадаг. Нэгж талбарын өгөгдөл өсөх тутам 200 мөрийн тэр
+  // хүсэлт axios-ийн 30 секундын timeout-д ороод "Серверт холбогдоход алдаа
+  // гарлаа" toast гаргадаг байв (дээр нь react-query 2 удаа дахин оролддог).
+  // Энэ endpoint нь зөвхөн land_acquisition хүснэгтээс 4 багана уншина.
+  filterOptions: () =>
+    api.get<ApiResponse<LandAcquisitionOption[]>>(
+      '/land-acquisitions/filter-options'
+    ).then(r => r.data.data ?? []),
   getById: (id: string) =>
     api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
   create: (data: FormData) =>
@@ -958,7 +1017,11 @@ export const parcelApi = {
     const suffix = q.toString()
 
     try {
-      return await api.get<PaginatedResponse<GlobalParcel>>(`/parcels${suffix ? `?${suffix}` : ''}`).then(r => r.data)
+      // _allow404 — 404 үед доор чөлөөлөлт тус бүрээр нь эвлүүлдэг тул
+      // хэрэглэгчид "Мэдээлэл олдсонгүй" гэж харуулах шаардлагагүй.
+      return await api
+        .get<PaginatedResponse<GlobalParcel>>(`/parcels${suffix ? `?${suffix}` : ''}`, { _allow404: true })
+        .then(r => r.data)
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 404 && !params?.years?.length) {
         return listParcelsFromAcquisitions(params)
