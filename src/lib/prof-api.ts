@@ -27,7 +27,8 @@ import type {
   ValuationImportPayload,
   ValuationImportResult,
   Document,
-  AuthorizedRepresentative,
+  ParcelHolder,
+  RepresentativeInput,
   FundingSource,
   AcquisitionCategory,
 } from '@/types'
@@ -225,9 +226,9 @@ class ProfApiService {
 
   // ── Эрх эзэмшигч төлөөлөгч ─────────────────────────────────────────────────
 
-  profListRepresentatives(acqId: string, parcelId: string): Promise<AuthorizedRepresentative[]> {
+  profListRepresentatives(acqId: string, parcelId: string): Promise<ParcelHolder[]> {
     return apiClient
-      .get<ApiResponse<AuthorizedRepresentative[]>>(
+      .get<ApiResponse<ParcelHolder[]>>(
         `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`,
       )
       .then(r => r.data.data ?? [])
@@ -236,10 +237,10 @@ class ProfApiService {
   profCreateRepresentative(
     acqId: string,
     parcelId: string,
-    body: Omit<AuthorizedRepresentative, 'id' | 'acquisition_id' | 'parcel_id' | 'created_at' | 'created_by'>,
-  ): Promise<AuthorizedRepresentative | undefined> {
+    body: RepresentativeInput,
+  ): Promise<ParcelHolder | undefined> {
     return apiClient
-      .post<ApiResponse<AuthorizedRepresentative>>(
+      .post<ApiResponse<ParcelHolder>>(
         `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/representatives`,
         body,
       )
@@ -249,6 +250,14 @@ class ProfApiService {
   profDeleteRepresentative(acqId: string, parcelId: string, repId: string): Promise<void> {
     return apiClient.delete(
       `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/representatives/${repId}`,
+    )
+  }
+
+  /** Нөхөн төлбөр хүлээн авах эзэмшигчийг сонгох */
+  profSetPaymentRecipient(acqId: string, parcelId: string, holderId: string): Promise<void> {
+    return apiClient.put(
+      `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/payment-recipient`,
+      { holder_id: holderId },
     )
   }
 

@@ -5,9 +5,11 @@ import { parcelApi, documentTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
-import { Upload, Trash2, Download, FileText, Paperclip, X } from "lucide-react";
+import { Upload, Trash2, Download, FileText, Paperclip, ExternalLink, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import type { Document } from "@/types";
+import { DOCUMENT_GROUPS, groupKeyForDocCode } from "@/lib/document-groups";
 
 function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
@@ -110,71 +112,167 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
     uploadMutation.mutate({ file: selectedFile, typeId: documentTypeId as number, name: fileName });
   }
 
+  // source_doc_id-тай бол эх системээс (ГУС) ТАТАГДСАН, эсрэгээр ГАРААР оруулсан.
+  // Татагдсаныг устгах товч харуулахгүй — дараагийн татахад буцаж орж ирнэ.
+  const syncedDocs = docs.filter((d) => !!d.source_doc_id);
+  const manualDocs = docs.filter((d) => !d.source_doc_id);
+  const typeNameOf = (doc: Document) =>
+    docTypes.find((t) => t.id === doc.document_type_id)?.name;
+  // "Мэдээлэл татах" цонхтой ЯГ ИЖИЛ бүлгүүдээр ангилна. Кодгүй/танихгүй
+  // кодтой (Бусад холбоотой хавсралт) нь кадастр бүлэгт багтана.
+  const groupedDocs = DOCUMENT_GROUPS.map((group) => ({
+    ...group,
+    docs: syncedDocs.filter((d) => groupKeyForDocCode(d.source_doc_code) === group.key),
+  }));
+
   return (
     <>
-      <div className="ap-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div>
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
+      {/* Дэлгэцийг 2 хуваана: ЗҮҮН — гараар оруулсан баримт бичиг,
+          БАРУУН — эх системээс татагдсан нэгж талбарын хавсралт.
+          items-start — багана бүр өөрийн өндрөөрөө үлдэнэ. */}
+      <div className="grid gap-5 lg:grid-cols-2 items-start">
+        {/* Баримт бичгүүд — гараар оруулсан (ЗҮҮН) */}
+        <div className="ap-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <div>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
+            </div>
+            {!isLocked && (
+              <button
+                onClick={openModal}
+                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+              >
+                <Upload className="h-4 w-4" />
+                Нэмэх
+              </button>
+            )}
           </div>
-          {!isLocked && (
-            <button
-              onClick={openModal}
-              className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-            >
-              <Upload className="h-4 w-4" />
-              Нэмэх
-            </button>
+
+          {isLoading ? (
+            <div className="p-5 space-y-3 animate-pulse">
+              {[...Array(3)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+            </div>
+          ) : !manualDocs.length ? (
+            <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
+              <Paperclip className="h-8 w-8 mb-2 opacity-30" />
+              <p className="text-[13px]">Баримт бичиг байхгүй</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+              {manualDocs.map((doc) => {
+                const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
+                return (
+                  <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
+                      <FileText className="h-4 w-4 text-red-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
+                        {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </a>
+                      {!isLocked && (
+                        <button
+                          onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(doc.id) })}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {isLoading ? (
-          <div className="p-5 space-y-3 animate-pulse">
-            {[...Array(3)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+        {/* Нэгж талбарын хавсралт — "Мэдээлэл дуудах" үед эх системээс татагдсан */}
+        <div className="ap-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <div>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Нэгж талбарын хавсралт</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Эх системээс татагдсан · &quot;Мэдээлэл дуудах&quot;-аар шинэчилнэ
+              </p>
+            </div>
+            {syncedDocs.length > 0 && (
+              <span className="rounded-full bg-[#02c0ce]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#02c0ce]">
+                {syncedDocs.length}
+              </span>
+            )}
           </div>
-        ) : !docs.length ? (
-          <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
-            <Paperclip className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-[13px]">Баримт бичиг байхгүй</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
-            {docs.map((doc) => {
-              const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
-              return (
+
+          {isLoading ? (
+            <div className="p-5 space-y-3 animate-pulse">
+              {[...Array(2)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+              {groupedDocs.map((group) => (
+                <div key={group.key}>
+                  {/* Бүлгийн толгой — татах цонхны бүлгүүдтэй ижил нэр/өнгө */}
+                  <div className="flex items-center gap-2 bg-slate-50/70 dark:bg-[#191b22] px-5 py-2">
+                    <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {group.label}
+                    </p>
+                    <span className="ml-auto text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+                      {group.docs.length}
+                    </span>
+                  </div>
+                  {group.docs.length === 0 ? (
+                    <p className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500">Олдоогүй</p>
+                  ) : (
+                  <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+                    {group.docs.map((doc) => (
                 <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
-                    <FileText className="h-4 w-4 text-red-500" />
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
+                    <FileText className="h-4 w-4 text-[#02c0ce]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                      {doc.file_type && (
+                        <span className="rounded-md bg-slate-200/70 dark:bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">
+                          {doc.file_type}
+                        </span>
+                      )}
+                      <span className="rounded-full bg-[#02c0ce]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02c0ce]">
+                        Эх сурвалж
+                      </span>
+                    </div>
+                    {/* Файл эх системийн сервер дээр байдаг тул хэмжээ 0 ирнэ — харуулахгүй */}
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
-                      {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
+                      {typeNameOf(doc) && <span className="text-[#02c0ce] mr-1.5">{typeNameOf(doc)} ·</span>}
+                      {formatDate(doc.uploaded_at)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <a
-                      href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
-                    {!isLocked && (
-                      <button
-                        onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(doc.id) })}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <a
+                    href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                    ))}
+                  </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Upload modal */}

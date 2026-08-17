@@ -77,7 +77,7 @@ function PlanCodeSearch({
   const trimmed = code.trim();
   const search = () => {
     if (!trimmed) {
-      setNotFound("Төлөвлөгөөний кодыг оруулна уу");
+      setNotFound("Төлөвлөгөөний нэгж талбарын дугаарыг оруулна уу");
       return;
     }
     searchMutation.mutate(trimmed);
@@ -88,12 +88,12 @@ function PlanCodeSearch({
       <div className="flex items-start gap-2">
         <input
           type="text"
-          placeholder="Төлөвлөгөөний код"
+          placeholder="Төлөвлөгөөний нэгж талбарын дугаар"
           value={code}
           onChange={(e) => {
             setCode(e.target.value);
             setNotFound(null);
-            // Код өөрчлөгдмөгц өмнөх хайлтын үр дүн хүчингүй — цааш
+            // Дугаар өөрчлөгдмөгц өмнөх хайлтын үр дүн хүчингүй — цааш
             // үргэлжлэхийг дахин хайх хүртэл хаана.
             if (plan) onReset();
           }}
@@ -124,7 +124,7 @@ function PlanCodeSearch({
         <div className="flex items-start gap-2 rounded-lg bg-[#f1556c]/8 border border-[#f1556c]/20 px-3 py-2">
           <AlertCircle className="h-3.5 w-3.5 text-[#f1556c] mt-0.5 shrink-0" />
           <p className="text-[12px] text-[#f1556c]">
-            {notFound}. Кодыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол чөлөөлөлт үүсгэх
+            {notFound}. Дугаарыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол чөлөөлөлт үүсгэх
             боломжгүй.
           </p>
         </div>
@@ -139,7 +139,10 @@ function PlanCodeSearch({
 function PlanInfoCard({ plan }: { plan: Plan }) {
   const rows: Array<[string, string | undefined | null]> = [
     ["Нэр", plan.name],
+    // Бүтээн байгуулалтын ажил — төлөвлөгөөний нэгж талбар дээр хийгдэх ажил
+    ["Бүтээн байгуулалт", plan.gazner],
     ["Төрөл", plan.plan_type_name],
+    ["Талбарын дугаар", plan.parcel_id],
     ["Талбай", (plan.area_m2 ?? 0) > 0 ? formatArea(plan.area_m2 ?? 0) : undefined],
     ["Батлагдсан", plan.approved_date],
     [
@@ -153,7 +156,7 @@ function PlanInfoCard({ plan }: { plan: Plan }) {
       <CheckCircle className="h-4 w-4 text-[#02c0ce] mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-mono font-semibold text-[#02c0ce]">
-          {plan.plan_code || plan.code}
+          {plan.parcel_id || plan.plan_code || plan.code}
         </p>
         <div className="mt-1 space-y-0.5">
           {rows
@@ -224,9 +227,11 @@ function CreateModal({ onClose }: CreateModalProps) {
 
   const handleSubmit = () => {
     // Төлөвлөгөө ОЛДООГҮЙ бол чөлөөлөлт үүсгэхгүй (1-р алхмын хамгаалалт).
-    const planCode = plan?.plan_code || plan?.code || "";
-    if (!plan || !planCode) {
-      toast.error("Газар зохион байгуулалтын төлөвлөгөөг кодоор хайж олно уу");
+    // Backend руу ЗӨВХӨН нэгж талбарын дугаарыг явуулна — төлөвлөгөөг тэндээс
+    // нь хайж олоод, шалгаж, чөлөөлөлттэй холбох ажлыг backend хийнэ.
+    const planParcelId = plan?.parcel_id || "";
+    if (!plan || !planParcelId) {
+      toast.error("Газар зохион байгуулалтын төлөвлөгөөг нэгж талбарын дугаараар хайж олно уу");
       setStep(1);
       return;
     }
@@ -243,7 +248,7 @@ function CreateModal({ onClose }: CreateModalProps) {
       return;
     }
     const fd = new FormData();
-    fd.append("plan_code", planCode);
+    fd.append("plan_parcel_id", planParcelId);
     fd.append("start_date", startDate);
     fd.append("acquisition_name", projectName);
     fd.append("implementing_org", implementingOrg);
@@ -321,10 +326,10 @@ function CreateModal({ onClose }: CreateModalProps) {
           {step === 1 ? (
             <div className="space-y-4">
               <p className="text-[13px] text-slate-500 dark:text-slate-400">
-                Газар зохион байгуулалтын төлөвлөгөөний кодыг оруулж хайна уу.
+                Газар зохион байгуулалтын төлөвлөгөөний нэгж талбарын дугаарыг оруулж хайна уу.
               </p>
               <div>
-                <label className={labelCls}>Төлөвлөгөөний код *</label>
+                <label className={labelCls}>Төлөвлөгөөний нэгж талбарын дугаар *</label>
                 <PlanCodeSearch
                   plan={plan}
                   onFound={setPlan}
@@ -350,8 +355,8 @@ function CreateModal({ onClose }: CreateModalProps) {
                 <div className="flex items-start gap-3 p-3 rounded-xl bg-[#02c0ce]/8 dark:bg-[#02c0ce]/10 border border-solid border-[#02c0ce]/20">
                   <CheckCircle className="h-4 w-4 text-[#02c0ce] mt-0.5 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-[#02c0ce]">
-                      {plan.plan_code}
+                    <p className="text-[13px] font-mono font-semibold text-[#02c0ce]">
+                      {plan.parcel_id || plan.plan_code}
                     </p>
                     {plan.name && (
                       <p className="text-[12px] text-slate-600 dark:text-slate-400 truncate mt-0.5">

@@ -66,11 +66,16 @@ export interface Plan {
   name: string;
   area_m2?: number;
   status?: number;
+  /** @deprecated Backend буцаахаа больсон — хил зөвхөн backend-д хадгалагдана */
   boundary_wkt?: string;
   // Дундын сервисийн (middleware /plan/project) нэмэлт талбарууд
   code?: string;
   project_id?: string;
   plan_type_name?: string;
+  /** Төлөвлөгөөний нэгж талбарын дугаар — төлөвлөгөөг ҮҮГЭЭР хайна */
+  parcel_id?: string;
+  /** Бүтээн байгуулалтын ажил, ж: "Дамбадаржаа дэд төвийн бүтээн байгуулалтын ажил" */
+  gazner?: string;
   start_date?: string | null;
   end_date?: string | null;
   approved_date?: string | null;
@@ -376,6 +381,113 @@ export interface Document {
   uploaded_by: string;
   uploaded_at: string;
   document_type_id?: number;
+  /**
+   * Эх системийн (ГУС) баримтын дугаар.
+   * - утгатай → эх системээс ТАТАГДСАН хавсралт (устгах боломжгүй, дараагийн
+   *   татахад буцаж орж ирнэ)
+   * - хоосон/байхгүй → хэрэглэгч ГАРААР оруулсан
+   */
+  source_doc_id?: string;
+  /**
+   * ГУС-ийн баримтын үүргийн код (ж: "1"=Өргөдөл, "11"=Кадастрын зураг).
+   * Хавсралтыг Кадастр/Төлбөр/Мониторинг гэж бүлэглэхэд ашиглана.
+   * document_type_id-тай ХАМААРАЛГҮЙ — дугаарлалт нь огт өөр.
+   */
+  source_doc_code?: string;
+}
+
+/**
+ * Нэгж талбарын хавсралт татсаны үр дүн.
+ * Татах нь ЗӨВХӨН НЭМЭХ үйлдэл — юу ч устгагдахгүй, дарагдахгүй тул дахин
+ * дахин дарж болно (2 дахь удаад saved=0, skipped=N).
+ */
+/** Эзэмшигчийн мэдээлэл татсаны үр дүн */
+export interface ParcelHolderSyncResult {
+  /** ГУС-аас ирсэн нийт */
+  found: number;
+  /** Хадгалагдсан (регистрийн давхардал хассаны дараах) */
+  saved: number;
+  /** Регистр давхцсан тул алгасагдсан */
+  skipped: number;
+}
+
+/** Газрын суурь үнэ (ГУС data_cama) */
+export interface ParcelBasePrice {
+  base_price: number;
+  base_price_m2: number;
+  calculate_year: number;
+}
+
+/** Газрын төлбөрийн нэхэмжлэл */
+export interface ParcelInvoice {
+  invoice_no: string;
+  description: string;
+  amount: number;
+  paid_amount: number;
+  status_id: number;
+  status_name: string;
+}
+
+export interface ParcelInvoiceSyncResult {
+  found: number;
+  invoices: ParcelInvoice[];
+}
+
+/** Барьцаа. source_parent_id утгатай бол ДАВХАР барьцаа */
+export interface ParcelMortgage {
+  id: string;
+  source_id: string;
+  source_parent_id: string;
+  app_no: string;
+  start_mortgage_period: string;
+  end_mortgage_period: string;
+  loan_contract_no: string;
+  mortgage_contract_no: string;
+  loan_contract_amount: number;
+  monetary_unit_value: number;
+  unit_type: string;
+  mortgage_type: string;
+  status_id: string;
+  status_name: string;
+}
+
+/** Шүүхийн шийдвэр */
+export interface ParcelCourtDecision {
+  id: string;
+  source_id: string;
+  app_no: string;
+  start_period: string;
+  end_period: string;
+  court_status: string;
+  status_name: string;
+  court_decision_no: string;
+}
+
+/** Хянан баталгааны мэдээлэл */
+export interface ParcelMonitoring {
+  id: string;
+  monitoring_id: string;
+  page_no: string;
+  status_name: string;
+  company_name: string;
+  created_at: string;
+}
+
+/** Татаж хадгалсан бичлэгийн тоо */
+export interface ParcelSyncCountResult {
+  found: number;
+  saved: number;
+}
+
+export interface ParcelDocumentSyncResult {
+  /** Эх системд олдсон нийт */
+  found: number;
+  /** Шинээр нэмэгдсэн */
+  saved: number;
+  /** Өмнө нь татагдсан тул алгасагдсан */
+  skipped: number;
+  /** Татсаны дараах ЭЦСИЙН бүх хавсралт — жагсаалтыг үүгээр шууд шинэчилнэ */
+  documents: Document[];
 }
 
 /**
@@ -528,6 +640,21 @@ export interface ParcelFull extends Parcel {
   old_parcel_id?: string;
   valid_from?: string;
   valid_till?: string;
+  // ГУС-аас татагддаг ч урьд нь дэлгэцэд гардаггүй байсан талбарууд
+  landuse_name?: string;
+  address_khashaa?: string;
+  address_streetname?: string;
+  property_no?: string;
+  /** Бүх эзэмшигч (үндсэн + хамтран). detail.holder_* нь зөвхөн үндсэнийг заана. */
+  holders?: ParcelHolder[];
+  /** ГУС-аас татагдсан барьцаа. source_parent_id утгатай нь ДАВХАР барьцаа */
+  mortgages?: ParcelMortgage[];
+  /** Шүүхийн шийдвэрүүд */
+  court_decisions?: ParcelCourtDecision[];
+  /** Газрын төлбөрийн нэхэмжлэлүүд */
+  invoices?: ParcelInvoice[];
+  /** Хянан баталгааны мэдээлэл */
+  monitorings?: ParcelMonitoring[];
   geometry_wkt: string;
   acquisition_geom_wkt: string;
   status_id: number;
@@ -563,16 +690,66 @@ export interface ParcelDetail {
   holder_type: string;
   holder_civil_id: string;
   app_no: string;
+  // Өргөдлийн дэлгэрэнгүй — ГУС-аас татагддаг ч урьд нь дэлгэцэд гардаггүй байсан
+  app_timestamp?: string;
+  app_type?: string;
+  app_status?: string;
   decision_no: string;
   decision_date?: string;
   contract_no: string;
   contract_date?: string;
+  contract_begin?: string;
+  contract_end?: string;
+  contract_property_no?: string;
+  contract_status?: string;
   certificate_no: string;
   certificate_date?: string;
+  // Улсын бүртгэлийн мэдээлэл
+  record_no?: string;
+  record_date?: string;
+  record_certificate_no?: string;
+  record_status?: string;
   valuation_zone: string;
   base_price_per_ha?: number;
   auction_coeff?: number;
   auction_price?: number;
+}
+
+/**
+ * Нэгж талбарын эзэмшигч — нэг хүсэлт (app_no) дээр олон хүн байж болно.
+ * main_applicant нь үндсэн өргөдөл гаргагчийг заана; эх системд нэгээс олон
+ * үндсэн өргөдөл гаргагч ирэх тохиолдол БАЙНА.
+ */
+export interface ParcelHolder {
+  id: string;
+  main_applicant: boolean;
+  last_name: string;
+  name: string;
+  register_no: string;
+  phone: string;
+  email: string;
+  /** Жишээ нь "3: Монгол улсын хуулийн этгээд" — хуулийн этгээд үед last_name хоосон */
+  person_type: string;
+  app_no: string;
+  /** holder = ГУС-аас татагдсан, representative = гараар бүртгэсэн итгэмжлэгдсэн төлөөлөгч */
+  holder_role: ParcelHolderRole;
+  /** Нөхөн төлбөр хүлээн авах эзэмшигч — нэгж талбарт зөвхөн НЭГ мөр true */
+  payment_recipient: boolean;
+  note?: string;
+  address?: string;
+}
+
+export type ParcelHolderRole = "holder" | "representative";
+
+/** Итгэмжлэгдсэн төлөөлөгч бүртгэх маягтын утга (backend first_name = right_holder.name) */
+export interface RepresentativeInput {
+  last_name: string;
+  first_name: string;
+  register_no: string;
+  phone: string;
+  email: string;
+  address: string;
+  note: string;
 }
 
 export interface GlobalParcel {

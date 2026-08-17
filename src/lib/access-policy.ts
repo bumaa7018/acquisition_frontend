@@ -52,6 +52,7 @@ export type ParcelTabKey =
   | "progress"
   | "realEstate"
   | "documents"
+  | "finance"
   | "decree"
   | "print";
 
