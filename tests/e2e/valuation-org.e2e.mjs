@@ -41,12 +41,20 @@ async function request(path, { token, method = "GET", body } = {}) {
   return { res, json };
 }
 
+// /auth бүлэг минутад 30 хүсэлтийн хязгаартай тул нэг ажиллагааны дотор нэг
+// хэрэглэгчээр давтан нэвтрэхгүй — токеныг кэшлэнэ. ШИНЭ нэвтрэлт шаардсан
+// тестүүд (идэвхгүй болсны дараах шалгалт г.м.) /auth/login-г ШУУД дуудна.
+const tokenCache = new Map();
+
 async function login(username, password) {
+  const key = `${username}:${password}`;
+  if (tokenCache.has(key)) return tokenCache.get(key);
   const { res, json } = await request("/auth/login", {
     method: "POST",
     body: { username, password },
   });
   assert.equal(res.status, 200, `login failed for ${username}: ${res.status}`);
+  tokenCache.set(key, json.data.access_token);
   return json.data.access_token;
 }
 
@@ -368,9 +376,13 @@ test("байгууллага устахад ажилтан нь ӨӨР байг�
   const del = await request(`/valuation-orgs/${tmpId}`, { token: admin, method: "DELETE" });
   assert.equal(del.res.status, 200);
 
-  // Ажилтан салгагдсан тул нэвтрэхэд org_id ОГТ гарах ёсгүй.
-  const c = claims(await login(tmpUser, "Testpass123!"));
-  assert.equal(c.org_id, undefined, `устгасан байгууллагын ажилтан org_id авсаар байна: ${c.org_id}`);
+  // Байгууллага устахад ажилтан салгагдаад зогсохгүй нэвтрэх эрх нь ч хаагдана
+  // (мөр устгагдахгүй — зөвхөн төлөв). Иймд нэвтрэлт татгалзагдана.
+  const { res } = await request("/auth/login", {
+    method: "POST",
+    body: { username: tmpUser, password: "Testpass123!" },
+  });
+  assert.equal(res.status, 401, `устгасан байгууллагын ажилтан нэвтэрсэн хэвээр: ${res.status}`);
 });
 
 test("цэвэрлэгээ: оноолт салгаж, байгууллагыг устгана", async () => {
@@ -386,4 +398,73 @@ test("цэвэрлэгээ: оноолт салгаж, байгууллагыг 
 
   const del = await request(`/valuation-orgs/${scoped.orgId}`, { token: admin, method: "DELETE" });
   assert.equal(del.res.status, 200, `устгах: ${del.res.status}`);
+});
+
+// ── 7. Идэвхтэй эсэхийн шалгалт ─────────────────────────────────────────────
+
+const act = { orgId: null, user: null };
+
+test("бэлтгэл: идэвхжилт шалгах байгууллага + ажилтан", async () => {
+  act.user = `e2e_act_${suffix}`.replace(/-/g, "_");
+  const { res, json } = await request("/valuation-orgs", {
+    token: admin,
+    method: "POST",
+    body: {
+      name: `E2E Идэвхжилт ${suffix}`,
+      employees: [{
+        last_name: "Идэвх", first_name: "Тест", register_no: reg("7"),
+        position_name: "Үнэлгээчин", username: act.user, password: "Testpass123!",
+      }],
+    },
+  });
+  assert.equal(res.status, 201, `${res.status} ${JSON.stringify(json)}`);
+  act.orgId = String(json.data.id);
+});
+
+test("нэвтрэх нэр нь ИМЭЙЛ байх шаардлагагүй", async () => {
+  // "e2e_act_…" нь имэйл биш — backend үүнийг хүлээж авах ёстой.
+  const t = await login(act.user, "Testpass123!");
+  assert.ok(t, "энгийн нэвтрэх нэрээр нэвтэрч чадсангүй");
+  assert.equal(claims(t).org_id, Number(act.orgId));
+});
+
+test("имэйлээр ч нэвтэрч болно (хоёулаа дэмжигдэнэ)", async () => {
+  const { res, json } = await request("/auth/login", {
+    method: "POST",
+    body: { username: ADMIN_USER, password: ADMIN_PASS },
+  });
+  assert.equal(res.status, 200);
+  assert.ok(json.data.access_token);
+});
+
+test("ажилтныг байгууллагаас хасахад НЭВТРЭХ ЭРХ нь хаагдана", async () => {
+  // Ажилтныг жагсаалтаас хасна (мөр устахгүй — зөвхөн төлөв).
+  const upd = await request(`/valuation-orgs/${act.orgId}`, {
+    token: admin,
+    method: "PUT",
+    body: { name: `E2E Идэвхжилт ${suffix}`, employees: [] },
+  });
+  assert.equal(upd.res.status, 200, `${upd.res.status} ${JSON.stringify(upd.json)}`);
+  assert.equal(upd.json.data.employee_count, 0);
+
+  // Өмнө нь ажилтан хасагдсан ч sd_user идэвхтэй хэвээр үлдэж, нэвтэрсээр байв.
+  const { res, json } = await request("/auth/login", {
+    method: "POST",
+    body: { username: act.user, password: "Testpass123!" },
+  });
+  assert.equal(res.status, 401, `хасагдсан ажилтан нэвтэрсэн хэвээр: ${res.status} ${JSON.stringify(json)}`);
+});
+
+test("идэвхгүй хэрэглэгч 'олдсонгүй' (401) болно — 403 биш", async () => {
+  // Бүртгэл байгаа эсэхийг гаднаас таамаглах боломжгүй байх ёстой.
+  const { res } = await request("/auth/login", {
+    method: "POST",
+    body: { username: act.user, password: "buruu-nuuts-ug" },
+  });
+  assert.equal(res.status, 401);
+});
+
+test("цэвэрлэгээ: идэвхжилтийн байгууллагыг устгах", async () => {
+  const del = await request(`/valuation-orgs/${act.orgId}`, { token: admin, method: "DELETE" });
+  assert.equal(del.res.status, 200);
 });

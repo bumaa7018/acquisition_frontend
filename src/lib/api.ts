@@ -349,8 +349,9 @@ function normalizeUser(raw: any): User {
 }
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post<ApiResponse<LoginResponse>>('/auth/login', { username: email, password }).then(r => r.data.data),
+  // login нь нэвтрэх нэр ЭСВЭЛ имэйл — backend хоёуланг нь хүлээж авна.
+  login: (login: string, password: string) =>
+    api.post<ApiResponse<LoginResponse>>('/auth/login', { username: login, password }).then(r => r.data.data),
   // Refresh токеноо хамт илгээж хоёуланг нь хүчингүй болгоно
   logout: () => api.post('/auth/logout', { refresh_token: authStorage.getRefreshToken() }).then(r => r.data),
   me: () => api.get<ApiResponse<User>>('/users/me').then(r => normalizeUser(r.data.data)),

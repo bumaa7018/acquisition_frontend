@@ -19,8 +19,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+// Нэвтрэх талбар нь имэйл байх ШААРДЛАГАГҮЙ: backend нь нэвтрэх нэр эсвэл
+// имэйл хоёуланг нь хүлээж авдаг тул "user0101010" гэх мэт энгийн нэр ч
+// хүчинтэй. Өмнө нь энд .email() шалгалт байсан нь имэйл биш нэртэй
+// хэрэглэгчдийг маягт дээрээ саатуулж байв.
 const schema = z.object({
-  email: z.string().email("Имэйл буруу"),
+  login: z.string().min(1, "Нэвтрэх нэр оруулна уу"),
   password: z.string().min(4, "Нууц үг хэт богино"),
 });
 type FormData = z.infer<typeof schema>;
@@ -39,7 +43,7 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
-      const res = await authApi.login(data.email, data.password);
+      const res = await authApi.login(data.login, data.password);
       authStorage.setTokens(res.access_token, res.refresh_token);
       // Cookie тохирсоныг навигацаас ӨМНӨ баталгаажуулна — эхний map/файл
       // хүсэлт cookie-гүй явж 401 болох race-аас сэргийлнэ.
@@ -82,18 +86,22 @@ export default function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-300">
-                  Имэйл
+                <Label htmlFor="login" className="text-slate-300">
+                  Нэвтрэх нэр эсвэл имэйл
                 </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="admin@example.com"
+                  id="login"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="username"
+                  placeholder="admin эсвэл admin@example.com"
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
-                  {...register("email")}
+                  {...register("login")}
                 />
-                {errors.email && (
-                  <p className="text-xs text-red-400">{errors.email.message}</p>
+                {errors.login && (
+                  <p className="text-xs text-red-400">{errors.login.message}</p>
                 )}
               </div>
               <div className="space-y-2">
