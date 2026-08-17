@@ -25,6 +25,7 @@ import {
   canUpdateRole,
   canUpdateUser,
   canViewPermissions,
+  canViewSystemSettings,
   canViewHrRegistry,
   canCreateHrRecord,
   canUpdateHrRecord,
@@ -53,12 +54,23 @@ import {
   layerTextToWkt,
 } from "../src/lib/geometry-utils.ts";
 
+// Мэргэжлийн байгууллагын хандалт нь ХЭРЭГЛЭГЧИЙН биш БАЙГУУЛЛАГЫН
+// харьяалалаар (orgId) шийдэгддэг. Тиймээс userId нь org-оос ЗОРИУД өөр —
+// хоёрыг андуурсан тохиолдолд эдгээр тест барих ёстой.
 const primaryProfessional = {
-  userId: "professional-primary",
+  userId: "primary-employee-1",
+  orgId: "org-primary",
+  roles: ["professional_org"],
+};
+// Нэг байгууллагын ӨӨР ажилтан — ижил эрхтэй байх ёстой.
+const primaryProfessionalColleague = {
+  userId: "primary-employee-2",
+  orgId: "org-primary",
   roles: ["professional_org"],
 };
 const independentProfessional = {
-  userId: "professional-independent",
+  userId: "independent-employee-1",
+  orgId: "org-independent",
   roles: ["professional_org"],
 };
 const mika = { userId: "mika-user", roles: ["mika"] };
@@ -77,14 +89,14 @@ const decisionSpecialist = {
   permissions: ["land:read", "decision:read", "decision:create", "decision:update"],
 };
 
-const acquisition = { professional_org_id: "professional-primary" };
+const acquisition = { professional_org_id: "org-primary" };
 const evaluationParcel = {
   status_name: EVALUATION_STATUS_NAME,
-  independent_org_id: "professional-independent",
+  independent_org_id: "org-independent",
 };
 const waitingParcel = {
   status_name: "Хүлээгдэж буй",
-  independent_org_id: "professional-independent",
+  independent_org_id: "org-independent",
 };
 
 test("мэргэжлийн байгууллага зөвхөн өөрт холбогдсон чөлөөлөлтийг харна", () => {
@@ -100,9 +112,23 @@ test("мэргэжлийн байгууллага зөвхөн өөрт холб
   );
   assert.equal(
     canAccessAcquisitionForActor(
-      { userId: "other-professional", roles: ["professional_org"] },
+      { userId: "other-employee", orgId: "org-other", roles: ["professional_org"] },
       acquisition,
       [evaluationParcel],
+    ),
+    false,
+  );
+  // Нэг байгууллагын өөр ажилтан ижил эрхтэй — байгууллагад олон ажилтан
+  // бүртгэгддэг болсны гол үр дүн.
+  assert.equal(
+    canAccessAcquisitionForActor(primaryProfessionalColleague, acquisition),
+    true,
+  );
+  // Байгууллагын харьяалалгүй (ажилтны бүртгэлгүй) хэрэглэгч нэвтэрч чадахгүй.
+  assert.equal(
+    canAccessAcquisitionForActor(
+      { userId: "primary-employee-1", roles: ["professional_org"] },
+      acquisition,
     ),
     false,
   );
@@ -215,7 +241,7 @@ test("нөхөх олговорын дэд tab харах эрхүүд зөв б
   );
   assert.equal(
     canViewValuationSubTabForActor(
-      { userId: "other-professional", roles: ["professional_org"] },
+      { userId: "other-employee", orgId: "org-other", roles: ["professional_org"] },
       "asset",
       null,
       acquisition,
@@ -570,10 +596,12 @@ test("удирдлагын хуудсууд эрхгүй хэрэглэгчид 
   assert.equal(canViewUsersPage(admin), true);
   assert.equal(canViewRolesPage(admin), true);
   assert.equal(canViewPermissions(admin), true);
+  assert.equal(canViewSystemSettings(admin), true);
 
   assert.equal(canViewUsersPage(plainEmployee), false);
   assert.equal(canViewRolesPage(plainEmployee), false);
   assert.equal(canViewPermissions(plainEmployee), false);
+  assert.equal(canViewSystemSettings(plainEmployee), false);
 
   // permissions талбар байхгүй actor — шалгалт бүр false
   assert.equal(canViewUsersPage({ userId: "x", roles: ["admin"] }), false);
@@ -583,14 +611,15 @@ test("удирдлагын хуудсууд эрхгүй хэрэглэгчид 
 test("гадаад ролиуд эрхтэй байсан ч удирдлагын цэсэд хандахгүй", () => {
   assert.equal(canViewUsersPage(externalWithAdminPerms), false);
   assert.equal(canViewRolesPage(externalWithAdminPerms), false);
+  assert.equal(canViewSystemSettings(externalWithAdminPerms), false);
   assert.equal(canCreateUser(externalWithAdminPerms), false);
   assert.equal(canUpdateUser(externalWithAdminPerms), false);
   assert.equal(canDeleteUserRow(externalWithAdminPerms, "someone-else"), false);
   assert.equal(canManageRolePermissions(externalWithAdminPerms), false);
 });
 
-test("зөвхөн харах эрхтэй хэрэглэгч засах үйлдэл хийхгүй", () => {
-  assert.equal(canViewUsersPage(readOnlyAdmin), true);
+test("зөвхөн харах эрхтэй non-admin хэрэглэгч удирдлагын хуудас харахгүй, засах үйлдэл хийхгүй", () => {
+  assert.equal(canViewUsersPage(readOnlyAdmin), false);
   assert.equal(canCreateUser(readOnlyAdmin), false);
   assert.equal(canUpdateUser(readOnlyAdmin), false);
   assert.equal(canDeleteUserRow(readOnlyAdmin, "other-user"), false);
@@ -629,6 +658,29 @@ test("эрх нэмэгдүүлэлт: өөрт байхгүй эрхийг ол
   // Ганц ч эрх дутвал бүхэлдээ татгалзана
   assert.equal(
     canGrantRoleForActor(readOnlyAdmin, ["users:read", "roles:update"]),
+    false,
+  );
+});
+
+test("10-р системийн admin зөвхөн land/compensation/decision эрхүүдийг тохируулна", () => {
+  const system10Admin = {
+    userId: "system10-admin",
+    roles: ["admin"],
+    permissions: ["users:read", "users:create", "roles:read", "permissions:read", "hr:read", "hr:create"],
+  };
+
+  assert.equal(canViewSystemSettings(system10Admin), true);
+  assert.equal(canManageRolePermissions(system10Admin), true);
+  assert.equal(canGrantPermissionForActor(system10Admin, "land:read"), true);
+  assert.equal(canGrantPermissionForActor(system10Admin, "compensation:update"), true);
+  assert.equal(canGrantPermissionForActor(system10Admin, "decision:create"), true);
+  assert.equal(canGrantPermissionForActor(system10Admin, "users:delete"), false);
+  assert.equal(
+    canGrantRoleForActor(system10Admin, ["land:read", "compensation:update", "decision:create"]),
+    true,
+  );
+  assert.equal(
+    canGrantRoleForActor(system10Admin, ["land:read", "users:delete"]),
     false,
   );
 });

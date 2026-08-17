@@ -87,8 +87,8 @@ export default function AcquisitionDetailPage() {
   function handleTabClick(key: Tab) {
     setTab(key);
   }
-  // Backend PUT нь ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
-  const canEditBase = hasRole("senior_specialist", "Ахлах мэргэжилтэн") && hasPermission("land:update");
+  // Backend PUT нь admin эсвэл ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
+  const canEditBase = hasRole("admin", "senior_specialist", "Ахлах мэргэжилтэн") && hasPermission("land:update");
 
   const { data: acq, isLoading, error } = useQuery({
     queryKey: ["land", id],

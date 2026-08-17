@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3000";
 const API = `${BASE}/api/v1`;
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+const shortSuffix = Math.random().toString(36).slice(2, 8).toUpperCase();
 
 async function request(path, { token, method = "GET", body } = {}) {
   const res = await fetch(`${API}${path}`, {
@@ -94,7 +95,7 @@ test("authdb HR chain happy path, business rules, permissions", async () => {
     out = await request("/persons", {
       token: admin,
       method: "POST",
-      body: { person_type: "citizen", register_no: `E2EP${suffix}`, last_name: "E2E", first_name: `Иргэн ${suffix}` },
+      body: { person_type: "citizen", register_no: `E2${shortSuffix}`, last_name: "E2E", first_name: `Иргэн ${suffix}` },
     });
     assert.equal(out.res.status, 201);
     created.person = out.json.data;
@@ -107,7 +108,6 @@ test("authdb HR chain happy path, business rules, permissions", async () => {
         organization_id: created.org.id,
         department_id: created.dep.id,
         position_id: created.pos.id,
-        employee_no: `E2E-EMP-${suffix}`,
       },
     });
     assert.equal(out.res.status, 201);
@@ -152,7 +152,7 @@ test("authdb HR chain happy path, business rules, permissions", async () => {
 
     await expectStatus(admin, "DELETE", `/persons/${created.person.id}`, null, 409);
 
-    const txRegister = `TX-${suffix}`;
+    const txRegister = `TX${shortSuffix}`;
     const badPositionID = "00000000-0000-0000-0000-000000000404";
     const tx = await request("/users", {
       token: admin,

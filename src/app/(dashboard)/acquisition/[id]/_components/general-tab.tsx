@@ -25,9 +25,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
   });
-  const { data: professionalOrgUsers = [] } = useQuery({
-    queryKey: ["professional-org-users"],
-    queryFn: () => landApi.listProfessionalOrgUsers(),
+  // Үнэлгээний БАЙГУУЛЛАГУУД (өмнө нь professional_org рольтой хэрэглэгчид).
+  const { data: valuationOrgs = [] } = useQuery({
+    queryKey: ["valuation-orgs"],
+    queryFn: () => landApi.listValuationOrgs(),
     enabled: canEdit,
     staleTime: 60_000,
   });
@@ -470,10 +471,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                 className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
               >
                 <option value="">— Сонгоно уу —</option>
-                {professionalOrgUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {[u.first_name, u.last_name].filter(Boolean).join(" ") || u.email}
-                    {u.position ? ` · ${u.position}` : ""}
+                {valuationOrgs.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name}
+                    {org.register_no ? ` · ${org.register_no}` : ""}
                   </option>
                 ))}
               </select>

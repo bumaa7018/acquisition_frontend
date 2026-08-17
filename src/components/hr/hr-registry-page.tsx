@@ -38,10 +38,10 @@ const meta = {
 
 function emptyForm(mode: Mode): FormState {
   if (mode === "person") return { person_type: "citizen", register_no: "", last_name: "", first_name: "", legal_name: "", phone: "", email: "" };
-  if (mode === "employee") return { person_id: "", person_label: "", new_person: false, person_type: "citizen", register_no: "", last_name: "", first_name: "", legal_name: "", organization_id: "", department_id: "", position_id: "", employee_no: "", work_email: "", work_phone: "" };
-  if (mode === "department") return { organization_id: "", name: "", code: "", sort_order: "0" };
-  if (mode === "position") return { name: "", code: "", sort_order: "0" };
-  return { name: "", short_name: "", register_no: "", phone: "", email: "", address: "" };
+  if (mode === "employee") return { person_id: "", person_label: "", new_person: false, person_type: "citizen", register_no: "", last_name: "", first_name: "", legal_name: "", organization_id: "", department_id: "", position_id: "", work_email: "", work_phone: "" };
+  if (mode === "department") return { organization_id: "", name: "", code: "" };
+  if (mode === "position") return { name: "", code: "" };
+  return { name: "" };
 }
 
 function rowTitle(row: Row, mode: Mode) {
@@ -85,23 +85,20 @@ function personTypeBadge(type: Person["person_type"]) {
 }
 
 const columns: Record<Mode, Column[]> = {
+  // sd_organization-д ЗӨВХӨН (id, name) багана байдаг. Регистр, тусгай
+  // зөвшөөрөл зэрэг нэмэлт мэдээлэл нь ЗӨВХӨН үнэлгээний байгууллагад
+  // хамаарах бөгөөд /valuation_org дэлгэц дээр бүртгэгдэнэ.
   organization: [
     { key: "name", label: "Нэр", value: (r) => (r as Organization).name },
-    { key: "short_name", label: "Товч нэр", value: (r) => dash((r as Organization).short_name) },
-    { key: "register_no", label: "ТТД", value: (r) => dash((r as Organization).register_no), mono: true },
-    { key: "phone", label: "Утас", value: (r) => dash((r as Organization).phone), mono: true, hideSm: true },
-    { key: "email", label: "Имэйл", value: (r) => dash((r as Organization).email), hideSm: true },
   ],
   department: [
     { key: "name", label: "Нэр", value: (r) => (r as Department).name },
     { key: "code", label: "Код", value: (r) => dash((r as Department).code), mono: true },
     { key: "organization_name", label: "Байгууллага", value: (r) => dash((r as Department).organization_name) },
-    { key: "sort_order", label: "Дараалал", value: (r) => dash((r as Department).sort_order), mono: true, hideSm: true },
   ],
   position: [
     { key: "name", label: "Нэр", value: (r) => dash((r as Position).name) },
     { key: "code", label: "Код", value: (r) => dash((r as Position).code), mono: true },
-    { key: "sort_order", label: "Дараалал", value: (r) => dash((r as Position).sort_order), mono: true, hideSm: true },
   ],
   person: [
     { key: "name", label: "Нэр", value: (r) => dash(rowTitle(r, "person")) },
@@ -115,7 +112,6 @@ const columns: Record<Mode, Column[]> = {
     { key: "position_name", label: "Албан тушаал", value: (r) => dash((r as Employee).position_name) },
     { key: "department_name", label: "Алба, хэлтэс", value: (r) => dash((r as Employee).department_name) },
     { key: "organization_name", label: "Байгууллага", value: (r) => dash((r as Employee).organization_name), hideSm: true },
-    { key: "employee_no", label: "Ажилтны дугаар", value: (r) => dash((r as Employee).employee_no), mono: true, hideSm: true },
     { key: "work_email", label: "Ажлын имэйл", value: (r) => dash((r as Employee).work_email), hideSm: true },
   ],
 };
@@ -165,11 +161,11 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["hr", mode] });
 
   const payload = (): OrganizationPayload | DepartmentPayload | PositionPayload | PersonPayload | EmployeePayload => {
-    if (mode === "organization") return { name: String(form.name || "").trim(), short_name: String(form.short_name || "") || undefined, register_no: String(form.register_no || "") || undefined, phone: String(form.phone || "") || undefined, email: String(form.email || "") || undefined, address: String(form.address || "") || undefined };
-    if (mode === "department") return { organization_id: String(form.organization_id || ""), name: String(form.name || "").trim(), code: String(form.code || "") || undefined, sort_order: Number(form.sort_order || 0) };
-    if (mode === "position") return { name: String(form.name || "").trim(), code: String(form.code || "") || undefined, sort_order: Number(form.sort_order || 0) };
+    if (mode === "organization") return { name: String(form.name || "").trim() };
+    if (mode === "department") return { organization_id: String(form.organization_id || ""), name: String(form.name || "").trim(), code: String(form.code || "") || undefined };
+    if (mode === "position") return { name: String(form.name || "").trim(), code: String(form.code || "") || undefined };
     if (mode === "person") return { person_type: form.person_type === "legal" ? "legal" : "citizen", register_no: String(form.register_no || "").trim(), last_name: String(form.last_name || "") || undefined, first_name: String(form.first_name || "") || undefined, legal_name: String(form.legal_name || "") || undefined, phone: String(form.phone || "") || undefined, email: String(form.email || "") || undefined };
-    const p: EmployeePayload = { organization_id: String(form.organization_id || ""), department_id: String(form.department_id || "") || undefined, position_id: String(form.position_id || ""), employee_no: String(form.employee_no || "") || undefined, work_email: String(form.work_email || "") || undefined, work_phone: String(form.work_phone || "") || undefined };
+    const p: EmployeePayload = { organization_id: String(form.organization_id || ""), department_id: String(form.department_id || "") || undefined, position_id: String(form.position_id || ""), work_email: String(form.work_email || "") || undefined, work_phone: String(form.work_phone || "") || undefined };
     if (form.new_person) {
       p.person = { person_type: form.person_type === "legal" ? "legal" : "citizen", register_no: String(form.register_no || "").trim(), last_name: String(form.last_name || "") || undefined, first_name: String(form.first_name || "") || undefined, legal_name: String(form.legal_name || "") || undefined };
     } else {
@@ -214,15 +210,15 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
     setEdit(row);
     setFormOpen(true);
     if (mode === "organization") {
-      const r = row as Organization; setForm({ name: r.name, short_name: r.short_name ?? "", register_no: r.register_no ?? "", phone: r.phone ?? "", email: r.email ?? "", address: r.address ?? "" });
+      const r = row as Organization; setForm({ name: r.name });
     } else if (mode === "department") {
-      const r = row as Department; setForm({ organization_id: r.organization_id, name: r.name, code: r.code ?? "", sort_order: String(r.sort_order ?? 0) });
+      const r = row as Department; setForm({ organization_id: r.organization_id, name: r.name, code: r.code ?? "" });
     } else if (mode === "position") {
-      const r = row as Position; setForm({ name: r.name, code: r.code ?? "", sort_order: String(r.sort_order ?? 0) });
+      const r = row as Position; setForm({ name: r.name, code: r.code ?? "" });
     } else if (mode === "person") {
       const r = row as Person; setForm({ person_type: r.person_type, register_no: r.register_no, last_name: r.last_name ?? "", first_name: r.first_name ?? "", legal_name: r.legal_name ?? "", phone: r.phone ?? "", email: r.email ?? "" });
     } else {
-      const r = row as Employee; setForm({ person_id: r.person_id, person_label: r.person_name ?? "", new_person: false, organization_id: r.organization_id, department_id: r.department_id ?? "", position_id: r.position_id, employee_no: r.employee_no ?? "", work_email: r.work_email ?? "", work_phone: r.work_phone ?? "" });
+      const r = row as Employee; setForm({ person_id: r.person_id, person_label: r.person_name ?? "", new_person: false, organization_id: r.organization_id, department_id: r.department_id ?? "", position_id: r.position_id, work_email: r.work_email ?? "", work_phone: r.work_phone ?? "" });
     }
   };
 
@@ -277,7 +273,6 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
                     <option value="">Албан тушаал *</option>
                     {positions.data?.data.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  <input value={String(form.employee_no || "")} onChange={(e) => setForm((f) => ({ ...f, employee_no: e.target.value }))} placeholder="Ажилтны дугаар" className={inputCls} />
                   <input value={String(form.work_email || "")} onChange={(e) => setForm((f) => ({ ...f, work_email: e.target.value }))} placeholder="Ажлын имэйл" className={inputCls} />
                   <input value={String(form.work_phone || "")} onChange={(e) => setForm((f) => ({ ...f, work_phone: e.target.value }))} placeholder="Ажлын утас" className={inputCls} />
                   <label className="col-span-full flex w-fit items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300">
@@ -304,8 +299,6 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
                 <>
                   <input value={String(form.name || "")} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Нэр *" className={inputCls} />
                   {mode !== "organization" && <input value={String(form.code || "")} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="Код" className={inputCls} />}
-                  {mode === "organization" && <input value={String(form.short_name || "")} onChange={(e) => setForm((f) => ({ ...f, short_name: e.target.value }))} placeholder="Товч нэр" className={inputCls} />}
-                  {mode === "organization" && <input value={String(form.register_no || "")} onChange={(e) => setForm((f) => ({ ...f, register_no: e.target.value }))} placeholder="ТТД" className={inputCls} />}
                 </>
               )}
 

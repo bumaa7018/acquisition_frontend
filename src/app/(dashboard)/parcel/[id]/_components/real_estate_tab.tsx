@@ -4,7 +4,7 @@ import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/rea
 import { landApi, parcelApi, assetSpecTypeApi, assetCalcTypeApi, documentTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
-import { type Asset, type AssetCalculation, type Compensation, type CompensationHistory, type LandValuation, type LandValuationUpsert, type ValuationImportPayload, type ParcelFull, type User, type ValuationSubmission, type ValuationStatus, type ValuationType, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
+import { type Asset, type AssetCalculation, type Compensation, type CompensationHistory, type LandValuation, type LandValuationUpsert, type ValuationImportPayload, type ParcelFull, type ValuationOrg, type ValuationSubmission, type ValuationStatus, type ValuationType, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import {
   X,
@@ -124,9 +124,9 @@ function detailLabel(comp: Compensation) {
   return comp.note?.trim() || COMP_TYPE_LABELS[comp.compensation_type] || comp.compensation_type;
 }
 
-function orgUserName(user?: User) {
-  if (!user) return "";
-  return user.full_name || [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+function valuationOrgLabel(org?: ValuationOrg) {
+  if (!org) return "";
+  return org.name || org.short_name || org.register_no;
 }
 
 // Барилгын өртгийн хандлага — үл хөдлөх хөрөнгө бүрийг ХОЙШ БАГАНА болгож (Excel шиг)
@@ -449,9 +449,10 @@ export function RealEstateTab({
       : orderedSubTabs[0]?.key ?? "asset";
   const activeType: ValuationType = activeSubTab as ValuationType;
 
-  const { data: professionalOrgUsers = [] } = useQuery({
-    queryKey: ["professional-org-users"],
-    queryFn: () => landApi.listProfessionalOrgUsers(),
+  // Хараат бус үнэлгээчнээр томилох БАЙГУУЛЛАГУУД (өмнө нь хэрэглэгчид байв).
+  const { data: valuationOrgs = [] } = useQuery({
+    queryKey: ["valuation-orgs"],
+    queryFn: () => landApi.listValuationOrgs(),
     enabled: !isExternal,
     staleTime: 60_000,
   });
@@ -473,8 +474,8 @@ export function RealEstateTab({
     const orgId = parcelData?.independent_org_id || fallbackParcel?.independent_org_id;
     if (!orgId) return;
 
-    const user = professionalOrgUsers.find((x) => x.id === orgId);
-    const name = parcelData?.independent_org_name || fallbackParcel?.independent_org_name || orgUserName(user);
+    const org = valuationOrgs.find((x) => x.id === orgId);
+    const name = parcelData?.independent_org_name || fallbackParcel?.independent_org_name || valuationOrgLabel(org);
     setAssignedIndependentOrg({ id: orgId, name });
     setIndependentSelect(orgId);
   }, [
@@ -482,7 +483,7 @@ export function RealEstateTab({
     fallbackParcel?.independent_org_name,
     parcelData?.independent_org_id,
     parcelData?.independent_org_name,
-    professionalOrgUsers,
+    valuationOrgs,
   ]);
 
   // Бүх өгөгдөл идэвхтэй урсгалаар (activeType) тусад нь татагдана — урсгалууд холилдохгүй.
@@ -753,23 +754,23 @@ export function RealEstateTab({
   };
 
   const independentOrgMutation = useMutation({
-    mutationFn: (orgUserId: string | null) =>
-      svc.setParcelIndependentOrg(acqId, parcelId, orgUserId),
-    onSuccess: (_data, orgUserId) => {
-      const u = orgUserId ? professionalOrgUsers.find((x) => x.id === orgUserId) : undefined;
-      const orgName = orgUserName(u) || undefined;
-      setAssignedIndependentOrg(orgUserId ? { id: orgUserId, name: orgName } : null);
-      setIndependentSelect(orgUserId ?? "");
+    mutationFn: (orgId: string | null) =>
+      svc.setParcelIndependentOrg(acqId, parcelId, orgId),
+    onSuccess: (_data, orgId) => {
+      const org = orgId ? valuationOrgs.find((x) => x.id === orgId) : undefined;
+      const orgName = valuationOrgLabel(org) || undefined;
+      setAssignedIndependentOrg(orgId ? { id: orgId, name: orgName } : null);
+      setIndependentSelect(orgId ?? "");
       // Холбогдсон төлөвийг шууд тусгана — getParcel эдгээр талбарыг буцаахгүй байсан ч
       // холболт харагдахгүй байхаас сэргийлж optimistic-оор кэшийг шинэчилнэ.
       queryClient.setQueryData<ParcelFull>(["parcel-full", acqId, parcelId], (old) =>
         old
-          ? { ...old, independent_org_id: orgUserId ?? undefined, independent_org_name: orgName }
+          ? { ...old, independent_org_id: orgId ?? undefined, independent_org_name: orgName }
           : old,
       );
       queryClient.invalidateQueries({ queryKey: ["land-parcels", acqId] });
       toast.success(
-        orgUserId
+        orgId
           ? "Хөндлөнгийн байгууллага холбогдлоо"
           : "Хөндлөнгийн байгууллагын холболт салгагдлаа",
       );
@@ -815,7 +816,7 @@ export function RealEstateTab({
     !!selectedType &&
     activeType === selectedType &&
     (!isExternal || (isProfOrg && canEditValuationSubTab(activeSubTab, parcelData, acquisition)));
-  const orgDisplayName = (id: string) => orgUserName(professionalOrgUsers.find((x) => x.id === id));
+  const orgDisplayName = (id: string) => valuationOrgLabel(valuationOrgs.find((x) => x.id === id));
   const currentIndependentOrgId = assignedIndependentOrg?.id || parcelData?.independent_org_id || "";
   const selectedIndependentOrgName =
     assignedIndependentOrg?.name ||
@@ -1241,10 +1242,10 @@ export function RealEstateTab({
                   className="h-9 min-w-64 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all disabled:opacity-50"
                 >
                   <option value="">— Сонгоно уу —</option>
-                  {professionalOrgUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {orgUserName(u)}
-                      {u.position ? ` · ${u.position}` : ""}
+                  {valuationOrgs.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {valuationOrgLabel(org)}
+                      {org.register_no ? ` · ${org.register_no}` : ""}
                     </option>
                   ))}
                 </select>

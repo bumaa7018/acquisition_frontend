@@ -13,6 +13,7 @@ import {
   canUpdateDecisionDraftForActor,
   canViewDecisionDraftsForActor,
   canEditValuationSubTabForActor,
+  canViewSystemSettings,
   canGrantPermissionForActor,
   canGrantRoleForActor,
   canManageRolePermissions,
@@ -45,10 +46,23 @@ function getTokenPayload(): Record<string, unknown> | null {
   return decodeJwtPayload(authStorage.getAccessToken());
 }
 
+/**
+ * JWT-ийн ID нэхэмжлэлүүд (`user_id`, `org_id`) нь sdplatform-д int4 тул JSON-д
+ * ТОО болж ирдэг. API-ийн хариултууд (`professional_org_id` гэх мэт) харин
+ * ТЭМДЭГТ МӨР. Энд мөр болгож нэгтгэхгүй бол `"12" === 12` нь үргэлж false
+ * болж, мэргэжлийн байгууллагын хандалт чимээгүй унана.
+ */
+function idClaim(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value !== "") return value;
+  return null;
+}
+
 export function getCurrentActor(): AccessActor {
   const payload = getTokenPayload();
   return {
-    userId: (payload?.user_id as string) ?? null,
+    userId: idClaim(payload?.user_id),
+    orgId: idClaim(payload?.org_id),
     roles: Array.isArray(payload?.roles) ? (payload.roles as string[]) : [],
     permissions: Array.isArray(payload?.permissions)
       ? (payload.permissions as string[])
@@ -66,6 +80,11 @@ export function hasPermission(name: string): boolean {
 
 export function getCurrentUserId(): string | null {
   return getCurrentActor().userId ?? null;
+}
+
+/** Нэвтэрсэн хэрэглэгчийн ХАРЬЯА байгууллага (JWT-ийн org_id). */
+export function getCurrentOrgId(): string | null {
+  return getCurrentActor().orgId ?? null;
 }
 
 // Мэргэжлийн байгууллага role
@@ -271,6 +290,10 @@ export function canEditRolePermissions(): boolean {
 
 export function canListPermissions(): boolean {
   return canViewPermissions(getCurrentActor());
+}
+
+export function canViewSettings(): boolean {
+  return canViewSystemSettings(getCurrentActor());
 }
 
 /** Тухайн эрхийг роль-д олгох боломжтой эсэх (өөрт байгаа эрхийг л олгоно). */

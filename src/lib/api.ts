@@ -29,8 +29,9 @@ function showAccessDenied(title: string, description: string, withLoginBtn = fal
 }
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
-  User, Role, Permission,
+  User, Role, Permission, Menu,
   Organization, Department, Position, Person, Employee,
+  ValuationOrg, ValuationOrgPayload,
   AuditLog,
   Plan, LandAcquisition, LandAcquisitionFilter, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, Document, StatusOption,
@@ -334,25 +335,41 @@ api.interceptors.response.use(
 )
 
 // ── Auth ────────────────────────────────────────────
+// sdplatform схемийн ID-ууд int4 тул backend хэрэглэгчийн `id`-г ТОО болгож
+// илгээдэг. Харин JWT-ээс уншсан `userId`, чөлөөлөлтийн `professional_org_id`
+// зэрэг нь ТЭМДЭГТ МӨР. Хоёрыг шууд харьцуулбал (`12 === "12"`) үргэлж false
+// болох тул хэрэглэгч уншсан бүр газарт ID-г мөр болгож жигдрүүлнэ.
+function normalizeUser(raw: any): User {
+  if (!raw) return raw
+  return {
+    ...raw,
+    id: String(raw.id ?? ''),
+    employee_id: raw.employee_id == null ? undefined : String(raw.employee_id),
+  }
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<ApiResponse<LoginResponse>>('/auth/login', { username: email, password }).then(r => r.data.data),
   // Refresh токеноо хамт илгээж хоёуланг нь хүчингүй болгоно
   logout: () => api.post('/auth/logout', { refresh_token: authStorage.getRefreshToken() }).then(r => r.data),
-  me: () => api.get<ApiResponse<User>>('/users/me').then(r => r.data.data),
+  me: () => api.get<ApiResponse<User>>('/users/me').then(r => normalizeUser(r.data.data)),
 }
 
 // ── Users ────────────────────────────────────────────
 export const usersApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; role?: string; is_active?: boolean }) =>
-    api.get<PaginatedResponse<User>>('/users', { params }).then(r => r.data),
-  getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => r.data.data),
+    api.get<PaginatedResponse<User>>('/users', { params }).then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeUser),
+    })),
+  getById: (id: string) => api.get<ApiResponse<User>>(`/users/${id}`).then(r => normalizeUser(r.data.data)),
   // role_ids — backend хэрэглэгчийг үүсгэхтэй зэрэг ролиудыг оноож,
   // олгох эрхгүй роль дурдвал хэрэглэгчийг ҮҮСГЭХГҮЙ (хагас биелэхээс сэргийлнэ).
   create: (body: { username: string; email: string; password: string; first_name?: string; last_name?: string; position?: string; employee_id?: string; employee?: EmployeePayload; is_active?: boolean; role_ids?: string[] }) =>
-    api.post<ApiResponse<User>>('/users', body).then(r => r.data.data),
+    api.post<ApiResponse<User>>('/users', body).then(r => normalizeUser(r.data.data)),
   update: (id: string, body: Partial<{ username: string; email: string; first_name: string; last_name: string; position: string; is_active: boolean }>) =>
-    api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => r.data.data),
+    api.put<ApiResponse<User>>(`/users/${id}`, body).then(r => normalizeUser(r.data.data)),
   changePassword: (id: string, password: string) =>
     api.put(`/users/${id}/password`, { password }),
   // Роль олгох/хураах нь тусдаа маршрут — backend дээр эрх нэмэгдүүлэлт болон
@@ -417,31 +434,113 @@ export const personApi = {
   delete: (id: string) => api.delete(`/persons/${id}`),
 }
 
+// sdplatform-ийн ID-ууд int4 тул backend тоо буцаадаг — мөр болгож жигдрүүлнэ
+// (харьцуулалт, Select-ийн value бүгд мөр дээр ажилладаг).
+function normalizeEmployee(raw: any): Employee {
+  if (!raw) return raw
+  return {
+    ...raw,
+    id: String(raw.id ?? ''),
+    person_id: String(raw.person_id ?? ''),
+    user_id: raw.user_id == null ? undefined : String(raw.user_id),
+    organization_id: raw.organization_id == null ? '' : String(raw.organization_id),
+    department_id: raw.department_id == null ? undefined : String(raw.department_id),
+    position_id: String(raw.position_id ?? ''),
+  }
+}
+
 export const employeeApi = {
-  list: (params?: HRListParams) => api.get<PaginatedResponse<Employee>>('/employees', { params }).then(r => r.data),
-  getById: (id: string) => api.get<ApiResponse<Employee>>(`/employees/${id}`).then(r => r.data.data),
+  list: (params?: HRListParams) => api.get<PaginatedResponse<Employee>>('/employees', { params }).then(r => ({
+    ...r.data,
+    data: (r.data.data ?? []).map(normalizeEmployee),
+  })),
+  getById: (id: string) => api.get<ApiResponse<Employee>>(`/employees/${id}`).then(r => normalizeEmployee(r.data.data)),
   create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', body).then(r => r.data.data),
   update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, body).then(r => r.data.data),
   delete: (id: string) => api.delete(`/employees/${id}`),
+}
+
+// ── Үнэлгээний (мэргэжлийн) байгууллага ────────────────
+//
+// sdplatform схемийн ID-ууд int4 тул backend ТОО илгээдэг; харин чөлөөлөлт/
+// нэгж талбарын `professional_org_id` / `independent_org_id` нь ТЭМДЭГТ МӨР
+// хэлбэрээр ирдэг. Хоёрыг шууд харьцуулбал ("12" === 12) үргэлж false болох
+// тул энд бүх ID-г мөр болгож жигдрүүлнэ.
+function normalizeValuationOrgEmployee(raw: any): Employee {
+  return {
+    ...raw,
+    id: String(raw?.id ?? ''),
+    person_id: String(raw?.person_id ?? ''),
+    organization_id: raw?.organization_id == null ? '' : String(raw.organization_id),
+    department_id: raw?.department_id == null ? undefined : String(raw.department_id),
+    position_id: String(raw?.position_id ?? ''),
+  }
+}
+
+function normalizeValuationOrg(raw: any): ValuationOrg {
+  return {
+    ...raw,
+    id: String(raw?.id ?? ''),
+    employees: Array.isArray(raw?.employees)
+      ? raw.employees.map(normalizeValuationOrgEmployee)
+      : undefined,
+  }
+}
+
+export const valuationOrgApi = {
+  list: (params?: { search?: string; is_active?: boolean; page?: number; page_size?: number }) =>
+    api.get<PaginatedResponse<ValuationOrg>>('/valuation-orgs', { params }).then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeValuationOrg),
+    })),
+  getById: (id: string) =>
+    api.get<ApiResponse<ValuationOrg>>(`/valuation-orgs/${id}`).then(r => normalizeValuationOrg(r.data.data)),
+  create: (body: ValuationOrgPayload) =>
+    api.post<ApiResponse<ValuationOrg>>('/valuation-orgs', body).then(r => normalizeValuationOrg(r.data.data)),
+  update: (id: string, body: ValuationOrgPayload) =>
+    api.put<ApiResponse<ValuationOrg>>(`/valuation-orgs/${id}`, body).then(r => normalizeValuationOrg(r.data.data)),
+  delete: (id: string) => api.delete(`/valuation-orgs/${id}`),
 }
 
 // ── Roles ─────────────────────────────────────────────
 // Backend returns Go PascalCase fields; normalize to frontend camelCase
 function normalizePermission(p: any): Permission {
   return {
-    id: p.ID ?? p.id,
+    id: String(p.ID ?? p.id),
+    code: p.Code ?? p.code,
     name: p.Name ?? p.name,
+    action: p.Action ?? p.action,
     description: p.Description ?? p.description,
+    resource: p.Resource ?? p.resource,
+  }
+}
+
+function normalizeMenu(m: any): Menu {
+  const rawPerms: unknown[] = m.Permissions ?? m.permissions ?? []
+  return {
+    id: String(m.ID ?? m.id),
+    code: m.Code ?? m.code,
+    name: m.Name ?? m.name,
+    parent_id: m.ParentID ?? m.parent_id ? String(m.ParentID ?? m.parent_id) : undefined,
+    parent_code: m.ParentCode ?? m.parent_code,
+    menu_url: m.URL ?? m.menu_url,
+    menu_icon: m.Icon ?? m.menu_icon,
+    sort_order: m.SortOrder ?? m.sort_order,
+    permissions: rawPerms.map(normalizePermission),
   }
 }
 
 function normalizeRole(r: any): Role {
   const rawPerms: unknown[] = r.Permissions ?? r.permissions ?? []
+  const rawMenus: unknown[] = r.Menus ?? r.menus ?? []
   return {
-    id: r.ID ?? r.id,
+    id: String(r.ID ?? r.id),
+    code: r.Code ?? r.code,
     name: r.Name ?? r.name,
+    resource: r.Resource ?? r.resource,
     description: r.Description ?? r.description,
     permissions: rawPerms.map(normalizePermission),
+    menus: rawMenus.map(normalizeMenu),
   }
 }
 
@@ -462,6 +561,23 @@ export const rolesApi = {
     api.post(`/roles/${roleId}/permissions`, { permission_id: permissionId }),
   removePermission: (roleId: string, permissionId: string) =>
     api.delete(`/roles/${roleId}/permissions/${permissionId}`),
+  setMenuPermissions: (roleId: string, menuId: string, permissionIds: string[]) =>
+    api.put(`/roles/${roleId}/menus/${menuId}/permissions`, { permission_ids: permissionIds }),
+  removeMenu: (roleId: string, menuId: string) =>
+    api.delete(`/roles/${roleId}/menus/${menuId}/permissions`),
+}
+
+export const menusApi = {
+  list: () =>
+    api.get<PaginatedResponse<Menu>>('/menus').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeMenu),
+    })),
+  mine: () =>
+    api.get<PaginatedResponse<Menu>>('/menus/me').then(r => ({
+      ...r.data,
+      data: (r.data.data ?? []).map(normalizeMenu),
+    })),
 }
 
 // ── Permissions ───────────────────────────────────────
@@ -777,23 +893,30 @@ export const landApi = {
   deleteDroneImage: (acqId: string, imageId: string) =>
     api.delete(`/land-acquisitions/${acqId}/drone-images/${imageId}`),
 
+  // Backend `user_id`/`assigned_by`-г ТОО болгож буцаадаг (sdplatform int4),
+  // харин бичихдээ МӨР хүлээж авдаг. Уншихдаа мөр болгож жигдрүүлэхгүй бол
+  // хэрэглэгчийн жагсаалттай тулгах (`assignedIds.has(u.id)`) ажиллахгүй.
   getAssignees: (acquisitionId: string): Promise<AcquisitionAssignee[]> =>
     api.get<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`)
-      .then(r => r.data.data ?? []),
+      .then(r => (r.data.data ?? []).map((a: any) => ({
+        ...a,
+        user_id: String(a.user_id ?? ''),
+        assigned_by: a.assigned_by == null ? '' : String(a.assigned_by),
+      }))),
 
   setAssignees: (acquisitionId: string, users: { user_id: string; user_name: string; user_position?: string }[]): Promise<AcquisitionAssignee[]> =>
     api.put<ApiResponse<AcquisitionAssignee[]>>(`/land-acquisitions/${acquisitionId}/assignees`, { users })
       .then(r => r.data.data ?? []),
 
-  // Set the professional org user for an acquisition
-  setProfessionalOrg: (acquisitionId: string, orgUserId: string | null) =>
-    api.put(`/land-acquisitions/${acquisitionId}/professional-org`, { org_user_id: orgUserId }),
+  // Чөлөөлөлтийн үндсэн үнэлгээний БАЙГУУЛЛАГЫГ оноох (хэрэглэгч биш).
+  setProfessionalOrg: (acquisitionId: string, orgId: string | null) =>
+    api.put(`/land-acquisitions/${acquisitionId}/professional-org`, { org_id: orgId }),
 
-  // Set the independent org user for a specific parcel
-  setParcelIndependentOrg: (acqId: string, parcelId: string, orgUserId: string | null) =>
+  // Нэгж талбарын хараат бус үнэлгээний БАЙГУУЛЛАГЫГ оноох.
+  setParcelIndependentOrg: (acqId: string, parcelId: string, orgId: string | null) =>
     api.patch(
       `/land-acquisitions/${acqId}/parcels/${parcelId}/independent-org`,
-      { org_user_id: orgUserId }
+      { org_id: orgId }
     ),
 
   // Funding sources — жагсаалт нь getById-ийн funding_sources талбараар ирдэг (тусдаа GET байхгүй)
@@ -817,16 +940,14 @@ export const landApi = {
   deleteRepresentative: (acqId: string, parcelId: string, repId: string) =>
     api.delete(`/land-acquisitions/${acqId}/parcels/${parcelId}/representatives/${repId}`),
 
-  // List users with professional_org role (for org selectors)
-  listProfessionalOrgUsers: () =>
-    api.get<PaginatedResponse<User>>('/users', { params: { role: 'professional_org', page_size: 200 } })
-      .then(r => {
-        const users = r.data.data ?? []
-        return users.filter(user => {
-          if (!Array.isArray(user.roles) || user.roles.length === 0) return true
-          return user.roles.some(role => role.name === 'professional_org' || role.id === 'professional_org')
-        })
-      }),
+  // Үнэлгээний байгууллагын сонгогчид (чөлөөлөлтийн үндсэн гүйцэтгэгч, нэгж
+  // талбарын хараат бус үнэлгээчин) тэжээх жагсаалт.
+  //
+  // Өмнө нь `professional_org` рольтой ХЭРЭГЛЭГЧДИЙГ жагсаадаг байсан — тэр үед
+  // байгууллага = нэг хэрэглэгч байв. Одоо байгууллага бие даасан бүртгэлтэй
+  // бөгөөд олон ажилтантай тул байгууллагын лавлахаас уншина.
+  listValuationOrgs: () =>
+    valuationOrgApi.list({ is_active: true, page_size: 200 }).then(r => r.data ?? []),
 }
 
 // ── Global Parcels ────────────────────────────────────

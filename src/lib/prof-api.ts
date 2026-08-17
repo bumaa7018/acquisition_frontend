@@ -134,10 +134,10 @@ class ProfApiService {
       .then(r => r.data.data)
   }
 
-  profSetParcelIndependentOrg(acqId: string, parcelId: string, orgUserId: string | null): Promise<unknown> {
+  profSetParcelIndependentOrg(acqId: string, parcelId: string, orgId: string | null): Promise<unknown> {
     return apiClient.patch(
       `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/independent-org`,
-      { org_user_id: orgUserId },
+      { org_id: orgId },
     )
   }
 

@@ -12,6 +12,7 @@ import {
   canViewUsers,
   canViewRoles,
   canViewHr,
+  canViewSettings,
   canViewDecisionDrafts,
 } from "@/lib/role-utils";
 import {
@@ -39,6 +40,7 @@ import {
   IdCard,
   UserCog,
   Building2,
+  Landmark,
   Network,
   BadgeCheck,
   Gavel,
@@ -124,6 +126,7 @@ const NAV_HR = [
   { href: "/person", label: "Иргэн, хуулийн этгээд", icon: IdCard },
   { href: "/employee", label: "Ажилтан", icon: UserCog },
   { href: "/organization", label: "Байгууллага", icon: Building2 },
+  { href: "/valuation_org", label: "Үнэлгээний байгууллага", icon: Landmark },
   { href: "/department", label: "Алба, хэлтэс", icon: Network },
   { href: "/position", label: "Албан тушаал", icon: BadgeCheck },
 ];
@@ -203,7 +206,7 @@ export function Sidebar() {
     setUser(authStorage.getUser());
     setIsExternal(isExternalSpecialRole());
     setIsProfOrg(isProfessionalOrg());
-    setCanViewConfig(hasPermission("admin:read"));
+    setCanViewConfig(canViewSettings());
     setCanViewHrNav(canViewHr());
     setCanViewAudit(hasPermission("audit:read"));
     // Хэрэглэгч/роль цэс — эрхтэй хэрэглэгчид л харагдана. Эрхгүй хэрэглэгч
@@ -412,7 +415,7 @@ export function Sidebar() {
                   </div>
                 )}
 
-                {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
+                {/* Тохиргоо nested dropdown — системийн тохиргоо харах эрхтэй хэрэглэгчид */}
                 {canViewConfig && (
                   <div className="mt-0.5">
                     <button
