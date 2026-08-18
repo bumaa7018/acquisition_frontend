@@ -2,9 +2,65 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Columns2, Plus, Minus } from "lucide-react";
+import WKT from "ol/format/WKT";
+import { transformExtent } from "ol/proj";
 import { droneAcquisitionApi } from "@/lib/api";
-import { formatDate, resolveImageUrl } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import { fetchWmsImage } from "@/lib/geoserver";
 import type { DroneAcquisition } from "@/types";
+
+// Хоёр зургийг харьцуулах slider WMS GetMap-аас татсан статик PNG ашигладаг
+// (preview_image_path биш — drone_image-тэй адилаар шинэ урсгал preview JPEG
+// generate хийдэггүй, GeoServer-ээр л харагддаг тул). Нэг талын зургийн
+// пиксель хэмжээ.
+const MAX_WMS_DIM = 1400;
+
+type CompareReadyAcquisition = DroneAcquisition & { geoserver_layer: string; bbox_wkt: string };
+
+/** acq-ийн bbox_wkt-аас WMS GetMap зургийг татаж, blob URL болгоно. */
+function useWmsCompareImage(acq?: CompareReadyAcquisition) {
+  const [src, setSrc] = useState<string | undefined>(undefined);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    setSrc(undefined);
+    setError(false);
+    if (!acq) return;
+    let cancelled = false;
+    let objectUrl: string | undefined;
+
+    (async () => {
+      try {
+        const geom = new WKT().readGeometry(acq.bbox_wkt, {
+          dataProjection: "EPSG:4326",
+          featureProjection: "EPSG:4326",
+        });
+        const [minX, minY, maxX, maxY] = transformExtent(geom.getExtent(), "EPSG:4326", "EPSG:3857");
+        const dx = maxX - minX;
+        const dy = maxY - minY;
+        const width = dx >= dy ? MAX_WMS_DIM : Math.max(1, Math.round((MAX_WMS_DIM * dx) / dy));
+        const height = dx >= dy ? Math.max(1, Math.round((MAX_WMS_DIM * dy) / dx)) : MAX_WMS_DIM;
+        const url = await fetchWmsImage(acq.geoserver_layer, [minX, minY, maxX, maxY], width, height);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setSrc(url);
+      } catch {
+        if (!cancelled) setError(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acq?.id, acq?.geoserver_layer, acq?.bbox_wkt]);
+
+  return { src, error };
+}
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
@@ -48,19 +104,26 @@ function Placeholder({ text }: { text: string }) {
 }
 
 function CompareImage({
-  src,
+  acq,
   className,
   style,
 }: {
-  src?: string;
+  acq?: CompareReadyAcquisition;
   className: string;
   style?: React.CSSProperties;
 }) {
-  const [error, setError] = useState(false);
-  if (!src || error) {
+  const { src, error } = useWmsCompareImage(acq);
+  if (!acq || error) {
     return (
       <div className={`${className} flex items-center justify-center bg-slate-100 dark:bg-[#252630]`}>
         <p className="text-[12px] text-slate-400 dark:text-slate-500">Зураг ачаалагдсангүй</p>
+      </div>
+    );
+  }
+  if (!src) {
+    return (
+      <div className={`${className} flex items-center justify-center bg-slate-100 dark:bg-[#252630] animate-pulse`}>
+        <p className="text-[12px] text-slate-400 dark:text-slate-500">Ачааллаж байна…</p>
       </div>
     );
   }
@@ -69,14 +132,13 @@ function CompareImage({
       src={src}
       alt=""
       draggable={false}
-      onError={() => setError(true)}
       className={className}
       style={style}
     />
   );
 }
 
-type ReadyAcquisition = DroneAcquisition & { preview_image_path: string };
+type ReadyAcquisition = CompareReadyAcquisition;
 
 export function DroneAcquisitionCompare({ acquisitionId }: Props) {
   const [splitPercent, setSplitPercent] = useState(50);
@@ -163,10 +225,10 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
     return droneAcquisitions
       .filter(
         (acq): acq is ReadyAcquisition =>
-          !!acq.preview_image_path &&
+          !!acq.geoserver_layer &&
+          !!acq.bbox_wkt &&
           acq.type === "acquisition" &&
-          acq.acquisition_id === acquisitionId &&
-          acq.status === "ready",
+          acq.acquisition_id === acquisitionId,
       )
       .sort(
         (a, b) =>
@@ -242,7 +304,7 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
         {/* base — right-side image, fills the whole frame */}
         <CompareImage
           key={right.id}
-          src={resolveImageUrl(right.preview_image_path)}
+          acq={right}
           className="absolute inset-0 h-full w-full object-contain"
           style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: "0 0" }}
         />
@@ -253,7 +315,7 @@ export function DroneAcquisitionCompare({ acquisitionId }: Props) {
         >
           <CompareImage
             key={left.id}
-            src={resolveImageUrl(left.preview_image_path)}
+            acq={left}
             className="absolute inset-0 h-full w-full object-contain"
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: "0 0" }}
           />

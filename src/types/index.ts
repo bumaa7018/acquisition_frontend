@@ -441,8 +441,10 @@ export type DroneAcquisitionStatus = "processing" | "ready" | "failed";
 export interface DroneAcquisition {
   id: number;
   owner_id: string;
+  /** Legacy (local-disk upload) rows only — new uploads use file_url below. */
   tif_path?: string;
   geoserver_layer: string;
+  /** Legacy rows only. */
   preview_image_path?: string;
   bbox_wkt?: string;
   status: DroneAcquisitionStatus;
@@ -451,6 +453,25 @@ export interface DroneAcquisition {
   acquisition_id?: string;
   captured_at?: string;
   created_at: string;
+
+  // --- Direct-upload flow (drone_image-parity) — set only for rows
+  // created via droneAcquisitionApi.createUploadUrl + register. Undefined
+  // for legacy rows, which use tif_path/preview_image_path/status above.
+  file_name?: string;
+  file_url?: string;
+  original_name?: string;
+  content_type?: string;
+  size_bytes?: number;
+  /** True once file_url has been successfully published to GeoServer. */
+  published?: boolean;
+  uploaded_at?: string;
+  uploaded_by?: string;
+  /**
+   * GeoServer-т давхарга үүсгэхэд гарсан алдаа (бүртгэх/шинэчлэх үед л
+   * ирнэ). Зураг хадгалалтад бүтэн орсон тул алдаа биш — "Шинэчлэх"-ээр
+   * дахин оролдох боломжтой.
+   */
+  publish_error?: string;
 }
 
 export interface Document {

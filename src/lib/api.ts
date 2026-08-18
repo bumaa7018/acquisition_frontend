@@ -656,6 +656,37 @@ export const auditApi = {
     api.get<PaginatedResponse<AuditLog>>('/audit-logs', { params }).then(r => r.data),
 }
 
+// Файлыг ӨӨРИЙН origin-ий `/api/files/...` руу тавина. Next-ийн route нь
+// биеийг урсгалаар MinIO руу дамжуулна. Presigned-upload урсгалтай бүх
+// feature (drone_image, drone_acquisition) үүгээр дамждаг ижил алхам тул
+// нэг газар л байна.
+//
+// ЯАГААД MinIO-руу ШУУД БИШ: presigned URL-ийн host нь backend-ийн хаяг
+// (container-т `minio:9000`) — browser түүнийг шийдэж чаддаггүй. Мөн шууд
+// хандвал MinIO-ийн порт гадаад сүлжээнд нээлттэй байх, CORS ажиллах
+// шаардлагатай болдог. Өөрийн origin-руу тавихад тэр гурав нь бүгд арилна.
+//
+// Зөвшөөрөл нь presigned URL-ийн query (X-Amz-*) дотор — түүнийг хэвээр
+// дамжуулж, MinIO өөрөө шалгана. `api` instance-ыг хэрэглэхгүй: Authorization
+// header нь гарын үсэгтэй зөрчилдөж, interceptor нь файлын серверийн хариуд
+// хөндлөнгөөс оролцох ёсгүй.
+function putFileToPresignedURL(
+  ticket: DroneUploadTicket,
+  file: File,
+  onProgress?: (percent: number) => void,
+) {
+  return axios.put(ticket.file_url + '?' + new URL(ticket.url).search.replace(/^\?/, ''), file, {
+    headers: { 'Content-Type': 'image/tiff' },
+    timeout: 0,
+    maxBodyLength: Infinity,
+    maxContentLength: Infinity,
+    onUploadProgress: (e) => {
+      if (!onProgress || !e.total) return
+      onProgress(Math.round((e.loaded / e.total) * 100))
+    },
+  }).then(() => undefined)
+}
+
 // ── Land Acquisitions ─────────────────────────────────
 export const landApi = {
   listConstructionTypes: () =>
@@ -887,33 +918,8 @@ export const landApi = {
       `/land-acquisitions/${acqId}/drone-images/upload-url`,
       { file_name: fileName },
     ).then(r => r.data.data),
-  // Файлыг ӨӨРИЙН origin-ий `/api/files/...` руу тавина. Next-ийн route нь
-  // биеийг урсгалаар MinIO руу дамжуулна.
-  //
-  // ЯАГААД MinIO-руу ШУУД БИШ: presigned URL-ийн host нь backend-ийн хаяг
-  // (container-т `minio:9000`) — browser түүнийг шийдэж чаддаггүй. Мөн шууд
-  // хандвал MinIO-ийн порт гадаад сүлжээнд нээлттэй байх, CORS ажиллах
-  // шаардлагатай болдог. Өөрийн origin-руу тавихад тэр гурав нь бүгд арилна.
-  //
-  // Зөвшөөрөл нь presigned URL-ийн query (X-Amz-*) дотор — түүнийг хэвээр
-  // дамжуулж, MinIO өөрөө шалгана. `api` instance-ыг хэрэглэхгүй: Authorization
-  // header нь гарын үсэгтэй зөрчилдөж, interceptor нь файлын серверийн хариуд
-  // хөндлөнгөөс оролцох ёсгүй.
-  putDroneFileDirect: (
-    ticket: DroneUploadTicket,
-    file: File,
-    onProgress?: (percent: number) => void,
-  ) =>
-    axios.put(ticket.file_url + '?' + new URL(ticket.url).search.replace(/^\?/, ''), file, {
-      headers: { 'Content-Type': 'image/tiff' },
-      timeout: 0,
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-      onUploadProgress: (e) => {
-        if (!onProgress || !e.total) return
-        onProgress(Math.round((e.loaded / e.total) * 100))
-      },
-    }).then(() => undefined),
+  // Browser файлыг ШУУД файлын систем рүү тавих алхам — putFileToPresignedURL-г үзнэ үү.
+  putDroneFileDirect: putFileToPresignedURL,
   // timeout: 0 — бүртгэл нь GeoServer-т давхарга нийтлэхийг ДОТРОО хийдэг тул
   // ердийн 30 сек-ийн хязгаарт багтахгүй байж болно. GeoServer растрын толгойг
   // (IFD) HTTP Range-ээр уншина: жинхэнэ COG дээр 1-2 сек, харин COG БИШ
@@ -1093,11 +1099,19 @@ function toRFC3339Date(date?: string): string | undefined {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00Z` : date
 }
 
+// ── Дроны ортофото (.tif) — drone_image-тэй ИЖИЛ урсгал ──────────────────
+// Файл BACKEND-ЭЭР ДАМЖИХГҮЙ. Гурван алхам:
+//   1. createUploadUrl — backend-ээс байршуулах зөвшөөрөл (presigned URL)
+//   2. putFileToPresignedURL — browser файлыг ШУУД файлын систем руу PUT
+//   3. register/registerUpdate — backend объектыг шалгаж GeoServer-т
+//      СИНХРОН нийтэлж бүртгэнэ (нийтлэлт бүтэлгүйтвэл publish_error-оор
+//      мэдээлнэ, refresh-ээр дахин оролдоно)
 export const droneAcquisitionApi = {
   list: () =>
     api.get<ApiResponse<DroneAcquisition[]>>('/drone-acquisitions').then(r => r.data.data ?? []),
   getById: (id: number) =>
     api.get<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`).then(r => r.data.data),
+  // Legacy JSON-reference create (no file — references an already-published GeoServer layer directly).
   create: (data: {
     owner_id: string
     geoserver_layer: string
@@ -1111,44 +1125,32 @@ export const droneAcquisitionApi = {
     ...data,
     captured_at: toRFC3339Date(data.captured_at),
   }).then(r => r.data.data),
-  // Uploads a .tif/.tiff — the backend stores it and derives tif_path/preview/bbox
-  // synchronously, returning status "processing" with an empty geoserver_layer.
-  // Publishing tif_path to GeoServer and setting geoserver_layer/status is a
-  // separate, manual step (not automated by this app).
-  createFromTif: (data: {
-    file: File
+  createUploadUrl: (fileName: string) =>
+    api.post<ApiResponse<DroneUploadTicket>>('/drone-acquisitions/upload-url', { file_name: fileName })
+      .then(r => r.data.data),
+  putFileDirect: putFileToPresignedURL,
+  // Registers a .tif previously uploaded via createUploadUrl + putFileDirect —
+  // the backend validates it (real size + magic bytes) and publishes to
+  // GeoServer synchronously. timeout: 0 — publish can take a while for a
+  // non-COG GeoTIFF (see landApi.registerDroneImage's comment on the same issue).
+  register: (data: {
+    stored_name: string
+    original_name: string
     owner_id: string
     type: 'parcel' | 'acquisition'
     parcel_id?: string
     acquisition_id?: string
     captured_at?: string
-  }) => {
-    const fd = new FormData()
-    fd.append('file', data.file)
-    fd.append('owner_id', data.owner_id)
-    fd.append('type', data.type)
-    if (data.parcel_id) fd.append('parcel_id', data.parcel_id)
-    if (data.acquisition_id) fd.append('acquisition_id', data.acquisition_id)
-    const capturedAt = toRFC3339Date(data.captured_at)
-    if (capturedAt) fd.append('captured_at', capturedAt)
-    return api
-      .post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', fd, { timeout: 5 * 60 * 1000 })
-      .then(r => r.data.data)
-  },
-  // Replaces an existing acquisition's GeoServer layer/preview from a new .tif — the old
-  // ones are removed on the backend once the new layer finishes publishing. `file` is
-  // optional: omit it to patch only captured_at and leave the existing layer/preview
-  // untouched (the backend supports a file-less multipart request for exactly this —
-  // metadata-only update).
-  updateFromTif: (id: number, data: { file?: File; captured_at?: string }) => {
-    const fd = new FormData()
-    if (data.file) fd.append('file', data.file)
-    const capturedAt = toRFC3339Date(data.captured_at)
-    if (capturedAt) fd.append('captured_at', capturedAt)
-    return api
-      .put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, fd, { timeout: 5 * 60 * 1000 })
-      .then(r => r.data.data)
-  },
+  }) => api.post<ApiResponse<DroneAcquisition>>('/drone-acquisitions', {
+    ...data,
+    captured_at: toRFC3339Date(data.captured_at),
+  }, { timeout: 0 }).then(r => r.data.data),
+  // Replaces an existing row's uploaded file — same validate+publish flow as register.
+  registerUpdate: (id: number, data: { stored_name: string; original_name: string; captured_at?: string }) =>
+    api.put<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}`, {
+      ...data,
+      captured_at: toRFC3339Date(data.captured_at),
+    }, { timeout: 0 }).then(r => r.data.data),
   update: (id: number, data: Partial<{
     geoserver_layer: string
     bbox_wkt: string
@@ -1161,6 +1163,13 @@ export const droneAcquisitionApi = {
     ...data,
     captured_at: toRFC3339Date(data.captured_at),
   }).then(r => r.data.data),
+  // Publishes (or retries publishing) a row's file to GeoServer — call after
+  // a create/update response comes back with publish_error set.
+  refresh: (id: number) =>
+    api.post<ApiResponse<DroneAcquisition>>(`/drone-acquisitions/${id}/refresh`, undefined, {
+      timeout: 0,
+      _silent: true,
+    }).then(r => r.data.data),
   delete: (id: number) => api.delete(`/drone-acquisitions/${id}`),
 }
 

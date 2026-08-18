@@ -65,6 +65,45 @@ export function wmsPostLoad(image: ImageWrapper, src: string) {
     })
 }
 
+/**
+ * WMS GetMap-ийн статик PNG зургийг authenticated POST-оор татаж, blob object
+ * URL болгож буцаана (`<img src>` GET биш — wmsPostLoad-той ижил шалтгаан:
+ * cookie нь mount дараах race-д тохироогүй байж болзошгүй тул Bearer header
+ * шаардлагатай). Дуудагч буцаасан URL-ийг ашиглаж дууссаны дараа
+ * `URL.revokeObjectURL`-оор чөлөөлөх ёстой.
+ *
+ * bbox нь EPSG:3857 (Web Mercator) координатаар — WMS 1.1.1/EPSG:3857 дээр
+ * тэнхлэгийн дараалал (x,y) үргэлж тогтвортой тул WKT-ээс WGS84 bbox-ыг
+ * шууд дамжуулахаас (1.3.0 дээрх lat/lon эргэлт) илүү найдвартай.
+ */
+export async function fetchWmsImage(
+  layer: string,
+  bbox3857: [number, number, number, number],
+  width: number,
+  height: number,
+): Promise<string> {
+  const params = new URLSearchParams({
+    SERVICE: 'WMS',
+    VERSION: '1.1.1',
+    REQUEST: 'GetMap',
+    LAYERS: layer,
+    FORMAT: 'image/png',
+    TRANSPARENT: 'true',
+    SRS: 'EPSG:3857',
+    BBOX: bbox3857.join(','),
+    WIDTH: String(width),
+    HEIGHT: String(height),
+  })
+  const res = await fetch(GS_WMS, {
+    method: 'POST',
+    headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
+    body: params.toString(),
+  })
+  if (!res.ok) throw new Error(`WMS GetMap failed: ${res.status}`)
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 export function buildAcqCql(acquisitionIds?: string[]): string {
   if (!acquisitionIds || acquisitionIds.length === 0) return ''
   return acquisitionIds.length === 1

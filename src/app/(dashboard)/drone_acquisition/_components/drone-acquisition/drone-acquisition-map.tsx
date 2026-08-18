@@ -67,10 +67,12 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
     );
   }, [boundaryHistory]);
 
-  // Tile pyramids ("acquisition"-type) tied to this specific acquisition. "processing" rows
-  // are included too (see makeDroneTileLayer) — they render from tif_path directly until the
-  // background GeoServer publish finishes and geoserver_layer switches them to WMS; only
-  // "failed" rows (no usable tif_path either) are excluded.
+  // Tile pyramids ("acquisition"-type) tied to this specific acquisition. bbox_wkt is only
+  // set once something is actually renderable: for new (direct-upload) rows that's after a
+  // successful synchronous GeoServer publish (see makeDroneTileLayer's geoserver_layer
+  // branch); a still-unpublished row has no bbox_wkt yet and is naturally excluded here
+  // until retried (list view's "Нийтлэгдээгүй" button). Legacy rows keep the old tif_path
+  // fallback (see makeDroneTileLayer) for local-disk .tif rendering.
   const relevantDroneTiles = useMemo(() => {
     return droneAcquisitions
       .filter(
@@ -165,11 +167,11 @@ export function DroneAcquisitionMap({ acquisitionId }: Props) {
       droneTileExtents.current[`tile-${acq.id}`] = extent;
 
       // Prefer the published GeoServer WMS layer — server-rendered, so the browser doesn't
-      // have to download/decode the full orthomosaic. The backend publishes tif_path to
-      // GeoServer in the background after upload (see acquisition_backend's
-      // drone_acquisition service), so geoserver_layer is empty until that finishes (or if
-      // GeoServer publishing isn't configured, or it failed) — fall back to rendering the
-      // raw .tif directly, client-side, via OpenLayers' GeoTIFF source in that case.
+      // have to download/decode the full orthomosaic. New (direct-upload) rows publish
+      // synchronously on upload/refresh (acquisition_backend's drone_acquisition service),
+      // so geoserver_layer is only set once that succeeds. Legacy (local-disk) rows may still
+      // have only tif_path with no geoserver_layer — fall back to rendering the raw .tif
+      // directly, client-side, via OpenLayers' GeoTIFF source in that case.
       if (acq.geoserver_layer) {
         return new ImageLayer({
           visible: false,
