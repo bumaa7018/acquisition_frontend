@@ -8,7 +8,7 @@ import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { formatArea, getApiError } from "@/lib/utils";
 import { runSequentialWithDelay } from "@/lib/sequential-runner";
-import { canAccessParcel, getCurrentUserId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
+import { canAccessParcel, getCurrentOrgId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
 import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
@@ -120,8 +120,10 @@ export function ParcelsTab({
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
   const isFinance = isFinanceSpecialist();
-  const currentUserId = getCurrentUserId();
-  const isMainProfOrg = isExternal && acquisitionProfOrgId === currentUserId;
+  // Үндсэн гүйцэтгэгч эсэхийг хэрэглэгчийн биш БАЙГУУЛЛАГЫН харьяалалаар
+  // тогтооно — нэг байгууллагын аль ч ажилтан ижил эрхтэй.
+  const currentOrgId = getCurrentOrgId();
+  const isMainProfOrg = isExternal && !!currentOrgId && acquisitionProfOrgId === currentOrgId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [page, setPage] = useState(1);
   const [filterForm, setFilterForm] = useState<ParcelFilter>(EMPTY_FILTER);

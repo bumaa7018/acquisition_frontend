@@ -12,7 +12,9 @@ import {
   canViewUsers,
   canViewRoles,
   canViewHr,
+  canViewSettings,
   canViewDecisionDrafts,
+  isSeniorSpecialist,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -40,6 +42,7 @@ import {
   IdCard,
   UserCog,
   Building2,
+  Landmark,
   Network,
   BadgeCheck,
   Gavel,
@@ -126,6 +129,7 @@ const NAV_HR = [
   { href: "/person", label: "Иргэн, хуулийн этгээд", icon: IdCard },
   { href: "/employee", label: "Ажилтан", icon: UserCog },
   { href: "/organization", label: "Байгууллага", icon: Building2 },
+  { href: "/valuation_org", label: "Үнэлгээний байгууллага", icon: Landmark },
   { href: "/department", label: "Алба, хэлтэс", icon: Network },
   { href: "/position", label: "Албан тушаал", icon: BadgeCheck },
 ];
@@ -205,7 +209,7 @@ export function Sidebar() {
     setUser(authStorage.getUser());
     setIsExternal(isExternalSpecialRole());
     setIsProfOrg(isProfessionalOrg());
-    setCanViewConfig(hasPermission("admin:read"));
+    setCanViewConfig(canViewSettings());
     setCanViewHrNav(canViewHr());
     setCanViewAudit(hasPermission("audit:read"));
     // Хэрэглэгч/роль цэс — эрхтэй хэрэглэгчид л харагдана. Эрхгүй хэрэглэгч
@@ -218,8 +222,15 @@ export function Sidebar() {
     // Захирамжийн төсөл нь тусдаа decision:* эрхтэй — эрхгүй ажилтанд цэс
     // харуулбал 403-той хоосон хуудас нээгдэнэ.
     const showDecision = canViewDecisionDrafts();
+    // Тайлан нь БҮХ чөлөөлөлтийг хуваарилалт үл харгалзан нэгтгэдэг тул
+    // backend дээр ахлах мэргэжилтнээр хязгаарлагдсан — цэсийг мөн тэгш байлгана.
+    const showReport = isSeniorSpecialist();
     setMainNav(
-      NAV_MAIN.filter((item) => item.href !== "/decision_draft" || showDecision),
+      NAV_MAIN.filter(
+        (item) =>
+          (item.href !== "/decision_draft" || showDecision) &&
+          (item.href !== "/report" || showReport),
+      ),
     );
     setReady(true);
   }, []);
@@ -414,7 +425,7 @@ export function Sidebar() {
                   </div>
                 )}
 
-                {/* Тохиргоо nested dropdown — admin:read эрхтэй хэрэглэгчид л харагдана */}
+                {/* Тохиргоо nested dropdown — системийн тохиргоо харах эрхтэй хэрэглэгчид */}
                 {canViewConfig && (
                   <div className="mt-0.5">
                     <button

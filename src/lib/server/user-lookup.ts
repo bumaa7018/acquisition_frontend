@@ -1,8 +1,14 @@
 import { Pool } from "pg";
 
-// Нөхөх олговрыг зөвшөөрсөн санхүүгийн мэргэжилтний нэрийг гэрээнд бичихэд ашиглана.
-// compensation.reviewed_by нь authdb.users-ийн ID тул admin-units.ts-ийн адил
-// зориулалттай, тусдаа (auth) өгөгдлийн сан руу шууд холбогдоно.
+// Нөхөх олговрыг зөвшөөрсөн санхүүгийн мэргэжилтний нэрийг гэрээнд бичихэд
+// ашиглана. compensation.reviewed_by нь нэвтрэлтийн ID-г ТЕКСТ хэлбэрээр
+// хадгалдаг тул admin-units.ts-ийн адил тусдаа (auth) сан руу шууд холбогдоно.
+//
+// sdplatform шилжилтийн дараа энэ лавлагаа өөрчлөгдсөн:
+//   * public.users хүснэгт УСТСАН (migrations/auth/000014) — sdplatform.sd_user
+//     руу шилжсэн;
+//   * ID нь uuid-аас int4 болсон тул "$1::uuid" cast нь алдаа өгдөг байв.
+// Эдгээрийн улмаас гэрээний DOCX дээр мэргэжилтний нэр хоосон хэвлэгддэг байлаа.
 const pool = new Pool({
   host: process.env.AUTH_DB_HOST || process.env.DB_HOST || (process.env.NODE_ENV === "production" ? "postgres" : "localhost"),
   port: Number(process.env.AUTH_DB_PORT || process.env.DB_PORT || 5432),
@@ -22,10 +28,18 @@ export async function resolveUserName(userId: string | undefined | null): Promis
 } | null> {
   if (!userId) return null;
 
+  // sd_user.user_id нь int4 — тоо биш утга ирвэл лавлагаа хийх шаардлагагүй
+  // (буруу cast хийвэл SQL алдаа өгнө).
+  const numericId = Number(String(userId).trim());
+  if (!Number.isInteger(numericId)) return null;
+
   try {
     const res = await pool.query<{ first_name: string | null; last_name: string | null }>(
-      "SELECT first_name, last_name FROM users WHERE id = $1::uuid AND deleted_at IS NULL",
-      [userId],
+      `SELECT COALESCE(u.firstname, '') AS first_name,
+              COALESCE(u.lastname, '')  AS last_name
+       FROM sdplatform.sd_user u
+       WHERE u.user_id = $1::int4 AND u.deleted_at IS NULL`,
+      [numericId],
     );
     const row = res.rows[0];
     if (!row) return null;

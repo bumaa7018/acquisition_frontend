@@ -21,6 +21,16 @@ export type AccessRole = string;
 
 export type AccessActor = {
   userId?: string | null;
+  /**
+   * JWT-ийн `org_id` claim — хэрэглэгчийн ХАРЬЯА байгууллага (ажилтны
+   * бүртгэлээр тогтоогддог).
+   *
+   * Мэргэжлийн/хараат бус байгууллагын хандалт ҮҮГЭЭР шалгагдана: чөлөөлөлт
+   * эсвэл нэгж талбарт оноогдсон байгууллагын аль ч ажилтан ажиллаж чадна.
+   * Өмнө нь userId-тай шууд тулгадаг байсан тул нэг байгууллагад ганц
+   * хэрэглэгч байж чаддаг байв.
+   */
+  orgId?: string | null;
   roles?: AccessRole[] | null;
   /** JWT-ийн `permissions` claim. Байхгүй бол эрх шалгалт бүр false. */
   permissions?: string[] | null;
@@ -92,6 +102,7 @@ export function isFinanceSpecialistActor(actor: AccessActor): boolean {
 }
 
 export function isSeniorSpecialistActor(actor: AccessActor): boolean {
+  if (isAdminActor(actor)) return true;
   return hasAccessRole(
     actor,
     ACCESS_ROLE_CODES.SENIOR_SPECIALIST,
@@ -118,11 +129,11 @@ export function canAccessAcquisitionForActor(
 ): boolean {
   if (!isExternalSpecialActor(actor)) return true;
   if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
-  if (!isProfessionalOrgActor(actor) || !actor.userId) return false;
+  if (!isProfessionalOrgActor(actor) || !actor.orgId) return false;
 
   return (
-    acquisition?.professional_org_id === actor.userId ||
-    (parcels ?? []).some((parcel) => parcel.independent_org_id === actor.userId)
+    acquisition?.professional_org_id === actor.orgId ||
+    (parcels ?? []).some((parcel) => parcel.independent_org_id === actor.orgId)
   );
 }
 
@@ -135,10 +146,10 @@ export function canAccessParcelForActor(
   if (parcel?.status_name !== EVALUATION_STATUS_NAME) return false;
 
   if (isProfessionalOrgActor(actor)) {
-    if (!actor.userId) return false;
+    if (!actor.orgId) return false;
     return (
-      acquisition?.professional_org_id === actor.userId ||
-      parcel.independent_org_id === actor.userId
+      acquisition?.professional_org_id === actor.orgId ||
+      parcel.independent_org_id === actor.orgId
     );
   }
 
@@ -181,8 +192,8 @@ export function canViewValuationSubTabForActor(
     if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
     // Мэргэжлийн байгуулл... — зөвхөн тухайн парцелийн independent_org-оор томилогдсон бол
     if (isProfessionalOrgActor(actor)) {
-      return !!actor.userId && !!parcel?.independent_org_id &&
-        parcel.independent_org_id === actor.userId;
+      return !!actor.orgId && !!parcel?.independent_org_id &&
+        parcel.independent_org_id === actor.orgId;
     }
     return false;
   }
@@ -190,10 +201,10 @@ export function canViewValuationSubTabForActor(
   // "asset" — MIKA / санхүү эсвэл үндсэн мэргэжлийн байгуулга (professional_org_id) л харна
   if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
   if (isProfessionalOrgActor(actor)) {
-    if (!actor.userId) return false;
+    if (!actor.orgId) return false;
     // Acquisition мэдээлэл байвал professional_org_id-тэй тулгана
     if (acquisition !== undefined && acquisition !== null) {
-      return acquisition.professional_org_id === actor.userId;
+      return acquisition.professional_org_id === actor.orgId;
     }
     // Мэдээлэл байхгүй бол зөвшөөрнө (graceful fallback)
     return true;
@@ -212,16 +223,16 @@ export function canEditValuationSubTabForActor(
   if (subTab === "asset") {
     return (
       isProfessionalOrgActor(actor) &&
-      !!actor.userId &&
-      acquisition?.professional_org_id === actor.userId
+      !!actor.orgId &&
+      acquisition?.professional_org_id === actor.orgId
     );
   }
 
   if (subTab === "independent") {
     return (
       isProfessionalOrgActor(actor) &&
-      !!actor.userId &&
-      parcel.independent_org_id === actor.userId
+      !!actor.orgId &&
+      parcel.independent_org_id === actor.orgId
     );
   }
 
@@ -249,6 +260,19 @@ export const HR_PERMISSIONS = {
   HR_CREATE: "hr:create",
   HR_UPDATE: "hr:update",
   HR_DELETE: "hr:delete",
+} as const;
+
+export const SYSTEM10_PERMISSION_RESOURCES = [
+  "land",
+  "compensation",
+  "decision",
+] as const;
+
+export const SYSTEM_SETTINGS_PERMISSIONS = {
+  ADMIN_READ: "admin:read",
+  ADMIN_CREATE: "admin:create",
+  ADMIN_UPDATE: "admin:update",
+  ADMIN_DELETE: "admin:delete",
 } as const;
 
 // Захирамжийн төсөл — тусдаа эрхийн бүлэг. Захирамжийн төсөлтэй ажиллах
@@ -307,7 +331,7 @@ function canDoHr(actor: AccessActor, permission: string): boolean {
 }
 
 export function canViewUsersPage(actor: AccessActor): boolean {
-  return canDo(actor, ADMIN_PERMISSIONS.USERS_READ);
+  return isAdminActor(actor) && canDo(actor, ADMIN_PERMISSIONS.USERS_READ);
 }
 
 export function canViewHrRegistry(actor: AccessActor): boolean {
@@ -354,13 +378,33 @@ export function canDeleteRole(actor: AccessActor): boolean {
   return canDo(actor, ADMIN_PERMISSIONS.ROLES_DELETE);
 }
 
-/** Роль-д эрх нэмэх/хасах — backend-д roles:update шаарддаг. */
+/** Роль-д эрх нэмэх/хасах — roles:update эсвэл 10-р системийн admin. */
 export function canManageRolePermissions(actor: AccessActor): boolean {
-  return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE);
+  return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE) ||
+    (canEnterAdminConsole(actor) && isAdminActor(actor));
 }
 
 export function canViewPermissions(actor: AccessActor): boolean {
   return canDo(actor, ADMIN_PERMISSIONS.PERMISSIONS_READ);
+}
+
+export function canViewSystemSettings(actor: AccessActor): boolean {
+  if (!canEnterAdminConsole(actor)) return false;
+  if (isAdminActor(actor)) return true;
+  return Object.values(SYSTEM_SETTINGS_PERMISSIONS).some((permission) =>
+    actorHasPermission(actor, permission),
+  );
+}
+
+function isSystem10PermissionName(name: string): boolean {
+  const resource = name.includes(":")
+    ? name.split(":", 1)[0]
+    : name.includes(".")
+      ? name.split(".", 1)[0]
+      : "";
+  return SYSTEM10_PERMISSION_RESOURCES.includes(
+    resource as (typeof SYSTEM10_PERMISSION_RESOURCES)[number],
+  );
 }
 
 /**
@@ -372,18 +416,30 @@ export function canGrantPermissionForActor(
   actor: AccessActor,
   permissionName: string,
 ): boolean {
+  if (isAdminActor(actor) && isSystem10PermissionName(permissionName)) {
+    return true;
+  }
   return actorHasPermission(actor, permissionName);
 }
 
 /**
  * Ролийг бүхэлд нь олгож/хураах боломжтой эсэх — ролийн эрх БҮГД дуудагчид
- * байх ёстой (backend-ийн callerCanGrantRole).
+ * байх ёстой. 10-р системийн admin нь land/compensation/decision role-уудыг
+ * олгож чадна.
  */
 export function canGrantRoleForActor(
   actor: AccessActor,
   rolePermissionNames: string[] | null | undefined,
 ): boolean {
-  return (rolePermissionNames ?? []).every((name) =>
+  const names = rolePermissionNames ?? [];
+  if (
+    names.length > 0 &&
+    isAdminActor(actor) &&
+    names.every(isSystem10PermissionName)
+  ) {
+    return true;
+  }
+  return names.every((name) =>
     actorHasPermission(actor, name),
   );
 }

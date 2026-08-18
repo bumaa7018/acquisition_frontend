@@ -1,8 +1,20 @@
 import type { AccessActor } from "./access-policy";
 
+/**
+ * JWT-ийн ID нэхэмжлэлүүд (`user_id`, `org_id`) нь sdplatform-д int4 тул JSON-д
+ * ТОО болж ирдэг. Харин API-ийн хариултууд (professional_org_id гэх мэт) нь
+ * ТЭМДЭГТ МӨР. Хоёуланг нь мөр болгож нэгтгэхгүй бол `"12" === 12` нь үргэлж
+ * false болж, хандалтын шалгалт чимээгүй унана.
+ */
+function idClaim(value: unknown): string | null {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value !== "") return value;
+  return null;
+}
+
 export function actorFromAuthorization(authorization: string | null): AccessActor {
   const token = authorization?.replace(/^Bearer\s+/i, "");
-  if (!token) return { userId: null, roles: [] };
+  if (!token) return { userId: null, orgId: null, roles: [] };
 
   try {
     const rawPayload = token.split(".")[1];
@@ -12,7 +24,8 @@ export function actorFromAuthorization(authorization: string | null): AccessActo
       .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
     const payload = JSON.parse(Buffer.from(normalizedPayload, "base64").toString("utf8"));
     return {
-      userId: payload.user_id ?? null,
+      userId: idClaim(payload.user_id),
+      orgId: idClaim(payload.org_id),
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     };
   } catch (err) {
@@ -21,7 +34,7 @@ export function actorFromAuthorization(authorization: string | null): AccessActo
     // Docker container лог болж Promtail/Loki-руу дамжина. Токен өөрийг нь
     // хэзээ ч логлохгүй, зөвхөн задлах явцад алдаа гарсныг тэмдэглэнэ.
     console.warn(JSON.stringify({ level: "WARN", msg: "jwt decode failed (server)", error: String(err) }));
-    return { userId: null, roles: [] };
+    return { userId: null, orgId: null, roles: [] };
   }
 }
 

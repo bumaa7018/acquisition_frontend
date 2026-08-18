@@ -31,16 +31,33 @@ export interface User {
 
 export interface Role {
   id: string;
+  code?: string;
   name: string;
+  resource?: string;
   description?: string;
   permissions: Permission[];
+  menus?: Menu[];
 }
 
 export interface Permission {
   id: string;
+  code?: string;
   name: string;
+  action?: string;
   description?: string;
   resource?: string;
+}
+
+export interface Menu {
+  id: string;
+  code: string;
+  name: string;
+  parent_id?: string;
+  parent_code?: string;
+  menu_url?: string;
+  menu_icon?: string;
+  sort_order?: number;
+  permissions?: Permission[];
 }
 
 export interface AuditLog {
@@ -114,20 +131,14 @@ export interface DocumentType {
   updated_by?: string;
 }
 
+// HR лавлахууд нь ГУС-ийн sdplatform схем дээр шууд буудаг. Тэр схемд байхгүй
+// талбарыг (short_name, register_no, sort_order, external_id ...) энд бүү нэм —
+// backend буцаахгүй тул дэлгэц дээр үргэлж хоосон харагдана. Байгууллагын
+// нэмэлт мэдээлэл ЗӨВХӨН үнэлгээний байгууллагад хамаарах ба ValuationOrg
+// дээр байдаг (аппын өөрийн valuation_org_profile хүснэгт).
 export interface Organization {
   id: string;
-  parent_id?: string;
   name: string;
-  short_name?: string;
-  register_no?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  external_id?: string;
-  source?: string;
-  is_active?: boolean;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface Department {
@@ -137,8 +148,6 @@ export interface Department {
   parent_id?: string;
   code?: string;
   name: string;
-  sort_order?: number;
-  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -147,10 +156,66 @@ export interface Position {
   id: string;
   code?: string;
   name: string;
-  sort_order?: number;
-  is_active?: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Үнэлгээний (мэргэжлийн) байгууллага — байгууллагын мэдээлэл + ажилтнууд.
+ *
+ * `id` нь `land_acquisition.professional_org_id` / `parcel.independent_org_id`
+ * -д хадгалагдах утга (хэрэглэгчийн ID БИШ).
+ */
+export interface ValuationOrg {
+  id: string;
+  name: string;
+  short_name: string;
+  register_no: string;
+  license_no: string;
+  license_issued_at?: string;
+  license_expires_at?: string;
+  phone: string;
+  email: string;
+  address: string;
+  note: string;
+  is_active: boolean;
+  employee_count: number;
+  /** Зөвхөн дэлгэрэнгүй (GET /valuation-orgs/:id) хариултад ирнэ. */
+  employees?: Employee[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Байгууллагатай ХАМТ бүртгэгдэх ажилтны маягтын утга. */
+export interface ValuationOrgEmployeeInput {
+  /** Утгатай бол одоо байгаа ажилтныг засна. */
+  id?: string;
+  last_name: string;
+  first_name: string;
+  register_no: string;
+  phone: string;
+  email: string;
+  position_name: string;
+  /** Хоосон бол нэвтрэх эрх үүсгэхгүй / хуучныг нь хэвээр үлдээнэ. */
+  username?: string;
+  /** Зөвхөн шинэ эрх үүсгэх эсвэл нууц үг солиход. */
+  password?: string;
+}
+
+export interface ValuationOrgPayload {
+  name: string;
+  short_name?: string;
+  register_no?: string;
+  license_no?: string;
+  license_issued_at?: string | null;
+  license_expires_at?: string | null;
+  phone?: string;
+  email?: string;
+  address?: string;
+  note?: string;
+  is_active?: boolean;
+  /** Байхгүй бол ажилтнуудад хүрэхгүй; хоосон массив = бүгдийг идэвхгүй болгох. */
+  employees?: ValuationOrgEmployeeInput[];
 }
 
 export interface Person {
@@ -176,6 +241,14 @@ export interface Person {
 export interface Employee {
   id: string;
   person_id: string;
+  /**
+   * Ажилтны нэвтрэх эрх (hr_employee.user_id). Нэвтрэх эрхгүй ажилтанд байхгүй.
+   *
+   * Чөлөөлөлтөд ажилтан хуваарилах / ажилтнаар шүүх нь
+   * `land_acquisition_assignee.user_id`-тай ажилладаг тул тэдгээр газарт
+   * ажилтны биш ЭНЭ ID-г дамжуулна.
+   */
+  user_id?: string;
   person?: Person;
   person_name?: string;
   organization_id: string;
@@ -184,7 +257,6 @@ export interface Employee {
   department_name?: string;
   position_id: string;
   position_name?: string;
-  employee_no?: string;
   work_email?: string;
   work_phone?: string;
   hired_at?: string;
@@ -246,6 +318,16 @@ export interface LandAcquisition {
   professional_org_name?: string;
   // Дэлгэрэнгүй (getById) дээр л ирнэ — тусдаа funding-sources GET API байхгүй
   funding_sources?: FundingSource[];
+}
+
+// Шүүлтүүрийн dropdown-ы хөнгөн бүтэц (GET /land-acquisitions/filter-options).
+// Үндсэн LandAcquisition-ы 25+ талбарын оронд зөвхөн 4 талбар — dropdown-д
+// хэрэгтэй нь тэр л. Дэлгэрэнгүйг landApi.filterOptions тайлбарт.
+export interface LandAcquisitionOption {
+  id: string;
+  acquisition_name: string;
+  plan_code: string;
+  plan_name: string;
 }
 
 export interface AU {

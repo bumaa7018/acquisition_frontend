@@ -1,7 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { landApi } from "@/lib/api";
+import { useAcquisitionPlanOptions } from "@/hooks/use-acquisition-options";
 import { X, ChevronDown } from "lucide-react";
 import { Highlight } from "./highlight";
 
@@ -18,22 +17,7 @@ export function PlanSelect({
   const [query, setQuery] = useState(value);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const { data } = useQuery({
-    queryKey: ["acq-list-all"],
-    queryFn: () => landApi.list({ page: 1, page_size: 200 }),
-    staleTime: 60_000,
-  });
-
-  const plans = Array.from(
-    new Map(
-      (data?.data ?? [])
-        .filter((a) => a.plan_code)
-        .map((a) => [
-          a.plan_code,
-          { plan_code: a.plan_code, name: a.plan_name ?? "" },
-        ]),
-    ).values(),
-  );
+  const { plans } = useAcquisitionPlanOptions();
 
   const filtered = query.trim()
     ? plans.filter(
