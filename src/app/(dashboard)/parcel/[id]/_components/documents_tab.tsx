@@ -5,11 +5,12 @@ import { parcelApi, documentTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
-import { Upload, Trash2, Download, FileText, Paperclip, ExternalLink, X } from "lucide-react";
+import { Upload, Trash2, Download, FileText, Paperclip, Eye, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import type { Document } from "@/types";
 import { DOCUMENT_GROUPS, groupKeyForDocCode } from "@/lib/document-groups";
+import { documentLink } from "@/lib/document-url";
 
 function formatSize(b: number) {
   return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
@@ -162,6 +163,8 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
             <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
               {manualDocs.map((doc) => {
                 const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
+                // PDF → браузерт шууд харна, бусад → татна (documentLink).
+                const link = documentLink(doc, parcelId, { prof: isProfOrg });
                 return (
                   <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
@@ -176,10 +179,14 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     </div>
                     <div className="flex items-center gap-1.5">
                       <a
-                        href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer"
+                        href={link.href} download={link.download}
+                        target="_blank" rel="noopener noreferrer"
+                        title={link.view ? "Харах" : "Татах"}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                       >
-                        <Download className="h-3.5 w-3.5" />
+                        {link.view
+                          ? <Eye className="h-3.5 w-3.5" />
+                          : <Download className="h-3.5 w-3.5" />}
                       </a>
                       {!isLocked && (
                         <button
@@ -235,7 +242,10 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     <p className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500">Олдоогүй</p>
                   ) : (
                   <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                    {group.docs.map((doc) => (
+                    {group.docs.map((doc) => {
+                    // PDF → браузерт шууд харна, бусад → татна (documentLink).
+                    const link = documentLink(doc, parcelId, { prof: isProfOrg });
+                    return (
                 <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
                     <FileText className="h-4 w-4 text-[#02c0ce]" />
@@ -259,13 +269,18 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     </p>
                   </div>
                   <a
-                    href={doc.file_url} target="_blank" rel="noopener noreferrer"
+                    href={link.href} download={link.download}
+                    target="_blank" rel="noopener noreferrer"
+                    title={link.view ? "Харах" : "Татах"}
                     className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
+                    {link.view
+                      ? <Eye className="h-3.5 w-3.5" />
+                      : <Download className="h-3.5 w-3.5" />}
                   </a>
                 </div>
-                    ))}
+                    );
+                    })}
                   </div>
                   )}
                 </div>
