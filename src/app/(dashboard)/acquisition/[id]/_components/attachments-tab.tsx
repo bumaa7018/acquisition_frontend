@@ -2,10 +2,11 @@
 import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, Upload, Trash2, Download, X, Paperclip } from "lucide-react";
+import { FileText, Upload, Trash2, Download, Eye, X, Paperclip } from "lucide-react";
 import { landApi, documentTypeApi } from "@/lib/api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { documentLink } from "@/lib/document-url";
 
 export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -116,6 +117,8 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
           <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
             {docs.map((doc) => {
               const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
+              // PDF → браузерт шууд харна, бусад → татна.
+              const link = documentLink(doc);
               return (
                 <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
@@ -129,11 +132,16 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {/* PDF → браузерт шууд харна, бусад → татна */}
                     <a
-                      href={doc.file_url} download={doc.name} target="_blank" rel="noopener noreferrer"
+                      href={link.href} download={link.download}
+                      target="_blank" rel="noopener noreferrer"
+                      title={link.view ? "Харах" : "Татах"}
                       className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                     >
-                      <Download className="h-3.5 w-3.5" />
+                      {link.view
+                        ? <Eye className="h-3.5 w-3.5" />
+                        : <Download className="h-3.5 w-3.5" />}
                     </a>
                     {canEdit && (
                       <button
