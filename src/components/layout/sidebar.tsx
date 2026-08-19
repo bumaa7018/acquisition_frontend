@@ -56,7 +56,7 @@ const NAV_MAIN = [
   { href: "/acquisition", label: "Газар чөлөөлөлт", icon: FileText },
   { href: "/report", label: "Тайлан", icon: BarChart3 },
   { href: "/map", label: "Газрын зураг", icon: Map },
-  // { href: "/drone_acquisition", label: "Дрон зураг", icon: Camera },
+  { href: "/drone_acquisition", label: "Дрон зураг", icon: Camera },
   { href: "/parcel", label: "Нэгж талбарын түүх", icon: Grid2x2 },
   { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
