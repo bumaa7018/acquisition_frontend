@@ -64,7 +64,7 @@ import type {
   Organization, Department, Position, Person, Employee,
   ValuationOrg, ValuationOrgPayload,
   AuditLog,
-  Plan, LandAcquisition, LandAcquisitionFilter, LandAcquisitionOption, Parcel, ParcelFull, ParcelDiscoveryResult,
+  Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
@@ -387,10 +387,12 @@ api.interceptors.response.use(
 // болох тул хэрэглэгч уншсан бүр газарт ID-г мөр болгож жигдрүүлнэ.
 function normalizeUser(raw: any): User {
   if (!raw) return raw
+  const employee = raw.employee ? normalizeEmployee(raw.employee) : raw.employee
   return {
     ...raw,
-    id: String(raw.id ?? ''),
+    id: String(raw.id ?? raw.user_id ?? ''),
     employee_id: raw.employee_id == null ? undefined : String(raw.employee_id),
+    employee,
   }
 }
 
@@ -453,6 +455,25 @@ export type OrganizationPayload = Partial<Omit<Organization, 'id' | 'created_at'
 export type DepartmentPayload = Partial<Omit<Department, 'id' | 'created_at' | 'updated_at'>> & { organization_id: string; name: string }
 export type PositionPayload = Partial<Omit<Position, 'id' | 'created_at' | 'updated_at'>> & { name: string }
 
+function numericHrId(value: string | number | null | undefined): string | number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) ? n : value
+}
+
+function employeeWritePayload(body: Partial<EmployeePayload>): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...body }
+  next.organization_id = numericHrId(body.organization_id)
+  next.position_id = numericHrId(body.position_id)
+  const departmentId = numericHrId(body.department_id)
+  if (departmentId === undefined) delete next.department_id
+  else next.department_id = departmentId
+  const personId = numericHrId(body.person_id)
+  if (personId === undefined) delete next.person_id
+  else next.person_id = personId
+  return next
+}
+
 export const organizationApi = {
   list: (params?: HRListParams) => api.get<PaginatedResponse<Organization>>('/organizations', { params }).then(r => r.data),
   create: (body: OrganizationPayload) => api.post<ApiResponse<Organization>>('/organizations', body).then(r => r.data.data),
@@ -502,8 +523,8 @@ export const employeeApi = {
     data: (r.data.data ?? []).map(normalizeEmployee),
   })),
   getById: (id: string) => api.get<ApiResponse<Employee>>(`/employees/${id}`).then(r => normalizeEmployee(r.data.data)),
-  create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', body).then(r => r.data.data),
-  update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, body).then(r => r.data.data),
+  create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', employeeWritePayload(body)).then(r => normalizeEmployee(r.data.data)),
+  update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, employeeWritePayload(body)).then(r => normalizeEmployee(r.data.data)),
   delete: (id: string) => api.delete(`/employees/${id}`),
 }
 
@@ -700,9 +721,14 @@ export const landApi = {
     api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
+  // timeout: 0 — ХИЛ солиход (shapefile илгээгдсэн үед) backend нь ГУС-аас
+  // нэгж талбарыг 100-гийн багцаар татаж, шинэ хилд ороогүй болсныг устгах
+  // ажлыг ДОТРОО хийдэг тул ердийн 30 сек-т багтахгүй байж болно. Хил
+  // хөндөөгүй ердийн засварт хязгаар хэвээр (алдааг эрт харуулах нь дээр).
   update: (id: string, data: FormData) =>
-    api.put<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`, data, {
+    api.put<ApiResponse<LandAcquisitionUpdateResult>>(`/land-acquisitions/${id}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      ...(data.has('shapefile') ? { timeout: 0 } : {}),
     }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
@@ -783,10 +809,15 @@ export const landApi = {
     api.get<ApiResponse<GlobalCompensation>>(`/compensations/${id}`).then(r => r.data.data),
   getParcel: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
-  // Чөлөөлөх хилээр ГУС-аас нэгж талбарын ДУГААРУУДЫГ татаж бүртгэнэ.
-  // Дэлгэрэнгүй мэдээлэл татагдахгүй — түүнийг дугаар тус бүрээр syncParcel хийнэ.
+  // Чөлөөлөх хилээр ГУС-аас нэгж талбарыг татаж бүртгэнэ: дугаар + бүртгэлийн
+  // баганууд (геометр, талбай, зориулалт, хаяг) шууд орж ирнэ. ЭРХ ЗҮЙН
+  // дэлгэрэнгүй татагдахгүй — түүнийг дугаар тус бүрээр syncParcel хийнэ.
+  //
+  // timeout: 0 — backend нь дундын сервисийг 100-гийн БАГЦААР, багц хооронд
+  // зайтай дууддаг тул том чөлөөлөлт дээр 30 сек-ийн хязгаарт багтахгүй.
+  // Явцыг татах цонх өөрөө харуулах ба цуцлах товч байдаг.
   discoverParcels: (acqId: string, opts?: { silent?: boolean }) =>
-    api.post<ApiResponse<ParcelDiscoveryResult>>(`/land-acquisitions/${acqId}/parcels/by-acquisition`, undefined, { _silent: opts?.silent }).then(r => r.data.data),
+    api.post<ApiResponse<ParcelDiscoveryResult>>(`/land-acquisitions/${acqId}/parcels/by-acquisition`, undefined, { _silent: opts?.silent, timeout: 0 }).then(r => r.data.data),
   syncParcel: (acqId: string, parcelId: string, opts?: { silent?: boolean }) =>
     api.post(`/land-acquisitions/${acqId}/parcels/${parcelId}/sync`, undefined, { _silent: opts?.silent }),
   syncValuation: (acqId: string, parcelId: string, opts?: { silent?: boolean }) =>

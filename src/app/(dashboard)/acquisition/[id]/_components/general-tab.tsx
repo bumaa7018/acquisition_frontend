@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload, Pencil, Save, X, Calculator } from "lucide-react";
+import { Upload, Pencil, Save, X, Calculator, AlertTriangle } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isProfessionalOrg } from "@/lib/role-utils";
@@ -10,9 +10,11 @@ import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { calcAreaFromWkt } from "@/lib/geometry-utils";
 import { STATUS_LABELS } from "@/types";
 import { STATUS_CFG } from "./shared";
+import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const isProfOrg = isProfessionalOrg();
   const { data: acq } = useQuery({
     queryKey: ["land", id],
@@ -91,23 +93,54 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       if (!isNaN(areaVal) && areaVal > 0)
         fd.append("area_m2", String(areaVal));
       if (boundaryFile) fd.append("shapefile", boundaryFile);
-      await landApi.update(id, fd);
+      const updated = await landApi.update(id, fd);
       // Мэргэжлийн байгууллагыг ерөнхий update PUT уншдаггүй — зориулалтын
       // /professional-org endpoint-оор тусад нь солино (өөрчлөгдсөн үед л).
       if (professionalOrgId !== (acq?.professional_org_id ?? "")) {
         await landApi.setProfessionalOrg(id, professionalOrgId || null);
       }
+      return updated;
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       toast.success("Хадгалагдлаа");
+      // Хил солигдсон бол нэгж талбар нэмэгдэж/хасагдсаныг ХАРУУЛНА — хасалт
+      // нь буцаах боломжгүй тул чимээгүй өнгөрүүлж болохгүй.
+      const added = updated?.added_parcels ?? 0;
+      const removed = updated?.removed_parcels ?? 0;
+      if (added || removed) {
+        toast.info(
+          `Шинэ хилээр ${added} нэгж талбар нэмэгдэж, ${removed} нэгж талбар хасагдлаа`,
+        );
+      }
       setEditing(false);
       setAreaAutoCalc(false);
       setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
-      queryClient.invalidateQueries({ queryKey: ["land-parcels", id] });
+      queryClient.invalidateQueries({ queryKey: ["land-parcels", id], refetchType: "all" });
+      // Хил солиход нэгж талбарын НИЙТ тоо ба хилийн түүх хоёулаа хуучирна.
+      queryClient.invalidateQueries({ queryKey: ["land-parcels-total", id], refetchType: "all" });
+      queryClient.invalidateQueries({ queryKey: ["land-boundary-history", id] });
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
+
+  // Хил солих нь БУЦААХ БОЛОМЖГҮЙ үйлдэл (шинэ хилд ороогүй нэгж талбар
+  // үнэлгээ/олговор/баримттайгаа хамт устана) тул файл сонгосон үед зөвшөөрөл
+  // авна. Файлгүй ердийн засварт шууд хадгална.
+  const requestSave = () => {
+    if (!boundaryFile) {
+      saveMutation.mutate();
+      return;
+    }
+    setPendingConfirm({
+      title: "Чөлөөлөх хилийг солих уу?",
+      description:
+        "Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). \"Чөлөөлсөн\" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.",
+      confirmLabel: "Зөвшөөрөх",
+      confirmColor: "#f59e0b",
+      onConfirm: () => saveMutation.mutate(),
+    });
+  };
 
   if (!acq) return null;
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
@@ -186,7 +219,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                   <X className="h-3.5 w-3.5" /> Болих
                 </button>
                 <button
-                  onClick={() => saveMutation.mutate()}
+                  onClick={requestSave}
                   disabled={saveMutation.isPending}
                   className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
                 >
@@ -240,6 +273,19 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                   </button>
                 )}
               </div>
+            </div>
+          )}
+          {/* Хил солих нь нэгж талбарыг УСТГАЖ болох тул анхааруулна */}
+          {editing && boundaryFile && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
+                Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд{" "}
+                <span className="font-semibold">ороогүй</span> нэгж талбарууд
+                үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт бүрмөсөн
+                устана. &laquo;Чөлөөлсөн&raquo; төлөвтэй нэгж талбар шинэ
+                хилээс гарч байвал хил хүлээгдэхгүй.
+              </p>
             </div>
           )}
           {row(
@@ -528,6 +574,16 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        title={pendingConfirm?.title ?? ""}
+        description={pendingConfirm?.description}
+        confirmLabel={pendingConfirm?.confirmLabel}
+        confirmColor={pendingConfirm?.confirmColor}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onClose={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }

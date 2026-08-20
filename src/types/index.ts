@@ -320,6 +320,20 @@ export interface LandAcquisition {
   funding_sources?: FundingSource[];
 }
 
+/**
+ * PUT /land-acquisitions/:id-ийн хариулт.
+ *
+ * Хил (shapefile) солигдсон үед backend нь ГУС-аас нэгж талбарыг дахин
+ * тодорхойлж, шинэ хилд ороогүй болсныг БҮРМӨСӨН устгадаг тул хэдэн талбар
+ * нэмэгдэж/хасагдсаныг хариултад буцаана. Хил хөндөгдөөгүй үед эдгээр талбар
+ * ирэхгүй (warning ч мөн адил).
+ */
+export interface LandAcquisitionUpdateResult extends LandAcquisition {
+  warning?: string;
+  added_parcels?: number;
+  removed_parcels?: number;
+}
+
 // Шүүлтүүрийн dropdown-ы хөнгөн бүтэц (GET /land-acquisitions/filter-options).
 // Үндсэн LandAcquisition-ы 25+ талбарын оронд зөвхөн 4 талбар — dropdown-д
 // хэрэгтэй нь тэр л. Дэлгэрэнгүйг landApi.filterOptions тайлбарт.

@@ -1,16 +1,30 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, Users, UserPlus, UserMinus } from "lucide-react";
 import { landApi, usersApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { getCurrentUserId } from "@/lib/role-utils";
-import type { AcquisitionAssignee } from "@/types";
+import type { AcquisitionAssignee, User } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { isSeniorSpecialist } from "./shared";
 
-type UserOption = { id: string; first_name: string; last_name: string; email: string; position?: string };
+type UserOption = Pick<User, "id" | "first_name" | "last_name" | "full_name" | "email" | "position" | "employee_id" | "employee" | "is_active">;
+
+function userDisplayName(user: UserOption) {
+  return (
+    user.employee?.person_name ||
+    user.full_name ||
+    [user.last_name, user.first_name].filter(Boolean).join(" ") ||
+    user.email ||
+    user.id
+  );
+}
+
+function userPosition(user: UserOption) {
+  return user.employee?.position_name || user.position || "";
+}
 
 export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -19,6 +33,7 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<"select" | "confirm">("select");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selected, setSelected] = useState<UserOption[]>([]);
 
   const { data: assignees = [], isLoading } = useQuery<AcquisitionAssignee[]>({
@@ -26,9 +41,19 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     queryFn: () => landApi.getAssignees(id),
   });
 
-  const { data: usersData } = useQuery({
-    queryKey: ["users-all"],
-    queryFn: () => usersApi.list({ page: 1, page_size: 200 }),
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data: usersData, isFetching: usersFetching } = useQuery({
+    queryKey: ["users-assignee-options", debouncedSearch],
+    queryFn: () => usersApi.list({
+      page: 1,
+      page_size: debouncedSearch ? 50 : 200,
+      search: debouncedSearch || undefined,
+      is_active: true,
+    }),
     enabled: modalOpen,
   });
 
@@ -38,12 +63,16 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
   const currentUserId = getCurrentUserId();
 
   const filteredUsers = allUsers.filter((u) => {
+    const hasEmployee = !!(u.employee_id || u.employee?.id);
+    if (!hasEmployee) return false;
     if (u.id === currentUserId) return false;
     if (assignedIds.has(u.id)) return false;
-    const name = `${u.first_name} ${u.last_name}`.toLowerCase();
-    const position = (u.position ?? "").toLowerCase();
+    if (selectedIds.has(u.id)) return true;
+    const name = userDisplayName(u).toLowerCase();
+    const position = userPosition(u).toLowerCase();
+    const email = (u.email ?? "").toLowerCase();
     const q = search.toLowerCase();
-    return name.includes(q) || position.includes(q) || u.email.toLowerCase().includes(q);
+    return !q || name.includes(q) || position.includes(q) || email.includes(q);
   });
 
   const setMutation = useMutation({
@@ -52,6 +81,8 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     onSuccess: () => {
       toast.success("Ажилтны жагсаалт шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["assignees", id] });
+      queryClient.invalidateQueries({ queryKey: ["land"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       closeModal();
     },
     onError: (err) => toast.error(getApiError(err, "Шинэчлэхэд алдаа гарлаа")),
@@ -89,8 +120,8 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
       ...assignees.map((a) => ({ user_id: a.user_id, user_name: a.user_name ?? "", user_position: a.user_position ?? "" })),
       ...selected.map((u) => ({
         user_id: u.id,
-        user_name: [u.first_name, u.last_name].filter(Boolean).join(" ") || u.id,
-        user_position: u.position ?? "",
+        user_name: userDisplayName(u),
+        user_position: userPosition(u),
       })),
     ];
     setMutation.mutate(updated);
@@ -198,7 +229,7 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-2 py-1 min-h-0">
-                  {!usersData ? (
+                  {usersFetching && !usersData ? (
                     <div className="space-y-2 p-4 animate-pulse">
                       {[...Array(5)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
                     </div>
@@ -230,14 +261,14 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                             )}
                           </div>
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02c0ce]/10 text-[#02c0ce] text-[12px] font-bold select-none">
-                            {(u.first_name || u.last_name || "?").charAt(0).toUpperCase()}
+                            {userDisplayName(u).charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                              {u.first_name} {u.last_name}
+                              {userDisplayName(u)}
                             </p>
                             <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                              {u.position || u.email}
+                              {userPosition(u) || u.email}
                             </p>
                           </div>
                         </button>
@@ -275,14 +306,14 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                     {selected.map((u) => (
                       <div key={u.id} className="flex items-center gap-3 px-4 py-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#02c0ce]/10 text-[#02c0ce] text-[12px] font-bold select-none">
-                          {(u.first_name || u.last_name || "?").charAt(0).toUpperCase()}
+                          {userDisplayName(u).charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                            {u.first_name} {u.last_name}
+                            {userDisplayName(u)}
                           </p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                            {u.position || u.email}
+                            {userPosition(u) || u.email}
                           </p>
                         </div>
                       </div>
