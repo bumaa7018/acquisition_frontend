@@ -511,8 +511,20 @@ export const employeeApi = {
     data: (r.data.data ?? []).map(normalizeEmployee),
   })),
   getById: (id: string) => api.get<ApiResponse<Employee>>(`/employees/${id}`).then(r => normalizeEmployee(r.data.data)),
-  create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', body).then(r => r.data.data),
-  update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, body).then(r => r.data.data),
+  create: (body: EmployeePayload) => api.post<ApiResponse<Employee>>('/employees', {
+    ...body,
+    organization_id: toNumericId(body.organization_id),
+    department_id: toNumericId(body.department_id),
+    position_id: toNumericId(body.position_id),
+    person_id: toNumericId(body.person_id),
+  }).then(r => r.data.data),
+  update: (id: string, body: Partial<EmployeePayload>) => api.put<ApiResponse<Employee>>(`/employees/${id}`, {
+    ...body,
+    organization_id: toNumericId(body.organization_id),
+    department_id: toNumericId(body.department_id),
+    position_id: toNumericId(body.position_id),
+    person_id: toNumericId(body.person_id),
+  }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/employees/${id}`),
 }
 
