@@ -563,14 +563,33 @@ export default function LandPage() {
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
-  const canCreate = hasPermission("land:create") && hasRole("admin", "senior_specialist", "Ахлах мэргэжилтэн");
-  const isExternal = isExternalSpecialRole();
+  // Токен зөвхөн client дээр (localStorage) байдаг тул эрхээс хамаарсан утгыг
+  // render үед шууд бодвол SSR (false) ба анхны client hydration (үнэн эрх)
+  // хооронд UI таарахгүй болж hydration mismatch үүсгэдэг. Тиймээс mount
+  // хийгдсэний дараа useEffect-д тооцоолж, эхний render дээр SSR-тэй адилхан
+  // (бүгд false) байлгана.
+  const [auth, setAuth] = useState({
+    canCreate: false,
+    canDelete: false,
+    isExternal: false,
+    isProfOrg: false,
+    isEmployee: false,
+  });
+  const { canCreate, canDelete, isExternal, isProfOrg, isEmployee } = auth;
   const currentUserId = getCurrentUserId();
-  const isProfOrg = isProfessionalOrg();
   // Гадаад ролиудад (санхүү, МИКА; мэрг. байгууллага /my_acquisitions руу шилжинэ)
   // зөвхөн "Хээрийн судалгаа" төлөвтэй чөлөөлөлт харагдана — backend ч мөн шүүнэ.
   const onlyFieldSurvey = isExternal;
-  const isEmployee = hasRole("employee", "Энгийн ажилтан");
+
+  useEffect(() => {
+    setAuth({
+      canCreate: hasPermission("land:create") && hasRole("admin", "senior_specialist", "Ахлах мэргэжилтэн"),
+      canDelete: hasPermission("land:delete"),
+      isExternal: isExternalSpecialRole(),
+      isProfOrg: isProfessionalOrg(),
+      isEmployee: hasRole("employee", "Энгийн ажилтан"),
+    });
+  }, []);
 
   // Мэргэжлийн байгууллага /my_acquisitions руу redirect хийнэ
   useEffect(() => {
@@ -879,7 +898,7 @@ export default function LandPage() {
                               Дэлгэрэнгүй
                             </Link>
                           )}
-                          {!isExternal && hasPermission("land:delete") && (
+                          {!isExternal && canDelete && (
                             <button
                               onClick={() => setPendingConfirm({ title: "Устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(land.id) })}
                               className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
