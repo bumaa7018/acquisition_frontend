@@ -481,10 +481,18 @@ export const organizationApi = {
   delete: (id: string) => api.delete(`/organizations/${id}`),
 }
 
+// sdplatform-ийн ID-ууд backend дээр int4 тул бичихдээ (POST/PUT) тоо болгож
+// хөрвүүлнэ — унших үед мөр болгодог normalizeEmployee-ийн эсрэг чиглэл.
+function toNumericId(v: unknown): number | undefined {
+  if (v === undefined || v === null || v === '') return undefined
+  const n = Number(v)
+  return Number.isFinite(n) ? n : undefined
+}
+
 export const departmentApi = {
   list: (params?: HRListParams) => api.get<PaginatedResponse<Department>>('/departments', { params }).then(r => r.data),
-  create: (body: DepartmentPayload) => api.post<ApiResponse<Department>>('/departments', body).then(r => r.data.data),
-  update: (id: string, body: Partial<DepartmentPayload>) => api.put<ApiResponse<Department>>(`/departments/${id}`, body).then(r => r.data.data),
+  create: (body: DepartmentPayload) => api.post<ApiResponse<Department>>('/departments', { ...body, organization_id: toNumericId(body.organization_id) }).then(r => r.data.data),
+  update: (id: string, body: Partial<DepartmentPayload>) => api.put<ApiResponse<Department>>(`/departments/${id}`, { ...body, organization_id: toNumericId(body.organization_id) }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/departments/${id}`),
 }
 

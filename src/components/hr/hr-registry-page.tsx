@@ -259,7 +259,7 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
               {mode === "department" || mode === "employee" ? (
                 <select value={String(form.organization_id || "")} onChange={(e) => setForm((f) => ({ ...f, organization_id: e.target.value, department_id: "" }))} className={inputCls}>
                   <option value="">Байгууллага *</option>
-                  {organizations.data?.data.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  {(organizations.data?.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               ) : null}
 
@@ -267,11 +267,11 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
                 <>
                   <select value={String(form.department_id || "")} onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value }))} className={inputCls}>
                     <option value="">Алба, хэлтэс</option>
-                    {departments.data?.data.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {(departments.data?.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                   <select value={String(form.position_id || "")} onChange={(e) => setForm((f) => ({ ...f, position_id: e.target.value }))} className={inputCls}>
                     <option value="">Албан тушаал *</option>
-                    {positions.data?.data.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {(positions.data?.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                   <input value={String(form.work_email || "")} onChange={(e) => setForm((f) => ({ ...f, work_email: e.target.value }))} placeholder="Ажлын имэйл" className={inputCls} />
                   <input value={String(form.work_phone || "")} onChange={(e) => setForm((f) => ({ ...f, work_phone: e.target.value }))} placeholder="Ажлын утас" className={inputCls} />
@@ -284,7 +284,7 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
                       <input value={personSearch} onChange={(e) => setPersonSearch(e.target.value)} placeholder="Иргэн хайх" className={inputCls} />
                       <select value={String(form.person_id || "")} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} className={inputCls}>
                         <option value="">Иргэн сонгох *</option>
-                        {people.data?.data.map((p) => (
+                        {(people.data?.data ?? []).map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.person_type === "legal" ? p.legal_name : `${p.last_name ?? ""} ${p.first_name ?? ""}`} · {p.register_no}
                           </option>
