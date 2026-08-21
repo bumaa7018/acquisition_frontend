@@ -56,8 +56,12 @@ export default function ParcelDetailPage() {
   });
 
   const PARCEL_FINAL_STATUSES = ["Чөлөөлсөн", "Татгалзсан", "Нөлөөллөөс гарсан"];
+  // Татгалзсан төлөвтэй ч бусад төлөв рүү шилжих боломжтой байх ёстой тул
+  // энэ төлвийг явцын (status) хаалтаас чөлөөлнө — бусад таб хаалттай хэвээр.
+  const PROGRESS_FINAL_STATUSES = ["Чөлөөлсөн", "Нөлөөллөөс гарсан"];
   const isAcqConfirmed = acquisition?.status === ACQ_STATUS.CONFIRMED;
   const isParcelLocked = isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+  const isProgressLocked = isAcqConfirmed || PROGRESS_FINAL_STATUSES.includes(parcel?.status_name ?? "");
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "general", label: "Ерөнхий мэдээлэл", icon: <Info className="h-4 w-4" /> },
@@ -231,7 +235,7 @@ export default function ParcelDetailPage() {
 
       {activeTab === "general" && <GeneralTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "holder" && <HolderTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isProgressLocked} />}
       {activeTab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
       {activeTab === "documents" && <DocumentsTab parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "finance" && <FinanceTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
