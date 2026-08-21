@@ -29,7 +29,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
   // Үнэлгээний БАЙГУУЛЛАГУУД (өмнө нь professional_org рольтой хэрэглэгчид).
   const { data: valuationOrgs = [] } = useQuery({
-    queryKey: ["valuation-orgs"],
+    // ["valuation-orgs", ...] иерархи (valuation-org-page.tsx-ийн qk-г үз):
+    // бүртгэлийн хуудас хадгалахдаа угтвараар нь хүчингүй болгодог тул шинэ
+    // байгууллага энэ сонгогчид шууд харагдана.
+    queryKey: ["valuation-orgs", "options"],
     queryFn: () => landApi.listValuationOrgs(),
     enabled: canEdit,
     staleTime: 60_000,

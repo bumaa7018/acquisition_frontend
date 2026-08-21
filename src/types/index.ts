@@ -249,6 +249,12 @@ export interface Employee {
    * ажилтны биш ЭНЭ ID-г дамжуулна.
    */
   user_id?: string;
+  /**
+   * Нэвтрэх нэр (sd_user.username). ЗӨВХӨН үнэлгээний байгууллагын ажилтны
+   * хариултад ирнэ — HR-ийн ерөнхий жагсаалт нь өөр сангийн sd_user-ийг join
+   * хийж чаддаггүй. Нэвтрэх эрхгүй ажилтанд байхгүй.
+   */
+  username?: string;
   person?: Person;
   person_name?: string;
   organization_id: string;

@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { valuationOrgApi } from "@/lib/api";
 import { canAddHr, canEditHr, canRemoveHr, canViewHr } from "@/lib/role-utils";
 import { getApiError } from "@/lib/utils";
 import type { Employee, ValuationOrg, ValuationOrgEmployeeInput, ValuationOrgPayload } from "@/types";
-import { Landmark, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ChevronRight, Landmark, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
@@ -17,6 +17,28 @@ const ghostBtn =
   "inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[13px] font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-white/[0.04]";
 const iconBtn =
   "flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors hover:bg-[#02c0ce]/10 hover:text-[#02c0ce] dark:bg-[#252630] dark:text-slate-400";
+
+// Үнэлгээний байгууллагын БҮХ кэш нэг иерархид: ["valuation-orgs", <төрөл>, ...].
+//
+// Өмнө нь гурван key тус тусдаа байсан — ["valuation-org-list", search],
+// ["valuation-org", id], ["valuation-orgs"] — бөгөөд дунд хоёр нь ЗӨВХӨН нэг
+// үсгээр ялгаатай байв. Улмаар хадгалсны дараа дэлгэрэнгүйн кэшийг цэвэрлэх
+// мөр дутуу байсныг хэн ч анзаараагүй (ажилтан нэмээд дахин нээхэд хуучин
+// жагсаалт харагддаг байсан).
+//
+// Одоо React Query-ийн УГТВАРААР таарах шинжийг ашиглана: qk.all нь доорх
+// гурвуулангийг НЭГ дуудлагаар хүчингүй болгоно.
+//
+//   ["valuation-orgs", "list",    <хайлт>]  → энэ хуудасны хүснэгт
+//   ["valuation-orgs", "detail",  <id>]     → дэлгэрэнгүй (GET /:id)
+//   ["valuation-orgs", "options"]           → чөлөөлөлт / нэгж талбарын
+//                                             сонгогчид (өөр хуудсууд;
+//                                             тэнд literal-аар бичигдсэн)
+const qk = {
+  all: ["valuation-orgs"] as const,
+  list: (search: string) => ["valuation-orgs", "list", search] as const,
+  detail: (id: string | null) => ["valuation-orgs", "detail", id] as const,
+};
 
 const dash = (v: string | number | null | undefined) =>
   v === null || v === undefined || v === "" ? (
@@ -41,7 +63,20 @@ type OrgForm = {
 
 // Маягтын ажилтан. `id` утгатай бол одоо байгаа ажилтныг засна.
 // `hasLogin` нь ЗӨВХӨН харуулах зориулалттай (backend-ээс ирнэ).
-type EmployeeForm = ValuationOrgEmployeeInput & { hasLogin?: boolean };
+//
+// `uid` — React-ийн key. Шинэ ажилтанд `id` байхгүй тул индексээр key хийвэл
+// дундаас мөр хасахад доорх мөрүүдийн key нь шилжиж, React input-уудыг БУРУУ
+// мөрд холбодог (бичсэн утга нүүдэг). uid нь мөрийн ард бариастай явна.
+// `originalUsername` — backend-ээс ирсэн нэвтрэх нэр. Нууц үг ЗААВАЛ шаардах
+// эсэхийг үүнтэй тулгаж шийднэ: нэр өөрчлөгдөөгүй бол нууц үг хэрэггүй.
+type EmployeeForm = ValuationOrgEmployeeInput & {
+  hasLogin?: boolean;
+  uid: string;
+  originalUsername?: string;
+};
+
+let employeeUidSeq = 0;
+const nextUid = () => `emp-${++employeeUidSeq}`;
 
 const EMPTY_ORG: OrgForm = {
   name: "",
@@ -59,6 +94,7 @@ const EMPTY_ORG: OrgForm = {
 
 function emptyEmployee(): EmployeeForm {
   return {
+    uid: nextUid(),
     last_name: "",
     first_name: "",
     register_no: "",
@@ -70,10 +106,12 @@ function emptyEmployee(): EmployeeForm {
   };
 }
 
-// Backend-ийн Employee-г маягтын мөр болгоно. Овог/нэр нь bs_person дээр
-// тусдаа багана тул person-оос уншина.
+// Backend-ийн Employee-г маягтын мөр болгоно. Овог/нэр/регистр нь person дотор
+// ирдэг. Нэвтрэх нэрийг ХАРУУЛНА — эс бөгөөс тухайн ажилтан ямар эрхээр
+// нэвтэрдгийг мэдэхгүй, зассан ч хоосон нэр илгээгдэх эрсдэлтэй.
 function employeeToForm(e: Employee): EmployeeForm {
   return {
+    uid: nextUid(),
     id: e.id,
     hasLogin: !!e.user_id,
     last_name: e.person?.last_name ?? "",
@@ -82,7 +120,8 @@ function employeeToForm(e: Employee): EmployeeForm {
     phone: e.work_phone ?? e.person?.phone ?? "",
     email: e.work_email ?? e.person?.email ?? "",
     position_name: e.position_name ?? "",
-    username: "",
+    username: e.username ?? "",
+    originalUsername: e.username ?? "",
     password: "",
   };
 }
@@ -111,7 +150,7 @@ export function ValuationOrgPage() {
   }, [search]);
 
   const list = useQuery({
-    queryKey: ["valuation-org-list", debounced],
+    queryKey: qk.list(debounced),
     queryFn: () => valuationOrgApi.list({ search: debounced || undefined, page: 1, page_size: 100 }),
     enabled: canView,
   });
@@ -119,14 +158,32 @@ export function ValuationOrgPage() {
   // Засварлахад ажилтнуудыг дэлгэрэнгүй хариултаас (GET /:id) л авна —
   // жагсаалтын хариултад ажилтнууд ирдэггүй.
   const detail = useQuery({
-    queryKey: ["valuation-org", editingId],
+    queryKey: qk.detail(editingId),
     queryFn: () => valuationOrgApi.getById(editingId as string),
     enabled: !!editingId && formOpen,
   });
 
+  // hydratedFor — маягт тухайн байгууллагын өгөгдлөөр аль хэдийн бөглөгдсөн
+  // эсэх. Өмнө нь эффект `detail.data`-ийн ОБЪЕКТЫН ХАЯГААР хамаардаг байсан:
+  //   1) байгууллага нээх → шинэ объект → маягт бөглөгдөнө;
+  //   2) хаах → closeForm маягтыг хоослоно;
+  //   3) ДАХИН нээх → React Query кэшээс ЯГ ТЭР объект ирнэ → хаяг өөрчлөгдөөгүй
+  //      тул эффект ажиллахгүй → маягт ХООСОН хэвээр (нэр ч, ажилтан ч байхгүй,
+  //      formValid=false тул Хадгалах ч бөглөрдөг).
+  // Одоо нээлт тутам ЯГ НЭГ УДАА бөглөнө — refetch (цонх focus г.м.) хэрэглэгчийн
+  // бичиж байгаа өгөгдлийг дарж бичихгүй.
+  const hydratedFor = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!detail.data) return;
+    if (!formOpen) {
+      hydratedFor.current = null;
+      return;
+    }
+    if (!editingId || !detail.data) return;
+    if (hydratedFor.current === editingId) return;
+
     const d = detail.data;
+    hydratedFor.current = editingId;
     setOrg({
       name: d.name ?? "",
       short_name: d.short_name ?? "",
@@ -141,13 +198,14 @@ export function ValuationOrgPage() {
       is_active: d.is_active ?? true,
     });
     setEmployees((d.employees ?? []).map(employeeToForm));
-  }, [detail.data]);
+  }, [formOpen, editingId, detail.data]);
 
   const closeForm = () => {
     setFormOpen(false);
     setEditingId(null);
     setOrg(EMPTY_ORG);
     setEmployees([]);
+    hydratedFor.current = null;
   };
 
   const openCreate = () => {
@@ -156,12 +214,18 @@ export function ValuationOrgPage() {
     // Байгууллага дор хаяж нэг ажилтантай байх нь ердийн тохиолдол тул
     // маягтыг нэг хоосон мөртэй нээнэ.
     setEmployees([emptyEmployee()]);
+    hydratedFor.current = null;
     setFormOpen(true);
   };
 
-  const openEdit = (row: ValuationOrg) => {
+  // openDetail — "Дэлгэрэнгүй": байгууллагын үндсэн мэдээлэл БА ажилтныг нэг
+  // цонхонд засна/нэмнэ. Маягтыг хоослож нээгээд detail (GET /:id) ирэхэд
+  // дээрх эффект бөглөнө — өмнөх байгууллагын өгөгдөл харагдахгүй.
+  const openDetail = (row: ValuationOrg) => {
     setEditingId(row.id);
+    setOrg(EMPTY_ORG);
     setEmployees([]);
+    hydratedFor.current = null;
     setFormOpen(true);
   };
 
@@ -195,9 +259,8 @@ export function ValuationOrgPage() {
       editingId ? valuationOrgApi.update(editingId, payload()) : valuationOrgApi.create(payload()),
     onSuccess: () => {
       toast.success(editingId ? "Хадгалагдлаа" : "Бүртгэгдлээ");
-      queryClient.invalidateQueries({ queryKey: ["valuation-org-list"] });
-      // Сонгогчид (чөлөөлөлт, нэгж талбар) шинэ жагсаалтыг авна.
-      queryClient.invalidateQueries({ queryKey: ["valuation-orgs"] });
+      // Хүснэгт, дэлгэрэнгүй, бусад хуудасны сонгогчид — бүгд угтвараар.
+      queryClient.invalidateQueries({ queryKey: qk.all });
       closeForm();
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалах үед алдаа гарлаа")),
@@ -207,20 +270,21 @@ export function ValuationOrgPage() {
     mutationFn: (id: string) => valuationOrgApi.delete(id),
     onSuccess: () => {
       toast.success("Устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["valuation-org-list"] });
-      queryClient.invalidateQueries({ queryKey: ["valuation-orgs"] });
+      queryClient.invalidateQueries({ queryKey: qk.all });
     },
     onError: (err) =>
       toast.error(getApiError(err, "Устгах боломжгүй — чөлөөлөлтөд ашиглагдсан байж болзошгүй")),
   });
 
-  // Ажилтны нэр, регистр нь bs_person-д заавал шаардлагатай. Нэвтрэх эрх
-  // үүсгэх бол нууц үг ч заавал (backend мөн шалгана).
+  // Ажилтны нэр, регистр заавал. Нэвтрэх нэрийг ШИНЭЭР өгөх/СОЛИХ бол нууц үг
+  // ч заавал — backend нь sd_user шинээр үүсгэхэд нууц үг шаарддаг. Ирсэн
+  // нэрийг хөндөөгүй бол нууц үг хэрэггүй (одоо байгаа эрх хэвээр).
   const employeesValid = useMemo(
     () =>
       employees.every((e) => {
         if (!e.first_name.trim() || !e.register_no.trim()) return false;
-        if (e.username?.trim() && !e.id && !e.password) return false;
+        const username = e.username?.trim() ?? "";
+        if (username && username !== (e.originalUsername ?? "") && !e.password) return false;
         return true;
       }),
     [employees],
@@ -304,7 +368,15 @@ export function ValuationOrgPage() {
               </tr>
             )}
             {rows.map((row) => (
-              <tr key={row.id} className="text-slate-700 dark:text-slate-200">
+              <tr
+                key={row.id}
+                // Мөр дээр дарахад ч дэлгэрэнгүй нээгдэнэ (Үйлдэл багана нь
+                // stopPropagation хийдэг тул устгах товч давхар ажиллахгүй).
+                onClick={perms.update ? () => openDetail(row) : undefined}
+                className={`text-slate-700 dark:text-slate-200 ${
+                  perms.update ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.03]" : ""
+                }`}
+              >
                 <td className="px-3 py-2.5 font-medium">{row.name}</td>
                 <td className="px-3 py-2.5 font-mono">{dash(row.register_no)}</td>
                 <td className="px-3 py-2.5 font-mono">{dash(row.license_no)}</td>
@@ -322,11 +394,17 @@ export function ValuationOrgPage() {
                   </span>
                 </td>
                 {(perms.update || perms.del) && (
-                  <td className="px-3 py-2.5">
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1.5">
                       {perms.update && (
-                        <button type="button" onClick={() => openEdit(row)} className={iconBtn} title="Засах">
-                          <Pencil className="h-3.5 w-3.5" />
+                        <button
+                          type="button"
+                          onClick={() => openDetail(row)}
+                          className={ghostBtn}
+                          title="Үндсэн мэдээлэл ба ажилтныг засах"
+                        >
+                          Дэлгэрэнгүй
+                          <ChevronRight className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {perms.del && (
@@ -359,9 +437,14 @@ export function ValuationOrgPage() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div className="my-8 w-full max-w-3xl rounded-xl bg-white p-5 shadow-xl dark:bg-[#191a21]">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-[14px] font-semibold text-slate-800 dark:text-slate-100">
-                {editingId ? "Байгууллага засах" : "Шинэ үнэлгээний байгууллага"}
-              </h2>
+              <div>
+                <h2 className="text-[14px] font-semibold text-slate-800 dark:text-slate-100">
+                  {editingId ? org.name || "Байгууллагын дэлгэрэнгүй" : "Шинэ үнэлгээний байгууллага"}
+                </h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Үндсэн мэдээлэл ба ажилтныг энд засаж, нэмнэ
+                </p>
+              </div>
               <button type="button" onClick={closeForm} className={iconBtn}>
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -450,7 +533,7 @@ export function ValuationOrgPage() {
                         checked={org.is_active}
                         onChange={(e) => setOrg((o) => ({ ...o, is_active: e.target.checked }))}
                       />
-                      Идэвхтэй (сонгогчид харагдана)
+                      Идэвхтэй эсэх
                     </label>
                   </div>
                 </section>
@@ -484,7 +567,7 @@ export function ValuationOrgPage() {
                   <div className="space-y-3">
                     {employees.map((emp, index) => (
                       <div
-                        key={emp.id ?? `new-${index}`}
+                        key={emp.uid}
                         className="rounded-lg border border-slate-200 p-3 dark:border-white/[0.08]"
                       >
                         <div className="mb-2 flex items-center justify-between">
@@ -545,14 +628,19 @@ export function ValuationOrgPage() {
                           <input
                             value={emp.username ?? ""}
                             onChange={(e) => updateEmployee(index, { username: e.target.value })}
-                            placeholder={emp.hasLogin ? "Нэвтрэх нэр (одоо байгаа)" : "Нэвтрэх нэр (заавал бус)"}
+                            placeholder="Нэвтрэх нэр (заавал бус)"
                             className={inputCls}
                           />
                           <input
                             type="password"
                             value={emp.password ?? ""}
                             onChange={(e) => updateEmployee(index, { password: e.target.value })}
-                            placeholder={emp.id ? "Шинэ нууц үг (солих бол)" : "Нууц үг"}
+                            placeholder={
+                              (emp.username?.trim() ?? "") &&
+                              (emp.username?.trim() ?? "") !== (emp.originalUsername ?? "")
+                                ? "Нууц үг *"
+                                : "Шинэ нууц үг (солих бол)"
+                            }
                             className={inputCls}
                             autoComplete="new-password"
                           />

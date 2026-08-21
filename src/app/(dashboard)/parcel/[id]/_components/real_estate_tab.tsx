@@ -451,7 +451,8 @@ export function RealEstateTab({
 
   // Хараат бус үнэлгээчнээр томилох БАЙГУУЛЛАГУУД (өмнө нь хэрэглэгчид байв).
   const { data: valuationOrgs = [] } = useQuery({
-    queryKey: ["valuation-orgs"],
+    // ["valuation-orgs", ...] иерархи — valuation-org-page.tsx-ийн qk-г үз.
+    queryKey: ["valuation-orgs", "options"],
     queryFn: () => landApi.listValuationOrgs(),
     enabled: !isExternal,
     staleTime: 60_000,
