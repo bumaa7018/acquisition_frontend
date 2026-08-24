@@ -27,6 +27,8 @@ export type MapLayerDef = {
   color: string
   zIndex: number
   group?: string
+  /** WMS растер давхаргын ерөнхий opacity (0-1). Заагаагүй бол 0.9 хэрэглэгдэнэ. */
+  opacity?: number
 }
 
 /**
@@ -50,8 +52,8 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   au1: { label: 'Аймаг/Нийслэл', color: '#6366f1', zIndex: 1 },
   au2: { label: 'Сум/Дүүрэг', color: '#8b5cf6', zIndex: 2 },
   au3: { label: 'Баг/Хороо', color: '#a78bfa', zIndex: 3 },
-  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#a855f7', zIndex: 10 },
-  v_acquisition_boundary: { label: 'Чөлөөлөх бүсийн хил', color: '#3b82f6', zIndex: 20 },
+  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#a855f7', zIndex: 10, opacity: 0.95 },
+  v_acquisition_boundary: { label: 'Чөлөөлөх бүсийн хил', color: '#3b82f6', zIndex: 20, opacity: 0.95 },
   parcel:                 { label: 'Чөлөөлөх талбай',      color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },
   v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40 },

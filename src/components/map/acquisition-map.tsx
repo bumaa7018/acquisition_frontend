@@ -380,7 +380,7 @@ export function AcquisitionMap({
       const cql = d.cqlKey ? cqlByKey[d.cqlKey] : undefined;
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
-        opacity: 0.9,
+        opacity: d.opacity ?? 0.9,
         zIndex: d.zIndex,
         source: new ImageWMS({
           url: GS_WMS,

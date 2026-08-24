@@ -122,7 +122,7 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       const cql = d.cqlType === "acquisition" ? acqCql : d.cqlType === "parcel" ? parcelCql : undefined;
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
-        opacity: 0.9,
+        opacity: d.opacity ?? 0.9,
         zIndex: d.zIndex,
         source: new ImageWMS({
           url: GS_WMS,
