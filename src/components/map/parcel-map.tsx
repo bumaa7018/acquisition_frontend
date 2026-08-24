@@ -44,16 +44,16 @@ function parcelStyle(feature: { get: (k: string) => unknown }): Style {
   const sid = (feature.get("status_id") as number) ?? 0;
   const s = PARCEL_STATUS_STYLES[sid] ?? PARCEL_STATUS_STYLES[0];
   return new Style({
-    stroke: new Stroke({ color: s.color, width: 1.5 }),
-    fill:   new Fill({ color: `${s.color}22` }),
+    stroke: new Stroke({ color: s.color, width: 2 }),
+    fill:   new Fill({ color: `${s.color}cc` }),
   });
 }
 
 const VECTOR_STYLES: Record<string, Style | ((f: { get: (k: string) => unknown }) => Style)> = {
   v_parcel_acquisition: parcelStyle,
   parcel: new Style({
-    stroke: new Stroke({ color: "#22c55e", width: 2.5 }),
-    fill:   new Fill({ color: "rgba(34,197,94,0.2)" }),
+    stroke: new Stroke({ color: "#22c55e", width: 3 }),
+    fill:   new Fill({ color: "rgba(34,197,94,0.35)" }),
   }),
 };
 
@@ -122,7 +122,7 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       const cql = d.cqlType === "acquisition" ? acqCql : d.cqlType === "parcel" ? parcelCql : undefined;
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
-        opacity: 0.85,
+        opacity: 0.9,
         zIndex: d.zIndex,
         source: new ImageWMS({
           url: GS_WMS,

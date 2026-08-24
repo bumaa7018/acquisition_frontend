@@ -236,10 +236,13 @@ export function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["land", id],
     queryFn: () => landApi.getById(id),
   });
-  const { data: progress = [], isLoading } = useQuery({
+  const { data: rawProgress = [], isLoading } = useQuery({
     queryKey: ["progress", id],
     queryFn: () => landApi.getProgress(id),
   });
+  const progress = [...rawProgress].sort(
+    (a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime()
+  );
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["available-statuses", id],
     queryFn: () => landApi.getAvailableStatuses(id),

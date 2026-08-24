@@ -15,7 +15,7 @@ import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import { Box, Map as MapIcon } from "lucide-react";
+import { Box, Map as MapIcon, Printer } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES } from "@/types";
 import { landApi } from "@/lib/api";
@@ -31,6 +31,7 @@ import {
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
+import { printOLMap } from "./print-map";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 
@@ -325,6 +326,11 @@ export function AcquisitionMap({
     [cqlByKey, mapMode],
   );
 
+  const handlePrint = useCallback(() => {
+    if (!olMap.current) return;
+    printOLMap(olMap.current, "Чөлөөлөлтийн байршил");
+  }, []);
+
   const handleSelectMode = useCallback(async (mode: "2d" | "3d") => {
     if (mode === "3d" && !extentReady) return;
     setMapMode(mode);
@@ -374,7 +380,7 @@ export function AcquisitionMap({
       const cql = d.cqlKey ? cqlByKey[d.cqlKey] : undefined;
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
-        opacity: 0.8,
+        opacity: 0.9,
         zIndex: d.zIndex,
         source: new ImageWMS({
           url: GS_WMS,
@@ -657,6 +663,16 @@ export function AcquisitionMap({
             <div ref={mapRef} className="h-full w-full" />
             <LayerPanel layers={layers} groups={[PARCEL_GROUP]} onToggle={handleToggle} />
             <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
+            {mapMode === "2d" && (
+              <button
+                type="button"
+                onClick={handlePrint}
+                title="Газрын зургийг хэвлэх"
+                className="absolute bottom-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg bg-white/90 dark:bg-[#252630]/90 text-slate-600 dark:text-slate-200 shadow-sm hover:bg-slate-100 dark:hover:bg-[#2d2f3d] transition-colors"
+              >
+                <Printer className="h-4 w-4" />
+              </button>
+            )}
             <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
               <button
                 type="button"
