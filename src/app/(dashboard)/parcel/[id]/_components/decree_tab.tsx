@@ -136,7 +136,9 @@ export function DecreeTab({ parcelId }: { parcelId: string }) {
                     )}
                   </td>
                   <td className="px-4 py-3">
+                    {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                     <Link
+                      prefetch={false}
                       href={`/decision_draft/${d.decision_draft_id}`}
                       onClick={notifyNavStart}
                       className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"

@@ -791,7 +791,9 @@ export default function DecisionDraftListPage() {
                         </span>
                       </td>
                       <td className="px-3 py-3">
+                        {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                         <Link
+                          prefetch={false}
                           href={`/decision_draft/${d.id}`}
                           onClick={notifyNavStart}
                           className="inline-flex max-w-full items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2 py-1 text-[11px] font-medium transition-colors"

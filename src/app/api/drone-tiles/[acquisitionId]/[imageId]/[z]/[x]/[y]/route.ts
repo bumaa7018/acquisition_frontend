@@ -73,6 +73,10 @@ async function findAuthorizedLayerName(
     res = await fetch(`${BACKEND}/api/v1/land-acquisitions/${acquisitionId}/drone-images`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      // Node-ийн fetch анхдагчаар хугацаагаар таслахгүй. Энэ лавлагаа нь
+      // tile хүсэлт БҮРИЙГ хаалгалдаг тул backend гацвал зэрэг явж буй
+      // хэдэн арван tile browser-ийн бүх холболтыг эзэлж, апп гацна.
+      signal: AbortSignal.timeout(20_000),
     });
   } catch {
     return { status: 502 };

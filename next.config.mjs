@@ -19,6 +19,32 @@ const IN_DOCKER_BUILD = process.env.BUILD_IN_DOCKER === "1";
 const nextConfig = {
   httpAgentOptions: { keepAlive: false },
 
+  // ── ҮЙЛДВЭРЛЭЛИЙН САНАМЖ: browser-ийн холболтын хязгаар ────────────────
+  //
+  // `next start` (standalone) нь ЗӨВХӨН HTTP/1.1 үйлчилдэг. Browser нь нэг
+  // origin дээр HTTP/1.1-ээр дээд тал нь 6 холболт зэрэг барьдаг ба тэр 6-г
+  // дараах бүгд ХУВААЛЦДАГ:
+  //   * `/api/v1/notifications/stream` — мэдэгдлийн SSE, БАЙНГА нээлттэй (1 слот)
+  //   * `/api/report/download` — тайлангийн SSE (татаж байх үед 1 слот)
+  //   * бүх `/api/v1/*` XHR, `/api/files/*` зураг/PDF, `/api/geoserver/*` tile,
+  //     Next-ийн RSC prefetch, static asset
+  //
+  // Газрын зураг эсвэл олон хавсралттай хуудсан дээр tile/зураг үлдсэн слотыг
+  // дүүргэвэл жинхэнэ API дуудлагууд ДАРААЛАЛД ОРЖ хүлээдэг — backend хэвийн
+  // байсан ч frontend "уншиж гацсан" харагдана. Олон таб нээлттэй бол улам
+  // дордоно (хязгаар нь origin тус бүрээр, таб даяар нийтлэг).
+  //
+  // Кодын талаас аль болохыг хийсэн: жагсаалтын мөр бүрийн болон хажуугийн
+  // цэсний `<Link prefetch={false}>` (өмнө нь хуудас бүр 30-50 нэмэлт RSC
+  // хүсэлт үүсгэдэг байсан), `/api/files` дээр `private, max-age=3600`,
+  // session-guard дээр in-flight dedup.
+  //
+  // ҮЛДСЭН БҮРЭН ШИЙДЭЛ нь дэд бүтцийн: Next-ийн урд TLS+HTTP/2 (эсвэл HTTP/3)
+  // терминаци хийдэг reverse proxy (nginx/Caddy/Traefik) тавих. HTTP/2 дээр
+  // бүх хүсэлт НЭГ холболтоор multiplex болох тул энэ хязгаар бүрмөсөн
+  // арилна. Browser нь h2c (шифрлэлтгүй HTTP/2)-г дэмждэггүй тул сертификат
+  // ЗААВАЛ хэрэгтэй.
+
   // ── Docker build-ийн санах ойн хязгаарлалт ────────────────────────────
   // Docker Desktop-ийн VM нь 3.9GB, түүний ~1.5GB-ыг backend-ийн контейнерууд
   // (geoserver, loki, minio, postgres…) эзэлдэг тул build-д ~2GB л сул үлддэг.

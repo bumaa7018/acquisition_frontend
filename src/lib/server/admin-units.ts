@@ -9,6 +9,22 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || "postgres",
   database: process.env.DB_NAME || "appdb",
   ssl: process.env.DB_SSLMODE === "require" ? { rejectUnauthorized: false } : undefined,
+  // Хугацааны хязгаарууд. Анхдагчаар `pg` нь холболт хүлээхийг ХЯЗГААРЛАДАГГҮЙ
+  // тул сан унтарсан/сүлжээ тасарсан үед `pool.query` нь OS-ийн TCP timeout
+  // (~2 минут) хүртэл зүүгддэг. Доорх catch нь аль хэдийн эх утгыг буцаадаг
+  // тул хурдан унах нь ГАРАЛТЫГ өөрчлөхгүй — зөвхөн хүлээлтийг таслана.
+  connectionTimeoutMillis: 5_000,
+  query_timeout: 10_000,
+  max: 5,
+});
+
+// Сул (idle) холболт унавал `pg` нь pool дээр "error" гаргадаг. Сонсогч
+// БАЙХГҮЙ бол EventEmitter нь түүнийг барьцаагүй онцгой байдал болгож шиддэг —
+// өөрөөр хэлбэл postgres дахин эхлэхэд Next серверийн ПРОЦЕСС УНАДАГ ба бүх
+// хэрэглэгчийн хуудас зогсдог. Логлоод өнгөрөөнө; дараагийн асуулга шинэ
+// холболт авна.
+pool.on("error", (err) => {
+  console.error("[admin-units] postgres pool алдаа", err);
 });
 
 function stringValue(value: unknown): string {

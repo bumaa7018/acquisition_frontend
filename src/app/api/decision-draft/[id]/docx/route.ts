@@ -311,8 +311,8 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 
     const templatePath = path.join(process.cwd(), "public", "templates", TEMPLATE_FILENAME);
     const template = await readFile(templatePath);
-    const withRows = injectDecisionDraftCompensationRows(Buffer.from(template), groups);
-    const output = renderDocxTemplate(withRows, values);
+    const withRows = await injectDecisionDraftCompensationRows(Buffer.from(template), groups);
+    const output = await renderDocxTemplate(withRows, values);
     const responseBody = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer;
     const filename = `decision_draft_${safeFilePart(draft.proposal_no || draftId)}.docx`;
     const asciiFilename = `decision_draft_${safeFilePart(draftId)}.docx`;

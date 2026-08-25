@@ -4,6 +4,12 @@
 // хэрэглэгчийн бодит эрхийг үргэлж БАРИМТЫН backend-ээр (jwt.Manager) шалгуулна;
 // энд зөвхөн тухайн token-оор backend хүлээн авах эсэхийг (401/403 биш) шалгана.
 const BACKEND = process.env.NEXT_API_URL ?? "http://localhost:8080";
+// Backend руу хийх эрхийн лавлагааны хугацааны хязгаар. Node-ийн `fetch`
+// (undici) нь анхдагчаар хүсэлтийг хугацаагаар таслахгүй тул backend гацвал
+// баримт үүсгэх route-ууд 5 минут зүүгдэж, browser-ийн холболтын слотыг
+// эзэлдэг. `/users/me` хэвийн үед миллисекундэд хариулна.
+const AUTH_LOOKUP_TIMEOUT_MS = 20_000;
+
 
 export async function isAuthenticated(authorizationHeader: string | null): Promise<boolean> {
   if (!authorizationHeader) return false;
@@ -11,6 +17,7 @@ export async function isAuthenticated(authorizationHeader: string | null): Promi
     const res = await fetch(`${BACKEND}/api/v1/users/me`, {
       headers: { Authorization: authorizationHeader },
       cache: "no-store",
+      signal: AbortSignal.timeout(AUTH_LOOKUP_TIMEOUT_MS),
     });
     return res.ok;
   } catch {
@@ -35,6 +42,7 @@ export async function hasAnyRole(
     const res = await fetch(`${BACKEND}/api/v1/users/me`, {
       headers: { Authorization: authorizationHeader },
       cache: "no-store",
+      signal: AbortSignal.timeout(AUTH_LOOKUP_TIMEOUT_MS),
     });
     if (!res.ok) return false;
     const body = (await res.json()) as {

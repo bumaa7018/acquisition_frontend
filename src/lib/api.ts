@@ -263,6 +263,10 @@ declare module 'axios' {
   export interface AxiosRequestConfig {
     _silent?: boolean
     _allow404?: boolean
+    /** 401-ийн дараа нэг л удаа дахин оролдох тэмдэглэгээ. */
+    _retry?: boolean
+    /** blocking-loader-ийн энэ оролдлогод харгалзах id (silent бол undefined). */
+    _loaderId?: number
   }
 }
 
@@ -272,20 +276,65 @@ api.interceptors.request.use((config) => {
   // Эрхийн шалгалтыг backend (/prof group + middleware) дээр төвлөрүүлсэн.
   // Frontend талд урьдчилсан allowlist хийхгүй — false 403 (Хандах эрхгүй)
   // toast гарахаас сэргийлж, backend-тэй зөрчилдөхөөс зайлсхийнэ.
-  if (!config._silent) notifyRequestStart()
+  //
+  // 401-ийн дараах дахин оролдлого нь ИЖИЛ config-оор энэ interceptor-т дахин
+  // ирдэг тул ШИНЭ id авна — өмнөх id нь аль хэдийн хаагдсан.
+  config._loaderId = config._silent ? undefined : notifyRequestStart()
   return config
 })
 
+// ── Токен шинэчлэх: single-flight + хугацааны хязгаартай ────────────────────
+//
+// Хуудас дахин ачаалахад нэг дор 10-15 хүсэлт явдаг. Access token хугацаа
+// дууссан бол тэд БҮГД зэрэг 401 авна. Урьд нь тус бүр өөрийн
+// `/auth/refresh`-ээ ИЖИЛ refresh token-оор явуулдаг байсан: backend refresh
+// token-оо эргүүлдэг тул ЭХНИЙХ нь амжилттай болж, үлдсэн нь бүтэлгүйтээд
+// `authStorage.clear()` дуудан саяхан хадгалсан ШИНЭ токеныг устгадаг байв.
+// Үр дүнд нь хуудас хагас ачаалагдаад зогсох, эсвэл /login руу шидэгддэг —
+// яг "нэг хуудсан дээр удаан байгаад дахин ачаалахад" илэрдэг алдаа.
+//
+// Мөн тэр дуудлага нүцгэн `axios`-оор явдаг тул instance-ийн 30 сек timeout
+// ХАМААРДАГГҮЙ (axios-ийн анхдагч нь `0` = хязгааргүй). Backend/proxy гацвал
+// promise хэзээ ч settle хийхгүй, react-query-ийн query мөнхөд `pending`
+// үлдэж, хэрэглэгч төгсгөлгүй skeleton хардаг байлаа.
+const REFRESH_TIMEOUT_MS = 15_000
+let _refreshInFlight: Promise<string> | null = null
+
+function refreshAccessToken(): Promise<string> {
+  if (_refreshInFlight) return _refreshInFlight
+
+  const refreshToken = authStorage.getRefreshToken()
+  if (!refreshToken) return Promise.reject(new Error('refresh token байхгүй'))
+
+  _refreshInFlight = axios
+    .post<{ data?: { access_token?: string; refresh_token?: string } }>(
+      '/api/v1/auth/refresh',
+      { refresh_token: refreshToken },
+      { timeout: REFRESH_TIMEOUT_MS },
+    )
+    .then(({ data }) => {
+      const access = data?.data?.access_token
+      if (!access) throw new Error('refresh хариунд access_token алга')
+      authStorage.setTokens(access, data.data?.refresh_token ?? refreshToken)
+      return access
+    })
+    .finally(() => {
+      _refreshInFlight = null
+    })
+
+  return _refreshInFlight
+}
+
 api.interceptors.response.use(
   (res) => {
-    if (!res.config._silent) notifyRequestEnd()
+    notifyRequestEnd(res.config._loaderId)
     // Амжилттай хүсэлт БҮРийг логлохгүй — өдөрт олон мянган (ихэнхдээ 200 OK)
     // бичлэг Loki руу урсаж, /api/client-log-ыг real API-тай ойролцоо тоогоор
     // дуудуулж байсан бол илт хэрэггүй чимээ. Зөвхөн алдааг доор логлоно.
     return res
   },
   async (error) => {
-    if (!error.config?._silent) notifyRequestEnd()
+    notifyRequestEnd(error.config?._loaderId)
 
     const status = error.response?.status
     const isAuthRoute = error.config?.url?.startsWith('/auth/')
@@ -356,19 +405,47 @@ api.interceptors.response.use(
         }
         return Promise.reject(error)
       }
-      if (!error.config?._retry) {
+      if (!error.config._retry) {
         // Нэг удаа token refresh хийж үзнэ
         error.config._retry = true
-        try {
-          const refresh = authStorage.getRefreshToken()
-          const { data } = await axios.post('/api/v1/auth/refresh', { refresh_token: refresh })
-          authStorage.setTokens(data.data.access_token, data.data.refresh_token)
-          error.config.headers.Authorization = `Bearer ${data.data.access_token}`
+
+        // Зэрэг явсан өөр хүсэлт аль хэдийн шинэчилсэн бол ДАХИН refresh
+        // хийхгүй — зүгээр л шинэ токеноор дахин оролдоно. Ингэснээр нэг
+        // дор 401 авсан олон хүсэлт refresh token-ыг дэмий эргүүлэхгүй.
+        const usedAuth = String(error.config.headers?.Authorization ?? '')
+        const currentAccess = authStorage.getAccessToken()
+        if (currentAccess && usedAuth !== `Bearer ${currentAccess}`) {
+          error.config.headers.Authorization = `Bearer ${currentAccess}`
           return api(error.config)
-        } catch {
-          // Refresh амжилтгүй → session дууссан гэж үзнэ
-          authStorage.clear()
-          showAccessDenied('Хандах эрхийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
+        }
+
+        try {
+          const access = await refreshAccessToken()
+          error.config.headers.Authorization = `Bearer ${access}`
+          return api(error.config)
+        } catch (refreshError) {
+          // ӨӨР ТАБ зэрэг refresh хийсэн байж болно. Таб бүр өөрийн JS
+          // төлөвтэй тул дээрх single-flight нь табуудын хооронд ажиллахгүй:
+          // refresh token эргэдэг учир ХОЖСОН таб шинэ токеныг localStorage-д
+          // бичсэн байхад ялагдсан нь 4xx авдаг. Storage дахь access token
+          // СОЛИГДСОН бол сесс амьд хэвээр — цэвэрлэхгүй, шинэ токеноор л
+          // дахин оролдоно (эс бөгөөс хоёр таб зэрэг гарч хаягддаг).
+          const afterAccess = authStorage.getAccessToken()
+          if (afterAccess && usedAuth !== `Bearer ${afterAccess}`) {
+            error.config.headers.Authorization = `Bearer ${afterAccess}`
+            return api(error.config)
+          }
+
+          // Сүлжээ тасрах / timeout-ыг "сесс дууссан" гэж үзэхгүй — тэгвэл
+          // түр зуурын саатал хэрэглэгчийг гаргаж хаяна. ЗӨВХӨН backend
+          // refresh token-ыг ТАТГАЛЗСАН (4xx) үед сессийг хаана.
+          const refreshStatus = (refreshError as { response?: { status?: number } })?.response?.status
+          if (typeof refreshStatus === 'number' && refreshStatus >= 400 && refreshStatus < 500) {
+            authStorage.clear()
+            showAccessDenied('Хандах эрхийн хугацаа дууссан', 'Дахин нэвтэрч орно уу.', true)
+          } else {
+            showServerError('Сервер хариу өгсөнгүй эсвэл хүсэлт хугацаа хэтэрлээ. Түр хүлээгээд дахин оролдоно уу.')
+          }
           return Promise.reject(error)
         }
       }

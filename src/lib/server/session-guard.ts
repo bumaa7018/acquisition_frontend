@@ -18,24 +18,64 @@ export const SESSION_COOKIE = "gov_sess";
 const CACHE_TTL_MS = 30_000;
 const CACHE_MAX = 5000;
 
+// Backend руу хийх ЭРХИЙН лавлагааны хугацааны хязгаар.
+//
+// Node-ийн `fetch` (undici) нь анхдагчаар хүсэлтийн хугацаа хязгаарладаггүй
+// (зөвхөн 300 сек-ийн header/body хязгаартай). Эдгээр лавлагаа нь
+// `/api/files` болон `/api/geoserver`-ийн ХҮСЭЛТ БҮРИЙГ хаалгалдаг тул
+// backend гацвал зураг/tile-ийн хүсэлтүүд 5 минут ЗҮҮГДЭЖ, browser-ийн
+// origin тус бүрийн 6 холболтыг бүгдийг эзэлдэг — тэр агшнаас апп бүхэлдээ
+// "уншиж гацна". `/users/me` нь хэвийн үед миллисекундэд хариулдаг тул 20
+// секунд бол хэвийн саатлаас хол дээгүүр, гэхдээ хязгаартай.
+const AUTH_LOOKUP_TIMEOUT_MS = 20_000;
+
+/** Хугацааны хязгаартай signal. Хэтэрвэл fetch нь AbortError шиднэ. */
+function authLookupSignal(): AbortSignal {
+  return AbortSignal.timeout(AUTH_LOOKUP_TIMEOUT_MS);
+}
+
 type CacheEntry<T> = { value: T; exp: number };
 
-/** Богино хугацааны in-memory кэш. Түлхүүр нь ҮРГЭЛЖ токеноор эхэлнэ. */
+/**
+ * Богино хугацааны in-memory кэш. Түлхүүр нь ҮРГЭЛЖ токеноор эхэлнэ.
+ *
+ * `inflight` нь ЯВЖ БУЙ хүсэлтийг ч хуваалцана. Урьд нь зөвхөн ДУУССАН үр дүн
+ * кэшлэгддэг байсан тул кэш хоосон агшинд ирсэн бүх хүсэлт өөр өөрийн
+ * backend дуудлагаа явуулдаг байв: хуудас дахин ачаалахад 20 зураг зэрэг
+ * ирвэл `/api/files` нь `/users/me` + `/files/authorize`-ыг 40+ удаа ЗЭРЭГ
+ * дууддаг, газрын зураг дээр tile бүр `sessionRoles` +
+ * `externalAcquisitionScope` дууддаг. Энэ нь backend-ийг дүүргэж, өөрсдийгөө
+ * удаашруулж, "уншиж гацах"-ын нэг эх үүсвэр болдог байлаа.
+ */
 function makeCache<T>() {
   const store = new Map<string, CacheEntry<T>>();
-  return async function cached(key: string, load: () => Promise<T>): Promise<T> {
+  const inflight = new Map<string, Promise<T>>();
+
+  return function cached(key: string, load: () => Promise<T>): Promise<T> {
     const now = Date.now();
     const hit = store.get(key);
-    if (hit && hit.exp > now) return hit.value;
+    if (hit && hit.exp > now) return Promise.resolve(hit.value);
 
-    const value = await load();
-    store.set(key, { value, exp: now + CACHE_TTL_MS });
-    if (store.size > CACHE_MAX) {
-      store.forEach((v, k) => {
-        if (v.exp <= now) store.delete(k);
+    const running = inflight.get(key);
+    if (running) return running;
+
+    const pending = load()
+      .then((value) => {
+        const settledAt = Date.now();
+        store.set(key, { value, exp: settledAt + CACHE_TTL_MS });
+        if (store.size > CACHE_MAX) {
+          store.forEach((v, k) => {
+            if (v.exp <= settledAt) store.delete(k);
+          });
+        }
+        return value;
+      })
+      .finally(() => {
+        inflight.delete(key);
       });
-    }
-    return value;
+
+    inflight.set(key, pending);
+    return pending;
   };
 }
 
@@ -54,6 +94,7 @@ export async function isSessionValid(token: string): Promise<boolean> {
       const res = await fetch(`${BACKEND}/api/v1/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
+        signal: authLookupSignal(),
       });
       return res.ok;
     } catch {
@@ -104,6 +145,7 @@ export async function sessionRoles(token: string): Promise<string[] | null> {
       const res = await fetch(`${BACKEND}/api/v1/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
+        signal: authLookupSignal(),
       });
       if (!res.ok) return null;
       const body = (await res.json()) as {
@@ -145,7 +187,7 @@ export async function authorizeFileKey(token: string, key: string): Promise<bool
     try {
       const res = await fetch(
         `${BACKEND}/api/v1/files/authorize?key=${encodeURIComponent(key)}`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: authLookupSignal() },
       );
       return res.ok;
     } catch {
@@ -184,6 +226,7 @@ export async function externalAcquisitionScope(
       const res = await fetch(`${BACKEND}${path}?page=1&page_size=${MAX_SCOPE_IDS}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
+        signal: authLookupSignal(),
       });
       if (!res.ok) return null;
       const body = (await res.json()) as { data?: { id?: string }[] };

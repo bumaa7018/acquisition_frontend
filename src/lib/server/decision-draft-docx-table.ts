@@ -251,8 +251,11 @@ export function formatNumber(value: number, maximumFractionDigits: number): stri
   });
 }
 
-export function injectDecisionDraftCompensationRows(templateBuf: Buffer, groups: DecisionDraftDocxGroup[]): Buffer {
-  const entries = readZipEntries(templateBuf);
+export async function injectDecisionDraftCompensationRows(
+  templateBuf: Buffer,
+  groups: DecisionDraftDocxGroup[],
+): Promise<Buffer> {
+  const entries = await readZipEntries(templateBuf);
   const idx = entries.findIndex((e) => e.name === "word/document.xml");
   if (idx === -1) return templateBuf;
 

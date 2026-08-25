@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --experimental-strip-types --import ./tests/setup.mjs tests/access-policy.test.mjs tests/valuation-parser.test.mjs tests/map-layers.test.mjs tests/gchh2-report.test.mjs tests/decision-draft-docx.test.mjs tests/sequential-runner.test.mjs",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --experimental-strip-types --import ./tests/setup.mjs tests/access-policy.test.mjs tests/valuation-parser.test.mjs tests/map-layers.test.mjs tests/gchh2-report.test.mjs tests/decision-draft-docx.test.mjs tests/sequential-runner.test.mjs tests/blocking-loader-state.test.mjs",
     "test:e2e": "node --test tests/e2e/*.e2e.mjs"
   },
   "dependencies": {

@@ -92,8 +92,8 @@ function expandPropertyRows(documentXml: string, rows: PropertyRow[]): string {
 
 // Загварын docx буфер дотор word/document.xml-ийг олж, "Үл хөдлөх" хүснэгтийн
 // мөрүүдийг өргөтгөнө (renderDocxTemplate дуудахаас ӨМНӨ дуудна).
-export function injectPropertyRows(templateBuf: Buffer, rows: PropertyRow[]): Buffer {
-  const entries = readZipEntries(templateBuf);
+export async function injectPropertyRows(templateBuf: Buffer, rows: PropertyRow[]): Promise<Buffer> {
+  const entries = await readZipEntries(templateBuf);
   const idx = entries.findIndex((e) => e.name === "word/document.xml");
   if (idx === -1) return templateBuf;
 
