@@ -189,7 +189,13 @@ export function composePrintPage(
 
   if (legend.length) {
     const rowH = 18;
-    const legendW = 170;
+    // Тоо ("(160)" гэх мэт) нэмэгдсэнээр текст урт болдог тул хайрцгийн өргөнийг хамгийн
+    // урт мөрөнд тааруулж автоматаар тооцно — тогтмол 170px бол текст хайрцгаас гарна.
+    ctx.font = "bold 12px sans-serif";
+    const titleTextWidth = ctx.measureText("Таних тэмдэг").width;
+    ctx.font = "11px sans-serif";
+    const maxRowTextWidth = Math.max(...legend.map((item) => ctx.measureText(item.label).width));
+    const legendW = Math.max(170, titleTextWidth + 20, maxRowTextWidth + 28 + 10);
     const legendH = 30 + legend.length * rowH;
     const legendX = mapAreaX + 10;
     const legendY = mapAreaY + mapAreaH - legendH - 10;

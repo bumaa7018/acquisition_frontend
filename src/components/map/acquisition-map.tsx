@@ -150,6 +150,8 @@ function isValidLonLatExtent(e: [number, number, number, number]): boolean {
 interface Props {
   acquisitionId: string;
   aus?: AU[];
+  /** Хэвлэх гарчгийн анхны утга болгож ашиглана — өгөгдөөгүй бол ерөнхий гарчиг хэвээр */
+  acquisitionName?: string;
   /** Харагдах дроны зургууд — хоосон бол давхарга нэмэгдэхгүй */
   droneOverlays?: DroneOverlay[];
   /** [minX, minY, maxX, maxY] WGS84 — өөрчлөгдөх бүрд тэр хүрээ рүү нүүнэ */
@@ -159,6 +161,7 @@ interface Props {
 export function AcquisitionMap({
   acquisitionId,
   aus: ausProp,
+  acquisitionName,
   droneOverlays,
   droneFocus,
 }: Props) {
@@ -185,6 +188,8 @@ export function AcquisitionMap({
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d");
   const [extentReady, setExtentReady] = useState(false);
   const [loading3D, setLoading3D] = useState(false);
+  // Төлөв тус бүрийн нэгж талбарын тоо — хэвлэх легендэд харуулна (v_parcel_acquisition WFS-ээс)
+  const [statusCounts, setStatusCounts] = useState<Record<number, number>>({});
   const [printPreview, setPrintPreview] = useState<{
     orientation: PrintOrientation;
     title: string;
@@ -347,7 +352,7 @@ export function AcquisitionMap({
   const handlePrint = useCallback(
     (orientation: PrintOrientation) => {
       if (!olMap.current) return;
-      const title = "Чөлөөлөлтийн байршил";
+      const title = acquisitionName?.trim() || "Чөлөөлөлтийн байршил";
       // Масштабыг хэрэглэгчээс биш, харагдаж буй view-ийн resolution-оос шууд тооцно —
       // тиймээс товч дарах мөчид view-ийн мэдээллийг тэмдэглэж авна.
       const viewInfo = getMapViewInfo(olMap.current);
@@ -355,7 +360,7 @@ export function AcquisitionMap({
         .filter(({ id }) => layers.find((l) => l.id === id)?.visible ?? true)
         .map(({ status }) => ({
           color: PARCEL_STATUS_STYLES[status].color,
-          label: PARCEL_STATUS_NAMES[status],
+          label: `${PARCEL_STATUS_NAMES[status]} (${statusCounts[status] ?? 0})`,
         }));
       // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
       // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
@@ -369,7 +374,7 @@ export function AcquisitionMap({
         setPrintPreview({ orientation, title, viewInfo, legend, mapCanvas, dataUrl: page.toDataURL("image/png"), canvas: page });
       });
     },
-    [layers],
+    [layers, statusCounts, acquisitionName],
   );
 
   // Гарчгийг өөрчлөхөд газрын зургийг дахин авахгүйгээр (аль хэдийн авсан mapCanvas дээрээ
@@ -543,10 +548,15 @@ export function AcquisitionMap({
       .then((r) => r.json())
       .then((json) => {
         const cesiumParcels: Cesium3DParcel[] = [];
+        // Ring биш ФИЧЕР (нэгж талбар) тутамд нэг удаа тоологдоно — MultiPolygon
+        // нэгж талбар олон ring-тэй байж болох тул cesiumParcels (ring тутамд нэг
+        // элемент)-ээс тоолвол давхар тоологдоно.
+        const counts: Record<number, number> = {};
         (json?.features ?? []).forEach((f: { id?: string; properties?: { parcel_id?: string; status?: number }; geometry?: { type?: string; coordinates?: unknown } }) => {
           const status = f.properties?.status ?? 0;
           const style = PARCEL_STATUS_STYLES[status] ?? PARCEL_STATUS_STYLES[0];
           const statusLabel = PARCEL_STATUS_NAMES[status] ?? "";
+          counts[status] = (counts[status] ?? 0) + 1;
           extractExteriorRings(f.geometry).forEach((ring, i) => {
             cesiumParcels.push({
               id: `${f.properties?.parcel_id ?? f.id ?? "parcel"}-${i}`,
@@ -559,6 +569,7 @@ export function AcquisitionMap({
         });
         cesium3DParcels.current = cesiumParcels;
         cesium3D.current?.setParcels(cesiumParcels);
+        setStatusCounts(counts);
       })
       .catch(() => { /* нэгж талбарын 3D давхарга хоосон үлдэнэ */ });
 

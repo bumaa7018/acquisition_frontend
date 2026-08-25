@@ -316,7 +316,12 @@ export default function AcquisitionDetailPage() {
       {activeTab === "assignees" && <AssigneesTab id={id} canEdit={canEdit} />}
       {activeTab === "financing" && <FinancingTab id={id} canEdit={canEdit} />}
       {activeTab === "map" && (
-        <LocationTab id={id} aus={acq.aus} canEdit={canEdit && !isExternal} />
+        <LocationTab
+          id={id}
+          aus={acq.aus}
+          acquisitionName={acq.acquisition_name || acq.plan_code}
+          canEdit={canEdit && !isExternal}
+        />
       )}
     </div>
   );

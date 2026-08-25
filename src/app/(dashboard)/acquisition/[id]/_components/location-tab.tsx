@@ -91,10 +91,12 @@ function imageBounds(
 export function LocationTab({
   id,
   aus,
+  acquisitionName,
   canEdit,
 }: {
   id: string;
   aus?: AU[];
+  acquisitionName?: string;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -454,6 +456,7 @@ export function LocationTab({
           <AcquisitionMap
             acquisitionId={id}
             aus={aus}
+            acquisitionName={acquisitionName}
             droneOverlays={overlays}
             droneFocus={focus}
           />
