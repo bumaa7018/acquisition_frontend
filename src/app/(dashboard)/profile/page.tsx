@@ -72,7 +72,7 @@ export default function ProfilePage() {
   });
 
   const initials = (user ?? localUser)?.first_name
-    ? `${(user ?? localUser)!.first_name[0]}${(user ?? localUser)!.last_name?.[0] ?? ""}`.toUpperCase()
+    ? `${(user ?? localUser)!.last_name?.[0] ?? ""}${(user ?? localUser)!.first_name[0]}`.toUpperCase()
     : null;
 
   return (
@@ -105,7 +105,7 @@ export default function ProfilePage() {
             ) : (
               <>
                 <p className="text-[15px] font-semibold text-slate-800 dark:text-white">
-                  {user?.first_name} {user?.last_name}
+                  {user?.last_name} {user?.first_name}
                 </p>
                 <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
                   {user?.email}

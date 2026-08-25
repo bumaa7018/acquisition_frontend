@@ -64,7 +64,7 @@ export function Header() {
   const profileRef = useRef<HTMLDivElement>(null);
 
   const initials = user?.first_name
-    ? `${user.first_name[0]}${user.last_name?.[0] ?? ""}`.toUpperCase()
+    ? `${user.last_name?.[0] ?? ""}${user.first_name[0]}`.toUpperCase()
     : null;
 
   useEffect(() => {
@@ -191,7 +191,7 @@ export function Header() {
             {user && (
               <div className="hidden sm:block text-left">
                 <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 leading-tight">
-                  {user.first_name} {user.last_name}
+                  {user.last_name} {user.first_name}
                 </p>
                 {user.position && (
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight truncate">
@@ -221,7 +221,7 @@ export function Header() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-slate-800 dark:text-white truncate">
-                      {user?.first_name} {user?.last_name}
+                      {user?.last_name} {user?.first_name}
                     </p>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
                       {user?.email}

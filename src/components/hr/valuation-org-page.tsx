@@ -320,117 +320,125 @@ export function ValuationOrgPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Нэр, ТТД, тусгай зөвшөөрөл"
-              className={`${inputCls} w-64 pl-8`}
-            />
-          </div>
-          {perms.add && (
-            <button type="button" onClick={openCreate} className={primaryBtn}>
-              <Plus className="h-4 w-4" />
-              Шинэ байгууллага
-            </button>
-          )}
+        {perms.add && (
+          <button type="button" onClick={openCreate} className={primaryBtn}>
+            <Plus className="h-4 w-4" />
+            Шинэ байгууллага
+          </button>
+        )}
+      </div>
+
+      <div className="ap-card p-4">
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Нэр, ТТД, тусгай зөвшөөрөл"
+            className={`${inputCls} w-full pl-8`}
+          />
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
-        <table className="w-full min-w-[720px] text-left text-[13px]">
-          <thead className="bg-slate-50 text-[12px] font-semibold text-slate-500 dark:bg-[#1e1f27] dark:text-slate-400">
-            <tr>
-              <th className="px-3 py-2.5">Нэр</th>
-              <th className="px-3 py-2.5">ТТД</th>
-              <th className="px-3 py-2.5">Тусгай зөвшөөрөл</th>
-              <th className="px-3 py-2.5">Хүчинтэй хүртэл</th>
-              <th className="px-3 py-2.5">Ажилтан</th>
-              <th className="px-3 py-2.5">Төлөв</th>
-              {(perms.update || perms.del) && <th className="px-3 py-2.5 text-right">Үйлдэл</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-            {list.isLoading && (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
-                  Ачаалж байна…
-                </td>
+      <div className="ap-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-[13px]">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/50 dark:border-[#37394d] dark:bg-[#1a1d20]">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Нэр</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">ТТД</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Тусгай зөвшөөрөл</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Хүчинтэй хүртэл</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Ажилтан</th>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Төлөв</th>
+                {(perms.update || perms.del) && <th className="w-24 px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Үйлдэл</th>}
               </tr>
-            )}
-            {!list.isLoading && rows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-400">
-                  Бүртгэл алга
-                </td>
-              </tr>
-            )}
-            {rows.map((row) => (
-              <tr
-                key={row.id}
-                // Мөр дээр дарахад ч дэлгэрэнгүй нээгдэнэ (Үйлдэл багана нь
-                // stopPropagation хийдэг тул устгах товч давхар ажиллахгүй).
-                onClick={perms.update ? () => openDetail(row) : undefined}
-                className={`text-slate-700 dark:text-slate-200 ${
-                  perms.update ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.03]" : ""
-                }`}
-              >
-                <td className="px-3 py-2.5 font-medium">{row.name}</td>
-                <td className="px-3 py-2.5 font-mono">{dash(row.register_no)}</td>
-                <td className="px-3 py-2.5 font-mono">{dash(row.license_no)}</td>
-                <td className="px-3 py-2.5 font-mono">{dash(toDateInput(row.license_expires_at))}</td>
-                <td className="px-3 py-2.5">{row.employee_count}</td>
-                <td className="px-3 py-2.5">
-                  <span
-                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                      row.is_active
-                        ? "bg-[#02c0ce]/10 text-[#02a3af] dark:text-[#02c0ce]"
-                        : "bg-slate-100 text-slate-500 dark:bg-[#252630] dark:text-slate-400"
-                    }`}
-                  >
-                    {row.is_active ? "Идэвхтэй" : "Идэвхгүй"}
-                  </span>
-                </td>
-                {(perms.update || perms.del) && (
-                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1.5">
-                      {perms.update && (
-                        <button
-                          type="button"
-                          onClick={() => openDetail(row)}
-                          className={ghostBtn}
-                          title="Үндсэн мэдээлэл ба ажилтныг засах"
-                        >
-                          Дэлгэрэнгүй
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {perms.del && (
-                        <button
-                          type="button"
-                          className={iconBtn}
-                          title="Устгах"
-                          onClick={() =>
-                            setPendingConfirm({
-                              title: "Байгууллагыг устгах уу?",
-                              description: `«${row.name}» устгагдана. Ажилтнуудын холбоос ч тасарна.`,
-                              confirmLabel: "Устгах",
-                              onConfirm: () => deleteMutation.mutate(row.id),
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
+              {list.isLoading && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                    Ачаалж байна…
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </tr>
+              )}
+              {!list.isLoading && rows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                    Бүртгэл алга
+                  </td>
+                </tr>
+              )}
+              {rows.map((row) => (
+                <tr
+                  key={row.id}
+                  // Мөр дээр дарахад ч дэлгэрэнгүй нээгдэнэ (Үйлдэл багана нь
+                  // stopPropagation хийдэг тул устгах товч давхар ажиллахгүй).
+                  onClick={perms.update ? () => openDetail(row) : undefined}
+                  className={`transition-colors ${
+                    perms.update ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252630]" : ""
+                  }`}
+                >
+                  <td className="px-5 py-3.5 font-medium text-slate-800 dark:text-slate-100">{row.name}</td>
+                  <td className="px-5 py-3.5 font-mono text-[12px] text-slate-500 dark:text-slate-400">{dash(row.register_no)}</td>
+                  <td className="px-5 py-3.5 font-mono text-[12px] text-slate-500 dark:text-slate-400">{dash(row.license_no)}</td>
+                  <td className="px-5 py-3.5 font-mono text-[12px] text-slate-500 dark:text-slate-400">{dash(toDateInput(row.license_expires_at))}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">{row.employee_count}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                    <span
+                      className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                        row.is_active
+                          ? "bg-[#02c0ce]/10 text-[#02a3af] dark:text-[#02c0ce]"
+                          : "bg-slate-100 text-slate-500 dark:bg-[#252630] dark:text-slate-400"
+                      }`}
+                    >
+                      {row.is_active ? "Идэвхтэй" : "Идэвхгүй"}
+                    </span>
+                  </td>
+                  {(perms.update || perms.del) && (
+                    <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {perms.update && (
+                          <button
+                            type="button"
+                            onClick={() => openDetail(row)}
+                            className={ghostBtn}
+                            title="Үндсэн мэдээлэл ба ажилтныг засах"
+                          >
+                            Дэлгэрэнгүй
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {perms.del && (
+                          <button
+                            type="button"
+                            className={iconBtn}
+                            title="Устгах"
+                            onClick={() =>
+                              setPendingConfirm({
+                                title: "Байгууллагыг устгах уу?",
+                                description: `«${row.name}» устгагдана. Ажилтнуудын холбоос ч тасарна.`,
+                                confirmLabel: "Устгах",
+                                onConfirm: () => deleteMutation.mutate(row.id),
+                              })
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {rows.length > 0 && (
+          <div className="border-t border-slate-100 px-5 py-3 text-[12px] text-slate-400 dark:border-[#37394d] dark:text-slate-500">
+            Нийт {rows.length} бүртгэл
+          </div>
+        )}
       </div>
 
       {formOpen && (

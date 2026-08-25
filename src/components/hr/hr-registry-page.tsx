@@ -120,6 +120,7 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
   const [ready, setReady] = useState(false);
   const [perms, setPerms] = useState({ view: false, create: false, update: false, del: false });
   const [search, setSearch] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [edit, setEdit] = useState<Row | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm(mode));
@@ -135,11 +136,11 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
   }, []);
 
   const listQuery = useQuery({
-    queryKey: ["hr", mode, search],
+    queryKey: ["hr", mode, search, orgFilter],
     queryFn: async () => {
       const params = { search: search.trim() || undefined, page_size: 100 };
       if (mode === "organization") return organizationApi.list(params);
-      if (mode === "department") return departmentApi.list(params);
+      if (mode === "department") return departmentApi.list({ ...params, organization_id: orgFilter || undefined });
       if (mode === "position") return positionApi.list(params);
       if (mode === "person") return personApi.list(params);
       return employeeApi.list(params);
@@ -245,11 +246,17 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
           {perms.create && <button onClick={() => { setFormOpen((v) => !v); setEdit(null); setForm(emptyForm(mode)); }} className={primaryBtn}>{formOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{formOpen ? "Болих" : "Нэмэх"}</button>}
         </div>
 
-        <div className="ap-card p-4">
-          <div className="relative max-w-sm">
+        <div className="ap-card flex flex-wrap items-center gap-2 p-4">
+          <div className="relative max-w-sm flex-1">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Хайх" className={`${inputCls} w-full pl-8`} />
           </div>
+          {mode === "department" && (
+            <select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} className={`${inputCls} w-full max-w-xs`}>
+              <option value="">Бүх байгууллага</option>
+              {(organizations.data?.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          )}
         </div>
 
         {formOpen && (perms.create || (edit && perms.update)) && (

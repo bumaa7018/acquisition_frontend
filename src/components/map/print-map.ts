@@ -73,6 +73,23 @@ function computeScaleDenominator(viewInfo: PrintMapViewInfo, coverScale: number)
   return roundScaleDenominator(denominator);
 }
 
+// Гарчиг захад багтахгүй бол фонтын хэмжээг аажмаар багасгаж, тохирох
+// хамгийн том хэмжээг олно (доор minSize хүрвэл тэндээ зогсоно — canvas
+// fillText нь автоматаар мөр таслахгүй тул хэт урт гарчиг тайрагдана).
+function fitTitleFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxSize = 20,
+  minSize = 12,
+): number {
+  for (let size = maxSize; size > minSize; size -= 1) {
+    ctx.font = `bold ${size}px sans-serif`;
+    if (ctx.measureText(text).width <= maxWidth) return size;
+  }
+  return minSize;
+}
+
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -153,14 +170,16 @@ export function composePrintPage(
   ctx.fillRect(0, 0, width, height);
 
   const margin = 24;
-  const titleAreaH = 40;
+  const titleAreaH = 48;
   const footerAreaH = 26;
 
   ctx.fillStyle = "#1e293b";
-  ctx.font = "bold 20px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(title.toUpperCase(), width / 2, margin + titleAreaH / 2);
+  const titleMaxWidth = width - margin * 2 - 20;
+  const titleFontSize = fitTitleFontSize(ctx, title.toUpperCase(), titleMaxWidth);
+  ctx.font = `bold ${titleFontSize}px sans-serif`;
+  ctx.fillText(title.toUpperCase(), width / 2, margin + titleAreaH / 2, titleMaxWidth);
 
   const mapAreaX = margin;
   const mapAreaY = margin + titleAreaH;
