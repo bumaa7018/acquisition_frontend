@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelSyncCountResult } from "@/types";
+import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelFeeSyncResult, type ParcelSyncCountResult } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
@@ -61,6 +61,7 @@ const SYNC_STEPS = [
     subSteps: [
       { label: "Газрын суурь үнийн мэдээлэл", detail: "Газрын суурь үнэ татаж байна..." },
       { label: "Төлбөрийн мэдээлэл", detail: "Газрын төлбөрийн мэдээлэл татаж байна..." },
+      { label: "Газрын төлбөрийн бодолт", detail: "Газрын төлбөрийн бодолт татаж байна..." },
       { label: "Барьцааны мэдээлэл", detail: "Барьцааны бүртгэл татаж байна..." },
       { label: "Шүүхийн шийдвэрийн мэдээлэл", detail: "Шүүхийн шийдвэр татаж байна..." },
       { label: "Барьцааны гэрээний хавсралт", detail: "Барьцааны гэрээ татаж байна..." },
@@ -92,6 +93,10 @@ const SYNC_STEPS = [
   },
 ] as const;
 
+/** Өмчлөлийн газар тул ГУС руу хандалгүй алгасагдсан алхмын sentinel. */
+const OWNED_NO_PAYMENT = { owned_no_payment: true } as const;
+const RIGHT_TYPE_OWNERSHIP = 3;
+
 /**
  * Алхмын үр дүнг хүн уншихаар текст болгоно.
  *
@@ -101,13 +106,23 @@ const SYNC_STEPS = [
  */
 function describeSyncResult(result: unknown): string {
   const r = result as
-    | Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult & ParcelBasePrice & ParcelInvoiceSyncResult & ParcelSyncCountResult>
+    | Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult & ParcelBasePrice & ParcelInvoiceSyncResult & ParcelFeeSyncResult & ParcelSyncCountResult & typeof OWNED_NO_PAYMENT>
     | undefined;
   if (!r) return "";
+  if (r.owned_no_payment) return "Өмчлөлийн газар — төлбөр байхгүй";
   // Газрын суурь үнэ — тоо биш, дүнгээ шууд харуулна
   if (typeof r.base_price === "number") {
-    return r.base_price > 0
-      ? `${r.base_price.toLocaleString()}₮/га · ${r.calculate_year} он`
+    if (r.base_price <= 0) return "Олдоогүй";
+    const factors = r.factor_values?.length ?? 0;
+    return factors > 0
+      ? `${r.base_price.toLocaleString()}₮/га · ${factors} хүчин зүйл`
+      : `${r.base_price.toLocaleString()}₮/га`;
+  }
+  // Газрын төлбөрийн бодолт — status=false бол ГУС бодож чадаагүй (алдаа биш)
+  if (typeof r.total_payment === "number") {
+    if (r.status === false) return r.msg || "Төлбөр бодогдсонгүй";
+    return r.found
+      ? `${r.found} бүс · ${r.total_payment.toLocaleString()}₮`
       : "Олдоогүй";
   }
   if (typeof r.found !== "number") return "";
@@ -249,6 +264,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const startSync = useCallback(async () => {
     if (!acqId || !data?.parcel_id) return;
     const parcelCode = data.parcel_id;
+    const rightType = data.detail?.right_type;
     setSyncOpen(true);
     setSyncRunning(true);
     setSyncCurrentStepIdx(0);
@@ -262,12 +278,12 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     setSyncFinished(false);
     setSyncError(null);
 
-    // Дэд алхам 6-аас 14 болсон тул 1500ms үед хамгийн багадаа ~21 сек болно.
+    // Дэд алхам 6-аас 15 болсон тул 1500ms үед хамгийн багадаа ~22 сек болно.
     const minDelay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
     // API function for each sub-step [stepIdx][subStepIdx]
     // Бүх дуудалт silent — явцыг ЭНЭ цонх өөрөө харуулна. Дэлгэц блоклогч
-    // "Уншиж байна..." loader асвал 14 хүсэлт дээр анивчиж, унших боломжгүй болно.
+    // "Уншиж байна..." loader асвал 15 хүсэлт дээр анивчиж, унших боломжгүй болно.
     const SILENT = { silent: true };
     const docs = (...roles: string[]) => () =>
       landApi.syncParcelDocuments(acqId, parcelCode, roles, SILENT);
@@ -284,6 +300,12 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       [
         () => landApi.syncParcelBasePrice(acqId, parcelCode, SILENT),
         () => landApi.syncParcelInvoices(acqId, parcelCode, SILENT),
+        // Өмчлөлийн газарт (right_type=3) төлбөр байдаггүй — ГУС руу огт
+        // хандахгүй, алхмыг тайлбартай "амжилттай" гэж дүгнэнэ.
+        () =>
+          rightType === RIGHT_TYPE_OWNERSHIP
+            ? Promise.resolve(OWNED_NO_PAYMENT)
+            : landApi.syncParcelFee(acqId, parcelCode, SILENT),
         () => landApi.syncParcelMortgages(acqId, parcelCode, SILENT),
         () => landApi.syncParcelCourtDecisions(acqId, parcelCode, SILENT),
         docs(DOC.pledgeContract),

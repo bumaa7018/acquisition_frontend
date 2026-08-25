@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
-import { formatDate, getApiError } from "@/lib/utils";
-import { Banknote, Gavel, Landmark, RefreshCw } from "lucide-react";
+import { formatArea, formatDate, getApiError } from "@/lib/utils";
+import { Banknote, Calculator, Gavel, Landmark, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import type { ParcelCourtDecision, ParcelInvoice, ParcelMortgage } from "@/types";
+import type { ParcelBasePriceFactor, ParcelCourtDecision, ParcelFeeItem, ParcelInvoice, ParcelMortgage } from "@/types";
 
 /**
  * "Барьцаа, төлбөр" таб — "Мэдээлэл татах"-аар ГУС-аас татагдаж хадгалагдсан
@@ -20,6 +20,18 @@ const num = (v: number) => (v || 0).toLocaleString();
 function EmptyRow({ text }: { text: string }) {
   return (
     <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">{text}</p>
+  );
+}
+
+/** Хүснэгтгүй "нэр — утга" мөр (суурь үнийн карт). */
+function InfoRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
+      <span className="text-slate-500 dark:text-slate-400">{label}</span>
+      <span className={`tabular-nums ${strong ? "text-[13px] font-bold text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}>
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -50,9 +62,11 @@ function SectionCard({
 function RefreshButton({
   pending,
   onClick,
+  label = "Шинэчлэх",
 }: {
   pending: boolean;
   onClick: () => void;
+  label?: string;
 }) {
   return (
     <button
@@ -62,7 +76,7 @@ function RefreshButton({
       className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] transition-colors hover:bg-[#02c0ce]/20 disabled:opacity-50"
     >
       <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-      Шинэчлэх
+      {label}
     </button>
   );
 }
@@ -161,6 +175,27 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     },
     onError: (err) => toast.error(getApiError(err, "Шүүхийн шийдвэрийн мэдээлэл шинэчлэхэд алдаа гарлаа")),
   });
+  const feeSyncMutation = useMutation({
+    mutationFn: () => landApi.syncParcelFee(acqId, parcelCode),
+    onSuccess: (res) => {
+      // status=false нь алдаа БИШ — ГУС төлбөрийг бодож чадаагүй шалтгаан.
+      if (res && res.status === false) {
+        toast.warning(res.msg || "Газрын төлбөр бодогдсонгүй");
+      } else {
+        toast.success("Газрын төлбөрийн бодолт шинэчлэгдлээ");
+      }
+      invalidateParcel();
+    },
+    onError: (err) => toast.error(getApiError(err, "Газрын төлбөр бодоход алдаа гарлаа")),
+  });
+  const basePriceSyncMutation = useMutation({
+    mutationFn: () => landApi.syncParcelBasePrice(acqId, parcelCode),
+    onSuccess: () => {
+      toast.success("Газрын суурь үнэ шинэчлэгдлээ");
+      invalidateParcel();
+    },
+    onError: (err) => toast.error(getApiError(err, "Газрын суурь үнэ шинэчлэхэд алдаа гарлаа")),
+  });
 
   if (isLoading)
     return (
@@ -174,6 +209,19 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const invoices: ParcelInvoice[] = data.invoices ?? [];
   const mortgages: ParcelMortgage[] = data.mortgages ?? [];
   const courtDecisions: ParcelCourtDecision[] = data.court_decisions ?? [];
+  const fees: ParcelFeeItem[] = data.fees ?? [];
+  const factors: ParcelBasePriceFactor[] = data.base_price_factors ?? [];
+  const basePricePerHa = data.detail?.base_price_per_ha;
+  const hasBasePrice = basePricePerHa != null && basePricePerHa > 0;
+  // Нийт төлбөр нь бүсүүдийн payment-ийн НИЙЛБЭР (ГУС-ийн total_payment-ыг
+  // хадгалдаггүй — нэг л эх сурвалжтай байлгах нь зөрүү гарахаас сэргийлнэ).
+  const feeTotal = fees.reduce((sum, v) => sum + (v.payment || 0), 0);
+  // Өмчлөлийн газарт төлбөр БАЙДАГГҮЙ тул төлбөрийн картыг харуулахгүй
+  // (тайлбар бичиг ч харуулахгүй) — суурь үнэ бүтэн өргөнөөр гарна.
+  const isOwnership = data.detail?.right_type === 3;
+  const landusePurpose = data.landuse_name
+    ? `${data.landuse_name}${data.landuse ? ` (${data.landuse})` : ""}`
+    : data.landuse || "—";
 
   // Эцэг барьцаа эхэлж, давхар барьцаа нь эцгийнхээ ард. Эцэг нь ирээгүй
   // "өнчин" давхар барьцааг ч алдалгүй үндсэн түвшинд харуулна.
@@ -187,6 +235,135 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
 
   return (
     <div className="flex flex-col gap-5">
+      {/* Зүүн: суурь үнэ (хүснэгтгүй) | Баруун: төлбөрийн бодолт.
+          Өмчлөлийн газарт төлбөр байдаггүй тул суурь үнэ БҮТЭН өргөнөө эзэлнэ. */}
+      <div className={`grid gap-5 ${isOwnership ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}>
+        <SectionCard
+          title="Газрын суурь үнэ"
+          icon={<Calculator className="h-4 w-4" />}
+          action={
+            // Суурь үнэ хадгалагдсан бол товч харуулахгүй — татах нь зөвхөн
+            // мэдээлэл байхгүй үед л утгатай.
+            canSync && !hasBasePrice ? (
+              <RefreshButton
+                pending={basePriceSyncMutation.isPending}
+                onClick={() => basePriceSyncMutation.mutate()}
+                label="Суурь үнэ татах"
+              />
+            ) : undefined
+          }
+        >
+          <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
+            <InfoRow
+              label="Суурь үнэ /1га/"
+              value={hasBasePrice ? `${num(basePricePerHa)}₮` : "—"}
+              strong
+            />
+            <InfoRow label="Газрын зориулалт" value={landusePurpose} />
+            <InfoRow label="Нийт талбай" value={formatArea(data.area_m2)} />
+            {data.detail?.valuation_zone ? (
+              <InfoRow label="Үнэлгээний бүс" value={data.detail.valuation_zone} />
+            ) : null}
+          </div>
+
+          {/* Үнэлгээний хүчин зүйл — нэр дотроо хэмжих нэгжээ агуулдаг тул
+              (ж: "Гадаргын налуу/гр/") утгыг зөвхөн тоогоор харуулна. */}
+          {factors.length > 0 && (
+            <div className="mt-3 border-t border-slate-100 pt-2.5 dark:border-[#37394d]">
+              <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Үнэлгээний хүчин зүйл
+                <span className="ml-1 font-normal normal-case tracking-normal">({factors.length})</span>
+              </p>
+              <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
+                {factors.map((f) => (
+                  <div
+                    key={f.factor_id}
+                    className={`flex items-baseline justify-between gap-2 border-b border-slate-50 py-0.5 text-[11.5px] last:border-0 dark:border-[#2a2c38] ${
+                      f.in_active === false ? "opacity-50" : ""
+                    }`}
+                    title={f.factor_code}
+                  >
+                    <span className="truncate text-slate-500 dark:text-slate-400">{f.factor_name}</span>
+                    <span className="shrink-0 tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                      {f.factor_value != null ? f.factor_value.toLocaleString() : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </SectionCard>
+
+        {!isOwnership && (
+          <SectionCard
+            title="Газрын төлбөрийн бодолт"
+            icon={<Banknote className="h-4 w-4" />}
+            count={fees.length}
+            action={
+              canSync ? (
+                <RefreshButton
+                  pending={feeSyncMutation.isPending}
+                  onClick={() => feeSyncMutation.mutate()}
+                  label="Төлбөр татах"
+                />
+              ) : undefined
+            }
+          >
+            {fees.length === 0 ? (
+              <EmptyRow text="Байхгүй" />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-[#37394d]">
+                      {["Бүсийн төрөл", "Ашиглаж буй талбай (м²)", "Бүсийн талбай (м²)", "1м² төлбөр (₮)", "Төлбөр (₮)"].map((h, i) => (
+                        <th
+                          key={h}
+                          className={`px-2 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fees.map((v, i) => (
+                      <tr key={`${v.zone_id}-${i}`} className="border-b border-slate-50 dark:border-[#37394d] last:border-0">
+                        <td className="px-2 py-1.5 text-slate-700 dark:text-slate-200">
+                          {v.zone_type || "—"}
+                          {v.zone_name && (
+                            <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">{v.zone_name}</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.landuse_area)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.zone_area)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.base_fee_per_m2)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">{num(v.payment)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-slate-200 dark:border-[#37394d]">
+                      <td className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Нийт
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-600 dark:text-slate-300">
+                        {num(fees.reduce((s, v) => s + (v.landuse_area || 0), 0))}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-600 dark:text-slate-300">
+                        {num(fees.reduce((s, v) => s + (v.zone_area || 0), 0))}
+                      </td>
+                      <td />
+                      <td className="px-2 py-1.5 text-right tabular-nums font-bold text-[#02c0ce]">{num(feeTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </SectionCard>
+        )}
+      </div>
+
       {/* Газрын төлбөр */}
       <SectionCard
         title="Газрын төлбөрийн нэхэмжлэл"
@@ -212,7 +389,9 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 <tbody>
                   {invoices.map((v) => {
                     const rest = (v.amount || 0) - (v.paid_amount || 0);
-                    const isAllowedStatus = v.status_id === 20 || v.status_id === 30;
+                    // Зөвхөн 2, 3 төлөвтэй нэхэмжлэлийг анхаарал татахаар улаанаар
+                    // тэмдэглэнэ — бусад бүх төлөв хэвийн (сааралдуу) харагдана.
+                    const isAlertStatus = v.status_id === 2 || v.status_id === 3;
                     return (
                       <tr key={v.invoice_no} className="border-b border-slate-50 dark:border-[#37394d] last:border-0">
                         <td className="px-2 py-2.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">{v.invoice_no}</td>
@@ -224,9 +403,9 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                         </td>
                         <td className="px-2 py-2.5">
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            isAllowedStatus
-                              ? "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300"
-                              : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+                            isAlertStatus
+                              ? "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+                              : "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300"
                           }`}>
                             {v.status_name || v.status_id}
                           </span>

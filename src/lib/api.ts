@@ -69,7 +69,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
-  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory,
@@ -852,6 +852,12 @@ export const landApi = {
   syncParcelInvoices: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
     api.post<ApiResponse<ParcelInvoiceSyncResult>>(
       `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/invoices`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
+  // Газрын төлбөрийн БОДОЛТ (бүсээр). Өмчлөлийн газарт 422 буцна.
+  syncParcelFee: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelFeeSyncResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/fee`,
       undefined, { _silent: opts?.silent },
     ).then(r => r.data.data),
   syncParcelMortgages: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>

@@ -494,11 +494,65 @@ export interface ParcelHolderSyncResult {
   skipped: number;
 }
 
-/** Газрын суурь үнэ (ГУС data_cama) */
+/**
+ * Газрын суурь үнэ + үнэлгээний хүчин зүйлийн задаргаа
+ * (ГУС data_cama, /parcel/base-price/{parcel}/factors).
+ */
 export interface ParcelBasePrice {
+  status: boolean;
+  parcel_id: string;
   base_price: number;
+  factor_values: ParcelBasePriceFactor[];
+}
+
+/** Үнэлгээний нэг хүчин зүйлийн утга */
+export interface ParcelBasePriceFactor {
+  factor_id: number;
+  factor_code: string;
+  factor_name: string;
+  factor_data_type: string;
+  factor_value: number | null;
+  year_value: number | null;
+  in_active: boolean | null;
+  /** closets_parcel_id — эх системийн баганын нэр (closets ≠ closest), засаагүй */
+  closets_parcel_id: string;
+}
+
+/**
+ * Газрын ТӨЛБӨРИЙН БОДОЛТ бүсээр (ГУС POST /parcel/fee).
+ * Нийт төлбөр нь мөрүүдийн payment-ийн НИЙЛБЭР.
+ */
+export interface ParcelFeeItem {
+  zone_id: string;
+  zone_type: string;
+  zone_no: string;
+  zone_name: string;
+  area: number;
+  landuse_area: number;
+  zone_area: number;
+  base_fee_id: string;
+  resolution_id: string;
+  confidence_percent: number;
+  subsidized_area: number;
+  subsidized_fee_rate: number;
   base_price_m2: number;
-  calculate_year: number;
+  base_fee_per_m2: number;
+  landuses: string;
+  value: number;
+  payment: number;
+}
+
+/**
+ * Төлбөр татсаны үр дүн. status=false бол ГУС төлбөрийг бодож ЧАДААГҮЙ —
+ * шалтгаан msg-д монголоор ирнэ (алдаа биш).
+ */
+export interface ParcelFeeSyncResult {
+  found: number;
+  status: boolean;
+  msg: string;
+  area_m2: number;
+  total_payment: number;
+  items: ParcelFeeItem[];
 }
 
 /** Газрын төлбөрийн нэхэмжлэл */
@@ -736,6 +790,10 @@ export interface ParcelFull extends Parcel {
   court_decisions?: ParcelCourtDecision[];
   /** Газрын төлбөрийн нэхэмжлэлүүд */
   invoices?: ParcelInvoice[];
+  /** Газрын төлбөрийн бодолт бүсээр. Нийт төлбөр = payment-ийн нийлбэр */
+  fees?: ParcelFeeItem[];
+  /** Суурь үнийн үнэлгээний хүчин зүйлүүд */
+  base_price_factors?: ParcelBasePriceFactor[];
   /** Хянан баталгааны мэдээлэл */
   monitorings?: ParcelMonitoring[];
   geometry_wkt: string;
