@@ -181,6 +181,7 @@ export function AcquisitionMap({
   const [printPreview, setPrintPreview] = useState<{
     orientation: PrintOrientation;
     title: string;
+    scale: string;
     legend: { color: string; label: string }[];
     mapCanvas: HTMLCanvasElement | null;
     dataUrl: string | null;
@@ -340,6 +341,7 @@ export function AcquisitionMap({
     (orientation: PrintOrientation) => {
       if (!olMap.current) return;
       const title = "Чөлөөлөлтийн байршил";
+      const scale = "";
       const legend = PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
         .filter(({ id }) => layers.find((l) => l.id === id)?.visible ?? true)
         .map(({ status }) => ({
@@ -348,27 +350,36 @@ export function AcquisitionMap({
         }));
       // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
       // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
-      setPrintPreview({ orientation, title, legend, mapCanvas: null, dataUrl: null, canvas: null });
+      setPrintPreview({ orientation, title, scale, legend, mapCanvas: null, dataUrl: null, canvas: null });
       void captureMapCanvas(olMap.current).then((mapCanvas) => {
         if (!mapCanvas) {
           setPrintPreview(null);
           return;
         }
-        const page = composePrintPage(mapCanvas, title, orientation, legend);
-        setPrintPreview({ orientation, title, legend, mapCanvas, dataUrl: page.toDataURL("image/png"), canvas: page });
+        const page = composePrintPage(mapCanvas, title, orientation, legend, scale);
+        setPrintPreview({ orientation, title, scale, legend, mapCanvas, dataUrl: page.toDataURL("image/png"), canvas: page });
       });
     },
     [layers],
   );
 
-  // Гарчгийг өөрчлөхөд газрын зургийг дахин авахгүйгээр (аль хэдийн авсан mapCanvas дээрээ
-  // тулгуурлан) зөвхөн хуудсыг дахин зурж, урьдчилан харах зургийг шууд шинэчилнэ.
+  // Гарчиг эсвэл масштабыг өөрчлөхөд газрын зургийг дахин авахгүйгээр (аль хэдийн авсан
+  // mapCanvas дээрээ тулгуурлан) зөвхөн хуудсыг дахин зурж, урьдчилан харах зургийг шууд шинэчилнэ.
   const handleTitleChange = useCallback((title: string) => {
     setPrintPreview((prev) => {
       if (!prev) return prev;
       if (!prev.mapCanvas) return { ...prev, title };
-      const page = composePrintPage(prev.mapCanvas, title, prev.orientation, prev.legend);
+      const page = composePrintPage(prev.mapCanvas, title, prev.orientation, prev.legend, prev.scale);
       return { ...prev, title, dataUrl: page.toDataURL("image/png"), canvas: page };
+    });
+  }, []);
+
+  const handleScaleChange = useCallback((scale: string) => {
+    setPrintPreview((prev) => {
+      if (!prev) return prev;
+      if (!prev.mapCanvas) return { ...prev, scale };
+      const page = composePrintPage(prev.mapCanvas, prev.title, prev.orientation, prev.legend, scale);
+      return { ...prev, scale, dataUrl: page.toDataURL("image/png"), canvas: page };
     });
   }, []);
 
@@ -778,6 +789,8 @@ export function AcquisitionMap({
           orientation={printPreview.orientation}
           title={printPreview.title}
           onTitleChange={handleTitleChange}
+          scale={printPreview.scale}
+          onScaleChange={handleScaleChange}
           dataUrl={printPreview.dataUrl}
           onClose={() => setPrintPreview(null)}
           onDownload={handleDownloadPrint}

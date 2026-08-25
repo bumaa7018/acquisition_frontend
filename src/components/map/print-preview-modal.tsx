@@ -6,6 +6,8 @@ interface Props {
   orientation: PrintOrientation;
   title: string;
   onTitleChange: (title: string) => void;
+  scale: string;
+  onScaleChange: (scale: string) => void;
   dataUrl: string | null;
   onClose: () => void;
   onDownload: () => void;
@@ -15,6 +17,8 @@ export default function PrintPreviewModal({
   orientation,
   title,
   onTitleChange,
+  scale,
+  onScaleChange,
   dataUrl,
   onClose,
   onDownload,
@@ -39,17 +43,31 @@ export default function PrintPreviewModal({
           </button>
         </div>
 
-        <div className="px-5 pt-4">
-          <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-            Гарчиг
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => onTitleChange(e.target.value)}
-            placeholder="Гарчиг оруулах..."
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#02c0ce]/40 dark:border-[#37394d] dark:bg-[#15161c] dark:text-slate-200"
-          />
+        <div className="grid grid-cols-1 gap-3 px-5 pt-4 sm:grid-cols-[1fr_140px]">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Гарчиг
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+              placeholder="Гарчиг оруулах..."
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#02c0ce]/40 dark:border-[#37394d] dark:bg-[#15161c] dark:text-slate-200"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Масштаб
+            </label>
+            <input
+              type="text"
+              value={scale}
+              onChange={(e) => onScaleChange(e.target.value)}
+              placeholder="1:1,800"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#02c0ce]/40 dark:border-[#37394d] dark:bg-[#15161c] dark:text-slate-200"
+            />
+          </div>
         </div>
 
         <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#15161c]">

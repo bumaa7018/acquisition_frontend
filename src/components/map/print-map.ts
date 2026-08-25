@@ -18,6 +18,11 @@ function pageSizePx(orientation: PrintOrientation): { width: number; height: num
     : { width: A4_PX.width, height: A4_PX.height };
 }
 
+// Лавлагаа зурган дээрх шиг сар/өдөрт тэг нэмэхгүй (жиш: 7/24/2026)
+function formatDateMMDDYYYY(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+}
+
 function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -86,6 +91,7 @@ export function composePrintPage(
   title: string,
   orientation: PrintOrientation,
   legend: PrintLegendItem[],
+  scale = "",
 ): HTMLCanvasElement {
   const { width, height } = pageSizePx(orientation);
   const page = document.createElement("canvas");
@@ -98,6 +104,7 @@ export function composePrintPage(
 
   const margin = 24;
   const titleAreaH = 40;
+  const footerAreaH = 26;
 
   ctx.fillStyle = "#1e293b";
   ctx.font = "bold 20px sans-serif";
@@ -108,14 +115,14 @@ export function composePrintPage(
   const mapAreaX = margin;
   const mapAreaY = margin + titleAreaH;
   const mapAreaW = width - margin * 2;
-  const mapAreaH = height - mapAreaY - margin;
+  const mapAreaH = height - mapAreaY - margin - footerAreaH;
 
   // "cover" байдлаар зурна — mapArea-г бүхэлд нь дүүргэж, хэтэрсэн хэсгийг тайрна
   // (Math.min биш Math.max), учир нь зурган дээрх шиг газрын зураг хуудсыг бүрэн дүүргэсэн
   // харагдацтай байх ёстой, хоосон захтай "contain" биш.
-  const scale = Math.max(mapAreaW / mapCanvas.width, mapAreaH / mapCanvas.height);
-  const drawW = mapCanvas.width * scale;
-  const drawH = mapCanvas.height * scale;
+  const coverScale = Math.max(mapAreaW / mapCanvas.width, mapAreaH / mapCanvas.height);
+  const drawW = mapCanvas.width * coverScale;
+  const drawH = mapCanvas.height * coverScale;
   const drawX = mapAreaX + (mapAreaW - drawW) / 2;
   const drawY = mapAreaY + (mapAreaH - drawH) / 2;
 
@@ -158,6 +165,19 @@ export function composePrintPage(
       ctx.fillText(item.label, legendX + 28, rowY + 1);
     });
   }
+
+  // Доод мөр — масштаб голд, огноо баруун доод буланд (жиш зурган дээрх байрлалтай адил)
+  const footerCenterY = height - margin - footerAreaH / 2;
+  ctx.font = "13px sans-serif";
+  ctx.textBaseline = "middle";
+  if (scale.trim()) {
+    ctx.fillStyle = "#1e293b";
+    ctx.textAlign = "center";
+    ctx.fillText(scale.trim(), width / 2, footerCenterY);
+  }
+  ctx.fillStyle = "#1e293b";
+  ctx.textAlign = "right";
+  ctx.fillText(formatDateMMDDYYYY(new Date()), width - margin, footerCenterY);
 
   return page;
 }
