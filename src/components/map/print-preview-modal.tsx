@@ -4,12 +4,21 @@ import type { PrintOrientation } from "./print-map";
 
 interface Props {
   orientation: PrintOrientation;
+  title: string;
+  onTitleChange: (title: string) => void;
   dataUrl: string | null;
   onClose: () => void;
   onDownload: () => void;
 }
 
-export default function PrintPreviewModal({ orientation, dataUrl, onClose, onDownload }: Props) {
+export default function PrintPreviewModal({
+  orientation,
+  title,
+  onTitleChange,
+  dataUrl,
+  onClose,
+  onDownload,
+}: Props) {
   // Хэвтээ (landscape) үед модал өргөн, босоо (portrait) үед нарийн — хуудасны
   // харьцаатай ойролцоо харагдахын тулд өргөнийг чиглэлээр нь өөрчилнө.
   const widthClass = orientation === "landscape" ? "max-w-3xl" : "max-w-lg";
@@ -28,6 +37,19 @@ export default function PrintPreviewModal({ orientation, dataUrl, onClose, onDow
           >
             <X className="h-4 w-4" />
           </button>
+        </div>
+
+        <div className="px-5 pt-4">
+          <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+            Гарчиг
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Гарчиг оруулах..."
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#02c0ce]/40 dark:border-[#37394d] dark:bg-[#15161c] dark:text-slate-200"
+          />
         </div>
 
         <div className="flex flex-1 items-center justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#15161c]">

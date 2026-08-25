@@ -103,30 +103,39 @@ export function composePrintPage(
   ctx.font = "bold 20px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(title, width / 2, margin + titleAreaH / 2);
+  ctx.fillText(title.toUpperCase(), width / 2, margin + titleAreaH / 2);
 
   const mapAreaX = margin;
   const mapAreaY = margin + titleAreaH;
   const mapAreaW = width - margin * 2;
   const mapAreaH = height - mapAreaY - margin;
 
-  const scale = Math.min(mapAreaW / mapCanvas.width, mapAreaH / mapCanvas.height);
+  // "cover" байдлаар зурна — mapArea-г бүхэлд нь дүүргэж, хэтэрсэн хэсгийг тайрна
+  // (Math.min биш Math.max), учир нь зурган дээрх шиг газрын зураг хуудсыг бүрэн дүүргэсэн
+  // харагдацтай байх ёстой, хоосон захтай "contain" биш.
+  const scale = Math.max(mapAreaW / mapCanvas.width, mapAreaH / mapCanvas.height);
   const drawW = mapCanvas.width * scale;
   const drawH = mapCanvas.height * scale;
   const drawX = mapAreaX + (mapAreaW - drawW) / 2;
   const drawY = mapAreaY + (mapAreaH - drawH) / 2;
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mapAreaX, mapAreaY, mapAreaW, mapAreaH);
+  ctx.clip();
   ctx.drawImage(mapCanvas, drawX, drawY, drawW, drawH);
+  ctx.restore();
+
   ctx.strokeStyle = "#cbd5e1";
   ctx.lineWidth = 1;
-  ctx.strokeRect(drawX + 0.5, drawY + 0.5, drawW, drawH);
+  ctx.strokeRect(mapAreaX + 0.5, mapAreaY + 0.5, mapAreaW, mapAreaH);
 
   if (legend.length) {
     const rowH = 18;
     const legendW = 170;
     const legendH = 30 + legend.length * rowH;
-    const legendX = drawX + 10;
-    const legendY = drawY + drawH - legendH - 10;
+    const legendX = mapAreaX + 10;
+    const legendY = mapAreaY + mapAreaH - legendH - 10;
 
     ctx.fillStyle = "rgba(255,255,255,0.94)";
     drawRoundedRect(ctx, legendX, legendY, legendW, legendH, 6);

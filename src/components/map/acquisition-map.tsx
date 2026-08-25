@@ -180,6 +180,9 @@ export function AcquisitionMap({
   const [loading3D, setLoading3D] = useState(false);
   const [printPreview, setPrintPreview] = useState<{
     orientation: PrintOrientation;
+    title: string;
+    legend: { color: string; label: string }[];
+    mapCanvas: HTMLCanvasElement | null;
     dataUrl: string | null;
     canvas: HTMLCanvasElement | null;
   } | null>(null);
@@ -336,30 +339,43 @@ export function AcquisitionMap({
   const handlePrint = useCallback(
     (orientation: PrintOrientation) => {
       if (!olMap.current) return;
-      // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
-      // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
-      setPrintPreview({ orientation, dataUrl: null, canvas: null });
+      const title = "Чөлөөлөлтийн байршил";
       const legend = PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
         .filter(({ id }) => layers.find((l) => l.id === id)?.visible ?? true)
         .map(({ status }) => ({
           color: PARCEL_STATUS_STYLES[status].color,
           label: PARCEL_STATUS_NAMES[status],
         }));
+      // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
+      // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
+      setPrintPreview({ orientation, title, legend, mapCanvas: null, dataUrl: null, canvas: null });
       void captureMapCanvas(olMap.current).then((mapCanvas) => {
         if (!mapCanvas) {
           setPrintPreview(null);
           return;
         }
-        const page = composePrintPage(mapCanvas, "Чөлөөлөлтийн байршил", orientation, legend);
-        setPrintPreview({ orientation, dataUrl: page.toDataURL("image/png"), canvas: page });
+        const page = composePrintPage(mapCanvas, title, orientation, legend);
+        setPrintPreview({ orientation, title, legend, mapCanvas, dataUrl: page.toDataURL("image/png"), canvas: page });
       });
     },
     [layers],
   );
 
+  // Гарчгийг өөрчлөхөд газрын зургийг дахин авахгүйгээр (аль хэдийн авсан mapCanvas дээрээ
+  // тулгуурлан) зөвхөн хуудсыг дахин зурж, урьдчилан харах зургийг шууд шинэчилнэ.
+  const handleTitleChange = useCallback((title: string) => {
+    setPrintPreview((prev) => {
+      if (!prev) return prev;
+      if (!prev.mapCanvas) return { ...prev, title };
+      const page = composePrintPage(prev.mapCanvas, title, prev.orientation, prev.legend);
+      return { ...prev, title, dataUrl: page.toDataURL("image/png"), canvas: page };
+    });
+  }, []);
+
   const handleDownloadPrint = useCallback(() => {
     if (!printPreview?.canvas) return;
-    void downloadCanvasAsPdf(printPreview.canvas, printPreview.orientation, "Чөлөөлөлтийн_байршил");
+    const fileName = printPreview.title.trim().replace(/\s+/g, "_") || "gazriin_zurag";
+    void downloadCanvasAsPdf(printPreview.canvas, printPreview.orientation, fileName);
   }, [printPreview]);
 
   const handleSelectMode = useCallback(async (mode: "2d" | "3d") => {
@@ -760,6 +776,8 @@ export function AcquisitionMap({
       {printPreview && (
         <PrintPreviewModal
           orientation={printPreview.orientation}
+          title={printPreview.title}
+          onTitleChange={handleTitleChange}
           dataUrl={printPreview.dataUrl}
           onClose={() => setPrintPreview(null)}
           onDownload={handleDownloadPrint}
