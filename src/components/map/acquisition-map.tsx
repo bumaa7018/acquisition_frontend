@@ -15,12 +15,14 @@ import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import { Box, Map as MapIcon, Printer } from "lucide-react";
+import { Box, Map as MapIcon } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES } from "@/types";
 import { landApi } from "@/lib/api";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 import FullscreenButton from "./fullscreen-button";
+import PrintButton from "./print-button";
+import PrintPreviewModal from "./print-preview-modal";
 import { useFullscreen } from "./use-fullscreen";
 import {
   BASE_Z_INDEX,
@@ -31,7 +33,7 @@ import {
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
-import { printOLMap } from "./print-map";
+import { captureMapCanvas, composePrintPage, downloadCanvasAsPdf, type PrintOrientation } from "./print-map";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 
@@ -176,6 +178,11 @@ export function AcquisitionMap({
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d");
   const [extentReady, setExtentReady] = useState(false);
   const [loading3D, setLoading3D] = useState(false);
+  const [printPreview, setPrintPreview] = useState<{
+    orientation: PrintOrientation;
+    dataUrl: string | null;
+    canvas: HTMLCanvasElement | null;
+  } | null>(null);
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map((d) => ({
@@ -326,10 +333,34 @@ export function AcquisitionMap({
     [cqlByKey, mapMode],
   );
 
-  const handlePrint = useCallback(() => {
-    if (!olMap.current) return;
-    printOLMap(olMap.current, "Чөлөөлөлтийн байршил");
-  }, []);
+  const handlePrint = useCallback(
+    (orientation: PrintOrientation) => {
+      if (!olMap.current) return;
+      // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
+      // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
+      setPrintPreview({ orientation, dataUrl: null, canvas: null });
+      const legend = PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
+        .filter(({ id }) => layers.find((l) => l.id === id)?.visible ?? true)
+        .map(({ status }) => ({
+          color: PARCEL_STATUS_STYLES[status].color,
+          label: PARCEL_STATUS_NAMES[status],
+        }));
+      void captureMapCanvas(olMap.current).then((mapCanvas) => {
+        if (!mapCanvas) {
+          setPrintPreview(null);
+          return;
+        }
+        const page = composePrintPage(mapCanvas, "Чөлөөлөлтийн байршил", orientation, legend);
+        setPrintPreview({ orientation, dataUrl: page.toDataURL("image/png"), canvas: page });
+      });
+    },
+    [layers],
+  );
+
+  const handleDownloadPrint = useCallback(() => {
+    if (!printPreview?.canvas) return;
+    void downloadCanvasAsPdf(printPreview.canvas, printPreview.orientation, "Чөлөөлөлтийн_байршил");
+  }, [printPreview]);
 
   const handleSelectMode = useCallback(async (mode: "2d" | "3d") => {
     if (mode === "3d" && !extentReady) return;
@@ -663,16 +694,7 @@ export function AcquisitionMap({
             <div ref={mapRef} className="h-full w-full" />
             <LayerPanel layers={layers} groups={[PARCEL_GROUP]} onToggle={handleToggle} />
             <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
-            {mapMode === "2d" && (
-              <button
-                type="button"
-                onClick={handlePrint}
-                title="Газрын зургийг хэвлэх"
-                className="absolute bottom-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg bg-white/90 dark:bg-[#252630]/90 text-slate-600 dark:text-slate-200 shadow-sm hover:bg-slate-100 dark:hover:bg-[#2d2f3d] transition-colors"
-              >
-                <Printer className="h-4 w-4" />
-              </button>
-            )}
+            {mapMode === "2d" && <PrintButton onPrint={handlePrint} />}
             <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
               <button
                 type="button"
@@ -733,6 +755,15 @@ export function AcquisitionMap({
             ))}
           </div>
         </div>
+      )}
+
+      {printPreview && (
+        <PrintPreviewModal
+          orientation={printPreview.orientation}
+          dataUrl={printPreview.dataUrl}
+          onClose={() => setPrintPreview(null)}
+          onDownload={handleDownloadPrint}
+        />
       )}
     </div>
   );
