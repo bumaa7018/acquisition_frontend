@@ -1,9 +1,17 @@
 import type OLMap from "ol/Map";
+import { toLonLat } from "ol/proj";
 import { PDFDocument } from "pdf-lib";
 
 export interface PrintLegendItem {
   color: string;
   label: string;
+}
+
+export interface PrintMapViewInfo {
+  /** view.getResolution() — проекцын нэгж (метр, EPSG:3857) OL viewport-ийн 1 CSS px тутамд */
+  resolution: number;
+  /** Харагдацын төвийн өргөрөг — Web Mercator-ийн метрийн гажуудлыг засахад хэрэглэнэ */
+  centerLat: number;
 }
 
 export type PrintOrientation = "landscape" | "portrait";
@@ -21,6 +29,48 @@ function pageSizePx(orientation: PrintOrientation): { width: number; height: num
 // Лавлагаа зурган дээрх шиг сар/өдөрт тэг нэмэхгүй (жиш: 7/24/2026)
 function formatDateMMDDYYYY(date: Date): string {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+}
+
+/**
+ * Идэвхтэй харагдацын resolution болон төвийн өргөргийг унших — масштаб
+ * тооцоолоход хэрэглэгдэнэ. rendercomplete хүлээх шаардлагагүй тул captureMapCanvas-аас
+ * өмнө ч дараа ч дуудаж болно.
+ */
+export function getMapViewInfo(map: OLMap): PrintMapViewInfo | null {
+  const view = map.getView();
+  const resolution = view.getResolution();
+  const center = view.getCenter();
+  if (resolution == null || !center) return null;
+  const [, centerLat] = toLonLat(center);
+  return { resolution, centerLat };
+}
+
+// Масштабын харьцааг "цэвэрхэн" тоо болгож дугуйлна (жиш: 1834 → 1800), учир нь
+// PDF/preview дээр 1:1,834.27 гэх мэт хэт нарийвчлалтай тоо мэргэжлийн бус харагдана.
+function roundScaleDenominator(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  let step: number;
+  if (value < 200) step = 5;
+  else if (value < 1000) step = 10;
+  else if (value < 5000) step = 50;
+  else if (value < 20000) step = 100;
+  else if (value < 100000) step = 500;
+  else step = 1000;
+  return Math.round(value / step) * step;
+}
+
+/**
+ * OL-ийн view resolution (проекцын нэгж/px)-ээс хэвлэх хуудсан дээрх бодит масштабыг
+ * тооцоолно. Web Mercator (EPSG:3857) метр нь өргөрөгөөс хамааран газрын бодит зайг
+ * илүү үзүүлдэг тул cos(lat)-аар засна. mapCanvas болон А4 хуудас хоёул нэг ижил
+ * "96dpi CSS px" конвенцоор хэмжигдсэн тул шууд харьцуулж болно.
+ */
+function computeScaleDenominator(viewInfo: PrintMapViewInfo, coverScale: number): number {
+  const groundMetersPerOLpx = viewInfo.resolution * Math.cos((viewInfo.centerLat * Math.PI) / 180);
+  const mmPerPagePx = 25.4 / 96;
+  const groundMetersPerPagePx = groundMetersPerOLpx / coverScale;
+  const denominator = (groundMetersPerPagePx / mmPerPagePx) * 1000;
+  return roundScaleDenominator(denominator);
 }
 
 function drawRoundedRect(
@@ -91,7 +141,7 @@ export function composePrintPage(
   title: string,
   orientation: PrintOrientation,
   legend: PrintLegendItem[],
-  scale = "",
+  viewInfo: PrintMapViewInfo | null = null,
 ): HTMLCanvasElement {
   const { width, height } = pageSizePx(orientation);
   const page = document.createElement("canvas");
@@ -166,14 +216,18 @@ export function composePrintPage(
     });
   }
 
-  // Доод мөр — масштаб голд, огноо баруун доод буланд (жиш зурган дээрх байрлалтай адил)
+  // Доод мөр — масштаб голд, огноо баруун доод буланд (жиш зурган дээрх байрлалтай адил).
+  // Масштабыг view-ийн resolution-оос автоматаар бодно — хэрэглэгч гараар засах шаардлагагүй.
   const footerCenterY = height - margin - footerAreaH / 2;
   ctx.font = "13px sans-serif";
   ctx.textBaseline = "middle";
-  if (scale.trim()) {
-    ctx.fillStyle = "#1e293b";
-    ctx.textAlign = "center";
-    ctx.fillText(scale.trim(), width / 2, footerCenterY);
+  if (viewInfo) {
+    const denominator = computeScaleDenominator(viewInfo, coverScale);
+    if (denominator > 0) {
+      ctx.fillStyle = "#1e293b";
+      ctx.textAlign = "center";
+      ctx.fillText(`1:${denominator.toLocaleString("en-US")}`, width / 2, footerCenterY);
+    }
   }
   ctx.fillStyle = "#1e293b";
   ctx.textAlign = "right";
