@@ -16,6 +16,17 @@ const pool = new Pool({
   password: process.env.AUTH_DB_PASSWORD || process.env.DB_PASSWORD || "postgres",
   database: process.env.AUTH_DB_NAME || "authdb",
   ssl: process.env.DB_SSLMODE === "require" ? { rejectUnauthorized: false } : undefined,
+  // admin-units.ts-ийн адил: холболт/асуулгыг хугацаагаар хязгаарлана. Доорх
+  // catch нь null буцаадаг тул хурдан унах нь гаралтыг өөрчлөхгүй.
+  connectionTimeoutMillis: 5_000,
+  query_timeout: 10_000,
+  max: 5,
+});
+
+// admin-units.ts-ийн адил: сонсогчгүй pool "error" нь Next серверийн процессыг
+// унагадаг тул заавал барина.
+pool.on("error", (err) => {
+  console.error("[user-lookup] postgres pool алдаа", err);
 });
 
 function firstLetter(value?: string | null): string {

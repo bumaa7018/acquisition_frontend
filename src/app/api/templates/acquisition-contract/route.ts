@@ -38,12 +38,12 @@ function parsePropertyRows(raw: unknown): PropertyRow[] {
 // Хавсралтын жинхэнэ агуулгаар нь (файлын нэрээр биш) DOCX мөн эсэхийг шалгана —
 // хавсаргасан баримтын дэлгэцийн нэр (Document.name) ихэвчлэн өргөтгөлгүй байдаг тул
 // файлын нэрэнд тулгуурлах шалгалт үнэн зөв DOCX-ийг ч буруу татгалздаг байсан.
-function isDocxBuffer(data: Buffer): boolean {
+async function isDocxBuffer(data: Buffer): Promise<boolean> {
   if (data.length < 4 || data[0] !== 0x50 || data[1] !== 0x4b || data[2] !== 0x03 || data[3] !== 0x04) {
     return false;
   }
   try {
-    const entries = readZipEntries(data);
+    const entries = await readZipEntries(data);
     return entries.some((e) => e.name === "word/document.xml");
   } catch {
     return false;
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
       });
     }
     const attachmentBuffer = Buffer.from(await attachment.arrayBuffer());
-    if (!isDocxBuffer(attachmentBuffer)) {
+    if (!(await isDocxBuffer(attachmentBuffer))) {
       return new Response(
         JSON.stringify({ error: "Хурлын тэмдэглэлийн хавсралт зөв DOCX файл биш байна" }),
         { status: 400, headers: { "Content-Type": "application/json" } },
@@ -117,10 +117,10 @@ export async function POST(request: NextRequest) {
     const templatesDir = path.join(process.cwd(), "public", "templates");
     const templatePath = path.join(templatesDir, TEMPLATE_FILENAME);
     const template = await readFile(templatePath);
-    const templateWithRows = injectPropertyRows(Buffer.from(template), propertyRows);
-    const rendered = renderDocxTemplate(templateWithRows, values);
+    const templateWithRows = await injectPropertyRows(Buffer.from(template), propertyRows);
+    const rendered = await renderDocxTemplate(templateWithRows, values);
 
-    const merged = mergeDocx(rendered, attachmentBuffer);
+    const merged = await mergeDocx(rendered, attachmentBuffer);
     const responseBody = merged.buffer.slice(merged.byteOffset, merged.byteOffset + merged.byteLength) as ArrayBuffer;
     const filename = `gereee_${safeFilePart(values.parcel_id)}.docx`;
 

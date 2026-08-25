@@ -599,6 +599,7 @@ export function ParcelsTab({
                               </span>
                             ) : (
                               <Link
+                                prefetch={false}
                                 href={`/parcel/${p.id}?acq=${id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"

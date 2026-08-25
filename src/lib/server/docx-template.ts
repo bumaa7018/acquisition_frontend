@@ -1,4 +1,17 @@
-import { deflateRawSync, inflateRawSync } from "zlib";
+import { deflateRaw, inflateRaw } from "zlib";
+import { promisify } from "util";
+
+// zlib-ийн АСИНХРОН хувилбар. Урьд нь `deflateRawSync`/`inflateRawSync`
+// ашигладаг байсан нь Node-ийн ГАНЦ event loop-ыг блоклодог: гэрээний загварт
+// 50MB хүртэл хавсралт залгаж болдог тул тэр шахалт хэдэн секунд үргэлжилдэг ба
+// ЯГ ТЭР ХУГАЦААНД бүх хэрэглэгчийн `/api/v1/*` proxy, хуудасны render, файл
+// татах бүгд зогсдог байв — backend хэвийн ажиллаж байхад frontend "гацсан"
+// харагдах нэг шалтгаан.
+//
+// Асинхрон хувилбар нь zlib-ийн thread pool дээр ажилладаг тул event loop
+// чөлөөтэй үлдэнэ. Алгоритм, түвшин, гаралтын байт БҮРЭН ижил.
+const inflateRawAsync = promisify(inflateRaw);
+const deflateRawAsync = promisify(deflateRaw);
 
 export type ZipEntry = {
   name: string;
@@ -54,7 +67,7 @@ function findEndOfCentralDirectory(zip: Buffer): number {
   throw new Error("DOCX zip бүтэц уншигдсангүй");
 }
 
-export function readZipEntries(zip: Buffer): ZipEntry[] {
+export async function readZipEntries(zip: Buffer): Promise<ZipEntry[]> {
   const eocd = findEndOfCentralDirectory(zip);
   const entryCount = zip.readUInt16LE(eocd + 10);
   if (entryCount > MAX_ZIP_ENTRY_COUNT) {
@@ -79,7 +92,7 @@ export function readZipEntries(zip: Buffer): ZipEntry[] {
     const name = zip.subarray(centralOffset + 46, centralOffset + 46 + nameLength).toString("utf8");
 
     // Zip-bomb хамгаалалт: төвийн лавлахад мэдэгдсэн задлагдсан хэмжээгээр
-    // урьдчилан шалгаж, бодит decompress (inflateRawSync)-оос ӨМНӨ татгалзана.
+    // урьдчилан шалгаж, бодит decompress (inflateRaw)-оос ӨМНӨ татгалзана.
     if (uncompressedSize > MAX_ENTRY_UNCOMPRESSED_SIZE) {
       throw new Error(`DOCX дотоод файл хэт том байна: ${name}`);
     }
@@ -102,7 +115,7 @@ export function readZipEntries(zip: Buffer): ZipEntry[] {
     else if (method === 8) {
       // maxOutputLength нь zip төвийн лавлахад мэдэгдсэн хэмжээ худал байсан ч
       // (эвдэрсэн/дайсагнасан zip) бодит decompress-ийг давхар хязгаарлана.
-      data = inflateRawSync(compressed, { maxOutputLength: MAX_ENTRY_UNCOMPRESSED_SIZE });
+      data = await inflateRawAsync(compressed, { maxOutputLength: MAX_ENTRY_UNCOMPRESSED_SIZE });
     } else throw new Error(`DOCX zip compression дэмжигдэхгүй байна: ${method}`);
 
     entries.push({ name, method, data });
@@ -112,14 +125,14 @@ export function readZipEntries(zip: Buffer): ZipEntry[] {
   return entries;
 }
 
-export function writeZipEntries(entries: ZipEntry[]): Buffer {
+export async function writeZipEntries(entries: ZipEntry[]): Promise<Buffer> {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
 
   for (const entry of entries) {
     const name = Buffer.from(entry.name, "utf8");
-    const data = entry.method === 0 ? entry.data : deflateRawSync(entry.data);
+    const data = entry.method === 0 ? entry.data : await deflateRawAsync(entry.data);
     const method = entry.method === 0 ? 0 : 8;
     const crc = crc32(entry.data);
 
@@ -251,12 +264,15 @@ function replacePlaceholdersInXml(xml: string, values: Record<string, string>): 
   return result;
 }
 
-export function renderDocxTemplate(input: Buffer, rawValues: Record<string, unknown>): Buffer {
+export async function renderDocxTemplate(
+  input: Buffer,
+  rawValues: Record<string, unknown>,
+): Promise<Buffer> {
   const values = Object.fromEntries(
     Object.entries(rawValues).map(([key, value]) => [normalizeKey(key), value == null ? "" : String(value)]),
   );
 
-  const entries = readZipEntries(input).map((entry) => {
+  const entries = (await readZipEntries(input)).map((entry) => {
     if (!entry.name.startsWith("word/") || !entry.name.endsWith(".xml")) return entry;
     const xml = entry.data.toString("utf8");
     return { ...entry, data: Buffer.from(replacePlaceholdersInXml(xml, values), "utf8") };

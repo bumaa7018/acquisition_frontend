@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const values = await resolveAdminUnitNames(rawValues);
     const { filename: templateFilename, fullPath } = resolveTemplatePath(body?.filename);
     const template = await readFile(fullPath);
-    const output = renderDocxTemplate(Buffer.from(template), values);
+    const output = await renderDocxTemplate(Buffer.from(template), values);
     const responseBody = output.buffer.slice(output.byteOffset, output.byteOffset + output.byteLength) as ArrayBuffer;
     const filename = `${templateFilename.replace(/\.docx$/i, "")}_${safeFilePart(values.parcel_id)}.docx`;
 

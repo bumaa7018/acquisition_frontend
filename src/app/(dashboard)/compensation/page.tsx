@@ -245,7 +245,9 @@ export default function CompensationsPage() {
                       className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
                       <td className="px-5 py-3.5">
+                        {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                         <Link
+                          prefetch={false}
                           href={`/compensation/${comp.id}`}
                           className="font-semibold text-[#02c0ce] hover:underline underline-offset-2 font-mono text-[12px]"
                         >

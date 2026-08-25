@@ -257,9 +257,11 @@ function remapRelationshipsAndMedia(
 // хуудас таслалтын дараа залгана. Тоолуурын жагсаалт (numbering), зураг/холбоос
 // (rels + media) давхцахгүй байхаар дахин дугаарлагдана. Хавсралтын өөрийн эцсийн
 // хуудасны тохиргоо (sectPr, толгой/хөл) хаягдаж, үндсэн баримтын тохиргоо үргэлжилнэ.
-export function mergeDocx(baseBuf: Buffer, appendBuf: Buffer): Buffer {
-  const baseEntries = readZipEntries(baseBuf);
-  const appendEntries = readZipEntries(appendBuf);
+export async function mergeDocx(baseBuf: Buffer, appendBuf: Buffer): Promise<Buffer> {
+  const [baseEntries, appendEntries] = await Promise.all([
+    readZipEntries(baseBuf),
+    readZipEntries(appendBuf),
+  ]);
 
   const baseDocXml = getEntryText(baseEntries, "word/document.xml");
   const appendDocXml = getEntryText(appendEntries, "word/document.xml");

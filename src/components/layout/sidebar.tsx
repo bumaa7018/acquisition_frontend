@@ -152,7 +152,19 @@ function NavItem({
       {active && (
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[#02c0ce]" />
       )}
+      {/*
+        prefetch={false} — Next-ийн <Link> нь харагдах талбарт орсон даруйдаа
+        зорилтот замын RSC payload-ыг татдаг. Хажуугийн цэс 30 орчим холбоостой
+        тул хуудас ачаалах бүрд 30 нэмэлт хүсэлт үүсдэг байв. Browser нь нэг
+        origin дээр HTTP/1.1-ээр ЗӨВХӨН 6 холболт зэрэг барьдаг (урд нь
+        reverse proxy байхгүй, Next standalone нь HTTP/2 дэмждэггүй) ба
+        мэдэгдлийн SSE нэгийг нь БАЙНГА эзэлдэг. Иймд тэр prefetch-ууд жинхэнэ
+        API дуудлагыг дараалалд оруулж "уншиж гацах" мэдрэмж төрүүлдэг байлаа.
+        Цэс дарахад шилжилт хэвийн ажиллана — зөвхөн урьдчилсан татах нь
+        унтарна.
+      */}
       <Link
+        prefetch={false}
         href={href}
         title={collapsed ? label : undefined}
         onClick={notifyNavStart}

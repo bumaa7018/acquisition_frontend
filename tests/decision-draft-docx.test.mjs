@@ -36,7 +36,8 @@ const plain = (xml) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const documentXml = (buf) => readZipEntries(buf).find((e) => e.name === "word/document.xml").data.toString("utf8");
+const documentXml = async (buf) =>
+  (await readZipEntries(buf)).find((e) => e.name === "word/document.xml").data.toString("utf8");
 
 function compensationTable(xml) {
   for (const match of xml.matchAll(/<w:tbl[\s\S]*?<\/w:tbl>/g)) {
@@ -146,7 +147,7 @@ test("дүнг нэр үгтэй үгээр — холбоосны хэлбэр"
 
 const templateExists = fs.existsSync(TEMPLATE);
 
-test("хүснэгт ба текст загварт яг таарч буурна", { skip: templateExists ? false : "Загвар файл байхгүй" }, () => {
+test("хүснэгт ба текст загварт яг таарч буурна", { skip: templateExists ? false : "Загвар файл байхгүй" }, async () => {
   const template = fs.readFileSync(TEMPLATE);
 
   const rows = [
@@ -183,9 +184,9 @@ test("хүснэгт ба текст загварт яг таарч буурна
   ];
   const groupTitle = "Сонгинохайрхан дүүргийн 5 дугаар хорооны нутаг дэвсгэрт баригдах Гэр хорооллын дахин төлөвлөлт";
 
-  const withRows = injectDecisionDraftCompensationRows(Buffer.from(template), [{ title: groupTitle, rows }]);
+  const withRows = await injectDecisionDraftCompensationRows(Buffer.from(template), [{ title: groupTitle, rows }]);
   const amount = 372_022_000;
-  const output = renderDocxTemplate(withRows, {
+  const output = await renderDocxTemplate(withRows, {
     decision_draft_no: "А/123",
     year: "2026",
     month: "08",
@@ -208,7 +209,7 @@ test("хүснэгт ба текст загварт яг таарч буурна
     acquisitioin_decision_parcel_amount_text: numberToMongolianWords(amount),
   });
 
-  const xml = documentXml(output);
+  const xml = await documentXml(output);
   assertBalancedXml(xml, "гаралтын document.xml");
 
   // --- 1. Догол мөрийн текст: "төгрөг" давхардахгүй, тоо нь үгээр ---
@@ -323,7 +324,7 @@ test("хүснэгт ба текст загварт яг таарч буурна
   assert.equal((table.match(/<w:textDirection w:val="btLr"\/>/g) || []).length, 14, "босоо нүдний тоо");
 });
 
-test("загварыг дахин угсрахад хуулбарлагдахгүй", { skip: templateExists ? false : "Загвар файл байхгүй" }, () => {
+test("загварыг дахин угсрахад хуулбарлагдахгүй", { skip: templateExists ? false : "Загвар файл байхгүй" }, async () => {
   const template = fs.readFileSync(TEMPLATE);
   const row = {
     no: "1",
@@ -340,9 +341,9 @@ test("загварыг дахин угсрахад хуулбарлагдахг�
     propertyCompensation: "1",
     totalCompensation: "3",
   };
-  const once = injectDecisionDraftCompensationRows(Buffer.from(template), [{ title: "Хэсэг", rows: [row] }]);
-  const twice = injectDecisionDraftCompensationRows(once, [{ title: "Хэсэг", rows: [row] }]);
-  const table = compensationTable(documentXml(twice));
+  const once = await injectDecisionDraftCompensationRows(Buffer.from(template), [{ title: "Хэсэг", rows: [row] }]);
+  const twice = await injectDecisionDraftCompensationRows(once, [{ title: "Хэсэг", rows: [row] }]);
+  const table = compensationTable(await documentXml(twice));
   // 2 гарчиг + дугаарлалт + хэсгийн гарчиг + 1 өгөгдөл + нийт
   assert.equal(tableRows(table).length, 6, "дахин угсрахад мөр хуримтлагдсан");
   assert.equal((table.match(/<w:textDirection/g) || []).length, 10, "textDirection давхардсан");
