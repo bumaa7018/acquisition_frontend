@@ -9,6 +9,22 @@ import { toast } from "sonner";
 import type { ParcelBasePriceFactor, ParcelCourtDecision, ParcelFeeItem, ParcelInvoice, ParcelMortgage } from "@/types";
 
 /**
+ * Нэхэмжлэлийн ТӨЛӨВИЙН шошгоны өнгө — ГУС-ийн `status_id`-аар ХАТУУ шалгана
+ * (эх сурвалж: `data_estimate.cl_imposition_invoice_status`).
+ *
+ *   2 → ногоон, 3 → саарал, БУСАД бүх төлөв → улаан.
+ *
+ * Жагсаалтад БАЙХГҮЙ id улаанаар (анхаарал татахаар) гарна — шинэ/танихгүй
+ * төлөв чимээгүй хэвийн харагдахаас сэргийлнэ.
+ */
+const INVOICE_STATUS_BADGE: Record<number, string> = {
+  2: "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300",
+  3: "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300",
+};
+const INVOICE_STATUS_BADGE_OTHER =
+  "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300";
+
+/**
  * "Барьцаа, төлбөр" таб — "Мэдээлэл татах"-аар ГУС-аас татагдаж хадгалагдсан
  * санхүү, эрх зүйн бүртгэлүүд.
  *
@@ -389,9 +405,6 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 <tbody>
                   {invoices.map((v) => {
                     const rest = (v.amount || 0) - (v.paid_amount || 0);
-                    // Зөвхөн 2, 3 төлөвтэй нэхэмжлэлийг анхаарал татахаар улаанаар
-                    // тэмдэглэнэ — бусад бүх төлөв хэвийн (сааралдуу) харагдана.
-                    const isAlertStatus = v.status_id === 2 || v.status_id === 3;
                     return (
                       <tr key={v.invoice_no} className="border-b border-slate-50 dark:border-[#37394d] last:border-0">
                         <td className="px-2 py-2.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">{v.invoice_no}</td>
@@ -403,9 +416,7 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                         </td>
                         <td className="px-2 py-2.5">
                           <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            isAlertStatus
-                              ? "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
-                              : "bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300"
+                            INVOICE_STATUS_BADGE[v.status_id] ?? INVOICE_STATUS_BADGE_OTHER
                           }`}>
                             {v.status_name || v.status_id}
                           </span>
