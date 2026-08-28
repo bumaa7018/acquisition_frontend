@@ -99,7 +99,6 @@ const LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("au2"), defaultVisible: false, cqlKey: "au2" },
   { ...layerDef("au3"), defaultVisible: false, cqlKey: "au3" },
   { ...layerDef("v_acquisition_plan"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_acquisition_boundary"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s0"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s1"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s2"), defaultVisible: true, cqlKey: "acquisition" },
@@ -494,6 +493,10 @@ export function AcquisitionMap({
       service: "WFS",
       version: "1.1.0",
       request: "GetFeature",
+      // Хүрээг чөлөөлөлтийн ГЕОМЕТРЭЭР олно. Энэ давхарга нь давхаргын
+      // жагсаалтаас хасагдсан (төлөвлөгөөний хилтэй давхцдаг) ч GeoServer
+      // дээр хэвээр — хуучин бүртгэлд plan_geom хоосон байж болох тул хүрээг
+      // үүгээр олох нь найдвартай.
       typeName: "land:v_acquisition_boundary",
       CQL_FILTER: acqFilter,
       outputFormat: "application/json",

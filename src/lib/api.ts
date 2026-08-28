@@ -806,14 +806,15 @@ export const landApi = {
     api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
-  // timeout: 0 — ХИЛ солиход (shapefile илгээгдсэн үед) backend нь ГУС-аас
-  // нэгж талбарыг 100-гийн багцаар татаж, шинэ хилд ороогүй болсныг устгах
-  // ажлыг ДОТРОО хийдэг тул ердийн 30 сек-т багтахгүй байж болно. Хил
-  // хөндөөгүй ердийн засварт хязгаар хэвээр (алдааг эрт харуулах нь дээр).
+  // timeout: 0 — ХИЛ солиход (plan_parcel_id илгээгдсэн үед) backend нь
+  // төлөвлөгөөний хилээр ГУС-аас нэгж талбарыг 100-гийн багцаар татаж, шинэ
+  // хилд ороогүй болсныг устгах ажлыг ДОТРОО хийдэг тул ердийн 30 сек-т
+  // багтахгүй байж болно. Хил хөндөөгүй ердийн засварт хязгаар хэвээр
+  // (алдааг эрт харуулах нь дээр).
   update: (id: string, data: FormData) =>
     api.put<ApiResponse<LandAcquisitionUpdateResult>>(`/land-acquisitions/${id}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      ...(data.has('shapefile') ? { timeout: 0 } : {}),
+      ...(data.has('plan_parcel_id') ? { timeout: 0 } : {}),
     }).then(r => r.data.data),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
@@ -1220,8 +1221,13 @@ export const reportApi = {
 
 // ── Plans ─────────────────────────────────────────────
 export const planApi = {
-  search: (code: string) =>
-    api.get<ApiResponse<Plan>>('/plans/search', { params: { code } }).then(r => r.data.data),
+  // withBoundary — хилийн геометрийг (boundary_wkt) хамт татна. Хил нь ХЭДЭН
+  // ЗУУН КБ болж мэддэг тул зөвхөн зураг дээр зурах шаардлагатай үед л
+  // хүснэ (чөлөөлөлт үүсгэх / хил солих дэлгэц).
+  search: (code: string, opts?: { withBoundary?: boolean }) =>
+    api.get<ApiResponse<Plan>>('/plans/search', {
+      params: { code, ...(opts?.withBoundary ? { with_boundary: 1 } : {}) },
+    }).then(r => r.data.data),
   suggest: (q: string) =>
     api.get<ApiResponse<Plan[]>>('/plans/suggest', { params: { q } }).then(r => r.data.data ?? []),
 }

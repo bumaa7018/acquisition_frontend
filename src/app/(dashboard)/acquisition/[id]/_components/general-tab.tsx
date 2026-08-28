@@ -2,13 +2,15 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload, Pencil, Save, X, Calculator, AlertTriangle } from "lucide-react";
+import { Pencil, Save, X, Calculator, AlertTriangle } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { calcAreaFromWkt } from "@/lib/geometry-utils";
 import { STATUS_LABELS } from "@/types";
+import type { Plan } from "@/types";
+import { PlanCodeSearch, planHasBoundary } from "@/components/ui/plan-code-search";
 import { STATUS_CFG } from "./shared";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
@@ -57,7 +59,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
   const [areaM2, setAreaM2] = useState<string>("");
   const [areaAutoCalc, setAreaAutoCalc] = useState(false);
-  const [boundaryFile, setBoundaryFile] = useState<File | null>(null);
+  // Хил солих: чөлөөлөлт ҮҮСГЭХ хэсэгтэй ЯГ ИЖИЛ байдлаар төлөвлөгөөг нэгж
+  // талбарын дугаараар хайж олоод, олдсон төлөвлөгөөний хилээр солино.
+  // Гараас shapefile оруулах зам БАЙХГҮЙ.
+  const [boundaryPlan, setBoundaryPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
     if (acq) {
@@ -74,7 +79,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setProfessionalOrgId(acq.professional_org_id ?? "");
       setAreaM2(String(acq.area_m2 ?? ""));
       setAreaAutoCalc(false);
-      setBoundaryFile(null);
+      setBoundaryPlan(null);
     }
   }, [acq]);
 
@@ -95,7 +100,11 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       const areaVal = parseFloat(areaM2);
       if (!isNaN(areaVal) && areaVal > 0)
         fd.append("area_m2", String(areaVal));
-      if (boundaryFile) fd.append("shapefile", boundaryFile);
+      // Дугаар илгээвэл backend тэр төлөвлөгөөг ДАХИН хайж, түүний хилээр
+      // чөлөөлөлтийн хилийг солино (Create-тэй ижил урсгал).
+      if (boundaryPlan) {
+        fd.append("plan_parcel_id", boundaryPlan.parcel_id || boundaryPlan.plan_code || boundaryPlan.code || "");
+      }
       const updated = await landApi.update(id, fd);
       // Мэргэжлийн байгууллагыг ерөнхий update PUT уншдаггүй — зориулалтын
       // /professional-org endpoint-оор тусад нь солино (өөрчлөгдсөн үед л).
@@ -117,7 +126,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       }
       setEditing(false);
       setAreaAutoCalc(false);
-      setBoundaryFile(null);
+      setBoundaryPlan(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
       queryClient.invalidateQueries({ queryKey: ["land-parcels", id], refetchType: "all" });
       // Хил солиход нэгж талбарын НИЙТ тоо ба хилийн түүх хоёулаа хуучирна.
@@ -128,17 +137,22 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
 
   // Хил солих нь БУЦААХ БОЛОМЖГҮЙ үйлдэл (шинэ хилд ороогүй нэгж талбар
-  // үнэлгээ/олговор/баримттайгаа хамт устана) тул файл сонгосон үед зөвшөөрөл
-  // авна. Файлгүй ердийн засварт шууд хадгална.
+  // үнэлгээ/олговор/баримттайгаа хамт устана) тул төлөвлөгөө сонгосон үед
+  // зөвшөөрөл авна. Төлөвлөгөө сонгоогүй ердийн засварт шууд хадгална.
   const requestSave = () => {
-    if (!boundaryFile) {
+    if (!boundaryPlan) {
       saveMutation.mutate();
       return;
     }
+    if (!planHasBoundary(boundaryPlan)) {
+      toast.error("Төлөвлөгөөнд хил бүртгэгдээгүй тул хил солих боломжгүй");
+      return;
+    }
+    const planLabel = boundaryPlan.parcel_id || boundaryPlan.plan_code || boundaryPlan.code || "";
     setPendingConfirm({
       title: "Чөлөөлөх хилийг солих уу?",
       description:
-        "Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). \"Чөлөөлсөн\" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.",
+        `«${planLabel}» төлөвлөгөөний хилээр чөлөөлөлтийн хил солигдож, нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
       confirmLabel: "Зөвшөөрөх",
       confirmColor: "#f59e0b",
       onConfirm: () => saveMutation.mutate(),
@@ -165,7 +179,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     setProfessionalOrgId(acq.professional_org_id ?? "");
     setAreaM2(String(acq.area_m2 ?? ""));
     setAreaAutoCalc(false);
-    setBoundaryFile(null);
+    setBoundaryPlan(null);
   };
 
   const row = (label: string, value: React.ReactNode, last = false) => (
@@ -248,38 +262,40 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           </p>
           {row("Төлөвлөгөөний дугаар", acq.plan_code)}
           {row("Төлөвлөгөөний нэр", acq.plan_name)}
+          {/* Хил солих — чөлөөлөлт үүсгэх хэсэгтэй ЯГ ИЖИЛ төлөвлөгөө хайлт.
+              Олдсон төлөвлөгөөний хил нь шинэ хил болно. */}
           {editing && (
-            <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
-                Хил солих файл
+            <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-1.5">
+                Хил солих төлөвлөгөө
               </span>
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <label className="inline-flex h-7 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 text-[12px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce]/60 hover:text-[#02c0ce] transition-colors">
-                  <Upload className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
-                    {boundaryFile ? boundaryFile.name : "Файл сонгох"}
-                  </span>
-                  <input
-                    type="file"
-                    accept=".zip,.shp"
-                    className="hidden"
-                    onChange={(e) => setBoundaryFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
-                {boundaryFile && (
-                  <button
-                    type="button"
-                    onClick={() => setBoundaryFile(null)}
-                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630] hover:text-red-500 transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              <div className="min-w-0 flex-1">
+                <PlanCodeSearch
+                  plan={boundaryPlan}
+                  onFound={setBoundaryPlan}
+                  onReset={() => setBoundaryPlan(null)}
+                  notFoundHint="Дугаарыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол хил солих боломжгүй."
+                  // Одоогийн хилийг ШИНЭ хилтэй зэрэгцүүлж харуулна: хил солих
+                  // нь буцаах боломжгүй тул зөрүүг нүдээрээ харах нь чухал.
+                  compareGeometry={{
+                    wkt: acq.geometry_wkt,
+                    color: "#f59e0b",
+                    label: "Одоогийн хил",
+                    dashed: true,
+                  }}
+                  mapHeight={220}
+                />
+                {!boundaryPlan && (
+                  <p className="mt-1.5 text-[11.5px] text-slate-400 dark:text-slate-500">
+                    Хоосон орхивол хил хэвээр үлдэнэ. Дугаараар хайж олсон
+                    төлөвлөгөөний хил нь чөлөөлөлтийн шинэ хил болно.
+                  </p>
                 )}
               </div>
             </div>
           )}
           {/* Хил солих нь нэгж талбарыг УСТГАЖ болох тул анхааруулна */}
-          {editing && boundaryFile && (
+          {editing && boundaryPlan && planHasBoundary(boundaryPlan) && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
               <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">

@@ -10,7 +10,6 @@ export type MapLayerId =
   | 'au2'
   | 'au3'
   | 'v_acquisition_plan'
-  | 'v_acquisition_boundary'
   | 'parcel'
   | 'building'
   | 'v_parcel_acquisition'
@@ -20,6 +19,16 @@ export type MapLayerId =
   | 'v_parcel_s3'
   | 'v_parcel_s4'
   | 'v_parcel_s5'
+
+/**
+ * GeoServer дээр байгаа ч давхаргын ЖАГСААЛТАД харагдахгүй view-ууд.
+ *
+ * 'v_acquisition_boundary' (чөлөөлөлтийн геометр) нь одоо төлөвлөгөөний
+ * хилийн хуулбар тул хэрэглэгчид ХОЁР ижил давхарга харуулах шаардлагагүй.
+ * Гэхдээ газрын зургийн ХҮРЭЭГ олоход хэвээр хэрэглэгдэнэ: хуучин бүртгэлд
+ * plan_geom хоосон байж болох ба geometry нь үргэлж дүүрэн байдаг.
+ */
+export type GeoServerLayerId = MapLayerId | 'v_acquisition_boundary'
 
 export type MapLayerDef = {
   id: MapLayerId
@@ -52,8 +61,10 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   au1: { label: 'Аймаг/Нийслэл', color: '#6366f1', zIndex: 1 },
   au2: { label: 'Сум/Дүүрэг', color: '#8b5cf6', zIndex: 2 },
   au3: { label: 'Баг/Хороо', color: '#a78bfa', zIndex: 3 },
+  // Чөлөөлөлтийн хил нь ТӨЛӨВЛӨГӨӨНИЙ хилийн хуулбар болсон тул давхаргын
+  // жагсаалтад зөвхөн НЭГ хил үлдэнэ: 'v_acquisition_boundary' (Чөлөөлөх
+  // бүсийн хил) нь энэ давхаргатай яг давхцах тул хасагдсан.
   v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#a855f7', zIndex: 10, opacity: 0.95 },
-  v_acquisition_boundary: { label: 'Чөлөөлөх бүсийн хил', color: '#3b82f6', zIndex: 20, opacity: 0.95 },
   parcel:                 { label: 'Чөлөөлөх талбай',      color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },
   v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40 },

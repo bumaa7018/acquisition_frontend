@@ -3,7 +3,7 @@ import GeoJSON from 'ol/format/GeoJSON'
 import { createEmpty, extend as extendExtent, isEmpty } from 'ol/extent'
 import { logger } from '@/lib/logger'
 import { gsAuthHeaders } from '@/lib/geoserver'
-import { type MapLayerId } from './layer-config'
+import { type GeoServerLayerId } from './layer-config'
 
 // Тохиргоо нь ./layer-config-т (OL-гүй, тестээр хамгаалагдсан). Дуудагчид
 // өмнөх шигээ './layers'-ээс авч байгаа тул дахин экспортолно.
@@ -14,12 +14,13 @@ export {
   layerDef,
   type MapLayerDef,
   type MapLayerId,
+  type GeoServerLayerId,
 } from './layer-config'
 
 type FitLayerOptions = {
   map: OLMap
   wfsUrl: string
-  layerId: MapLayerId
+  layerId: GeoServerLayerId
   cqlFilter?: string
   padding?: [number, number, number, number]
   maxZoom?: number

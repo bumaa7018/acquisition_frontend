@@ -27,7 +27,6 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('au2'),
   layerDef('au3'),
   layerDef('v_acquisition_plan'),
-  layerDef('v_acquisition_boundary'),
   layerDef('v_parcel_s0'),
   layerDef('v_parcel_s1'),
   layerDef('v_parcel_s2'),
@@ -37,10 +36,12 @@ const LAYER_DEFS: MapLayerDef[] = [
 ]
 
 const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
-const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_boundary', 'v_acquisition_plan'] as const
+const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_plan'] as const
 const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
 
-const DEFAULT_VISIBLE = new Set<string>(['v_acquisition_boundary', ...PARCEL_STATUS_LAYERS])
+// Чөлөөлөлтийн хил нь төлөвлөгөөний хилээс хуулагддаг тул давхаргын хэсэгт
+// зөвхөн ТӨЛӨВЛӨГӨӨНИЙ хил үлдсэн — тэр нь анхнаасаа асаалттай.
+const DEFAULT_VISIBLE = new Set<string>(['v_acquisition_plan', ...PARCEL_STATUS_LAYERS])
 
 const PARCEL_GROUP: LayerGroupConfig = {
   id: 'parcel_status',
@@ -246,7 +247,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     const getCql = (id: string): string => {
       if (PARCEL_STATUS_LAYERS.includes(id as typeof PARCEL_STATUS_LAYERS[number]))
         return parcelCql
-      if (id === 'v_acquisition_boundary' || id === 'v_acquisition_plan')
+      if (id === 'v_acquisition_plan')
         return acqCql
       if (id === 'au3')
         return hasFilter && au3Codes ? buildCodeCql(au3Codes, 'code') : ''
@@ -279,6 +280,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       void fitLayerToMap({
         map: olMap.current,
         wfsUrl: GS_WFS,
+        // Хүрээг чөлөөлөлтийн ГЕОМЕТРЭЭР олно (v_acquisition_boundary нь
+        // давхаргын жагсаалтаас хасагдсан ч GeoServer дээр хэвээр байгаа).
+        // Хуучин бүртгэлд plan_geom хоосон байж болох тул geometry-г сонгов.
         layerId: 'v_acquisition_boundary',
         cqlFilter: acqCql,
         padding: [48, 48, 48, 48],

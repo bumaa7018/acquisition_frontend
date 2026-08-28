@@ -29,7 +29,6 @@ const WMS_LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("au2"), defaultVisible: false },
   { ...layerDef("au3"), defaultVisible: true },
   { ...layerDef("v_acquisition_plan"),     defaultVisible: true,  cqlType: "acquisition" },
-  { ...layerDef("v_acquisition_boundary"), defaultVisible: true,  cqlType: "acquisition" },
   { ...layerDef("building"),               defaultVisible: true,  cqlType: "parcel" },
 ];
 

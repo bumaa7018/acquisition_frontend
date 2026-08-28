@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { landApi, planApi, authApi } from "@/lib/api";
+import { landApi, authApi } from "@/lib/api";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
@@ -16,9 +16,7 @@ import {
   FileText,
   Plus,
   X,
-  Upload,
   CheckCircle,
-  AlertCircle,
   ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,139 +36,7 @@ import { hasPermission, hasRole, isProfessionalOrg, isExternalSpecialRole, getCu
 import { UserSelect as EmployeeSelect } from "@/components/ui/user-select";
 import { PlanSelect } from "../parcel/_components/plan_select";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
-
-// ── Plan combobox ─────────────────────────────────────────────────────────────
-/**
- * Төлөвлөгөөний КОД оруулж, "Хайх" дарж дундын сервисээс (backend → middleware
- * /plan/project) татна. Код заавал байх ёстой бөгөөд ЗӨВХӨН олдсон үед л
- * чөлөөлөлт үүсгэх урсгал үргэлжилнэ.
- */
-function PlanCodeSearch({
-  plan,
-  onFound,
-  onReset,
-}: {
-  plan: Plan | null;
-  onFound: (plan: Plan) => void;
-  onReset: () => void;
-}) {
-  const [code, setCode] = useState("");
-  const [notFound, setNotFound] = useState<string | null>(null);
-
-  const searchMutation = useMutation({
-    mutationFn: (value: string) => planApi.search(value),
-    onSuccess: (found) => {
-      if (!found) {
-        setNotFound("Төлөвлөгөө олдсонгүй");
-        onReset();
-        return;
-      }
-      setNotFound(null);
-      onFound(found);
-    },
-    onError: (err) => {
-      setNotFound(getApiError(err, "Төлөвлөгөө олдсонгүй"));
-      onReset();
-    },
-  });
-
-  const trimmed = code.trim();
-  const search = () => {
-    if (!trimmed) {
-      setNotFound("Төлөвлөгөөний нэгж талбарын дугаарыг оруулна уу");
-      return;
-    }
-    searchMutation.mutate(trimmed);
-  };
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-start gap-2">
-        <input
-          type="text"
-          placeholder="Төлөвлөгөөний нэгж талбарын дугаар"
-          value={code}
-          onChange={(e) => {
-            setCode(e.target.value);
-            setNotFound(null);
-            // Дугаар өөрчлөгдмөгц өмнөх хайлтын үр дүн хүчингүй — цааш
-            // үргэлжлэхийг дахин хайх хүртэл хаана.
-            if (plan) onReset();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              search();
-            }
-          }}
-          className="h-9 flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] font-mono text-slate-800 dark:text-slate-200 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-600 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-          autoFocus
-        />
-        <button
-          onClick={search}
-          disabled={!trimmed || searchMutation.isPending}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white hover:bg-[#02aebb] disabled:opacity-50 transition-colors"
-        >
-          {searchMutation.isPending ? (
-            <span className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-          ) : (
-            <Search className="h-3.5 w-3.5" />
-          )}
-          Хайх
-        </button>
-      </div>
-
-      {notFound && (
-        <div className="flex items-start gap-2 rounded-lg bg-[#f1556c]/8 border border-[#f1556c]/20 px-3 py-2">
-          <AlertCircle className="h-3.5 w-3.5 text-[#f1556c] mt-0.5 shrink-0" />
-          <p className="text-[12px] text-[#f1556c]">
-            {notFound}. Дугаарыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол чөлөөлөлт үүсгэх
-            боломжгүй.
-          </p>
-        </div>
-      )}
-
-      {plan && <PlanInfoCard plan={plan} />}
-    </div>
-  );
-}
-
-/** Олдсон төлөвлөгөөний мэдээлэл */
-function PlanInfoCard({ plan }: { plan: Plan }) {
-  const rows: Array<[string, string | undefined | null]> = [
-    ["Нэр", plan.name],
-    // Бүтээн байгуулалтын ажил — төлөвлөгөөний нэгж талбар дээр хийгдэх ажил
-    ["Бүтээн байгуулалт", plan.gazner],
-    ["Төрөл", plan.plan_type_name],
-    ["Талбарын дугаар", plan.parcel_id],
-    ["Талбай", (plan.area_m2 ?? 0) > 0 ? formatArea(plan.area_m2 ?? 0) : undefined],
-    ["Батлагдсан", plan.approved_date],
-    [
-      "Хугацаа",
-      plan.start_date || plan.end_date ? `${plan.start_date ?? "—"} — ${plan.end_date ?? "—"}` : undefined,
-    ],
-  ];
-
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-[#02c0ce]/8 dark:bg-[#02c0ce]/10 border border-solid border-[#02c0ce]/20">
-      <CheckCircle className="h-4 w-4 text-[#02c0ce] mt-0.5 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-mono font-semibold text-[#02c0ce]">
-          {plan.parcel_id || plan.plan_code || plan.code}
-        </p>
-        <div className="mt-1 space-y-0.5">
-          {rows
-            .filter(([, value]) => !!value)
-            .map(([label, value]) => (
-              <p key={label} className="text-[11.5px] text-slate-600 dark:text-slate-400">
-                <span className="text-slate-400 dark:text-slate-500">{label}:</span> {value}
-              </p>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/components/ui/plan-code-search";
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
@@ -195,7 +61,6 @@ function CreateModal({ onClose }: CreateModalProps) {
   const [responsibleOrg, setResponsibleOrg] = useState("");
   const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
-  const [shpFile, setShpFile] = useState<File | null>(null);
 
   const { data: generalCategories = [] } = useQuery({
     queryKey: ["acquisition-categories"],
@@ -235,8 +100,15 @@ function CreateModal({ onClose }: CreateModalProps) {
       setStep(1);
       return;
     }
-    if (!shpFile || !startDate || !projectName.trim()) {
+    if (!startDate || !projectName.trim()) {
       toast.error("Бүх заавал талбаруудыг бөглөнө үү");
+      return;
+    }
+    // Чөлөөлөлтийн хил нь ТӨЛӨВЛӨГӨӨНИЙ хилээс хуулагдана — хилгүй
+    // төлөвлөгөөгөөр цааш үргэлжлэх боломжгүй (backend ч 422 буцаана).
+    if (!planHasBoundary(plan)) {
+      toast.error("Төлөвлөгөөнд хил бүртгэгдээгүй тул чөлөөлөлт үүсгэх боломжгүй");
+      setStep(1);
       return;
     }
     if (!generalCategoryId) {
@@ -258,7 +130,6 @@ function CreateModal({ onClose }: CreateModalProps) {
       fd.append("general_category_id", String(generalCategoryId));
     if (subCategoryId)
       fd.append("sub_category_id", String(subCategoryId));
-    fd.append("shapefile", shpFile);
     createMutation.mutate(fd);
   };
 
@@ -327,6 +198,7 @@ function CreateModal({ onClose }: CreateModalProps) {
             <div className="space-y-4">
               <p className="text-[13px] text-slate-500 dark:text-slate-400">
                 Газар зохион байгуулалтын төлөвлөгөөний нэгж талбарын дугаарыг оруулж хайна уу.
+                Чөлөөлөлтийн хил нь олдсон төлөвлөгөөний хилээс хуулагдана.
               </p>
               <div>
                 <label className={labelCls}>Төлөвлөгөөний нэгж талбарын дугаар *</label>
@@ -334,15 +206,23 @@ function CreateModal({ onClose }: CreateModalProps) {
                   plan={plan}
                   onFound={setPlan}
                   onReset={() => setPlan(null)}
+                  autoFocus
                 />
               </div>
               <div className="flex justify-end pt-1">
                 <button
-                  onClick={() => plan && setStep(2)}
-                  disabled={!plan}
+                  onClick={() => plan && planHasBoundary(plan) && setStep(2)}
+                  disabled={!plan || !planHasBoundary(plan)}
                   className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white hover:bg-[#02aebb] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  title={plan ? undefined : "Эхлээд төлөвлөгөө хайж олно уу"}
+                  title={
+                    !plan
+                      ? "Эхлээд төлөвлөгөө хайж олно уу"
+                      : !planHasBoundary(plan)
+                        ? "Төлөвлөгөөнд хил бүртгэгдээгүй тул үргэлжлүүлэх боломжгүй"
+                        : undefined
+                  }
                 >
+
                   Үргэлжлүүлэх
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -371,6 +251,10 @@ function CreateModal({ onClose }: CreateModalProps) {
                   </div>
                 </div>
               )}
+
+              {/* Бүртгэхийн ӨМНӨХ шалгалт: чөлөөлөлтийн хил болох
+                  төлөвлөгөөний хил (1-р алхамтай ижил геометр). */}
+              {plan && <PlanBoundaryPreview plan={plan} height={160} />}
 
               {/* Form fields */}
               <div>
@@ -465,41 +349,16 @@ function CreateModal({ onClose }: CreateModalProps) {
                 />
               </div>
 
-              {/* Shapefile upload */}
-              <div>
-                <label className={labelCls}>
-                  Хил хязгаарын файл (.shp zip) *
-                </label>
-                <label
-                  className={cn(
-                    "flex flex-col items-center justify-center gap-2 h-24 rounded-xl border-2 border-dashed cursor-pointer transition-colors",
-                    shpFile
-                      ? "border-[#02c0ce] bg-[#02c0ce]/5"
-                      : "border-slate-200 dark:border-white/[0.08] hover:border-[#02c0ce]/50 hover:bg-[#02c0ce]/5",
-                  )}
-                >
-                  <input
-                    type="file"
-                    accept=".zip,.shp"
-                    className="hidden"
-                    onChange={(e) => setShpFile(e.target.files?.[0] ?? null)}
-                  />
-                  {shpFile ? (
-                    <>
-                      <CheckCircle className="h-5 w-5 text-[#02c0ce]" />
-                      <span className="text-[12px] font-medium text-[#02c0ce] truncate max-w-[240px]">
-                        {shpFile.name}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-5 w-5 text-slate-400 dark:text-slate-500" />
-                      <span className="text-[12px] text-slate-400 dark:text-slate-500">
-                        Файл сонгоно уу
-                      </span>
-                    </>
-                  )}
-                </label>
+              {/* Чөлөөлөлтийн ХИЛ — гараас оруулахгүй, төлөвлөгөөнөөс хуулагдана */}
+              <div className="flex items-start gap-2 rounded-lg border border-[#02c0ce]/20 bg-[#02c0ce]/8 dark:bg-[#02c0ce]/10 px-3 py-2.5">
+                <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#02c0ce]" />
+                <p className="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  Чөлөөлөлтийн хилийг{" "}
+                  <span className="font-semibold text-[#02c0ce]">
+                    төлөвлөгөөний хилээс автоматаар
+                  </span>{" "}
+                  хуулж авна. Талбайн хэмжээ мөн тэр хилээс тооцогдоно.
+                </p>
               </div>
             </div>
           )}
@@ -518,7 +377,6 @@ function CreateModal({ onClose }: CreateModalProps) {
               onClick={handleSubmit}
               disabled={
                 createMutation.isPending ||
-                !shpFile ||
                 !startDate ||
                 !projectName.trim()
               }
