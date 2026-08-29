@@ -6,6 +6,7 @@ import TileLayer from "ol/layer/Tile";
 import ImageLayer from "ol/layer/Image";
 import ImageWMS from "ol/source/ImageWMS";
 import XYZ from "ol/source/XYZ";
+import { defaults as defaultControls } from "ol/control/defaults";
 import { fromLonLat, toLonLat } from "ol/proj";
 import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent";
 import type { Coordinate } from "ol/coordinate";
@@ -83,11 +84,15 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
 
-  const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') =>
-    new ImageLayer({
+  const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') => {
+    // Давхаргын өөрийн opacity-г эрхэмлэнэ (нэгж талбарууд = 1, ингэснээр
+    // SLD-ийн fill-opacity нь зурган дээр яг тэр хэмжээгээрээ гарна). Заагаагүй
+    // давхаргууд өмнөх шигээ 0.75.
+    const def = LAYER_DEFS.find(l => l.id === id)
+    return new ImageLayer({
       visible,
-      opacity: 0.75,
-      zIndex: LAYER_DEFS.find(l => l.id === id)?.zIndex ?? 0,
+      opacity: def?.opacity ?? 0.75,
+      zIndex: def?.zIndex ?? 0,
       source: new ImageWMS({
         url: GS_WMS,
         params: {
@@ -100,7 +105,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         serverType: 'geoserver',
         imageLoadFunction: wmsPostLoad,
       }),
-    }), [])
+    })
+  }, [])
 
   /* ── Map init (once) — base tile layer only, no WMS ── */
   useEffect(() => {
@@ -108,6 +114,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
 
     const map = new OLMap({
       target: mapRef.current,
+      // OL-ийн өгөгдмөл +/- товчийг нуув — томруулах/жижигрүүлэлт нь мөчлөг
+      // (scroll) болон хос товшилтоор хэвээр ажиллана.
+      controls: defaultControls({ zoom: false }),
       layers: [
         new TileLayer({
           source: new XYZ({

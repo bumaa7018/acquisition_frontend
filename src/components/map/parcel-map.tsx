@@ -8,6 +8,7 @@ import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
+import { defaults as defaultControls } from "ol/control/defaults";
 import { fromLonLat } from "ol/proj";
 import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
@@ -155,6 +156,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
 
     const map = new OLMap({
       target: mapRef.current,
+      // OL-ийн өгөгдмөл +/- товчийг нуув (map-view/acquisition-map-тай ижил).
+      controls: defaultControls({ zoom: false }),
       layers: [
         new TileLayer({
           source: new XYZ({

@@ -9,6 +9,7 @@ import VectorLayer from "ol/layer/Vector";
 import ImageWMS from "ol/source/ImageWMS";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
+import { defaults as defaultControls } from "ol/control/defaults";
 import { fromLonLat, toLonLat, transformExtent } from "ol/proj";
 import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent";
 import WKT from "ol/format/WKT";
@@ -462,6 +463,8 @@ export function AcquisitionMap({
 
     const map = new OLMap({
       target: mapRef.current,
+      // OL-ийн өгөгдмөл +/- товчийг нуув (map-view/parcel-map-тай ижил).
+      controls: defaultControls({ zoom: false }),
       layers: [
         new TileLayer({
           // Хамгийн доод давхарга — дрон болон бусад бүх давхарга үүний дээр

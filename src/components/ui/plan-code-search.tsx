@@ -18,7 +18,7 @@ const GeometryPreviewMap = dynamic(() => import("@/components/map/geometry-previ
 });
 
 /** Төлөвлөгөөний хилийн өнгө — давхаргын 'v_acquisition_plan'-тай ижил. */
-const PLAN_BOUNDARY_COLOR = "#a855f7";
+const PLAN_BOUNDARY_COLOR = "#ff7a00";
 
 /**
  * Төлөвлөгөөний НЭГЖ ТАЛБАРЫН ДУГААР оруулж, "Хайх" дарж дундын сервисээс

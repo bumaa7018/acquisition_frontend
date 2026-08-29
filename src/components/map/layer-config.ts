@@ -64,16 +64,19 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   // Чөлөөлөлтийн хил нь ТӨЛӨВЛӨГӨӨНИЙ хилийн хуулбар болсон тул давхаргын
   // жагсаалтад зөвхөн НЭГ хил үлдэнэ: 'v_acquisition_boundary' (Чөлөөлөх
   // бүсийн хил) нь энэ давхаргатай яг давхцах тул хасагдсан.
-  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#a855f7', zIndex: 10, opacity: 0.95 },
+  v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#ff7a00', zIndex: 10, opacity: 0.95 },
   parcel:                 { label: 'Чөлөөлөх талбай',      color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },
-  v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40 },
-  v_parcel_s0: { label: 'Хүлээгдэж буй',        color: '#64748b', zIndex: 30, group: 'parcel_status' },
-  v_parcel_s1: { label: 'Зөвшилцөх шатандаа',  color: '#facc15', zIndex: 31, group: 'parcel_status' },
-  v_parcel_s2: { label: 'Үнэлгээ хийх',         color: '#f97316', zIndex: 32, group: 'parcel_status' },
-  v_parcel_s3: { label: 'Нөлөөлөгдсөн гарсан', color: '#ec4899', zIndex: 33, group: 'parcel_status' },
-  v_parcel_s4: { label: 'Татгалзсан',          color: '#ef4444', zIndex: 34, group: 'parcel_status' },
-  v_parcel_s5: { label: 'Чөлөөлсөн',          color: '#22c55e', zIndex: 35, group: 'parcel_status' },
+  // НЭГЖ ТАЛБАРУУД: дүүргэлт SLD-д 70% (fill-opacity 0.7).
+  // Давхаргын opacity-г 1 болгосон — үгүй бол өгөгдмөл 0.9-тэй үржиж 63%
+  // болж, SLD дэх тохиргоо зурган дээр таарахгүй.
+  v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40, opacity: 1 },
+  v_parcel_s0: { label: 'Хүлээгдэж буй',        color: '#64748b', zIndex: 30, group: 'parcel_status', opacity: 1 },
+  v_parcel_s1: { label: 'Зөвшилцөх шатандаа',  color: '#facc15', zIndex: 31, group: 'parcel_status', opacity: 1 },
+  v_parcel_s2: { label: 'Үнэлгээ хийх',         color: '#f97316', zIndex: 32, group: 'parcel_status', opacity: 1 },
+  v_parcel_s3: { label: 'Нөлөөлөгдсөн гарсан', color: '#3b82f6', zIndex: 33, group: 'parcel_status', opacity: 1 },
+  v_parcel_s4: { label: 'Татгалзсан',          color: '#ef4444', zIndex: 34, group: 'parcel_status', opacity: 1 },
+  v_parcel_s5: { label: 'Чөлөөлсөн',          color: '#22c55e', zIndex: 35, group: 'parcel_status', opacity: 1 },
 }
 
 export function layerDef(id: MapLayerId): MapLayerDef {

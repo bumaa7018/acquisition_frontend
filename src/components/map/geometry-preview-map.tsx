@@ -67,12 +67,12 @@ export default function GeometryPreviewMap({
       style: (feature) =>
         new Style({
           stroke: new Stroke({
-            color: (feature.get("color") as string) ?? "#a855f7",
-            width: 2.5,
+            color: (feature.get("color") as string) ?? "#ff7a00",
+            width: 3.5,
             lineDash: feature.get("dashed") ? [8, 6] : undefined,
           }),
           fill: feature.get("filled")
-            ? new Fill({ color: `${(feature.get("color") as string) ?? "#a855f7"}33` })
+            ? new Fill({ color: `${(feature.get("color") as string) ?? "#ff7a00"}33` })
             : undefined,
         }),
     });

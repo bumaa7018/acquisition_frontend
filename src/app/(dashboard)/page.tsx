@@ -583,6 +583,19 @@ function YearMultiSelect({
   );
 }
 
+/* ── Welcome banner ──────────────────────────────────── */
+function WelcomeBanner() {
+  return (
+    <div className="ap-card px-5 py-4 flex items-center gap-3">
+      <div className="h-7 w-[3px] rounded-full shrink-0" style={{ background: "#02c0ce" }} />
+      <h1 className="text-[15px] sm:text-base font-bold tracking-wide text-slate-800 dark:text-white">
+        ГАЗАР ЧӨЛӨӨЛӨЛТИЙН ЦАХИМ СИСТЕМД{" "}
+        <span style={{ color: "#02c0ce" }}>ТАВТАЙ МОРИЛНО УУ.</span>
+      </h1>
+    </div>
+  );
+}
+
 /* ── Skeleton ────────────────────────────────────────── */
 function Skel({ w = "w-12" }: { w?: string }) {
   return (
@@ -751,6 +764,8 @@ function ExternalDashboard() {
 
   return (
     <div className="flex flex-col gap-5">
+      <WelcomeBanner />
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">{pageTitle}</h1>
@@ -1182,11 +1197,12 @@ export default function DashboardPage() {
 
   if (!roleReady) {
     return (
-      <div className="flex flex-col gap-4 animate-pulse">
-        <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630]" />
+      <div className="flex flex-col gap-4">
+        <WelcomeBanner />
+        <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-28 rounded-xl bg-slate-100 dark:bg-[#252630]" />
+            <div key={i} className="h-28 rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />
           ))}
         </div>
       </div>
@@ -1196,6 +1212,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
+
+      <WelcomeBanner />
 
       {/* ── Filter card ───────────────────────────────── */}
       <div className="ap-card w-full px-4 py-3">
