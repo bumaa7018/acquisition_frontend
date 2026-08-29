@@ -285,7 +285,12 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       })
     }
 
-    if (acqCql && olMap.current) {
+    // Зумлалт нь acqCql-ээс ХАМААРАХГҮЙ: шүүлтгүй (эсвэл зөвхөн он/ажилтнаар
+    // шүүсэн) үед ч олдсон чөлөөлөлтүүд рүү нь ойртоно. Өмнө нь `if (acqCql)`
+    // байсан тул он сонгохгүй хайхад зураг Монгол даяарын анхны харагдацдаа
+    // үлддэг байв. cqlFilter хоосон бол fitLayerToMap нь бүх чөлөөлөлтийн
+    // хүрээгээр (max 500 объект) багтаана.
+    if (olMap.current) {
       void fitLayerToMap({
         map: olMap.current,
         wfsUrl: GS_WFS,
@@ -293,7 +298,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         // давхаргын жагсаалтаас хасагдсан ч GeoServer дээр хэвээр байгаа).
         // Хуучин бүртгэлд plan_geom хоосон байж болох тул geometry-г сонгов.
         layerId: 'v_acquisition_boundary',
-        cqlFilter: acqCql,
+        cqlFilter: acqCql || undefined,
         padding: [48, 48, 48, 48],
         maxZoom: 16,
       })

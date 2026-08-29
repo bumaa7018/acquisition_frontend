@@ -1158,7 +1158,18 @@ export default function DashboardPage() {
   const prevIsLoadingRef = useRef<boolean | null>(null);
 
   const commitMap = useCallback(() => {
-    const hasF = !!(appliedFilter.acqId || appliedFilter.planCode || appliedFilter.years.length > 0 || appliedFilter.employeeId);
+    // Шүүлт хийгдсэн эсэх — АНГИЛЛЫГ ч тооцно. Өмнө нь зөвхөн чөлөөлөлт/
+    // төлөвлөгөө/он/ажилтныг л шалгадаг байсан тул "он"-оо цэвэрлээд зөвхөн
+    // ангилал сонгож "Харах" дарахад acqIds хоосон гарч, зураг нь шүүгдээгүй
+    // бүх давхаргыг харуулаад олдсон хэсэг рүү зумладаггүй байв.
+    const hasF = !!(
+      appliedFilter.acqId ||
+      appliedFilter.planCode ||
+      appliedFilter.years.length > 0 ||
+      appliedFilter.employeeId ||
+      appliedFilter.genCatId ||
+      appliedFilter.subCatId
+    );
     const acqIds = hasF
       ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
       : undefined;
