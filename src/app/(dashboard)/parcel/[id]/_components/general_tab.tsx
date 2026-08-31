@@ -9,7 +9,7 @@ import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
-import { calcAreaFromWkt, layerTextToWkt } from "@/lib/geometry-utils";
+import { layerTextToWkt } from "@/lib/geometry-utils";
 import { logger } from "@/lib/logger";
 
 const ParcelMap = dynamic(
@@ -184,17 +184,33 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     }
   }, [data]);
 
-  const handleAutoCalcArea = useCallback(() => {
-    if (!acquisitionGeomWkt.trim()) return;
-    const calc = calcAreaFromWkt(acquisitionGeomWkt);
-    if (calc != null) {
-      setAcquisitionAreaM2(String(Math.round(calc)));
-      setAreaAutoCalc(true);
-      toast.success("Талбай тооцоологдлоо");
-    } else {
-      toast.error("Геометриас талбай тооцоолох боломжгүй");
+  // Талбайг СЕРВЕР бодно (ГУС-тай ижил UTM арга). Browser дээр тооцвол нэгж
+  // талбар татахад бичигдсэн тооноос зөрнө — тэр нь өмнөх алдааны эх үүсвэр.
+  const [areaCalcBusy, setAreaCalcBusy] = useState(false);
+  const calcArea = useCallback(async (wkt: string): Promise<number | null> => {
+    try {
+      return await landApi.computeGeometryArea(wkt);
+    } catch {
+      return null;
     }
-  }, [acquisitionGeomWkt]);
+  }, []);
+
+  const handleAutoCalcArea = useCallback(async () => {
+    if (!acquisitionGeomWkt.trim() || areaCalcBusy) return;
+    setAreaCalcBusy(true);
+    try {
+      const calc = await calcArea(acquisitionGeomWkt);
+      if (calc != null) {
+        setAcquisitionAreaM2(String(calc));
+        setAreaAutoCalc(true);
+        toast.success("Талбай тооцоологдлоо");
+      } else {
+        toast.error("Геометриас талбай тооцоолох боломжгүй");
+      }
+    } finally {
+      setAreaCalcBusy(false);
+    }
+  }, [acquisitionGeomWkt, areaCalcBusy, calcArea]);
 
   const handleBoundaryLayerFile = useCallback(async (file: File) => {
     const text = await file.text();
@@ -205,16 +221,16 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     }
 
     setAcquisitionGeomWkt(wkt);
-    const calc = calcAreaFromWkt(wkt);
+    const calc = await calcArea(wkt);
     if (calc != null) {
-      setAcquisitionAreaM2(String(Math.round(calc)));
+      setAcquisitionAreaM2(String(calc));
       setAreaAutoCalc(true);
       toast.success("Давхардсан хил оруулж, талбай тооцоологдлоо");
     } else {
       setAreaAutoCalc(false);
       toast.success("Давхардсан хил орууллаа");
     }
-  }, []);
+  }, [calcArea]);
 
   const metaMutation = useMutation({
     mutationFn: () => {
@@ -496,10 +512,11 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   <button
                     type="button"
                     onClick={handleAutoCalcArea}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                    disabled={areaCalcBusy}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors disabled:opacity-50"
                   >
                     <Calculator className="h-3.5 w-3.5" />
-                    Хилээс тооцоолох
+                    {areaCalcBusy ? "Тооцоолж байна..." : "Хилээс тооцоолох"}
                   </button>
                 )}
                 {areaAutoCalc && (

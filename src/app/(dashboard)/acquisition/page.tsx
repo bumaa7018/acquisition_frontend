@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import Link from "next/link";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { ProgressBadge } from "@/components/ui/progress-badge";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -42,6 +43,20 @@ import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/componen
 
 interface CreateModalProps {
   onClose: () => void;
+}
+
+/**
+ * Чөлөөлөлтийн нэрийн ӨМНӨ төлөвлөгөөний нэгж талбарын дугаарыг залгана:
+ * "(12346) Чөлөөлөлтийн нэр".
+ *
+ * Хэрэглэгч дугаарыг өөрөө бичсэн байвал (эсвэл дугаар олдоогүй) ДАХИН
+ * залгахгүй — "(12346) (12346) ..." болохоос сэргийлнэ.
+ */
+function prefixedName(planParcelId: string, name: string): string {
+  const clean = name.trim();
+  if (!planParcelId) return clean;
+  const prefix = `(${planParcelId})`;
+  return clean.startsWith(prefix) ? clean : `${prefix} ${clean}`;
 }
 
 function CreateModal({ onClose }: CreateModalProps) {
@@ -122,7 +137,7 @@ function CreateModal({ onClose }: CreateModalProps) {
     const fd = new FormData();
     fd.append("plan_parcel_id", planParcelId);
     fd.append("start_date", startDate);
-    fd.append("acquisition_name", projectName);
+    fd.append("acquisition_name", prefixedName(planParcelId, projectName));
     fd.append("implementing_org", implementingOrg);
     fd.append("reason", reason);
     fd.append("responsible_org", responsibleOrg);
@@ -259,13 +274,23 @@ function CreateModal({ onClose }: CreateModalProps) {
               {/* Form fields */}
               <div>
                 <label className={labelCls}>Чөлөөлөлтийн нэр *</label>
-                <input
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Чөлөөлөлтийн нэр оруулна уу"
-                  className={inputCls}
-                  autoFocus
-                />
+                {/* Төлөвлөгөөний нэгж талбарын дугаар нэрийн ӨМНӨ автоматаар
+                    залгагдана. Хэрэглэгч түүнийг бичих шаардлагагүй тул
+                    талбарын дотор ЗӨВХӨН харагдана (засах боломжгүй). */}
+                <div className="flex h-9 w-full items-center rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] transition-all focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15">
+                  {plan?.parcel_id && (
+                    <span className="shrink-0 pl-3 text-[13px] font-mono font-semibold text-[#02c0ce] select-none">
+                      ({plan.parcel_id})
+                    </span>
+                  )}
+                  <input
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    placeholder="Чөлөөлөлтийн нэр оруулна уу"
+                    className="h-full w-full min-w-0 bg-transparent px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                    autoFocus
+                  />
+                </div>
               </div>
 
               <div>
@@ -406,6 +431,9 @@ const EMPTY_DRAFT = {
   employeeId: "",
   employeeName: "",
   year: 0,
+  // Сум/дүүргийн код — чөлөөлөлтийн хилээр тодорхойлогдож
+  // land_acquisition_au-д хадгалагдсан утга.
+  au2Code: "",
 };
 type AcqDraft = typeof EMPTY_DRAFT;
 
@@ -456,6 +484,12 @@ export default function LandPage() {
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
   });
+  // Сум/дүүрэг — чөлөөлөлт бүртгэгдсэн дүүргүүд л ирнэ.
+  const { data: districts = [] } = useQuery({
+    queryKey: ["acquisition-districts"],
+    queryFn: () => landApi.listDistricts(),
+    staleTime: 5 * 60_000,
+  });
   const { data: subCats = [] } = useQuery({
     queryKey: ["acquisition-categories", draft.genCat],
     queryFn: () => landApi.listCategories(draft.genCat),
@@ -475,7 +509,7 @@ export default function LandPage() {
   }
 
   const hasFilter = !!(
-    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.year
+    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.year || draft.au2Code
   );
 
   const { data: rawData, isLoading } = useQuery({
@@ -490,6 +524,7 @@ export default function LandPage() {
         general_category_id: filter.genCat || undefined,
         sub_category_id: filter.subCat || undefined,
         assigned_user_id: filter.employeeId || undefined,
+        au2_code: filter.au2Code || undefined,
         years: filter.year ? [filter.year] : undefined,
       }),
     enabled: !isProfOrg,
@@ -601,6 +636,14 @@ export default function LandPage() {
             className="flex-1 min-w-0"
           />
           <select
+            value={draft.au2Code}
+            onChange={(e) => setDraft(d => ({ ...d, au2Code: e.target.value }))}
+            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+          >
+            <option value="">Бүх сум/дүүрэг</option>
+            {districts.map(d => <option key={d.code} value={d.code}>{d.name || d.code}</option>)}
+          </select>
+          <select
             value={draft.year}
             onChange={(e) => setDraft(d => ({ ...d, year: Number(e.target.value) }))}
             className="w-24 shrink-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
@@ -683,16 +726,22 @@ export default function LandPage() {
                           </p>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 max-w-[200px]">
-                        {land.acquisition_name ? (
-                          <p className="text-[13px] text-slate-700 dark:text-slate-200 truncate">
-                            {land.acquisition_name}
-                          </p>
-                        ) : (
-                          <p className="text-[13px] text-slate-400 dark:text-slate-500">
-                            —
-                          </p>
-                        )}
+                      <td className="px-5 py-3.5 max-w-[240px]">
+                        {/* Явцын хувь — нэрийн ӨМНӨ (дашбоардтай ижил тоо) */}
+                        <div className="flex items-center gap-2">
+                          <ProgressBadge
+                            percent={land.progress_percent}
+                            parcelCount={land.parcel_count}
+                            finalCount={land.final_parcel_count}
+                          />
+                          {land.acquisition_name ? (
+                            <span className="truncate text-[13px] text-slate-700 dark:text-slate-200">
+                              {land.acquisition_name}
+                            </span>
+                          ) : (
+                            <span className="text-[13px] text-slate-400 dark:text-slate-500">—</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
                         <span className="truncate block">{land.general_category_name || "—"}</span>

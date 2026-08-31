@@ -100,7 +100,7 @@ export default function GeometryPreviewMap({
         center: fromLonLat([104.9, 47.9]),
         zoom: 5,
         minZoom: 4,
-        maxZoom: 20,
+        // maxZoom заахгүй — зумлалтын дээд хязгаар байхгүй.
       }),
       controls: [],
     });
@@ -148,7 +148,7 @@ export default function GeometryPreviewMap({
     setDrawn(count);
 
     if (count > 0 && !isEmptyExtent(extent)) {
-      map.getView().fit(extent, { padding: [24, 24, 24, 24], maxZoom: 18, duration: 300 });
+      map.getView().fit(extent, { padding: [24, 24, 24, 24], duration: 300 });
     }
     // Контейнерийн хэмжээ (модал дотор нээгдэх, эсвэл хэсэг өргөжих) хожуу
     // тодорхойлогддог тул OL-д дахин мэдэгдэнэ.

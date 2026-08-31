@@ -32,7 +32,9 @@ export async function fitLayerToMap({
   layerId,
   cqlFilter,
   padding = [64, 64, 64, 64],
-  maxZoom = 17,
+  // Зумлалтын дээд хязгаар байхгүй (өгөгдмөл утга ч алга) — дуудагч тусгайлан
+  // заагаагүй бол OL хүссэн хэмжээгээрээ ойртоно.
+  maxZoom,
 }: FitLayerOptions) {
   const params = new URLSearchParams({
     service: "WFS",

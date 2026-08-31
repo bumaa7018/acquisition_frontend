@@ -74,8 +74,12 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
     enabled: !!acqId && !!parcelId,
   });
 
+  // Төлөв солих ШАЛТГААН — "Нөлөөлөгдсөн гарсан"/"Татгалзсан" үед заавал
+  // (backend ч мөн 400 буцаана), бусад төлөвт хоосон байж болно. Газрын
+  // зургийн нэгж талбарын цонхонд энэ шалтгаан харагдана.
+  const [statusReason, setStatusReason] = useState("");
   const updateStatusMutation = useMutation({
-    mutationFn: (statusId: number) => parcelApi.updateStatus(acqId, parcelId, statusId),
+    mutationFn: (statusId: number) => parcelApi.updateStatus(acqId, parcelId, statusId, statusReason.trim()),
     onSuccess: () => {
       toast.success("Статус амжилттай шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
@@ -94,6 +98,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   function closeModal() {
     setModal("closed");
     setSelected(null);
+    setStatusReason("");
   }
 
   function handleSelectStatus(s: ParcelStatus) {
@@ -116,6 +121,10 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   const isMovingFromEvaluationToReleased =
     currentStatusName === EVALUATION_STATUS_NAME && selected?.name === RELEASED_STATUS_NAME;
   const blocksForUnapprovedCompensation = isMovingFromEvaluationToReleased && !compApproved;
+  // Эцсийн СӨРӨГ хоёр төлөвт шалтгаан заавал.
+  const reasonRequired =
+    selected?.name === "Нөлөөлөгдсөн гарсан" || selected?.name === "Татгалзсан";
+  const reasonMissing = reasonRequired && !statusReason.trim();
 
   return (
     <>
@@ -343,6 +352,33 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 })()}
               </div>
 
+              {/* ШАЛТГААН — сөрөг эцсийн 2 төлөвт заавал, бусдад заавал бус */}
+              <div className="px-5 pb-4">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  Шалтгаан {reasonRequired && <span className="text-red-400">*</span>}
+                </label>
+                <textarea
+                  value={statusReason}
+                  onChange={(e) => setStatusReason(e.target.value)}
+                  rows={2}
+                  placeholder={
+                    reasonRequired
+                      ? "Шалтгааныг бичнэ үү (заавал)"
+                      : "Шалтгаан (заавал биш)"
+                  }
+                  className={`w-full resize-none rounded-xl border px-3 py-2 text-[13px] outline-none transition-all dark:bg-[#1e1f27] dark:text-slate-200 ${
+                    reasonMissing
+                      ? "border-red-400 bg-red-50/30"
+                      : "border-slate-200 dark:border-[#37394d] bg-white focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15"
+                  }`}
+                />
+                {reasonMissing && (
+                  <p className="mt-1 text-[11px] text-red-400">
+                    Энэ төлөвт шилжихэд шалтгаан бичих шаардлагатай
+                  </p>
+                )}
+              </div>
+
               {blocksForUnapprovedCompensation && (
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
@@ -375,6 +411,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                   onClick={handleConfirm}
                   disabled={
                     updateStatusMutation.isPending ||
+                    reasonMissing ||
                     blocksForUnapprovedCompensation ||
                     (selected.name === RELEASED_STATUS_NAME && !hasApprovedReport)
                   }

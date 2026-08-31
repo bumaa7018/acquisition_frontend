@@ -26,8 +26,9 @@ const WMS_LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
   cqlType?: "acquisition" | "parcel";
 })[] = [
-  { ...layerDef("au1"), defaultVisible: false },
-  { ...layerDef("au2"), defaultVisible: false },
+  // Засаг захиргааны хил — ШУУД харагдана (лавлах давхарга).
+  { ...layerDef("au1"), defaultVisible: true },
+  { ...layerDef("au2"), defaultVisible: true },
   { ...layerDef("au3"), defaultVisible: true },
   { ...layerDef("v_acquisition_plan"),     defaultVisible: true,  cqlType: "acquisition" },
   { ...layerDef("building"),               defaultVisible: true,  cqlType: "parcel" },
@@ -104,7 +105,6 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
               layerId: def.id,
               cqlFilter: def.cqlType === "acquisition" ? acqCql : def.cqlType === "parcel" ? parcelCql : undefined,
               padding: [60, 60, 60, 60],
-              maxZoom: 18,
             });
           }
           return next;
@@ -178,7 +178,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
         center: fromLonLat([104.9, 47.9]),
         zoom: 5,
         minZoom: 4,
-        maxZoom: 20,
+        // maxZoom заахгүй — зумлалтын дээд хязгаар байхгүй (суурь зураг 20-оос
+        // цааш z20-ийн тайлаа томсгож харуулна).
       }),
     });
 
@@ -229,7 +230,6 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       if (extent) {
         olMap.current.getView().fit(extent, {
           padding: [60, 60, 60, 60],
-          maxZoom: 18,
           duration: 1000,
         });
       }

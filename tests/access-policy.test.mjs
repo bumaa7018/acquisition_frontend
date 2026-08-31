@@ -49,7 +49,6 @@ import {
   valuationTotals,
 } from "../src/lib/valuation-summary.ts";
 import {
-  calcAreaFromWkt,
   geoJsonToWkt,
   layerTextToWkt,
 } from "../src/lib/geometry-utils.ts";
@@ -537,10 +536,9 @@ test("нөхөх олговорын хүснэгтийн нэгтгэлүүд г
   });
 });
 
-test("давхардсан хилийн давхаргаас WKT болон талбай тооцоолж чадна", () => {
-  const wkt = "POLYGON((1000 1000,1010 1000,1010 1010,1000 1010,1000 1000))";
-  assert.equal(calcAreaFromWkt(wkt), 100);
-
+test("давхардсан хилийн давхаргаас WKT уншиж чадна", () => {
+  // Талбайг frontend тооцохоо БОЛЬСОН — backend (public.calculate_area_utm,
+  // ГУС-тай ижил) бодно. Энд зөвхөн WKT/GeoJSON задлалтыг шалгана.
   const geoJson = {
     type: "Feature",
     geometry: {

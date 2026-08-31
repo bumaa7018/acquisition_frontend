@@ -55,43 +55,15 @@ export function layerTextToWkt(text: string): string | null {
   }
 }
 
-export function calcAreaFromWkt(wkt: string): number | null {
-  try {
-    const cleaned = wkt.replace(/^SRID=\d+;/i, "");
-    const match = cleaned.match(/POLYGON\s*\(\((.+?)\)\)/i);
-    if (!match) return null;
-
-    const coords = match[1].split(",").map((p) => {
-      const [x, y] = p.trim().split(/\s+/).map(Number);
-      return [x, y] as [number, number];
-    });
-    if (coords.length < 3 || coords.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) {
-      return null;
-    }
-
-    const isGeographic = coords.every(([x, y]) => x >= -180 && x <= 180 && y >= -90 && y <= 90);
-
-    if (isGeographic) {
-      const R = 6378137;
-      const toRad = (d: number) => (d * Math.PI) / 180;
-      let area = 0;
-      for (let i = 0; i < coords.length - 1; i++) {
-        const [lon1, lat1] = coords[i];
-        const [lon2, lat2] = coords[(i + 1) % coords.length];
-        area += toRad(lon2 - lon1) * (2 + Math.sin(toRad(lat1)) + Math.sin(toRad(lat2)));
-      }
-      return Math.abs((area * R * R) / 2);
-    }
-
-    let area = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-      const [x1, y1] = coords[i];
-      const [x2, y2] = coords[(i + 1) % coords.length];
-      area += x1 * y2 - x2 * y1;
-    }
-    return Math.abs(area / 2);
-  } catch (err) {
-    logger.warn("calc area from wkt failed", { error: String(err) });
-    return null;
-  }
-}
+/* ТАЛБАЙГ ЭНД ТООЦООЛОХГҮЙ.
+ *
+ * Өмнө нь энд `calcAreaFromWkt` байсан — дэлхийг төгс бөмбөрцөг (R = 6378137)
+ * гэж үзсэн ойролцоолол. ГУС нь талбайг UTM проекц дээр (base.calculate_area_utm)
+ * боддог, бид нь эллипсоид дээр гэсэн үг — иймд нэг л полигон дээр гурван өөр
+ * тоо гардаг байв (өргөрөг/уртрагаас хамаарч 0.03-0.12% зөрүү).
+ *
+ * Одоо талбайг ЗӨВХӨН backend бодно: `landApi.computeGeometryArea(wkt)` →
+ * `POST /geometry/area` → `public.calculate_area_utm` (ГУС-ийн функцийн
+ * хуулбар). Ингэснээр "Хилээс тооцоолох" товч болон нэгж талбар татах хоёр
+ * ижил тоо өгнө.
+ */

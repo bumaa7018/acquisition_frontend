@@ -23,6 +23,9 @@ import { landApi } from "@/lib/api";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 import FullscreenButton from "./fullscreen-button";
 import PrintButton from "./print-button";
+import FeaturePopup from "./feature-popup";
+import ParcelInfoModal from "./parcel-info-modal";
+import AcquisitionInfoModal from "./acquisition-info-modal";
 import PrintPreviewModal from "./print-preview-modal";
 import { useFullscreen } from "./use-fullscreen";
 import {
@@ -31,6 +34,7 @@ import {
   fitLayerToMap,
   layerDef,
   type MapLayerDef,
+  type MapLayerId,
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
@@ -48,6 +52,16 @@ const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 // Дашбоардтай ижил: нэгж талбарыг төлөв тус бүрээр (v_parcel_s0..s5) тусад нь сонгож харна
 const PARCEL_STATUS_IDS = ["v_parcel_s0", "v_parcel_s1", "v_parcel_s2", "v_parcel_s3", "v_parcel_s4", "v_parcel_s5"] as const;
 const PARCEL_GROUP: LayerGroupConfig = { id: "parcel_status", label: "Нэгж талбарын хил", color: "#22c55e" };
+
+// Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
+const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_IDS, "v_parcel_acquisition"]);
+
+// Хилийн давхаргууд — дарвал ЧӨЛӨӨЛӨЛТИЙН мэдээллийн цонх нээнэ.
+const BOUNDARY_INFO_LAYERS: Record<string, string> = {
+  v_acquisition_plan: "Төлөвлөгөөний хил",
+  v_plan_acquisition: "Үндсэн төлөвлөлтийн хил",
+  v_acquisition_boundary: "Чөлөөлөх бүсийн хил",
+};
 
 function parcelStatusFromLayerId(id: string): number | null {
   const idx = PARCEL_STATUS_IDS.indexOf(id as (typeof PARCEL_STATUS_IDS)[number]);
@@ -90,15 +104,20 @@ function computeBboxFromGeoJson(geometry: { coordinates?: unknown } | undefined)
   return Number.isFinite(minX) ? [minX, minY, maxX, maxY] : undefined;
 }
 
-type CqlKey = "acquisition" | "au1" | "au2" | "au3";
+type CqlKey = "acquisition" | "plan" | "au1" | "au2" | "au3";
 
 const LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
   cqlKey?: CqlKey;
 })[] = [
-  { ...layerDef("au1"), defaultVisible: false, cqlKey: "au1" },
-  { ...layerDef("au2"), defaultVisible: false, cqlKey: "au2" },
-  { ...layerDef("au3"), defaultVisible: false, cqlKey: "au3" },
+  // Засаг захиргааны хил — ШУУД харагдана (лавлах давхарга).
+  { ...layerDef("au1"), defaultVisible: true, cqlKey: "au1" },
+  { ...layerDef("au2"), defaultVisible: true, cqlKey: "au2" },
+  { ...layerDef("au3"), defaultVisible: true, cqlKey: "au3" },
+  // Үндсэн төлөвлөлтийн хил — ТӨЛӨВЛӨГӨӨНИЙ ДУГААРААР (plan_code) шүүгдэнэ,
+  // чөлөөлөлтөөр биш. Тухайн төлөвлөгөөнд хамаарах бүх чөлөөлөлтийн хил
+  // харагдана — өөрийн чөлөөлөлт нь тэдгээрийн дунд хаана байгааг харуулна.
+  { ...layerDef("v_plan_acquisition"), defaultVisible: true, cqlKey: "plan" },
   { ...layerDef("v_acquisition_plan"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s0"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s1"), defaultVisible: true, cqlKey: "acquisition" },
@@ -156,6 +175,12 @@ interface Props {
   droneOverlays?: DroneOverlay[];
   /** [minX, minY, maxX, maxY] WGS84 — өөрчлөгдөх бүрд тэр хүрээ рүү нүүнэ */
   droneFocus?: [number, number, number, number] | null;
+  /**
+   * Төлөвлөгөөний дугаар (land_acquisition.plan_code) — "Үндсэн төлөвлөлтийн
+   * хил" давхаргыг ҮҮГЭЭР шүүнэ. Хоосон бол тэр давхарга юу ч харуулахгүй
+   * (бүх чөлөөлөлтийг зурахаас сэргийлж "__none__" шүүлт тавина).
+   */
+  planCode?: string;
 }
 
 export function AcquisitionMap({
@@ -164,6 +189,7 @@ export function AcquisitionMap({
   acquisitionName,
   droneOverlays,
   droneFocus,
+  planCode,
 }: Props) {
   // API заримдаа aus талбарыг undefined биш null-ээр буцаадаг тул destructuring default
   // (aus = []) ажиллахгүй — 'null' үед ч тогтвортой хоосон array болгож хамгаална
@@ -177,6 +203,10 @@ export function AcquisitionMap({
   const droneLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const wktFormat   = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
+  // Давхарга дээр дарахад: нэгж талбар бол дэлгэрэнгүй цонх, бусад нь жижиг popup.
+  const [popup, setPopup] = useState<{ layer: string; properties: Record<string, unknown>; position: { x: number; y: number } } | null>(null);
+  const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null);
+  const [acqInfo, setAcqInfo] = useState<{ acquisitionId: string; layerLabel: string; layerColor: string } | null>(null);
   // 3D (cesium-3d.ts): OL давхаргуудыг globe дээр давхарлана, зөвхөн хэрэглэгч сонгоход л ачаална
   const cesium3D    = useRef<Cesium3DHandle | null>(null);
   const cesium3DParcels = useRef<Cesium3DParcel[]>([]);
@@ -232,11 +262,14 @@ export function AcquisitionMap({
   const cqlByKey = useMemo<Record<CqlKey, string>>(
     () => ({
       acquisition: acqFilter,
+      // plan_code байхгүй бол ХООСОН биш "__none__" — хоосон CQL нь GeoServer-т
+      // "шүүлтгүй" гэсэн утгатай тул бүх чөлөөлөлтийн хил зурагдах байсан.
+      plan: `plan_code = '${(planCode ?? "").replace(/'/g, "''") || "__none__"}'`,
       au1: buildCodeCql(auCodes.au1, "code"),
       au2: buildCodeCql(auCodes.au2, "code"),
       au3: buildCodeCql(auCodes.au3, "code"),
     }),
-    [acqFilter, auCodes],
+    [acqFilter, auCodes, planCode],
   );
 
   const makeHistoryLayer = useCallback((history: BoundaryHistory) => {
@@ -305,7 +338,7 @@ export function AcquisitionMap({
 
       const extent = layer.getSource()?.getExtent();
       if (extent) {
-        map.getView().fit(extent, { padding: [56, 56, 56, 56], maxZoom: 17, duration: 500 });
+        map.getView().fit(extent, { padding: [56, 56, 56, 56], duration: 500 });
       }
     },
     [makeHistoryLayer],
@@ -339,7 +372,6 @@ export function AcquisitionMap({
               layerId: def.id,
               cqlFilter: def.cqlKey ? cqlByKey[def.cqlKey] : undefined,
               padding: [56, 56, 56, 56],
-              maxZoom: 17,
             });
           }
           return next;
@@ -476,6 +508,9 @@ export function AcquisitionMap({
               "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
               "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
             ],
+            // Тайлын БАЙГАА дээд түвшин (зумлалтын хязгаар БИШ). Үүнийг
+            // заагаагүй бол z20-оос цааш байхгүй тайл гуйж, суурь зураг
+            // хоосорно; зааснаар z20-ийн тайл томсож (бүдэг) харагдана.
             maxZoom: 20,
             crossOrigin: "anonymous",
           }),
@@ -486,8 +521,64 @@ export function AcquisitionMap({
         center: fromLonLat([104.9, 47.9]),
         zoom: 5,
         minZoom: 4,
-        maxZoom: 20,
+        // maxZoom заахгүй — зумлалтын дээд хязгаар байхгүй (суурь зураг 20-оос
+        // цааш z20-ийн тайлаа томсгож харуулна).
       }),
+    });
+
+    // ── Давхарга дээр дарах: GetFeatureInfo → дэлгэрэнгүй ──────────────
+    map.on("singleclick", async (evt) => {
+      const viewRes = map.getView().getResolution() ?? 1;
+      const projection = map.getView().getProjection();
+      const pixel = evt.pixel as [number, number];
+
+      // Дээд давхаргаас доош нь эрэмбэлж, ЭХНИЙ олдсоныг харуулна.
+      const visibleIds = LAYER_DEFS.filter((d) => wmsRecord[d.id]?.getVisible())
+        .sort((a, b) => b.zIndex - a.zIndex)
+        .map((d) => d.id);
+      if (!visibleIds.length) return;
+      setPopup(null);
+
+      for (const id of visibleIds) {
+        const url = wmsRecord[id]?.getSource()?.getFeatureInfoUrl(evt.coordinate, viewRes, projection, {
+          INFO_FORMAT: "application/json",
+          FEATURE_COUNT: 1,
+        });
+        if (!url) continue;
+        try {
+          const qIdx = url.indexOf("?");
+          const res =
+            qIdx === -1
+              ? await fetch(url, { headers: gsAuthHeaders() })
+              : await fetch(url.slice(0, qIdx), {
+                  method: "POST",
+                  headers: gsAuthHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
+                  body: url.slice(qIdx + 1),
+                });
+          const json = await res.json();
+          const features: { properties: Record<string, unknown> }[] = json.features ?? [];
+          if (features.length === 0) continue;
+
+          const props = features[0].properties ?? {};
+          const acqId = String(props.acquisition_id ?? acquisitionId);
+          if (PARCEL_INFO_LAYERS.has(id)) {
+            const uuid = String(props.id ?? "");
+            if (acqId && uuid) {
+              setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid });
+              return;
+            }
+          }
+          if (BOUNDARY_INFO_LAYERS[id] && acqId) {
+            setAcqInfo({ acquisitionId: acqId, layerLabel: BOUNDARY_INFO_LAYERS[id], layerColor: layerDef(id as MapLayerId).color });
+            return;
+          }
+          setPopup({ layer: id, properties: props, position: { x: pixel[0], y: pixel[1] } });
+          return;
+        } catch {
+          // Нэг давхарга уншигдахгүй бол дараагийнх руу — цонх огт гарахгүй
+          // байснаас нэг давхаргын мэдээлэл гарсан нь дээр.
+        }
+      }
     });
 
     olMap.current = map;
@@ -534,7 +625,7 @@ export function AcquisitionMap({
             bounds: { west, south, east, north },
           };
 
-          map.getView().fit(ext, { padding: [48, 48, 48, 48], maxZoom: 17, duration: 500 });
+          map.getView().fit(ext, { padding: [48, 48, 48, 48], duration: 500 });
         }
         setExtentReady(true);
       })
@@ -670,7 +761,7 @@ export function AcquisitionMap({
     const [minX, minY, maxX, maxY] = droneFocus;
     map.getView().fit(
       transformExtent([minX, minY, maxX, maxY], "EPSG:4326", "EPSG:3857"),
-      { padding: [40, 40, 40, 40], duration: 400, maxZoom: 20 },
+      { padding: [40, 40, 40, 40], duration: 400 },
     );
   }, [droneFocus, extentReady]);
 
@@ -739,6 +830,29 @@ export function AcquisitionMap({
             <LayerPanel layers={layers} groups={[PARCEL_GROUP]} onToggle={handleToggle} />
             <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
             {mapMode === "2d" && <PrintButton onPrint={handlePrint} />}
+            {popup && (
+              <FeaturePopup
+                layer={popup.layer}
+                properties={popup.properties}
+                position={popup.position}
+                onClose={() => setPopup(null)}
+              />
+            )}
+            {parcelInfo && (
+              <ParcelInfoModal
+                acquisitionId={parcelInfo.acquisitionId}
+                parcelUuid={parcelInfo.parcelUuid}
+                onClose={() => setParcelInfo(null)}
+              />
+            )}
+            {acqInfo && (
+              <AcquisitionInfoModal
+                acquisitionId={acqInfo.acquisitionId}
+                layerLabel={acqInfo.layerLabel}
+          layerColor={acqInfo.layerColor}
+                onClose={() => setAcqInfo(null)}
+              />
+            )}
             <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
               <button
                 type="button"

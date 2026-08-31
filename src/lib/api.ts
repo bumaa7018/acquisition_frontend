@@ -64,7 +64,7 @@ import type {
   Organization, Department, Position, Person, Employee,
   ValuationOrg, ValuationOrgPayload,
   AuditLog,
-  Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, Parcel, ParcelFull, ParcelDiscoveryResult,
+  Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, Document, StatusOption,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
@@ -774,6 +774,7 @@ export const landApi = {
     if (filter?.plan_code)           p.set('plan_code', filter.plan_code)
     if (filter?.acquisition_name)    p.set('acquisition_name', filter.acquisition_name)
     if (filter?.status)              p.set('status', String(filter.status))
+    if (filter?.au2_code)            p.set('au2_code', filter.au2_code)
     if (filter?.au3_code)            p.set('au3_code', filter.au3_code)
     if (filter?.general_category_id) p.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     p.set('sub_category_id', String(filter.sub_category_id))
@@ -800,6 +801,10 @@ export const landApi = {
     api.get<ApiResponse<LandAcquisitionOption[]>>(
       '/land-acquisitions/filter-options'
     ).then(r => r.data.data ?? []),
+  // Шүүлтүүрийн сум/дүүрэг — чөлөөлөлт БҮРТГЭГДСЭН дүүргүүд л ирнэ
+  // (land_acquisition_au). Хоосон сонголт харагдахгүй.
+  listDistricts: () =>
+    api.get<ApiResponse<AU2Option[]>>('/land-acquisitions/districts').then(r => r.data.data ?? []),
   getById: (id: string) =>
     api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
   create: (data: FormData) =>
@@ -1110,6 +1115,16 @@ export const landApi = {
   deleteFundingSource: (acqId: string, srcId: string) =>
     api.delete(`/land-acquisitions/${acqId}/funding-sources/${srcId}`),
 
+  // WKT хилээс талбай (м²) тооцно.
+  //
+  // ЯАГААД СЕРВЕРЭЭР: талбайг ГУС-тай ИЖИЛ аргаар — UTM проекц дээр, бүхэл
+  // м² болгож бөөрөнхийлж — бодох ёстой (ГУС: base.calculate_area_utm).
+  // Browser дээр бөмбөрцгийн ойролцоо томьёогоор тооцвол нэгж талбар татахад
+  // бодогдсон тооноос өргөрөг/уртрагаас хамаарч 0.03-0.12% зөрдөг байв.
+  computeGeometryArea: (geomWKT: string) =>
+    api.post<ApiResponse<{ area_m2: number }>>(`/geometry/area`, { geom_wkt: geomWKT })
+      .then(r => r.data.data?.area_m2 ?? null),
+
   // AuthorizedRepresentative
   // Итгэмжлэгдсэн төлөөлөгч нь эзэмшигчийн НЭГ ТӨРӨЛ болж parcel_holder-т
   // хадгалагдана — тиймээс ParcelHolder буцаана (holder_role='representative').
@@ -1172,8 +1187,10 @@ export const parcelApi = {
   getAvailableStatuses: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatus[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/available-statuses`)
       .then(r => r.data.data ?? []),
-  updateStatus: (acqId: string, parcelId: string, statusId: number) =>
-    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/status`, { status_id: statusId }),
+  // reason — төлөв солих ШАЛТГААН. "Нөлөөлөгдсөн гарсан"/"Татгалзсан" үед
+  // backend ЗААВАЛ шаардана (хоосон бол 400); бусад төлөвт хоосон байж болно.
+  updateStatus: (acqId: string, parcelId: string, statusId: number, reason?: string) =>
+    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/status`, { status_id: statusId, reason: reason ?? "" }),
   listStatusHistory: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatusHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`)
       .then(r => r.data.data ?? []),
@@ -1307,6 +1324,7 @@ export type DashboardFilter = {
   general_category_id?: number
   sub_category_id?:     number
   assigned_user_id?:    string
+  au2_code?:            string
 }
 
 export const dashboardApi = {
@@ -1318,6 +1336,7 @@ export const dashboardApi = {
     if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
     if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)
+    if (filter?.au2_code)            params.set('au2_code', filter.au2_code)
     filter?.years?.forEach(y => params.append('year', String(y)))
     return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
   },
@@ -1371,9 +1390,11 @@ export const acquisitionCategoryApi = {
     api.get<ApiResponse<AcquisitionCategory[]>>('/acquisition-categories', {
       params: parentId !== undefined ? { parent_id: parentId } : undefined,
     }).then(r => r.data.data ?? []),
-  create: (body: { name: string; parent_id?: number | null; sort_order?: number }) =>
+  create: (body: { name: string; parent_id?: number | null; sort_order?: number; department_id?: number | null }) =>
     api.post<{ code: number; data: AcquisitionCategory }>('/acquisition-categories', body).then(r => r.data.data),
-  update: (id: number, body: { name: string; sort_order?: number }) =>
+  // department_id-г ҮРГЭЛЖ илгээнэ: null нь "хариуцсан алба салгах" гэсэн
+  // утгатай тул талбарыг орхивол алба хэзээ ч цуцлагдахгүй болно.
+  update: (id: number, body: { name: string; sort_order?: number; department_id?: number | null }) =>
     api.put<ApiResponse<AcquisitionCategory>>(`/acquisition-categories/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/acquisition-categories/${id}`),
 }

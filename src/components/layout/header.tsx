@@ -57,7 +57,7 @@ export function Header() {
     setIsExternal(isExternalSpecialRole());
     setReady(true);
   }, []);
-  const { greeting, crumb } = resolveTitle(pathname);
+  const { crumb } = resolveTitle(pathname);
   const { resolvedTheme, setTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -100,8 +100,11 @@ export function Header() {
     >
       {/* Page title + breadcrumb */}
       <div className="min-w-0">
+        {/* Цэсний нэрийн ОРОНД угтах бичиг — ЯГ ИЖИЛ хэмжээ/жин (text-[15px]
+            font-bold). Аль хуудсанд байгааг доорх breadcrumb харуулна. */}
         <p className="text-[15px] font-bold text-slate-800 dark:text-white leading-tight truncate">
-          {greeting}
+          ГАЗАР ЧӨЛӨӨЛӨЛТИЙН ЦАХИМ СИСТЕМД{" "}
+          <span style={{ color: "#02c0ce" }}>ТАВТАЙ МОРИЛНО УУ.</span>
         </p>
         <div className="flex items-center gap-1 mt-0.5">
           <span className="text-[11px] text-slate-400 dark:text-slate-500">

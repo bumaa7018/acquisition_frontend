@@ -34,6 +34,9 @@ const ACQUISITION_SCOPED_NAMES = [
   ...PARCEL_STATUS_LAYERS,
   'v_acquisition_boundary',
   'v_acquisition_plan',
+  // Үндсэн төлөвлөлтийн хил — plan_code-оор шүүгддэг ч acquisition_id
+  // баганатай тул гадаад ролид өөрийн чөлөөлөлтөөр нь хумигдана.
+  'v_plan_acquisition',
   'v_parcel_acquisition',
   'parcel',
 ]
@@ -45,6 +48,8 @@ const ALLOWED_LAYERS = new Set(ACQUISITION_SCOPED_NAMES.concat(REFERENCE_NAMES))
 
 // WFS-ээр нэг хүсэлтэд татах мөрийн дээд хязгаар — бөөнөөр татахаас сэргийлнэ.
 const MAX_FEATURES = 5000
+// GetFeatureInfo-д нэг дарахад буцаах объектын дээд тоо.
+const MAX_FEATURE_INFO = 10
 
 // Enumerate-ийн вектор: GetCapabilities нь БҮХ давхарга/workspace-ийг жагсаадаг.
 // Frontend давхаргын нэрийг hardcode хийдэг тул шаардлагагүй — хаана.
@@ -78,10 +83,14 @@ function requestName(search: string, body?: string): string {
   return getParamCaseInsensitive(new URLSearchParams(body), 'request').toLowerCase()
 }
 
+// GetFeatureInfo — давхарга дээр дарахад нэг объектын атрибут уншина. Энэ нь
+// GetMap-тай ижил WMS үйлдэл бөгөөд гадаад ролид доорх applyScope мөн адил
+// хэрэглэгдэнэ. Өмнө нь зөвшөөрөгдөөгүй байсан тул зураг дээр дарахад 403
+// буцаж, дэлгэрэнгүй цонх хэзээ ч нээгддэггүй байв.
 function isAllowedOperation(path: string[], search: string, body?: string): boolean {
   const joined = path.join('/')
   const request = requestName(search, body)
-  if (joined === 'land/wms') return request === 'getmap'
+  if (joined === 'land/wms') return request === 'getmap' || request === 'getfeatureinfo'
   if (joined === 'land/ows') return request === 'getfeature'
   return false
 }
@@ -173,7 +182,16 @@ async function proxy(
 
   // Бөөнөөр татахаас сэргийлж мөрийн тоог хатуу хязгаарлана (бүх ролид).
   // WFS 2.0 нь `count`, 1.x нь `maxFeatures` гэсэн өөр нэр ашигладаг.
-  if (requestName(req.nextUrl.search, body) === 'getfeature') {
+  const reqName = requestName(req.nextUrl.search, body)
+  // GetFeatureInfo — нэг дарахад олон объект дуудахаас сэргийлж хязгаарлана
+  // (frontend 1 гуйдаг; илүү өгвөл дарж бичнэ).
+  if (reqName === 'getfeatureinfo') {
+    const current = Number(getParamCaseInsensitive(qs, 'feature_count'))
+    if (!Number.isFinite(current) || current <= 0 || current > MAX_FEATURE_INFO) {
+      setParamCaseInsensitive(qs, 'FEATURE_COUNT', String(MAX_FEATURE_INFO))
+    }
+  }
+  if (reqName === 'getfeature') {
     const limitParam = getParamCaseInsensitive(qs, 'version').startsWith('2.')
       ? 'count'
       : 'maxFeatures'

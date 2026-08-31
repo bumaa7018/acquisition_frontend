@@ -38,6 +38,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ProgressBadge } from "@/components/ui/progress-badge";
 import { authStorage } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
@@ -583,19 +584,6 @@ function YearMultiSelect({
   );
 }
 
-/* ── Welcome banner ──────────────────────────────────── */
-function WelcomeBanner() {
-  return (
-    <div className="ap-card px-5 py-4 flex items-center gap-3">
-      <div className="h-7 w-[3px] rounded-full shrink-0" style={{ background: "#02c0ce" }} />
-      <h1 className="text-[15px] sm:text-base font-bold tracking-wide text-slate-800 dark:text-white">
-        ГАЗАР ЧӨЛӨӨЛӨЛТИЙН ЦАХИМ СИСТЕМД{" "}
-        <span style={{ color: "#02c0ce" }}>ТАВТАЙ МОРИЛНО УУ.</span>
-      </h1>
-    </div>
-  );
-}
-
 /* ── Skeleton ────────────────────────────────────────── */
 function Skel({ w = "w-12" }: { w?: string }) {
   return (
@@ -764,8 +752,6 @@ function ExternalDashboard() {
 
   return (
     <div className="flex flex-col gap-5">
-      <WelcomeBanner />
-
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">{pageTitle}</h1>
@@ -976,8 +962,13 @@ function ExternalDashboard() {
             {actionAcquisitions.slice(0, 12).map((land) => (
               <div key={land.id} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-white/[0.03] transition-colors">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
-                    {land.acquisition_name || land.plan_code}
+                  <p className="flex items-center gap-1.5 text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                    <ProgressBadge
+                      percent={land.progress_percent}
+                      parcelCount={land.parcel_count}
+                      finalCount={land.final_parcel_count}
+                    />
+                    <span className="truncate">{land.acquisition_name || land.plan_code}</span>
                   </p>
                   <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                     {land.plan_code} · {land.parcel_count ?? 0} нэгж талбар
@@ -1037,11 +1028,19 @@ export default function DashboardPage() {
   const [inSubCatId,     setInSubCatId]     = useState(0);
   const [inEmployeeId,   setInEmployeeId]   = useState("");
   const [inEmployeeName, setInEmployeeName] = useState("");
+  const [inAu2Code,      setInAu2Code]      = useState("");
 
   const { data: dashGenCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
+    enabled: roleReady && !isProfOrg && !isOtherExternal,
+  });
+  // Сум/дүүрэг — чөлөөлөлт бүртгэгдсэн дүүргүүд (land_acquisition_au).
+  const { data: dashDistricts = [] } = useQuery({
+    queryKey: ["acquisition-districts"],
+    queryFn: () => landApi.listDistricts(),
+    staleTime: 5 * 60_000,
     enabled: roleReady && !isProfOrg && !isOtherExternal,
   });
   const { data: dashSubCats = [] } = useQuery({
@@ -1054,15 +1053,15 @@ export default function DashboardPage() {
   /* Applied filter — хуудас нээгдэхэд одоогийн он автоматаар сонгогдоно */
   const [appliedFilter, setAppliedFilter] = useState({
     acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0,
-    employeeId: "", employeeName: "",
+    employeeId: "", employeeName: "", au2Code: "",
   });
 
   const handleView = () => {
-    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId, employeeId: inEmployeeId, employeeName: inEmployeeName });
+    setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId, employeeId: inEmployeeId, employeeName: inEmployeeName, au2Code: inAu2Code });
   };
   const handleReset = () => {
-    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0); setInEmployeeId(""); setInEmployeeName("");
-    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0, employeeId: "", employeeName: "" });
+    setInAcqId(""); setInAcqName(""); setInPlanCode(""); setInYears([String(CURRENT_YEAR)]); setInGenCatId(0); setInSubCatId(0); setInEmployeeId(""); setInEmployeeName(""); setInAu2Code("");
+    setAppliedFilter({ acqId: "", acqName: "", planCode: "", years: [String(CURRENT_YEAR)], genCatId: 0, subCatId: 0, employeeId: "", employeeName: "", au2Code: "" });
   };
 
   /* ── ГЧХ АЖЛЫН МЭДЭЭ (Excel) — ХЭРЭГЛЭСЭН шүүлтээр татна ──────────────
@@ -1081,6 +1080,7 @@ export default function DashboardPage() {
       if (appliedFilter.genCatId) p.set("general_category_id", String(appliedFilter.genCatId));
       if (appliedFilter.subCatId) p.set("sub_category_id", String(appliedFilter.subCatId));
       if (appliedFilter.employeeId) p.set("assigned_user_id", appliedFilter.employeeId);
+      if (appliedFilter.au2Code) p.set("au2_code", appliedFilter.au2Code);
       appliedFilter.years.forEach((y) => p.append("year", y));
 
       const res = await fetch(`/api/report/gchh2?${p.toString()}`, {
@@ -1117,6 +1117,7 @@ export default function DashboardPage() {
       general_category_id: appliedFilter.genCatId || undefined,
       sub_category_id:    appliedFilter.subCatId || undefined,
       assigned_user_id:   appliedFilter.employeeId || undefined,
+      au2_code:           appliedFilter.au2Code || undefined,
     }),
     staleTime: 60_000,
     enabled: roleReady && !isProfOrg && !isOtherExternal,
@@ -1141,6 +1142,34 @@ export default function DashboardPage() {
   })), [dashData?.status_breakdown]);
 
   const TIMELINE = dashData?.timeline ?? [];
+
+  /* ── Чөлөөлөлтийн ГҮЙЦЭТГЭЛ ───────────────────────────────────────
+     Гүйцэтгэл = эцсийн төлөвт шилжсэн нэгж талбар / нийт нэгж талбар.
+     Чөлөөлөлт бүрийн хувийг backend бодож өгдөг (progress_percent); нийт
+     гүйцэтгэлийг МӨРӨӨР дундажлахгүй, НЭГЖ ТАЛБАРААР жинлэнэ — 3 талбартай
+     чөлөөлөлт 300 талбартайтай ижил жинтэй байх нь буруу дүр зураг өгнө. */
+  const perf = useMemo(() => {
+    // Чөлөөлөлт бүрийг ЯВЦААР нь 3 ангилна:
+    //   бүрэн (100%) · дутуу (0-ээс их, 100-аас бага) · шинэ (0% — эхлээгүй)
+    let full = 0;
+    let partial = 0;
+    let fresh = 0;
+    for (const a of filteredAcqs) {
+      const pct = (a.parcel_count ?? 0) > 0 ? (a.progress_percent ?? 0) : 0;
+      if (pct >= 100) full++;
+      else if (pct > 0) partial++;
+      else fresh++;
+    }
+    const totalParcelsAll = filteredAcqs.reduce((sum, a) => sum + (a.parcel_count ?? 0), 0);
+    const totalFinalAll = filteredAcqs.reduce((sum, a) => sum + (a.final_parcel_count ?? 0), 0);
+    return {
+      single: filteredAcqs.length === 1 ? filteredAcqs[0] : null,
+      full,
+      partial,
+      fresh,
+      percent: totalParcelsAll > 0 ? Math.round((totalFinalAll * 100) / totalParcelsAll) : 0,
+    };
+  }, [filteredAcqs]);
 
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
 
@@ -1168,7 +1197,8 @@ export default function DashboardPage() {
       appliedFilter.years.length > 0 ||
       appliedFilter.employeeId ||
       appliedFilter.genCatId ||
-      appliedFilter.subCatId
+      appliedFilter.subCatId ||
+      appliedFilter.au2Code
     );
     const acqIds = hasF
       ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
@@ -1203,13 +1233,16 @@ export default function DashboardPage() {
     if (appliedFilter.planCode)         parts.push(`Төлөвлөгөө: ${appliedFilter.planCode}`);
     if (appliedFilter.years.length > 0) parts.push(`${appliedFilter.years.join(", ")} он`);
     if (appliedFilter.employeeName)     parts.push(`Ажилтан: ${appliedFilter.employeeName}`);
+    if (appliedFilter.au2Code) {
+      const d = dashDistricts.find((x) => x.code === appliedFilter.au2Code);
+      parts.push(`Дүүрэг: ${d?.name || appliedFilter.au2Code}`);
+    }
     return parts.length > 0 ? parts.join(" · ") : "Бүх чөлөөлөлт";
-  }, [appliedFilter]);
+  }, [appliedFilter, dashDistricts]);
 
   if (!roleReady) {
     return (
       <div className="flex flex-col gap-4">
-        <WelcomeBanner />
         <div className="h-8 w-48 rounded bg-slate-100 dark:bg-[#252630] animate-pulse" />
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
@@ -1223,8 +1256,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-
-      <WelcomeBanner />
 
       {/* ── Filter card ───────────────────────────────── */}
       <div className="ap-card w-full px-4 py-3">
@@ -1273,6 +1304,23 @@ export default function DashboardPage() {
               onSelect={(id, label) => { setInEmployeeId(id); setInEmployeeName(label); }}
               onClear={() => { setInEmployeeId(""); setInEmployeeName(""); }}
             />
+          </div>
+
+          {/* Сум/дүүрэг — чөлөөлөлтийн хилээр тодорхойлогдсон (land_acquisition_au) */}
+          <div className="flex flex-col gap-1 min-w-0">
+            <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 pl-0.5">
+              Сум/дүүрэг
+            </label>
+            <select
+              value={inAu2Code}
+              onChange={(e) => setInAu2Code(e.target.value)}
+              className="h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
+            >
+              <option value="">Бүгд</option>
+              {dashDistricts.map((d) => (
+                <option key={d.code} value={d.code}>{d.name || d.code}</option>
+              ))}
+            </select>
           </div>
 
           {/* General category */}
@@ -1435,8 +1483,8 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* ── Freed parcels row ──────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      {/* ── Freed parcels row + гүйцэтгэлийн карт ─────────── */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {[
           {
             label: "ЧӨЛӨӨЛӨГДСӨН НЭГЖ ТАЛБАР",
@@ -1453,24 +1501,94 @@ export default function DashboardPage() {
             color: "#0acf97",
           },
         ].map((s) => (
-          <div key={s.label} className="ap-card px-5 py-3.5 flex items-center justify-between gap-4">
+          // Карт НАМ: тоо, явцын зураас, хувь нь нэг мөрөнд зэрэгцэнэ —
+          // ингэснээр газрын зураг дээш татагдаж илүү өндөр талбай эзэлнэ.
+          <div key={s.label} className="ap-card px-4 py-2 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 truncate">
                 {s.label}
               </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{s.sub}</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{s.sub}</p>
             </div>
-            <div className="shrink-0 text-right">
-              <span className="text-[32px] font-black tabular-nums leading-none" style={{ color: s.color }}>
-                {s.value === null ? <Skel w="w-16" /> : s.value}
+            <div className="flex shrink-0 items-center gap-2.5">
+              <span className="text-[20px] font-black tabular-nums leading-none" style={{ color: s.color }}>
+                {s.value === null ? <Skel w="w-14" /> : s.value}
               </span>
-              <div className="mt-1.5 h-1.5 w-24 rounded-full bg-slate-100 dark:bg-white/[0.07] overflow-hidden">
+              <div className="h-1.5 w-16 rounded-full bg-slate-100 dark:bg-white/[0.07] overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${s.pct}%`, background: s.color }} />
               </div>
-              <p className="text-[10px] font-bold mt-0.5" style={{ color: s.color }}>{s.pct}%</p>
+              <span className="text-[11px] font-bold tabular-nums" style={{ color: s.color }}>{s.pct}%</span>
             </div>
           </div>
         ))}
+
+        {/* ── ЧӨЛӨӨЛӨЛТИЙН ГҮЙЦЭТГЭЛ ──────────────────────────────
+            Ганц чөлөөлөлт олдвол — pie нь ЯВЦЫН хувь (дууссан/үлдсэн).
+            Олон бол — pie нь чөлөөлөлтийн ТОО: бүрэн / дутуу / шинэ (0%).
+            Хажуугийн том тоо нь хоёр тохиолдолд ч НИЙТ гүйцэтгэлийн хувь. */}
+        <div className="ap-card flex items-center justify-between gap-3 px-4 py-2">
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              Чөлөөлөлтийн гүйцэтгэл
+            </p>
+            {isLoading ? (
+              <p className="text-[10px] text-slate-400">…</p>
+            ) : perf.single ? (
+              <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">
+                {perf.single.acquisition_name || perf.single.plan_code}
+              </p>
+            ) : (
+              <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">
+                <span className="font-bold text-[#0acf97]">{perf.full}</span> бүрэн ·{" "}
+                <span className="font-bold text-[#f9bc0b]">{perf.partial}</span> дутуу ·{" "}
+                <span className="font-bold text-[#94a3b8]">{perf.fresh}</span> шинэ
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2.5">
+            {/* Ганц чөлөөлөлт — явцын хувиар; олон бол чөлөөлөлтийн ТООГООР
+                (бүрэн/дутуу/шинэ) — хоёуланг нь pie-гаар харуулна. */}
+            <div className="h-[38px] w-[38px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={
+                      perf.single
+                        ? [
+                            { name: "Дууссан", value: perf.percent, color: "#0acf97" },
+                            { name: "Үлдсэн", value: 100 - perf.percent, color: isDark ? "#37394d" : "#e2e8f0" },
+                          ]
+                        : [
+                            { name: "Бүрэн", value: perf.full, color: "#0acf97" },
+                            { name: "Дутуу", value: perf.partial, color: "#f9bc0b" },
+                            { name: "Шинэ", value: perf.fresh, color: isDark ? "#4b5563" : "#cbd5e1" },
+                          ]
+                    }
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={11}
+                    outerRadius={19}
+                    startAngle={90}
+                    endAngle={-270}
+                    stroke="none"
+                  >
+                    {(perf.single
+                      ? ["#0acf97", isDark ? "#37394d" : "#e2e8f0"]
+                      : ["#0acf97", "#f9bc0b", isDark ? "#4b5563" : "#cbd5e1"]
+                    ).map((c) => (
+                      <Cell key={c} fill={c} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={tooltipStyle} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: "#0acf97" }}>
+              {isLoading ? <Skel w="w-12" /> : `${perf.percent}%`}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* ── 3-column main ─────────────────────────────── */}
@@ -1538,7 +1656,8 @@ export default function DashboardPage() {
 
         {/* CENTER: map + timeline */}
         <div className="flex flex-col gap-4">
-          <div className="ap-card overflow-hidden" style={{ height: 320 }}>
+          {/* Газрын зураг — дээрх картууд нам болсон тул өндрийг нэмэв */}
+          <div className="ap-card overflow-hidden" style={{ height: 460 }}>
             {(!mapCommit || isLoading) ? (
               <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-[#252630] animate-pulse">
                 <MapIcon className="h-8 w-8 text-slate-300 dark:text-slate-600" />
@@ -1615,8 +1734,14 @@ export default function DashboardPage() {
                       style={{ background: dotColor }}
                     />
                     <div className="min-w-0">
-                      <p className="text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight truncate">
-                        {acq.acquisition_name || "—"}
+                      {/* Явцын хувь — нэрийн ӨМНӨ */}
+                      <p className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700 dark:text-slate-200 leading-tight">
+                        <ProgressBadge
+                          percent={acq.progress_percent}
+                          parcelCount={acq.parcel_count}
+                          finalCount={acq.final_parcel_count}
+                        />
+                        <span className="truncate">{acq.acquisition_name || "—"}</span>
                       </p>
                       <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                         {acq.plan_code} · {acq.parcel_count ?? 0} нэгж талбар

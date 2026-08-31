@@ -122,6 +122,10 @@ export interface AcquisitionCategory {
   name: string;
   parent_id: number | null;
   sort_order: number;
+  /** Хариуцсан албаны дугаар (hr_department.department_id). Алба нь ГУС-ийн
+   *  өөр сангийн бүртгэл тул зөвхөн дугаар ирнэ — нэрийг /departments
+   *  жагсаалтаас тааруулна. null = тодорхойлоогүй. */
+  department_id?: number | null;
 }
 
 export interface AcquisitionProgressStatus {
@@ -328,6 +332,10 @@ export interface LandAcquisition {
   created_at: string;
   created_by: string;
   parcel_count: number;
+  /** Эцсийн төлөвт (Нөлөөлөгдсөн гарсан/Татгалзсан/Чөлөөлсөн) шилжсэн талбар */
+  final_parcel_count?: number;
+  /** Чөлөөлөлтийн явц 0-100 (backend бодно — жагсаалт/дашбоард нэг тоо). */
+  progress_percent?: number;
   aus: AU[];
   parcels?: Parcel[];
   assigned_users?: AcquisitionAssignee[];
@@ -336,6 +344,17 @@ export interface LandAcquisition {
   professional_org_name?: string;
   // Дэлгэрэнгүй (getById) дээр л ирнэ — тусдаа funding-sources GET API байхгүй
   funding_sources?: FundingSource[];
+  /* Төлөвлөгөөний ДЭЛГЭРЭНГҮЙ — мөн зөвхөн getById дээр (plan хүснэгтээс).
+     plan_code нь төлөвлөгөөний КОД (ж: "2026-04-011-9878"), харин
+     plan_parcel_id нь түүний НЭГЖ ТАЛБАРЫН дугаар (ж: "5029776") — хоёр
+     өөр зүйл тул тусад нь харуулна. */
+  plan_parcel_id?: string;
+  plan_type_name?: string;
+  plan_gazner?: string;
+  plan_area_m2?: number;
+  plan_start_date?: string | null;
+  plan_end_date?: string | null;
+  plan_approved_date?: string | null;
 }
 
 /**
@@ -696,6 +715,9 @@ export interface ParcelStatusHistory {
   status_name: string;
   status_date: string;
   created_by: string;
+  /** Төлөв солих ШАЛТГААН. Нөлөөлөгдсөн гарсан / Татгалзсан үед заавал,
+   *  бусад төлөвт хоосон байж болно. */
+  reason?: string;
 }
 
 // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв (нэгж талбар бүрт).
@@ -1223,6 +1245,9 @@ export interface LandAcquisitionFilter {
   plan_code?: string;
   acquisition_name?: string;
   status?: number;
+  /** Сум/дүүргийн код — чөлөөлөлтийн хилээр тодорхойлогдож
+   *  land_acquisition_au-д хадгалагдсан утгаар шүүнэ. */
+  au2_code?: string;
   au3_code?: string;
   general_category_id?: number;
   sub_category_id?: number;
@@ -1230,6 +1255,12 @@ export interface LandAcquisitionFilter {
   years?: number[];
   page?: number;
   page_size?: number;
+}
+
+/** Шүүлтүүрийн сум/дүүргийн сонголт (GET /land-acquisitions/districts) */
+export interface AU2Option {
+  code: string;
+  name: string;
 }
 
 export interface LoginResponse {

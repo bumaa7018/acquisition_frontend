@@ -320,6 +320,7 @@ export default function AcquisitionDetailPage() {
           id={id}
           aus={acq.aus}
           acquisitionName={acq.acquisition_name || acq.plan_code}
+          planCode={acq.plan_code}
           canEdit={canEdit && !isExternal}
         />
       )}

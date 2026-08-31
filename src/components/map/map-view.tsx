@@ -16,9 +16,11 @@ import { Box, Map as MapIcon } from "lucide-react";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import FeaturePopup from './feature-popup'
+import ParcelInfoModal from './parcel-info-modal'
+import AcquisitionInfoModal from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
 import { useFullscreen } from './use-fullscreen'
-import { fitLayerToMap, layerDef, type MapLayerDef } from './layers'
+import { fitLayerToMap, layerDef, type MapLayerDef, type MapLayerId } from './layers'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
@@ -37,12 +39,24 @@ const LAYER_DEFS: MapLayerDef[] = [
 ]
 
 const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
+// Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
+const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_LAYERS, 'v_parcel_acquisition'])
+
+// Хилийн давхаргууд — дарвал ЧӨЛӨӨЛӨЛТИЙН мэдээллийн цонх нээнэ.
+const BOUNDARY_INFO_LAYERS: Record<string, string> = {
+  v_acquisition_plan: "Төлөвлөгөөний хил",
+  v_plan_acquisition: "Үндсэн төлөвлөлтийн хил",
+  v_acquisition_boundary: "Чөлөөлөх бүсийн хил",
+};
 const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_plan'] as const
 const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
 
 // Чөлөөлөлтийн хил нь төлөвлөгөөний хилээс хуулагддаг тул давхаргын хэсэгт
 // зөвхөн ТӨЛӨВЛӨГӨӨНИЙ хил үлдсэн — тэр нь анхнаасаа асаалттай.
-const DEFAULT_VISIBLE = new Set<string>(['v_acquisition_plan', ...PARCEL_STATUS_LAYERS])
+// Засаг захиргааны хил (аймаг/сум/хороо) нь ШУУД харагдана — байршлаа
+// тогтооход хэрэгтэй лавлах давхарга тул хэрэглэгч бүрд гараар асаах
+// шаардлагагүй. Давхаргын самбараас унтраах боломжтой хэвээр.
+const DEFAULT_VISIBLE = new Set<string>(['au1', 'au2', 'au3', 'v_acquisition_plan', ...PARCEL_STATUS_LAYERS])
 
 const PARCEL_GROUP: LayerGroupConfig = {
   id: 'parcel_status',
@@ -81,6 +95,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
+  // Нэгж талбарын дэлгэрэнгүй цонх — GeoServer-ийн `id` (parcel UUID) ба
+  // `acquisition_id`-аар нээгдэнэ.
+  const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null)
+  const [acqInfo, setAcqInfo] = useState<{ acquisitionId: string; layerLabel: string; layerColor: string } | null>(null)
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
 
@@ -135,7 +153,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         center: fromLonLat([104.9, 47.9]),
         zoom: 5,
         minZoom: 4,
-        maxZoom: 18,
+        // maxZoom заахгүй — зумлалтын дээд хязгаар байхгүй. Суурь зургийн
+        // XYZ эх сурвалж 20-д зогсох тул түүнээс цааш z20-ийн тайлууд
+        // томсгож (бүдэг) харагдана, WMS давхаргууд тод хэвээр.
       }),
     })
 
@@ -172,7 +192,20 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           const json = await res.json()
           const features: { properties: Record<string, unknown> }[] = json.features ?? []
           if (features.length > 0) {
-            setPopup({ layer: id, properties: features[0].properties ?? {}, position: { x: pixel[0], y: pixel[1] } })
+            const props = features[0].properties ?? {}
+            const acqId = String(props.acquisition_id ?? '')
+            if (PARCEL_INFO_LAYERS.has(id)) {
+              const uuid = String(props.id ?? '')
+              if (acqId && uuid) {
+                setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid })
+                break
+              }
+            }
+            if (BOUNDARY_INFO_LAYERS[id] && acqId) {
+              setAcqInfo({ acquisitionId: acqId, layerLabel: BOUNDARY_INFO_LAYERS[id], layerColor: layerDef(id as MapLayerId).color })
+              break
+            }
+            setPopup({ layer: id, properties: props, position: { x: pixel[0], y: pixel[1] } })
             break
           }
         } catch (err) {
@@ -300,7 +333,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         layerId: 'v_acquisition_boundary',
         cqlFilter: acqCql || undefined,
         padding: [48, 48, 48, 48],
-        maxZoom: 16,
+        // maxZoom заахгүй — хиймэл хязгаар (өмнө нь 16) байхгүй, олдсон
+        // хэсэг рүү бүрэн ойртоно.
       })
     }
   }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer])
@@ -318,7 +352,6 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           wfsUrl: GS_WFS,
           layerId: def.id,
           padding: [64, 64, 64, 64],
-          maxZoom: 17,
         })
       }
       return next
@@ -375,6 +408,21 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           properties={popup.properties}
           position={popup.position}
           onClose={() => setPopup(null)}
+        />
+      )}
+      {parcelInfo && (
+        <ParcelInfoModal
+          acquisitionId={parcelInfo.acquisitionId}
+          parcelUuid={parcelInfo.parcelUuid}
+          onClose={() => setParcelInfo(null)}
+        />
+      )}
+      {acqInfo && (
+        <AcquisitionInfoModal
+          acquisitionId={acqInfo.acquisitionId}
+          layerLabel={acqInfo.layerLabel}
+          layerColor={acqInfo.layerColor}
+          onClose={() => setAcqInfo(null)}
         />
       )}
     </div>

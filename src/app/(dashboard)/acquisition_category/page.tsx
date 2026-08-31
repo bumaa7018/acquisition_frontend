@@ -1,63 +1,101 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { acquisitionCategoryApi } from "@/lib/api";
+import { acquisitionCategoryApi, departmentApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { ChevronDown, ChevronRight, FolderOpen, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
 import { toast } from "sonner";
-import type { AcquisitionCategory } from "@/types";
+import type { AcquisitionCategory, Department } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
 
-type FormState = { name: string; sort_order: string };
-const emptyForm: FormState = { name: "", sort_order: "0" };
+type FormState = { name: string; sort_order: string; department_id: string };
+const emptyForm: FormState = { name: "", sort_order: "0", department_id: "" };
 
 function InlineForm({
   initial,
   onSave,
   onCancel,
   isPending,
+  departments,
 }: {
   initial?: FormState;
   onSave: (f: FormState) => void;
   onCancel: () => void;
   isPending: boolean;
+  /** Өгвөл "Хариуцсан алба" сонгогч гарна (зөвхөн ЕРӨНХИЙ ангилалд). */
+  departments?: Department[];
 }) {
   const [form, setForm] = useState<FormState>(initial ?? emptyForm);
+  // Талбар бүрийг ЖИЖИГ САВАНД оруулж, өргөнийг САВАНД нь өгнө.
+  //
+  // ЯАГААД: inputCls дотор `w-full` байдаг тул input дээр шууд `flex-1` нэмэхэд
+  // хоёр өргөний дүрэм зөрчилдөж, хажууд нь өөр талбар нэмэгдэхэд нэрийн
+  // талбар 0 өргөнтэй болж ХАРАГДАХГҮЙ болдог байв. Одоо сав нь flex-1 +
+  // min-w, input нь w-full — зөрчилгүй. Нарийн дэлгэц дээр доошоо эгнэнэ.
+  const fieldLabel = "mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500";
   return (
-    <div className="flex items-center gap-2">
-      <input
-        autoFocus
-        placeholder="Нэр *"
-        value={form.name}
-        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-        onKeyDown={(e) => { if (e.key === "Enter") onSave(form); if (e.key === "Escape") onCancel(); }}
-        className={inputCls + " flex-1"}
-      />
-      <input
-        type="number"
-        placeholder="Эрэмбэ"
-        value={form.sort_order}
-        onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
-        onKeyDown={(e) => { if (e.key === "Enter") onSave(form); if (e.key === "Escape") onCancel(); }}
-        className={inputCls + " w-24"}
-        min={0}
-      />
-      <button
-        onClick={() => onSave(form)}
-        disabled={isPending || !form.name.trim()}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce] text-white hover:bg-[#02a3af] disabled:opacity-50 transition-colors"
-      >
-        <Check className="h-4 w-4" />
-      </button>
-      <button
-        onClick={onCancel}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-slate-500 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
-      >
-        <X className="h-4 w-4" />
-      </button>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+      <div className="min-w-[200px] flex-1">
+        <label className={fieldLabel}>Нэр *</label>
+        <input
+          autoFocus
+          placeholder="Ангилалын нэр"
+          value={form.name}
+          onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          onKeyDown={(e) => { if (e.key === "Enter") onSave(form); if (e.key === "Escape") onCancel(); }}
+          className={inputCls}
+        />
+      </div>
+
+      {departments && (
+        <div className="w-full shrink-0 sm:w-56">
+          <label className={fieldLabel}>Хариуцсан алба</label>
+          <select
+            value={form.department_id}
+            onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}
+            className={inputCls}
+          >
+            <option value="">— Сонгоогүй —</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="w-full shrink-0 sm:w-24">
+        <label className={fieldLabel}>Эрэмбэ</label>
+        <input
+          type="number"
+          value={form.sort_order}
+          onChange={(e) => setForm((f) => ({ ...f, sort_order: e.target.value }))}
+          onKeyDown={(e) => { if (e.key === "Enter") onSave(form); if (e.key === "Escape") onCancel(); }}
+          className={inputCls}
+          min={0}
+        />
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          onClick={() => onSave(form)}
+          disabled={isPending || !form.name.trim()}
+          title="Хадгалах"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce] text-white hover:bg-[#02a3af] disabled:opacity-50 transition-colors"
+        >
+          <Check className="h-4 w-4" />
+        </button>
+        <button
+          onClick={onCancel}
+          title="Болих"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] text-slate-500 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -89,6 +127,8 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
   });
 
   const updateMutation = useMutation({
+    // Дэд ангилалд хариуцсан алба байхгүй — талбарыг илгээхгүй (backend
+    // null болгож бичих тул хоосон нь зөв утга).
     mutationFn: ({ id, f }: { id: number; f: FormState }) =>
       acquisitionCategoryApi.update(id, {
         name: f.name.trim(),
@@ -126,7 +166,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
         <div key={sub.id}>
           {editingId === sub.id ? (
             <InlineForm
-              initial={{ name: sub.name, sort_order: String(sub.sort_order) }}
+              initial={{ name: sub.name, sort_order: String(sub.sort_order), department_id: "" }}
               onSave={(f) => updateMutation.mutate({ id: sub.id, f })}
               onCancel={() => setEditingId(null)}
               isPending={updateMutation.isPending}
@@ -138,10 +178,11 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
                 <span className="text-[13px] text-slate-700 dark:text-slate-200">{sub.name}</span>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">#{sub.sort_order}</span>
               </div>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1">
                 <button
+                  title="Нэр, эрэмбийг засах"
                   onClick={() => setEditingId(sub.id)}
-                  className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors"
+                  className="flex h-6 w-6 items-center justify-center rounded bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                 >
                   <Pencil className="h-3 w-3" />
                 </button>
@@ -198,12 +239,23 @@ export default function AcquisitionCategoryPage() {
     queryFn: () => acquisitionCategoryApi.list(),
   });
 
+  // Хариуцсан алба — ГУС-ийн хэлтсийн жагсаалт. Ангилал нь зөвхөн дугаарыг
+  // хадгалдаг тул нэрийг эндээс тааруулна.
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments", "options"],
+    queryFn: () => departmentApi.list({ page_size: 200 }).then((r) => r.data ?? []),
+    staleTime: 5 * 60_000,
+  });
+  const deptName = (id?: number | null) =>
+    id == null ? "" : departments.find((d) => String(d.id) === String(id))?.name ?? `#${id}`;
+
   const createMutation = useMutation({
     mutationFn: (f: FormState) =>
       acquisitionCategoryApi.create({
         name: f.name.trim(),
         parent_id: null,
         sort_order: f.sort_order ? parseInt(f.sort_order) : 0,
+        department_id: f.department_id ? Number(f.department_id) : null,
       }),
     onSuccess: () => {
       toast.success("Ерөнхий ангилал нэмэгдлээ");
@@ -218,6 +270,7 @@ export default function AcquisitionCategoryPage() {
       acquisitionCategoryApi.update(id, {
         name: f.name.trim(),
         sort_order: f.sort_order ? parseInt(f.sort_order) : 0,
+        department_id: f.department_id ? Number(f.department_id) : null,
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
@@ -278,6 +331,7 @@ export default function AcquisitionCategoryPage() {
           <div className="px-5 py-3 border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#191b22]">
             <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Шинэ ерөнхий ангилал</p>
             <InlineForm
+              departments={departments}
               onSave={(f) => createMutation.mutate(f)}
               onCancel={() => setAddingGeneral(false)}
               isPending={createMutation.isPending}
@@ -310,7 +364,15 @@ export default function AcquisitionCategoryPage() {
                 {editingId === cat.id ? (
                   <div className="px-5 py-3">
                     <InlineForm
-                      initial={{ name: cat.name, sort_order: String(cat.sort_order) }}
+                      // key — ангилал солиход маягт ЗААВАЛ шинээр монтлогдож,
+                      // өмнөх мөрийн утга үлдэхээс сэргийлнэ.
+                      key={`edit-${cat.id}`}
+                      initial={{
+                        name: cat.name,
+                        sort_order: String(cat.sort_order),
+                        department_id: cat.department_id != null ? String(cat.department_id) : "",
+                      }}
+                      departments={departments}
                       onSave={(f) => updateMutation.mutate({ id: cat.id, f })}
                       onCancel={() => setEditingId(null)}
                       isPending={updateMutation.isPending}
@@ -326,14 +388,24 @@ export default function AcquisitionCategoryPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-semibold text-slate-800 dark:text-white">{cat.name}</p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">Эрэмбэ: {cat.sort_order}</p>
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                        Эрэмбэ: {cat.sort_order}
+                        {cat.department_id != null && (
+                          <>
+                            {" · "}
+                            <span className="text-[#02c0ce] font-medium">{deptName(cat.department_id)}</span>
+                          </>
+                        )}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1.5">
                       <button
+                        title="Нэр, хариуцсан алба, эрэмбийг засах"
                         onClick={(e) => { e.stopPropagation(); setEditingId(cat.id); setAddingGeneral(false); }}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors"
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                       >
                         <Pencil className="h-3.5 w-3.5" />
+                        Засах
                       </button>
                       <button
                         onClick={(e) => {

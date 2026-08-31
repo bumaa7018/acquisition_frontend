@@ -10,6 +10,7 @@ export type MapLayerId =
   | 'au2'
   | 'au3'
   | 'v_acquisition_plan'
+  | 'v_plan_acquisition'
   | 'parcel'
   | 'building'
   | 'v_parcel_acquisition'
@@ -58,12 +59,23 @@ export const BASE_Z_INDEX = -10
 export const DRONE_Z_INDEX = -5
 
 export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
-  au1: { label: 'Аймаг/Нийслэл', color: '#6366f1', zIndex: 1 },
-  au2: { label: 'Сум/Дүүрэг', color: '#8b5cf6', zIndex: 2 },
-  au3: { label: 'Баг/Хороо', color: '#a78bfa', zIndex: 3 },
+  // Засаг захиргааны хилийн өнгө нь GeoServer-ийн SLD-тэй ЯГ ТААРНА
+  // (au1_boundary/au2_boundary/au3_boundary — саарал өнгөний шатлал).
+  // Өмнө нь энд ягаан бичигдсэн байсан тул давхаргын самбарын өнгөт
+  // дөрвөлжин зурагтай зөрж, хэрэглэгчийг төөрөгдүүлж байв.
+  au1: { label: 'Аймаг/Нийслэл', color: '#334155', zIndex: 1 },
+  au2: { label: 'Сум/Дүүрэг', color: '#64748b', zIndex: 2 },
+  au3: { label: 'Баг/Хороо', color: '#94a3b8', zIndex: 3 },
   // Чөлөөлөлтийн хил нь ТӨЛӨВЛӨГӨӨНИЙ хилийн хуулбар болсон тул давхаргын
   // жагсаалтад зөвхөн НЭГ хил үлдэнэ: 'v_acquisition_boundary' (Чөлөөлөх
   // бүсийн хил) нь энэ давхаргатай яг давхцах тул хасагдсан.
+  // ҮНДСЭН ТӨЛӨВЛӨЛТИЙН ХИЛ — нэг төлөвлөгөөний ДУГААРТ хамаарах БҮХ
+  // чөлөөлөлтийн хил (v_plan_acquisition, plan_code-оор шүүнэ). Тухайн
+  // чөлөөлөлтийн өөрийн хилээс ДООР зурагдана (zIndex 9 < 10) — контекст
+  // давхарга тул дээр нь гарч ирэх ёсгүй.
+  // Будалт/тунгалаг нь ТӨЛӨВЛӨГӨӨНИЙ ХИЛТЭЙ ижил: давхаргын opacity 0.95,
+  // SLD дэх fill-opacity 0.10. Зөвхөн ӨНГӨӨРӨӨ ялгарна.
+  v_plan_acquisition:     { label: 'Үндсэн төлөвлөлтийн хил', color: '#6b3f1d', zIndex: 9, opacity: 0.95 },
   v_acquisition_plan:     { label: 'Төлөвлөгөөний хил',   color: '#ff7a00', zIndex: 10, opacity: 0.95 },
   parcel:                 { label: 'Чөлөөлөх талбай',      color: '#22c55e', zIndex: 30 },
   building:               { label: 'Барилгын хил',         color: '#06b6d4', zIndex: 40 },

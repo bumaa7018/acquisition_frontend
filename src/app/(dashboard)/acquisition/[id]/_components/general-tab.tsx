@@ -7,7 +7,6 @@ import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isProfessionalOrg } from "@/lib/role-utils";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
-import { calcAreaFromWkt } from "@/lib/geometry-utils";
 import { STATUS_LABELS } from "@/types";
 import type { Plan } from "@/types";
 import { PlanCodeSearch, planHasBoundary } from "@/components/ui/plan-code-search";
@@ -59,6 +58,28 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
   const [areaM2, setAreaM2] = useState<string>("");
   const [areaAutoCalc, setAreaAutoCalc] = useState(false);
+  // Талбайг СЕРВЕР бодно (ГУС-тай ижил UTM арга) — browser дээр тооцвол
+  // backend-ийн бичдэг тооноос зөрнө.
+  const [areaCalcBusy, setAreaCalcBusy] = useState(false);
+  const handleAutoCalcArea = async () => {
+    const wkt = acq?.geometry_wkt;
+    if (!wkt || areaCalcBusy) return;
+    setAreaCalcBusy(true);
+    try {
+      const calc = await landApi.computeGeometryArea(wkt);
+      if (calc != null) {
+        setAreaM2(String(calc));
+        setAreaAutoCalc(true);
+        toast.success("Талбай тооцоологдлоо");
+      } else {
+        toast.error("Геометриас талбай тооцоолох боломжгүй");
+      }
+    } catch (err) {
+      toast.error(getApiError(err, "Геометриас талбай тооцоолох боломжгүй"));
+    } finally {
+      setAreaCalcBusy(false);
+    }
+  };
   // Хил солих: чөлөөлөлт ҮҮСГЭХ хэсэгтэй ЯГ ИЖИЛ байдлаар төлөвлөгөөг нэгж
   // талбарын дугаараар хайж олоод, олдсон төлөвлөгөөний хилээр солино.
   // Гараас shapefile оруулах зам БАЙХГҮЙ.
@@ -260,8 +281,30 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
             Үндсэн мэдээлэл
           </p>
+          {/* ТӨЛӨВЛӨГӨӨНИЙ МЭДЭЭЛЭЛ. plan_code (ж: 2026-04-011-9878) нь
+              төлөвлөгөөний КОД, харин plan_parcel_id (ж: 5029776) нь түүний
+              НЭГЖ ТАЛБАРЫН дугаар — чөлөөлөлтийг үүгээр үүсгэдэг тул хамгийн
+              түрүүнд харуулна. Утгууд нь ГУС-аас татагдаад plan хүснэгтэд
+              хадгалагдсан — дэлгэц ГУС руу дахин хандахгүй. */}
+          {row(
+            "Төлөвлөгөөний нэгж талбар",
+            acq.plan_parcel_id ? <span className="font-mono">{acq.plan_parcel_id}</span> : undefined,
+          )}
           {row("Төлөвлөгөөний дугаар", acq.plan_code)}
           {row("Төлөвлөгөөний нэр", acq.plan_name)}
+          {row("Төлөвлөгөөний төрөл", acq.plan_type_name)}
+          {row("Бүтээн байгуулалт", acq.plan_gazner)}
+          {row(
+            "Төлөвлөгөөний талбай",
+            (acq.plan_area_m2 ?? 0) > 0 ? formatArea(acq.plan_area_m2) : undefined,
+          )}
+          {row("Төлөвлөгөө батлагдсан", acq.plan_approved_date ? formatDate(acq.plan_approved_date) : undefined)}
+          {row(
+            "Төлөвлөгөөний хугацаа",
+            acq.plan_start_date || acq.plan_end_date
+              ? `${acq.plan_start_date ? formatDate(acq.plan_start_date) : "—"} — ${acq.plan_end_date ? formatDate(acq.plan_end_date) : "—"}`
+              : undefined,
+          )}
           {/* Хил солих — чөлөөлөлт үүсгэх хэсэгтэй ЯГ ИЖИЛ төлөвлөгөө хайлт.
               Олдсон төлөвлөгөөний хил нь шинэ хил болно. */}
           {editing && (
@@ -331,20 +374,12 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                 {acq.geometry_wkt && (
                   <button
                     type="button"
-                    onClick={() => {
-                      const calc = calcAreaFromWkt(acq.geometry_wkt);
-                      if (calc != null) {
-                        setAreaM2(String(Math.round(calc)));
-                        setAreaAutoCalc(true);
-                        toast.success("Талбай тооцоологдлоо");
-                      } else {
-                        toast.error("Геометриас талбай тооцоолох боломжгүй");
-                      }
-                    }}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[11px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors whitespace-nowrap"
+                    onClick={handleAutoCalcArea}
+                    disabled={areaCalcBusy}
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[11px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors whitespace-nowrap disabled:opacity-50"
                   >
                     <Calculator className="h-3 w-3" />
-                    Хилээс тооцоолох
+                    {areaCalcBusy ? "Тооцоолж байна..." : "Хилээс тооцоолох"}
                   </button>
                 )}
                 {areaAutoCalc && (
