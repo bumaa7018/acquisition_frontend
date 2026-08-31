@@ -19,14 +19,14 @@ import "ol/ol.css";
 import { Box, Map as MapIcon } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
-import { landApi, departmentApi } from "@/lib/api";
+import { landApi } from "@/lib/api";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
 import FullscreenButton from "./fullscreen-button";
 import PrintButton from "./print-button";
 import FeaturePopup from "./feature-popup";
 import ParcelInfoModal from "./parcel-info-modal";
 import AcquisitionInfoModal from "./acquisition-info-modal";
-import PrintPreviewModal from "./print-preview-modal";
+import PrintMapDialog from "./print-map-dialog";
 import { useFullscreen } from "./use-fullscreen";
 import {
   BASE_Z_INDEX,
@@ -38,20 +38,7 @@ import {
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
-import {
-  captureMapCanvas,
-  composePrintPage,
-  downloadCanvasAsPdf,
-  getMapViewInfo,
-  printMapAreaSizePx,
-  printInfoBandPx,
-  loadImage,
-  type PrintOrientation,
-  type PrintPaperSize,
-  type PrintInfo,
-  type PrintLegendItem,
-  type PrintMapViewInfo,
-} from "./print-map";
+import type { PrintOrientation } from "./print-map";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 
@@ -62,24 +49,6 @@ const PARCEL_GROUP: LayerGroupConfig = { id: "parcel_status", label: "Нэгж �
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
 const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_IDS, "v_parcel_acquisition"]);
 
-/**
- * ХЭВЛЭХ үеийн style — ДҮҮРГЭЛТГҮЙ (зөвхөн хил).
- *
- * Дэлгэц дээр давхаргууд дүүргэлттэй хэвээр байх ёстой; дүүргэлт нь зөвхөн
- * ЦААСАН дээр доорх хиймэл дагуулын зураг/дроны ортофотог халхалдаг тул
- * хэвлэх мөчид WMS-ийн `STYLES` параметрээр эдгээр рүү түр сольж, зураг
- * авмагц буцаана. GeoServer дээр `make config`-оор ачаалагдана.
- */
-const PRINT_STYLES: Record<string, string> = {
-  v_acquisition_plan: "acquisition_plan_print",
-  v_plan_acquisition: "plan_acquisition_print",
-  v_parcel_s0: "parcel_s0_print",
-  v_parcel_s1: "parcel_s1_print",
-  v_parcel_s2: "parcel_s2_print",
-  v_parcel_s3: "parcel_s3_print",
-  v_parcel_s4: "parcel_s4_print",
-  v_parcel_s5: "parcel_s5_print",
-};
 
 // Хилийн давхаргууд — дарвал ЧӨЛӨӨЛӨЛТИЙН мэдээллийн цонх нээнэ.
 const BOUNDARY_INFO_LAYERS: Record<string, string> = {
@@ -253,52 +222,19 @@ export function AcquisitionMap({
   // тааруулж, бүх нэгж талбар/хил хуудсанд бүтэн орохыг баталгаажуулна.
   const acqExtent = useRef<[number, number, number, number] | null>(null);
 
-  /* ── Хэвлэх хуудасны МЭДЭЭЛЭЛ ────────────────────────────────────
-     Дэлгэц дээр харагдахгүй ч хуудсанд шаардлагатай талбарууд:
-     төлөвлөгөө, хариуцсан мэргэжилтэн, гүйцэтгэл, хэлтэс.
-     staleTime өндөр — хэвлэх нь ховор үйлдэл, шинэ хүсэлт гаргах
-     шаардлагагүй (дэлгэрэнгүй хуудас ижил түлхүүрээр аль хэдийн татсан). */
-  const { data: acqDetail } = useQuery({
-    queryKey: ["land", acquisitionId],
-    queryFn: () => landApi.getById(acquisitionId),
-    enabled: !!acquisitionId,
-    staleTime: 60_000,
-  });
-  const { data: allCategories = [] } = useQuery({
-    queryKey: ["acquisition-categories"],
-    queryFn: () => landApi.listCategories(),
-    staleTime: Infinity,
-  });
-  const { data: departments = [] } = useQuery({
-    queryKey: ["departments", "options"],
-    queryFn: () => departmentApi.list({ page_size: 200 }).then((r) => r.data ?? []),
-    staleTime: 5 * 60_000,
-  });
   const [loading3D, setLoading3D] = useState(false);
   // Төлөв тус бүрийн нэгж талбарын тоо — хэвлэх легендэд харуулна (v_parcel_acquisition WFS-ээс)
   const [statusCounts, setStatusCounts] = useState<Record<number, number>>({});
-  // Нэгж талбаруудын ЧӨЛӨӨЛӨХ талбайн нийлбэр (м²) — хэвлэх хуудсанд.
-  const [parcelsAreaM2, setParcelsAreaM2] = useState(0);
-  // Байгууллагын лого — хэвлэхэд canvas-д зурагдана. Ачаалагдаагүй зургийг
-  // зурвал хоосон гарах тул компонент ачаалагдмагц урьдчилан татна.
-  const logoRef = useRef<HTMLImageElement | null>(null);
-  const [printPreview, setPrintPreview] = useState<{
-    orientation: PrintOrientation;
-    paper: PrintPaperSize;
-    info: PrintInfo;
-    title: string;
-    viewInfo: PrintMapViewInfo | null;
-    legend: PrintLegendItem[];
-    mapCanvas: HTMLCanvasElement | null;
-    dataUrl: string | null;
-    canvas: HTMLCanvasElement | null;
-  } | null>(null);
+  // Ажлын зураг — ДАШБОАРДТАЙ ИЖИЛ цонх (print-map-dialog). Хэвлэх бүх
+  // логик тэнд НЭГ л газарт байна: хоёр урсгал зөрөх боломжгүй.
+  const [printOpen, setPrintOpen] = useState(false);
 
+
+  /* ?print=1 — дашбоард/шууд холбоосоор ирсэн бол Ажлын зургийн цонхыг
+     ӨӨРӨӨ нээнэ. Зураг бэлдэх ажлыг цонх өөрөө хийнэ. */
   useEffect(() => {
-    void loadImage("/org-logo.svg").then((img) => {
-      logoRef.current = img;
-    });
-  }, []);
+    if (autoPrint) setPrintOpen(true);
+  }, [autoPrint]);
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     LAYER_DEFS.map((d) => ({
@@ -450,188 +386,6 @@ export function AcquisitionMap({
     },
     [cqlByKey, mapMode],
   );
-
-  const handlePrint = useCallback(
-    (orientation: PrintOrientation, paper: PrintPaperSize = "A4") => {
-      const map = olMap.current;
-      if (!map) return;
-      const title = acquisitionName?.trim() || "Чөлөөлөлтийн байршил";
-
-      // Ерөнхий ангилалд ХОЛБОГДСОН хэлтэс (acquisition_category.department_id).
-      const cat = allCategories.find((c) => c.id === acqDetail?.general_category_id);
-      const dept = departments.find((d) => String(d.id) === String(cat?.department_id ?? ""));
-      const info: PrintInfo = {
-        planCode: acqDetail?.plan_code || planCode,
-        planName: acqDetail?.plan_name,
-        acquisitionAreaM2: acqDetail?.area_m2,
-        parcelsAreaM2: parcelsAreaM2,
-        orgName: "Нийслэлийн газрын алба",
-        logo: logoRef.current,
-        departmentName: dept?.name,
-        departmentCode: dept?.code,
-        statusName: acqDetail ? STATUS_LABELS[acqDetail.status] : undefined,
-        progressPercent: acqDetail?.progress_percent ?? 0,
-        // Pie нь нэгж талбарын ТӨЛӨВ тус бүрээр өнгөөр хуваагдана.
-        progressBreakdown: PARCEL_STATUS_IDS.map((_, status) => ({
-          color: PARCEL_STATUS_STYLES[status].color,
-          label: PARCEL_STATUS_NAMES[status],
-          count: statusCounts[status] ?? 0,
-        })).filter((sl) => sl.count > 0),
-        specialists: (acqDetail?.assigned_users ?? []).map((u) => u.user_name).filter(Boolean),
-      };
-      /* ── ТАНИХ ТЭМДЭГ ─────────────────────────────────────────────
-         (1) Нэгж талбарын төлөв — АСААЛТТАЙ бөгөөд 0-ээс ОЛОН талбартай
-             нь л орно (0 талбартай төлөв жагсаалтыг дэмий уртасгана).
-         (2) Хилийн давхаргууд — асаалттай нь ШУГАМАН тэмдэгтэйгээр. */
-      const legend: { color: string; label: string; line?: boolean }[] = [
-        ...PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
-          .filter(({ id }) => layers.find((l) => l.id === id)?.visible ?? true)
-          .filter(({ status }) => (statusCounts[status] ?? 0) > 0)
-          .map(({ status }) => ({
-            color: PARCEL_STATUS_STYLES[status].color,
-            label: `${PARCEL_STATUS_NAMES[status]} (${statusCounts[status]})`,
-          })),
-        ...(["v_acquisition_plan", "v_plan_acquisition", "au1", "au2", "au3"] as MapLayerId[])
-          .filter((id) => layers.find((l) => l.id === id)?.visible)
-          .map((id) => {
-            const def = layerDef(id);
-            return { color: def.color, label: def.label, line: true };
-          }),
-      ];
-
-      /* ── ХЭВЛЭХИЙН ӨМНӨ БҮТЭН ХҮРЭЭ РҮҮ ТААРУУЛНА ────────────────────
-         Өмнө нь дэлгэц дээрх ХАРАГДАЦ-ыг шууд авдаг байсан тул хэрэглэгч
-         ойртсон байвал нэгж талбарын зөвхөн нэг хэсэг хуудсанд ордог байв.
-         Одоо чөлөөлөлтийн бүтэн хүрээ (+ харагдаж буй дроны зургийн хүрээ)
-         рүү түр тааруулж, зураг авчихаад ХУУЧИН харагдацаа сэргээнэ. */
-      const prevCenter = map.getView().getCenter();
-      const prevResolution = map.getView().getResolution();
-      let printExtent = acqExtent.current ? ([...acqExtent.current] as [number, number, number, number]) : null;
-      // Дроны давхарга АСААЛТТАЙ бол түүний хүрээг ч багтаана — зураг нь
-      // чөлөөлөлтийн хилээс халин гарсан байж болно.
-      Object.entries(droneLayers.current).forEach(([id, layer]) => {
-        if (!layer.getVisible()) return;
-        const ov = droneOverlays?.find((o) => o.id === id);
-        if (!ov || !isValidLonLatExtent(ov.extent)) return;
-        const e = transformExtent(ov.extent, "EPSG:4326", "EPSG:3857");
-        printExtent = printExtent
-          ? [Math.min(printExtent[0], e[0]), Math.min(printExtent[1], e[1]),
-             Math.max(printExtent[2], e[2]), Math.max(printExtent[3], e[3])]
-          : (e as [number, number, number, number]);
-      });
-      const mapSize = map.getSize();
-      if (printExtent && mapSize && mapSize[0] > 0 && mapSize[1] > 0) {
-        /* ТАЙРАЛТЫГ ТООЦНО. composePrintPage нь зургийг "cover" байдлаар
-           зурж, хуудасны зургийн талбайд багтахгүй хэсгийг ТАЙРДАГ. Иймд
-           энгийн `fit` хийвэл хил зах руугаа тасарна.
-
-           Тайрсны ДАРАА үлдэх хэсэг нь canvas дээр:
-              cw × ch  (cw = areaW / coverScale, ch = areaH / coverScale)
-           Тиймээс хүрээг тэр ЖИЖИГ талбайд багтаах resolution-ыг өөрсдөө
-           бодож, төвд нь байрлуулна — ингэснээр тайралтын дараа хүрээ
-           бүтнээрээ үлдэнэ. */
-        const area = printMapAreaSizePx(orientation, paper);
-        const coverScale = Math.max(area.width / mapSize[0], area.height / mapSize[1]);
-        const visibleW = area.width / coverScale;
-        const visibleH = area.height / coverScale;
-
-        /* ДООД ЗУРВАС — таних тэмдэг ба мэдээллийн карт хөвдөг хэсэг.
-           Хилийг зөвхөн түүнээс ДЭЭШ багтаана: доор нь хилгүй хоосон
-           газрын зураг үлдэж, картууд түүн дээр хөвнө (хил халхлагдахгүй). */
-        const bandPage = printInfoBandPx();
-        const band = bandPage / coverScale;         // canvas px
-        const usableH = Math.max(visibleH * 0.35, visibleH - band);
-
-        const PAD = 1.06; // захад бага зэрэг зай (хил шууд ирмэг дээр таарахгүй)
-        const extW = (printExtent[2] - printExtent[0]) * PAD;
-        const extH = (printExtent[3] - printExtent[1]) * PAD;
-        const resolution = Math.max(extW / visibleW, extH / usableH);
-
-        /* Хүрээг ДЭЭД хэсэгт байрлуулна. Дэлгэц дээр дээшээ = газрын
-           солбицолд Y ИХСЭХ тул харагдацын төвийг доош (Y багасгах)
-           шилжүүлнэ — ингэснээр хүрээ дээшээ гарч ирнэ. */
-        map.getView().setResolution(resolution);
-        map.getView().setCenter([
-          (printExtent[0] + printExtent[2]) / 2,
-          (printExtent[1] + printExtent[3]) / 2 - (band / 2) * resolution,
-        ]);
-      }
-
-      // Масштабыг ХЭВЛЭХ харагдацын resolution-оос тооцно (fit хийсний ДАРАА).
-      const viewInfo = getMapViewInfo(map);
-
-      // ДҮҮРГЭЛТГҮЙ style руу түр сольно (дэлгэцийнх хэвээр буцна).
-      Object.entries(PRINT_STYLES).forEach(([id, style]) => {
-        wmsLayers.current[id]?.getSource()?.updateParams({ STYLES: style });
-      });
-      const restoreStyles = () => {
-        Object.keys(PRINT_STYLES).forEach((id) => {
-          wmsLayers.current[id]?.getSource()?.updateParams({ STYLES: undefined });
-        });
-      };
-
-      // Эхлээд хоосон (dataUrl: null) урьдчилан харах модал нээгээд, зураг бэлэн болмогц дүүргэнэ —
-      // rendercomplete-г хүлээх хугацаанд хэрэглэгч "Бэлтгэж байна..." төлөвийг харна.
-      setPrintPreview({ orientation, paper, info, title, viewInfo, legend, mapCanvas: null, dataUrl: null, canvas: null });
-      void captureMapCanvas(map).then((mapCanvas) => {
-        // Дэлгэцийн style болон харагдацыг СЭРГЭЭНЭ — хэвлэх нь газрын
-        // зургийн харагдах байдлыг өөрчлөх ёсгүй.
-        restoreStyles();
-        if (prevCenter && prevResolution != null) {
-          map.getView().setCenter(prevCenter);
-          map.getView().setResolution(prevResolution);
-        }
-        if (!mapCanvas) {
-          setPrintPreview(null);
-          return;
-        }
-        const page = composePrintPage(mapCanvas, { title, orientation, paper, legend, viewInfo, info });
-        setPrintPreview({ orientation, paper, info, title, viewInfo, legend, mapCanvas, dataUrl: page.toDataURL("image/png"), canvas: page });
-      });
-    },
-    [layers, statusCounts, acquisitionName, droneOverlays, acqDetail, allCategories, departments, parcelsAreaM2, planCode],
-  );
-
-  /* Дашбоардаас ирсэн автомат хэвлэлт — хүрээ тодорхойлогдож (extentReady)
-     давхаргууд зурагдсаны ДАРАА нэг удаа ажиллана. printedRef нь дахин
-     ажиллахаас (re-render бүрд) хамгаална. */
-  const autoPrintedRef = useRef(false);
-  useEffect(() => {
-    if (!autoPrint || autoPrintedRef.current || !extentReady || !olMap.current) return;
-    autoPrintedRef.current = true;
-    const t = setTimeout(() => handlePrint("landscape", "A4"), 400);
-    return () => clearTimeout(t);
-    // handlePrint нь layers/acqDetail-ээс хамаардаг ба тэдгээр нь ачаалагдах
-    // явцад солигдоно — дахин ажиллуулахгүйн тулд хамаарлаас хассан.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPrint, extentReady]);
-
-  // Гарчгийг өөрчлөхөд газрын зургийг дахин авахгүйгээр (аль хэдийн авсан mapCanvas дээрээ
-  // тулгуурлан) зөвхөн хуудсыг дахин зурж, урьдчилан харах зургийг шууд шинэчилнэ.
-  const handleTitleChange = useCallback((title: string) => {
-    setPrintPreview((prev) => {
-      if (!prev) return prev;
-      if (!prev.mapCanvas) return { ...prev, title };
-      const page = composePrintPage(prev.mapCanvas, {
-        title,
-        orientation: prev.orientation,
-        paper: prev.paper,
-        legend: prev.legend,
-        viewInfo: prev.viewInfo,
-        info: prev.info,
-      });
-      return { ...prev, title, dataUrl: page.toDataURL("image/png"), canvas: page };
-    });
-  }, []);
-
-  const handleDownloadPrint = useCallback(() => {
-    if (!printPreview?.canvas) return;
-    // Урт нэрээс урт файлын нэр үүсдэг (зарим файлын систем 255 тэмдэгтээр
-    // хязгаарладаг) тул 80 тэмдэгтээр таслана.
-    const fileName =
-      printPreview.title.trim().replace(/\s+/g, "_").slice(0, 80) || "gazriin_zurag";
-    void downloadCanvasAsPdf(printPreview.canvas, printPreview.orientation, fileName, printPreview.paper);
-  }, [printPreview]);
 
   const handleSelectMode = useCallback(async (mode: "2d" | "3d") => {
     if (mode === "3d" && !extentReady) return;
@@ -847,7 +601,7 @@ export function AcquisitionMap({
       typeName: "land:v_parcel_acquisition",
       CQL_FILTER: acqFilter,
       outputFormat: "application/json",
-      propertyName: "geometry,parcel_id,status,acquisition_area_m2",
+      propertyName: "geometry,parcel_id,status",
     });
     fetch(`${GS_WFS}?${parcelParams.toString()}`, { headers: gsAuthHeaders() })
       .then((r) => r.json())
@@ -857,9 +611,7 @@ export function AcquisitionMap({
         // нэгж талбар олон ring-тэй байж болох тул cesiumParcels (ring тутамд нэг
         // элемент)-ээс тоолвол давхар тоологдоно.
         const counts: Record<number, number> = {};
-        let areaSum = 0;
-        (json?.features ?? []).forEach((f: { id?: string; properties?: { parcel_id?: string; status?: number; acquisition_area_m2?: number }; geometry?: { type?: string; coordinates?: unknown } }) => {
-          areaSum += Number(f.properties?.acquisition_area_m2 ?? 0) || 0;
+        (json?.features ?? []).forEach((f: { id?: string; properties?: { parcel_id?: string; status?: number }; geometry?: { type?: string; coordinates?: unknown } }) => {
           const status = f.properties?.status ?? 0;
           const style = PARCEL_STATUS_STYLES[status] ?? PARCEL_STATUS_STYLES[0];
           const statusLabel = PARCEL_STATUS_NAMES[status] ?? "";
@@ -877,7 +629,6 @@ export function AcquisitionMap({
         cesium3DParcels.current = cesiumParcels;
         cesium3D.current?.setParcels(cesiumParcels);
         setStatusCounts(counts);
-        setParcelsAreaM2(areaSum);
       })
       .catch(() => { /* нэгж талбарын 3D давхарга хоосон үлдэнэ */ });
 
@@ -1040,7 +791,7 @@ export function AcquisitionMap({
             <div ref={mapRef} className="h-full w-full" />
             <LayerPanel layers={layers} groups={[PARCEL_GROUP]} onToggle={handleToggle} />
             <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
-            {mapMode === "2d" && <PrintButton onPrint={handlePrint} />}
+            {mapMode === "2d" && <PrintButton onClick={() => setPrintOpen(true)} />}
             {popup && (
               <FeaturePopup
                 layer={popup.layer}
@@ -1126,14 +877,11 @@ export function AcquisitionMap({
         </div>
       )}
 
-      {printPreview && (
-        <PrintPreviewModal
-          orientation={printPreview.orientation}
-          title={printPreview.title}
-          onTitleChange={handleTitleChange}
-          dataUrl={printPreview.dataUrl}
-          onClose={() => setPrintPreview(null)}
-          onDownload={handleDownloadPrint}
+      {printOpen && (
+        <PrintMapDialog
+          acquisitionId={acquisitionId}
+          acquisitionName={acquisitionName}
+          onClose={() => setPrintOpen(false)}
         />
       )}
     </div>

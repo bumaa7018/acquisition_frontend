@@ -1,6 +1,7 @@
 import type OLMap from "ol/Map";
 import { toLonLat } from "ol/proj";
 import { PDFDocument } from "pdf-lib";
+import { GS_WMS, gsAuthHeaders } from "@/lib/geoserver";
 
 export interface PrintLegendItem {
   color: string;
@@ -94,6 +95,28 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null);
     img.src = src;
   });
+}
+
+/**
+ * ХЭВЛЭХИЙН НЯГТАРШИЛ (супер-семпл).
+ *
+ * Хуудасны layout нь 96dpi-ийн CSS px-ээр бодогддог (A4 = 794×1123).
+ * Тэр хэмжээгээр шууд PDF-д тавихад 96dpi болж, цаасан дээр үсэг/шугам
+ * бүдэг гарна. Тиймээс canvas-ыг S дахин ТОМООР зурж, PDF-д ижил
+ * физик хэмжээтэйгээр (A4 = 595×842pt) шигтгэнэ → 96×S dpi.
+ *
+ * A3 нь физикээр 2 дахин том тул бага коэффициент ч хангалттай — санах
+ * ой хэт өсөхөөс сэргийлнэ (A3×3 нь ~16 сая пиксел = 64MB RGBA).
+ */
+export function printScaleFor(paper: PrintPaperSize): number {
+  const { width, height } = PAPER_PX[paper];
+  /* Хамгийн их canvas талбай. Safari нэг canvas дээр ~16.7 сая пикселийн
+     хязгаартай тул түүнээс доогуур барина; Chrome илүү өгөөмөр ч санах ой
+     дэмий иддэг. Энэ хязгаарт багтах ХАМГИЙН ТОМ коэффициентийг сонгоно. */
+  const MAX_PAGE_PX = 15_000_000;
+  const fit = Math.sqrt(MAX_PAGE_PX / (width * height));
+  // Дээд тал нь 3 (288dpi) — түүнээс дээш нүдэнд ялгарахгүй, файл л томордог.
+  return Math.min(3, Math.max(1.5, Math.floor(fit * 10) / 10));
 }
 
 /** Хуудсан дээр харуулах мэдээлэл. Бүгд заавал биш — байхгүй бол мөр нь алгасагдана. */
@@ -332,6 +355,291 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   ХЭВЛЭХИЙН ГАЗРЫН ЗУРАГ — OpenLayers-ГҮЙГЭЭР
+
+   ЯАГААД: OL-ийн дотоод canvas-аас зураг "буулгах" (captureMapCanvas)
+   арга нь хэвлэхийн ТОМ хэмжээнд найдваргүй болсон — суурь хиймэл
+   дагуулын зураг буудаг ч WMS давхаргууд (нэгж талбар, чөлөөлөлтийн
+   хил, дүүрэг/хорооны хил) хоосон гардаг байв. Шалтгааныг браузергүйгээр
+   таних боломжгүй байсан тул ЭНЭ ЗАМЫГ БҮРЭН ОРХИВ.
+
+   Оронд нь: хүрээ, пиксел хэмжээ, давхаргын жагсаалт бүгд МЭДЭГДЭЖ
+   байгаа тул давхарга бүрийг ШУУД татаад (WMS нэг хүсэлт, XYZ тайлууд)
+   өөрсдөө canvas дээр зурна. Ямар ч далд төлөв, тайминг байхгүй —
+   алдаа гарвал throw хийж хэрэглэгчид ХАРУУЛНА (чимээгүй хоосон
+   зураг гаргахгүй).
+   ══════════════════════════════════════════════════════════════════ */
+
+const WEB_MERCATOR_HALF = 20037508.342789244;
+const XYZ_TILE_PX = 256;
+/** Нэг давхаргад татах тайлын дээд тоо — санамсаргүй бөөн хүсэлтээс хамгаална. */
+const MAX_TILES_PER_LAYER = 900;
+/** Зэрэг явуулах тайлын хүсэлтийн тоо. */
+const TILE_CONCURRENCY = 8;
+
+export type PrintLayerSpec =
+  | {
+      kind: "wms";
+      /** Бүтэн нэр, жиш: "land:v_parcel_s0" */
+      layer: string;
+      styles?: string;
+      cql?: string;
+      opacity?: number;
+    }
+  | {
+      kind: "xyz";
+      /** {z}/{x}/{y} загвартай URL-ууд (олон бол ээлжлэн хэрэглэнэ). */
+      urls: string[];
+      maxZoom: number;
+      opacity?: number;
+      crossOrigin?: string;
+      /** EPSG:3857 хүрээ — зөвхөн энэ дотор зурна (дроны зураг). */
+      clipExtent?: [number, number, number, number];
+    };
+
+async function decodeFromUrl(src: string, crossOrigin?: string): Promise<HTMLImageElement | null> {
+  const img = new Image();
+  if (crossOrigin) img.crossOrigin = crossOrigin;
+  img.src = src;
+  try {
+    // decode() нь "татагдсан" биш "ЗУРАХАД БЭЛЭН" гэдгийг баталгаажуулна.
+    if (typeof img.decode === "function") await img.decode();
+    else await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+    return img;
+  } catch {
+    return null;
+  }
+}
+
+async function runPooled(jobs: (() => Promise<void>)[], limit: number): Promise<void> {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, jobs.length) }, async () => {
+    while (i < jobs.length) {
+      const job = jobs[i++];
+      await job();
+    }
+  });
+  await Promise.all(workers);
+}
+
+async function drawWmsLayer(
+  ctx: CanvasRenderingContext2D,
+  spec: Extract<PrintLayerSpec, { kind: "wms" }>,
+  extent: [number, number, number, number],
+  width: number,
+  height: number,
+): Promise<void> {
+  const body = new URLSearchParams({
+    SERVICE: "WMS",
+    VERSION: "1.1.1", // 1.1.1 — тэнхлэгийн дараалал (x,y) тодорхой, 1.3.0-ийн урвуутай асуудалгүй
+    REQUEST: "GetMap",
+    LAYERS: spec.layer,
+    STYLES: spec.styles ?? "",
+    BBOX: extent.join(","),
+    WIDTH: String(width),
+    HEIGHT: String(height),
+    SRS: "EPSG:3857",
+    FORMAT: "image/png",
+    TRANSPARENT: "true",
+  });
+  if (spec.cql) body.set("CQL_FILTER", spec.cql);
+
+  const r = await fetch(GS_WMS, {
+    method: "POST",
+    headers: gsAuthHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
+    body: body.toString(),
+  });
+  if (!r.ok) {
+    const text = await r.text().catch(() => "");
+    throw new Error(`${spec.layer}: HTTP ${r.status} ${text.slice(0, 200)}`);
+  }
+  const type = r.headers.get("content-type") || "";
+  if (!type.startsWith("image/")) {
+    // GeoServer алдааг 200 + XML-ээр буцаадаг тул статус хангалтгүй.
+    const text = await r.text().catch(() => "");
+    throw new Error(`${spec.layer}: ${text.replace(/<[^>]+>/g, " ").trim().slice(0, 200)}`);
+  }
+  const bitmap = await createImageBitmap(await r.blob());
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+}
+
+async function drawXyzLayer(
+  ctx: CanvasRenderingContext2D,
+  spec: Extract<PrintLayerSpec, { kind: "xyz" }>,
+  extent: [number, number, number, number],
+  resolution: number,
+): Promise<void> {
+  // Тайлын түвшинг ЗОРИЛТОТ нягтаршилд хамгийн ойрыг сонгоно.
+  const ideal = Math.log2((2 * WEB_MERCATOR_HALF) / (XYZ_TILE_PX * resolution));
+  let z = Math.max(0, Math.min(spec.maxZoom, Math.round(ideal)));
+
+  const box = spec.clipExtent
+    ? ([
+        Math.max(extent[0], spec.clipExtent[0]),
+        Math.max(extent[1], spec.clipExtent[1]),
+        Math.min(extent[2], spec.clipExtent[2]),
+        Math.min(extent[3], spec.clipExtent[3]),
+      ] as [number, number, number, number])
+    : extent;
+  if (box[0] >= box[2] || box[1] >= box[3]) return;
+
+  /* Хэт олон тайл гарвал ТҮВШИНГ БУУРУУЛНА (алгасахгүй) — үгүй бол том
+     чөлөөлөлт дээр суурь зураг огт гарахгүй хоосон үлдэнэ. */
+  const tileRange = (level: number) => {
+    const nn = 2 ** level;
+    const sp = (2 * WEB_MERCATOR_HALF) / nn;
+    return {
+      span: sp,
+      x0: Math.max(0, Math.floor((box[0] + WEB_MERCATOR_HALF) / sp)),
+      x1: Math.min(nn - 1, Math.floor((box[2] + WEB_MERCATOR_HALF) / sp)),
+      y0: Math.max(0, Math.floor((WEB_MERCATOR_HALF - box[3]) / sp)),
+      y1: Math.min(nn - 1, Math.floor((WEB_MERCATOR_HALF - box[1]) / sp)),
+    };
+  };
+  let range = tileRange(z);
+  while (z > 0 && (range.x1 - range.x0 + 1) * (range.y1 - range.y0 + 1) > MAX_TILES_PER_LAYER) {
+    z -= 1;
+    range = tileRange(z);
+  }
+  const { span, x0, x1, y0, y1 } = range;
+
+  const clipped = !!spec.clipExtent;
+  if (clipped) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(
+      (box[0] - extent[0]) / resolution,
+      (extent[3] - box[3]) / resolution,
+      (box[2] - box[0]) / resolution,
+      (box[3] - box[1]) / resolution,
+    );
+    ctx.clip();
+  }
+
+  const jobs: (() => Promise<void>)[] = [];
+  for (let x = x0; x <= x1; x++) {
+    for (let y = y0; y <= y1; y++) {
+      jobs.push(async () => {
+        const tpl = spec.urls[(x + y) % spec.urls.length];
+        const url = tpl.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+        const img = await decodeFromUrl(url, spec.crossOrigin);
+        if (!img) return; // хоосон тайл (далайн гадна г.м) — алдаа биш
+        const px = (x * span - WEB_MERCATOR_HALF - extent[0]) / resolution;
+        const py = (extent[3] - (WEB_MERCATOR_HALF - y * span)) / resolution;
+        const size = span / resolution;
+        // +1 — хөрш тайлуудын хооронд бөөрөнхийллөөс болж цагаан зураас гарахаас сэргийлнэ
+        ctx.drawImage(img, px, py, size + 1, size + 1);
+      });
+    }
+  }
+  await runPooled(jobs, TILE_CONCURRENCY);
+  if (clipped) ctx.restore();
+}
+
+/**
+ * Хэвлэх газрын зургийг ЯГ өгөгдсөн хүрээ, пиксел хэмжээгээр зурна.
+ *
+ * Давхаргууд жагсаалтын ДАРААЛЛААР (эхнийх нь доор) зурагдана.
+ * WMS алдаа гарвал throw — дуудагч талдаа хэрэглэгчид харуулна.
+ */
+export async function renderPrintMapCanvas(o: {
+  extent: [number, number, number, number];
+  width: number;
+  height: number;
+  layers: PrintLayerSpec[];
+}): Promise<HTMLCanvasElement> {
+  const { extent, width, height, layers } = o;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas контекст үүсгэж чадсангүй");
+  const resolution = (extent[2] - extent[0]) / width;
+
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, width, height);
+
+  for (const spec of layers) {
+    ctx.globalAlpha = spec.opacity ?? 1;
+    if (spec.kind === "wms") await drawWmsLayer(ctx, spec, extent, width, height);
+    else await drawXyzLayer(ctx, spec, extent, resolution);
+  }
+  ctx.globalAlpha = 1;
+  return canvas;
+}
+
+/**
+ * Газрын зураг БҮРЭН ачаалагдтал хүлээнэ (тайл + WMS зураг).
+ *
+ * ЯАГААД `rendercomplete` ХАНГАЛТГҮЙ: тэр эвент "одоо ачаалагдаж буй зүйл
+ * байхгүй" үед асдаг. Харагдац сая солигдсон үед OL хүсэлтээ ИЛГЭЭЖ
+ * амжаагүй байхад тэр нөхцөл үнэн болж, эвент шууд асаад ХООСОН (зөвхөн
+ * суурь зурагтай) агшин буудаг байв.
+ *
+ * Иймд эх сурвалж бүрийн load эвентийг тоолж, тоолуур тэг болтол хүлээнэ.
+ * Хүсэлт огт эхлээгүй тохиолдолд ч (бүх зураг кэштэй) богино хугацааны
+ * дараа гарна. timeoutMs нь сүлжээ гацсан үеийн хамгаалалт.
+ */
+export function waitForMapIdle(map: OLMap, timeoutMs = 30000): Promise<void> {
+  return new Promise((resolve) => {
+    let pending = 0;
+    const detach: (() => void)[] = [];
+
+    map.getLayers().forEach((layer) => {
+      const src = (layer as { getSource?: () => unknown }).getSource?.();
+      const target = src as
+        | { on?: (t: string, f: () => void) => void; un?: (t: string, f: () => void) => void }
+        | undefined;
+      if (!target?.on || !target?.un) return;
+      const inc = () => { pending += 1; };
+      const dec = () => { pending = Math.max(0, pending - 1); };
+      // Тайл (XYZ) ба зураг (ImageWMS) — эх сурвалжийн төрлөөс хамааран
+      // зөвхөн харгалзах эвентүүд нь асна; байхгүй нь юу ч хийхгүй.
+      for (const [evt, fn] of [
+        ["tileloadstart", inc], ["tileloadend", dec], ["tileloaderror", dec],
+        ["imageloadstart", inc], ["imageloadend", dec], ["imageloaderror", dec],
+      ] as [string, () => void][]) {
+        target.on(evt, fn);
+        detach.push(() => target.un?.(evt, fn));
+      }
+    });
+
+    const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    void (async () => {
+      // Хоёр удаа render — эхнийх нь харагдацыг шинэчлээд зарим давхаргын
+      // хүсэлтийг дараагийн frame рүү үлдээж болно.
+      map.renderSync();
+      await frame();
+      map.renderSync();
+      await frame();
+
+      const started = Date.now();
+      /* Тоолуур тэг байх нь ХАРААХАН хүсэлт эхлээгүйг ч илэрхийлж болно
+         (OL нь харагдац солигдсоны дараах frame дээр л хүсэлтээ илгээдэг,
+         зарим давхарга бүр хожуу). Иймд "тэг" гэдгийг НЭГ УДАА биш, дараалан
+         3 удаа, дор хаяж 700мс өнгөрсний дараа л үнэн гэж үзнэ. */
+      let idleStreak = 0;
+      while (Date.now() - started < timeoutMs) {
+        await new Promise((r) => setTimeout(r, 150));
+        map.renderSync();
+        if (pending > 0) { idleStreak = 0; continue; }
+        idleStreak += 1;
+        if (idleStreak >= 3 && Date.now() - started >= 700) break;
+      }
+      // Ачаалагдсан зургууд canvas дээр бууж амжих зай
+      map.renderSync();
+      await frame();
+      map.renderSync();
+      await frame();
+      detach.forEach((f) => f());
+      resolve();
+    })();
+  });
+}
+
 /**
  * OpenLayers Canvas renderer-ийн идэвхтэй харагдацыг нэг canvas зураг болгон нэгтгэнэ.
  * rendercomplete хүлээх шаардлагатай тул Promise буцаана.
@@ -400,10 +708,15 @@ export function composePrintPage(
     info = {},
   } = opts;
   const { width, height } = pageSizePx(orientation, paper);
+  /* Canvas-ыг S дахин том хийж, контекстийг мөн S-ээр масштаблана —
+     доорх БҮХ layout тооцоо 96dpi-ийн CSS px-ээр хэвээр бичигдэнэ.
+     Ингэснээр зөвхөн НЯГТАРШИЛ өснө, байрлал юу ч өөрчлөгдөхгүй. */
+  const S = printScaleFor(paper);
   const page = document.createElement("canvas");
-  page.width = width;
-  page.height = height;
+  page.width = Math.round(width * S);
+  page.height = Math.round(height * S);
   const ctx = page.getContext("2d")!;
+  ctx.scale(S, S);
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);

@@ -47,20 +47,47 @@ export function wmsPostLoad(image: ImageWrapper, src: string) {
   const qIdx = src.indexOf('?')
   const img = image.getImage() as HTMLImageElement
   if (qIdx === -1) { img.src = src; return }
-  fetch(src.slice(0, qIdx), {
+  const url = src.slice(0, qIdx)
+  fetch(url, {
     method: 'POST',
     headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
     body: src.slice(qIdx + 1),
   })
-    .then(r => r.blob())
-    .then(blob => {
+    .then(async r => {
+      // 1) АЛДААГ ЧИМЭЭГҮЙ ЗАЛГИХГҮЙ. Өмнө нь r.ok шалгадаггүй байсан тул
+      //    403/500 хариу ч `blob()`-оор амжилттай уншигдаж, зураг биш blob
+      //    <img>-д онооход давхарга ЧИМЭЭГҮЙ хоосон үлддэг байв.
+      if (!r.ok) {
+        const body = await r.text().catch(() => '')
+        throw new Error(`HTTP ${r.status} ${body.slice(0, 300)}`)
+      }
+      const type = r.headers.get('content-type') || ''
+      if (!type.startsWith('image/')) {
+        // GeoServer алдааг 200 + XML-ээр буцаадаг (ServiceException).
+        const body = await r.text().catch(() => '')
+        throw new Error(`non-image ${type} ${body.slice(0, 300)}`)
+      }
+      return r.blob()
+    })
+    .then(async blob => {
       const objectUrl = URL.createObjectURL(blob)
+      // 2) ЗУРГИЙГ УРЬДЧИЛАН DECODE ХИЙНЭ. `load` эвент нь зөвхөн өгөгдөл
+      //    ирснийг мэдэгдэх ба ТОМ зураг (хэвлэхийн 3000x2000+) хараахан
+      //    decode хийгдээгүй байж болно. Decode дуусаагүй зургийг canvas-д
+      //    `drawImage`-дэхэд ХООСОН зурагддаг — яг үүнээс болж хэвлэсэн
+      //    зураг дээр давхаргууд алга болдог байв. Ижил objectUrl-ыг
+      //    дахин оноох үед браузер decode хийсэн хуулбарыг ашиглана.
+      try {
+        const probe = new Image()
+        probe.src = objectUrl
+        if (typeof probe.decode === 'function') await probe.decode()
+      } catch { /* decode дэмжигдэхгүй бол ердийн замаар үргэлжилнэ */ }
       img.onload  = () => URL.revokeObjectURL(objectUrl)
       img.onerror = () => URL.revokeObjectURL(objectUrl)
       img.src = objectUrl
     })
     .catch((err) => {
-      logger.warn('wms tile load failed', { src: src.split('?')[0], error: String(err) })
+      logger.warn('wms tile load failed', { src: url, error: String(err) })
       img.src = ''
     })
 }

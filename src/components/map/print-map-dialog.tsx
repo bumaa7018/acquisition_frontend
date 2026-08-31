@@ -1,29 +1,22 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import OLMap from "ol/Map";
-import View from "ol/View";
-import TileLayer from "ol/layer/Tile";
-import ImageLayer from "ol/layer/Image";
-import ImageWMS from "ol/source/ImageWMS";
-import XYZ from "ol/source/XYZ";
-import { fromLonLat, transformExtent } from "ol/proj";
-// @ts-ignore: CSS side-effect import for OpenLayers styles
-import "ol/ol.css";
+import { toLonLat, transformExtent } from "ol/proj";
 import { Download, Loader2, X } from "lucide-react";
 import { landApi, departmentApi } from "@/lib/api";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
 import type { DroneImage } from "@/types";
-import { GS_WMS, GS_WFS, wmsPostLoad, gsAuthHeaders, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
-import { BASE_Z_INDEX, DRONE_Z_INDEX, layerDef, type MapLayerId } from "./layers";
+import { GS_WFS, gsAuthHeaders, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
+import { layerDef, type MapLayerId } from "./layers";
 import {
-  captureMapCanvas,
   composePrintPage,
   downloadCanvasAsPdf,
-  getMapViewInfo,
   printMapAreaSizePx,
   printInfoBandPx,
+  printScaleFor,
+  renderPrintMapCanvas,
   loadImage,
+  type PrintLayerSpec,
   type PrintOrientation,
   type PrintPaperSize,
   type PrintInfo,
@@ -33,11 +26,11 @@ import {
 /**
  * "Ажлын зураг" — ДАШБОАРДААС хэвлэх цонх.
  *
- * ЯАГААД ӨӨРИЙН ГАЗРЫН ЗУРАГТАЙ: дашбоардын зураг нь шүүлтэд тохирсон БҮХ
- * чөлөөлөлтийг нэг CQL-ээр харуулдаг ба хэмжээ нь хуудасны харьцаанаас өөр.
- * Түүнийг нэг чөлөөлөлт рүү шүүж, дараа нь буцаах нь эмзэг (алдаа гарвал
- * хэрэглэгчийн харж байсан зураг эвдэрнэ). Энд цонх нээгдэхэд ТУСДАА зураг
- * үүсч, хаагдахад устдаг — дашбоард огт хөндөгдөхгүй, хуудас ч солигдохгүй.
+ * ЯАГААД OPENLAYERS АШИГЛААГҮЙ: OL-ийн canvas-аас зураг "буулгах" арга нь
+ * хэвлэхийн том хэмжээнд суурь зургийг л буулгаж, WMS давхаргуудыг (нэгж
+ * талбар, чөлөөлөлтийн хил, дүүрэг/хорооны хил) ЧИМЭЭГҮЙ орхидог байв.
+ * Одоо renderPrintMapCanvas нь давхарга бүрийг ШУУД татаж canvas дээр
+ * зурна — далд төлөв, тайминг байхгүй, алдаа гарвал ХАРАГДАНА.
  *
  * Зургийн хэмжээг хуудасны зургийн талбайн ХАРЬЦААГААР үүсгэдэг тул
  * composePrintPage-ийн "cover" тайралт юу ч огтолдоггүй.
@@ -59,8 +52,15 @@ const PRINT_STYLES: Record<string, string> = {
   v_parcel_s5: "parcel_s5_print",
 };
 
-/** Хэвлэх зургийн ӨРГӨН (px). Өндөр нь хуудасны харьцаагаар бодогдоно. */
-const MAP_W = 1200;
+/**
+ * Хэвлэх газрын зургийн ӨРГӨН (px) — нягтаршлын коэффициентээр өснө.
+ *
+ * Зургийн canvas нь хуудсанд тавигдах хэмжээнээсээ ЖИЖИГ байвал сунгагдаж
+ * бүдгэрнэ. Иймд хуудасны зургийн талбайн S дахин том хэмжээгээр авна.
+ * Дээд хязгаар нь браузерын canvas/GeoServer-ийн хүсэлтийн бодит хязгаар
+ * (хэт том WMS зураг удаан ирдэг).
+ */
+const MAP_W_MAX = 4700;
 
 function droneBounds(img: DroneImage): [number, number, number, number] | null {
   const { min_x: a, min_y: b, max_x: c, max_y: d } = img;
@@ -81,13 +81,9 @@ export default function PrintMapDialog({
   acquisitionName?: string;
   onClose: () => void;
 }) {
-  const mapDivRef = useRef<HTMLDivElement>(null);
-  const olMap = useRef<OLMap | null>(null);
-  const wmsLayers = useRef<Record<string, ImageLayer<ImageWMS>>>({});
-  const droneLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
-  const extentRef = useRef<[number, number, number, number] | null>(null);
+  const [extent, setExtent] = useState<[number, number, number, number] | null>(null);
 
   const [paper, setPaper] = useState<PrintPaperSize>("A4");
   const [orientation, setOrientation] = useState<PrintOrientation>("landscape");
@@ -96,6 +92,7 @@ export default function PrintMapDialog({
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [pageCanvas, setPageCanvas] = useState<HTMLCanvasElement | null>(null);
   const [busy, setBusy] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const acqFilter = `acquisition_id='${acquisitionId}'`;
 
@@ -162,7 +159,7 @@ export default function PrintMapDialog({
         };
         walk(geom?.coordinates);
         if (Number.isFinite(minX)) {
-          extentRef.current = transformExtent([minX, minY, maxX, maxY], "EPSG:4326", "EPSG:3857") as [number, number, number, number];
+          setExtent(transformExtent([minX, minY, maxX, maxY], "EPSG:4326", "EPSG:3857") as [number, number, number, number]);
         }
       })
       .catch(() => {});
@@ -187,84 +184,6 @@ export default function PrintMapDialog({
       })
       .catch(() => {});
   }, [acqFilter]);
-
-  /* ── Газрын зураг (нэг удаа) ─────────────────────────────────── */
-  useEffect(() => {
-    if (!mapDivRef.current || olMap.current) return;
-
-    const record: Record<string, ImageLayer<ImageWMS>> = {};
-    ([...BOUNDARY_IDS, ...PARCEL_STATUS_IDS] as MapLayerId[]).forEach((id) => {
-      const def = layerDef(id);
-      const cql = id.startsWith("au") ? "" : acqFilter;
-      record[id] = new ImageLayer({
-        zIndex: def.zIndex,
-        opacity: def.opacity ?? 0.9,
-        source: new ImageWMS({
-          url: GS_WMS,
-          params: {
-            LAYERS: `land:${id}`,
-            FORMAT: "image/png",
-            TRANSPARENT: true,
-            // Энэ зураг ЗӨВХӨН хэвлэхэд зориулагдсан тул шууд хэвлэхийн style
-            ...(PRINT_STYLES[id] ? { STYLES: PRINT_STYLES[id] } : {}),
-            ...(cql ? { CQL_FILTER: cql } : {}),
-          },
-          ratio: 1,
-          serverType: "geoserver",
-          imageLoadFunction: wmsPostLoad,
-        }),
-      });
-    });
-    wmsLayers.current = record;
-
-    olMap.current = new OLMap({
-      target: mapDivRef.current,
-      controls: [],
-      interactions: [],
-      layers: [
-        new TileLayer({
-          zIndex: BASE_Z_INDEX,
-          source: new XYZ({
-            urls: [0, 1, 2, 3].map((i) => `https://mt${i}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`),
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
-        ...Object.values(record),
-      ],
-      view: new View({ center: fromLonLat([104.9, 47.9]), zoom: 5, minZoom: 4 }),
-    });
-
-    return () => {
-      olMap.current?.setTarget(undefined);
-      olMap.current = null;
-      wmsLayers.current = {};
-      droneLayers.current = {};
-    };
-  }, [acqFilter]);
-
-  /* ── Дроны давхаргууд — сонголтын дагуу ──────────────────────── */
-  useEffect(() => {
-    const map = olMap.current;
-    if (!map) return;
-    Object.entries(droneLayers.current).forEach(([id, layer]) => {
-      if (selectedDrones.has(id)) return;
-      map.removeLayer(layer);
-      delete droneLayers.current[id];
-    });
-    usableDrones.forEach((img) => {
-      if (!selectedDrones.has(img.id) || droneLayers.current[img.id]) return;
-      const b = droneBounds(img);
-      if (!b) return;
-      const layer = new TileLayer({
-        zIndex: DRONE_Z_INDEX,
-        extent: transformExtent(b, "EPSG:4326", "EPSG:3857"),
-        source: new XYZ({ url: droneTileUrl(acquisitionId, img.id), maxZoom: GS_GWC_MAX_ZOOM }),
-      });
-      droneLayers.current[img.id] = layer;
-      map.addLayer(layer);
-    });
-  }, [selectedDrones, usableDrones, acquisitionId]);
 
   /* ── Зураг авч, хуудас бүрдүүлэх ─────────────────────────────── */
   const legend = useMemo<PrintLegendItem[]>(
@@ -306,39 +225,83 @@ export default function PrintMapDialog({
     };
   }, [acq, categories, departments, parcelsAreaM2, statusCounts]);
 
-  // Зургийн ӨНДӨР — хуудасны зургийн талбайн харьцаагаар (тайралт үүсэхгүй)
+  /* Зургийн хэмжээ — хуудасны зургийн талбайн ХАРЬЦААГААР (тайралт үүсэхгүй),
+     нягтаршлын коэффициентээр ТОМСГОСОН (PDF дээр тод гарна). */
   const area = printMapAreaSizePx(orientation, paper);
-  const mapH = Math.round((MAP_W * area.height) / area.width);
+  const mapW = Math.min(MAP_W_MAX, Math.round(area.width * printScaleFor(paper)));
+  const mapH = Math.round((mapW * area.height) / area.width);
 
   const rebuild = useCallback(async () => {
-    const map = olMap.current;
-    const ext = extentRef.current;
-    if (!map || !ext) return;
+    const ext = extent;
+    if (!ext) return;
     setBusy(true);
-    map.updateSize();
+    setError(null);
 
-    // Хилийг ДЭЭД хэсэгт: доод зурвасыг таних тэмдэг/мэдээллийн карт эзэлнэ.
+    /* Хилийг ДЭЭД хэсэгт: доод зурвасыг таних тэмдэг/мэдээллийн карт эзэлнэ. */
     const a = printMapAreaSizePx(orientation, paper);
-    const cover = a.width / MAP_W; // өргөн/өндөр ижил харьцаатай тул нэг утга
+    const cover = a.width / mapW; // өргөн/өндөр ижил харьцаатай тул нэг утга
     const band = printInfoBandPx() / cover;
     const usableH = Math.max(mapH * 0.35, mapH - band);
     const PAD = 1.06;
-    const resolution = Math.max(((ext[2] - ext[0]) * PAD) / MAP_W, ((ext[3] - ext[1]) * PAD) / usableH);
-    map.getView().setResolution(resolution);
-    map.getView().setCenter([(ext[0] + ext[2]) / 2, (ext[1] + ext[3]) / 2 - (band / 2) * resolution]);
+    const resolution = Math.max(((ext[2] - ext[0]) * PAD) / mapW, ((ext[3] - ext[1]) * PAD) / usableH);
+    const cx = (ext[0] + ext[2]) / 2;
+    const cy = (ext[1] + ext[3]) / 2 - (band / 2) * resolution;
+    const view: [number, number, number, number] = [
+      cx - (resolution * mapW) / 2,
+      cy - (resolution * mapH) / 2,
+      cx + (resolution * mapW) / 2,
+      cy + (resolution * mapH) / 2,
+    ];
+    const viewInfo = { resolution, centerLat: toLonLat([cx, cy])[1] };
 
-    const viewInfo = getMapViewInfo(map);
-    const canvas = await captureMapCanvas(map);
-    if (!canvas) {
+    /* Давхаргууд — ДООДООС дээш (zIndex-ийн дарааллаар).
+       1) суурь хиймэл дагуул  2) сонгосон дроны зураг  3) WMS давхаргууд */
+    const layers: PrintLayerSpec[] = [
+      {
+        kind: "xyz",
+        urls: [0, 1, 2, 3].map((i) => `https://mt${i}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`),
+        maxZoom: 20,
+        crossOrigin: "anonymous",
+      },
+    ];
+    usableDrones
+      .filter((img) => selectedDrones.has(img.id))
+      .forEach((img) => {
+        const b = droneBounds(img);
+        if (!b) return;
+        layers.push({
+          kind: "xyz",
+          urls: [droneTileUrl(acquisitionId, img.id)],
+          maxZoom: GS_GWC_MAX_ZOOM,
+          clipExtent: transformExtent(b, "EPSG:4326", "EPSG:3857") as [number, number, number, number],
+        });
+      });
+    ([...BOUNDARY_IDS, ...PARCEL_STATUS_IDS] as MapLayerId[])
+      .map((id) => ({ id, def: layerDef(id) }))
+      .sort((x, y) => x.def.zIndex - y.def.zIndex)
+      .forEach(({ id, def }) => {
+        layers.push({
+          kind: "wms",
+          layer: `land:${id}`,
+          styles: PRINT_STYLES[id],
+          cql: id.startsWith("au") ? undefined : acqFilter,
+          opacity: def.opacity ?? 0.9,
+        });
+      });
+
+    try {
+      const canvas = await renderPrintMapCanvas({ extent: view, width: mapW, height: mapH, layers });
+      mapCanvasRef.current = canvas;
+      const page = composePrintPage(canvas, { title, orientation, paper, legend, viewInfo, info });
+      setPageCanvas(page);
+      setDataUrl(page.toDataURL("image/png"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
       setBusy(false);
-      return;
     }
-    mapCanvasRef.current = canvas;
-    const page = composePrintPage(canvas, { title, orientation, paper, legend, viewInfo, info });
-    setPageCanvas(page);
-    setDataUrl(page.toDataURL("image/png"));
-    setBusy(false);
-  }, [orientation, paper, title, legend, info, mapH]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orientation, paper, title, legend, info, mapW, mapH, extent, selectedDrones, usableDrones, acquisitionId, acqFilter]);
 
   // Хүрээ/сонголт/цаас өөрчлөгдөх бүрд дахин зурна (гарчиг УДААН биш —
   // доорх тусдаа effect нь зөвхөн хуудсыг дахин бүрдүүлнэ).
@@ -346,7 +309,7 @@ export default function PrintMapDialog({
     const t = setTimeout(() => void rebuild(), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation, paper, selectedDrones, statusCounts, acq, mapH]);
+  }, [orientation, paper, selectedDrones, statusCounts, acq, mapW, mapH, extent]);
 
   // Гарчиг солиход зургийг ДАХИН АВАХГҮЙ — хадгалсан canvas дээрээ дахин зурна
   useEffect(() => {
@@ -371,13 +334,6 @@ export default function PrintMapDialog({
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Зураг авах ҮЛ ҮЗЭГДЭХ газрын зураг. display:none БОЛОХГҮЙ —
-          OpenLayers хэмжээгүй контейнерт рендер хийхгүй. */}
-      <div
-        ref={mapDivRef}
-        style={{ position: "fixed", left: -99999, top: 0, width: MAP_W, height: mapH }}
-        aria-hidden
-      />
 
       <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1e1f27]">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-[#37394d]">
@@ -457,15 +413,31 @@ export default function PrintMapDialog({
           )}
         </div>
 
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#15161c]">
-          {busy || !dataUrl ? (
-            <div className="flex flex-col items-center gap-2 py-16 text-slate-400">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              <span className="text-[12px]">Бэлтгэж байна...</span>
-            </div>
-          ) : (
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#15161c]">
+          {/* Урьдчилан харах нь ХЭВЛЭГДЭХ ЯГ ТЭР зураг — өөр газрын зураг
+              байхгүй тул "дэлгэц дээр өөр, хэвлэхэд өөр" гэсэн зөрүү үүсэхгүй. */}
+          {dataUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={dataUrl} alt="Ажлын зураг" className="h-auto w-full rounded shadow" />
+            <img
+              src={dataUrl}
+              alt="Ажлын зураг"
+              className="max-h-full w-full rounded shadow"
+              style={{ opacity: busy ? 0.35 : 1 }}
+            />
+          )}
+          {busy && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-500">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="text-[12px]">Газрын зураг бэлдэж байна...</span>
+            </div>
+          )}
+          {!busy && error && (
+            <div className="absolute inset-4 flex flex-col items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 p-4 text-center dark:border-red-500/40 dark:bg-red-500/10">
+              <p className="text-[12.5px] font-semibold text-red-600 dark:text-red-400">
+                Газрын зургийн давхарга ачаалагдсангүй
+              </p>
+              <p className="max-w-lg break-words text-[11px] text-red-500/90 dark:text-red-300/80">{error}</p>
+            </div>
           )}
         </div>
 
