@@ -321,6 +321,7 @@ export default function AcquisitionDetailPage() {
           aus={acq.aus}
           acquisitionName={acq.acquisition_name || acq.plan_code}
           planCode={acq.plan_code}
+          autoPrint={searchParams.get("print") === "1"}
           canEdit={canEdit && !isExternal}
         />
       )}

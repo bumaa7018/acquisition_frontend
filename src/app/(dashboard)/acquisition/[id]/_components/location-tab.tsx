@@ -93,6 +93,7 @@ export function LocationTab({
   aus,
   acquisitionName,
   planCode,
+  autoPrint,
   canEdit,
 }: {
   id: string;
@@ -100,6 +101,8 @@ export function LocationTab({
   acquisitionName?: string;
   /** "Үндсэн төлөвлөлтийн хил" давхаргыг шүүх төлөвлөгөөний дугаар. */
   planCode?: string;
+  /** ?print=1 — газрын зураг бэлэн болмогц хэвлэх цонхыг өөрөө нээнэ. */
+  autoPrint?: boolean;
   canEdit: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -461,6 +464,7 @@ export function LocationTab({
             aus={aus}
             acquisitionName={acquisitionName}
             planCode={planCode}
+            autoPrint={autoPrint}
             droneOverlays={overlays}
             droneFocus={focus}
           />

@@ -36,11 +36,16 @@ import {
   ChevronDown,
   Calendar,
   FileSpreadsheet,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProgressBadge } from "@/components/ui/progress-badge";
 import { authStorage } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+
+// "Ажлын зураг" цонх — дотроо OpenLayers газрын зураг үүсгэдэг тул
+// зөвхөн хэрэглэгч товч дархад л ачаална (ssr: false).
+const PrintMapDialog = dynamic(() => import("@/components/map/print-map-dialog"), { ssr: false });
 
 const MapView = dynamic(() => import("@/components/map/map-view"), {
   ssr: false,
@@ -671,6 +676,8 @@ function moneyShort(value: number) {
 }
 
 function ExternalDashboard() {
+  // Ажлын зураг бэлдэх чөлөөлөлт (null = цонх хаалттай)
+  const [printAcq, setPrintAcq] = useState<{ id: string; name?: string } | null>(null);
   const isFinance = isFinanceSpecialist();
   const isMikaRole = isMika();
   const isProfOrgRole = isProfessionalOrg();
@@ -974,20 +981,38 @@ function ExternalDashboard() {
                     {land.plan_code} · {land.parcel_count ?? 0} нэгж талбар
                   </p>
                 </div>
-                {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
-                <Link
-                  prefetch={false}
-                  href={`/acquisition/${land.id}`}
-                  className="shrink-0 ml-4 inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
-                >
-                  {primaryActionLabel}
-                </Link>
+                <div className="ml-4 flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPrintAcq({ id: land.id, name: land.acquisition_name || land.plan_code })}
+                    title="Ажлын зураг бэлдэх"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-[#02c0ce]/10 hover:text-[#02c0ce]"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                  </button>
+                  {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
+                  <Link
+                    prefetch={false}
+                    href={`/acquisition/${land.id}`}
+                    className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
+                  >
+                    {primaryActionLabel}
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
         )}
         </div>
       </div>
+
+      {printAcq && (
+        <PrintMapDialog
+          acquisitionId={printAcq.id}
+          acquisitionName={printAcq.name}
+          onClose={() => setPrintAcq(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1029,6 +1054,8 @@ export default function DashboardPage() {
   const [inEmployeeId,   setInEmployeeId]   = useState("");
   const [inEmployeeName, setInEmployeeName] = useState("");
   const [inAu2Code,      setInAu2Code]      = useState("");
+  // Ажлын зураг бэлдэх чөлөөлөлт (null = цонх хаалттай)
+  const [printAcq, setPrintAcq] = useState<{ id: string; name?: string } | null>(null);
 
   const { data: dashGenCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
@@ -1727,7 +1754,7 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={acq.id}
-                    className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors"
+                    className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors"
                   >
                     <span
                       className="mt-1 h-2 w-2 shrink-0 rounded-full"
@@ -1747,6 +1774,20 @@ export default function DashboardPage() {
                         {acq.plan_code} · {acq.parcel_count ?? 0} нэгж талбар
                       </p>
                     </div>
+                    {/* АЖЛЫН ЗУРАГ — байршил таб руу очиж хэвлэх цонхыг
+                        ӨӨРӨӨ нээнэ (?print=1). Зураг нь тухайн чөлөөлөлтийн
+                        давхаргууд бүрэн ачаалагдсаны дараа бэлдэгдэнэ. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPrintAcq({ id: acq.id, name: acq.acquisition_name || acq.plan_code });
+                      }}
+                      title="Ажлын зураг бэлдэх"
+                      className="ml-auto mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-[#02c0ce]/10 hover:text-[#02c0ce]"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 );
               })}
@@ -1754,6 +1795,14 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {printAcq && (
+        <PrintMapDialog
+          acquisitionId={printAcq.id}
+          acquisitionName={printAcq.name}
+          onClose={() => setPrintAcq(null)}
+        />
+      )}
     </div>
   );
 }
