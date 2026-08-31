@@ -51,8 +51,12 @@ const PAGE_TITLE_AREA_H = PAGE_ORG_ROW_H + 52;
 // Мэдээллийн КАРТ — тусдаа панель БИШ, газрын зургийн ДЭЭР хөвнө
 // (таних тэмдэгтэй яг ижил цагаан дэвсгэртэй). Зургийн доод хэсэгт
 // чөлөөлөлтийн хил ороогүй хоосон зай үлдээж, түүн дээр нь зурна.
-const INFO_CARD_H = 126;
+const INFO_CARD_H = 72;
 const CARD_INSET = 10;
+/* БОСОО хэвлэхэд хуудас нарийн тул таних тэмдэг + мэдээллийн карт зэрэгцэж
+   БАГТДАГГҮЙ — мөрийн шошго ба утга давхарлаж уншигдахгүй болдог. Иймд босоо
+   үед хоёр картыг ДЭЭШ-ДООШ өрж, тус бүрд нь БҮТЭН өргөн өгнө. */
+
 
 /**
  * Хуудсан дээр ГАЗРЫН ЗУРАГТ оногдох талбайн хэмжээ (px).
@@ -386,6 +390,13 @@ export type PrintLayerSpec =
       styles?: string;
       cql?: string;
       opacity?: number;
+      /**
+       * ЗААВАЛ байх давхарга уу? Зөвхөн чөлөөлөлтийн хил ба нэгж талбар
+       * ЗААВАЛ — эдгээр байхгүй бол ажлын зураг утгагүй тул алдаа өгнө.
+       * Туслах давхарга (аймаг/сум/хороо, төлөвлөлтийн хил) унавал ЧИМЭЭГҮЙ
+       * алгасаж, үлдсэнийг нь хэвлэнэ.
+       */
+      required?: boolean;
     }
   | {
       kind: "xyz";
@@ -430,37 +441,60 @@ async function drawWmsLayer(
   width: number,
   height: number,
 ): Promise<void> {
-  const body = new URLSearchParams({
-    SERVICE: "WMS",
-    VERSION: "1.1.1", // 1.1.1 — тэнхлэгийн дараалал (x,y) тодорхой, 1.3.0-ийн урвуутай асуудалгүй
-    REQUEST: "GetMap",
-    LAYERS: spec.layer,
-    STYLES: spec.styles ?? "",
-    BBOX: extent.join(","),
-    WIDTH: String(width),
-    HEIGHT: String(height),
-    SRS: "EPSG:3857",
-    FORMAT: "image/png",
-    TRANSPARENT: "true",
-  });
-  if (spec.cql) body.set("CQL_FILTER", spec.cql);
+  const request = async (styles: string): Promise<Blob> => {
+    const body = new URLSearchParams({
+      SERVICE: "WMS",
+      VERSION: "1.1.1", // 1.1.1 — тэнхлэгийн дараалал (x,y) тодорхой, 1.3.0-ийн урвуутай асуудалгүй
+      REQUEST: "GetMap",
+      LAYERS: spec.layer,
+      STYLES: styles,
+      BBOX: extent.join(","),
+      WIDTH: String(width),
+      HEIGHT: String(height),
+      SRS: "EPSG:3857",
+      FORMAT: "image/png",
+      TRANSPARENT: "true",
+    });
+    if (spec.cql) body.set("CQL_FILTER", spec.cql);
 
-  const r = await fetch(GS_WMS, {
-    method: "POST",
-    headers: gsAuthHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
-    body: body.toString(),
-  });
-  if (!r.ok) {
-    const text = await r.text().catch(() => "");
-    throw new Error(`${spec.layer}: HTTP ${r.status} ${text.slice(0, 200)}`);
+    const r = await fetch(GS_WMS, {
+      method: "POST",
+      headers: gsAuthHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
+      body: body.toString(),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status} ${text.slice(0, 200)}`);
+    }
+    const type = r.headers.get("content-type") || "";
+    if (!type.startsWith("image/")) {
+      // GeoServer алдааг 200 + XML-ээр буцаадаг тул статус хангалтгүй.
+      const text = await r.text().catch(() => "");
+      throw new Error(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200));
+    }
+    return r.blob();
+  };
+
+  let blob: Blob;
+  try {
+    blob = await request(spec.styles ?? "");
+  } catch (first) {
+    if (!spec.styles) {
+      if (spec.required) throw new Error(`${spec.layer}: ${String(first)}`);
+      return;
+    }
+    /* Хэвлэхийн style ачаалагдаагүй байх (GeoServer-т reload хийгдээгүй г.м)
+       нь бүх зургийг унагаах шалтгаан БИШ — ӨГӨГДМӨЛ style-аар дахин оролдоно.
+       Зураас нь нимгэн боловч давхарга нь ГАРНА. */
+    try {
+      blob = await request("");
+    } catch (second) {
+      if (spec.required) throw new Error(`${spec.layer}: ${String(second)}`);
+      return; // туслах давхарга — чимээгүй алгасна
+    }
   }
-  const type = r.headers.get("content-type") || "";
-  if (!type.startsWith("image/")) {
-    // GeoServer алдааг 200 + XML-ээр буцаадаг тул статус хангалтгүй.
-    const text = await r.text().catch(() => "");
-    throw new Error(`${spec.layer}: ${text.replace(/<[^>]+>/g, " ").trim().slice(0, 200)}`);
-  }
-  const bitmap = await createImageBitmap(await r.blob());
+
+  const bitmap = await createImageBitmap(blob);
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 }
@@ -796,6 +830,8 @@ export function composePrintPage(
   ctx.strokeRect(mapAreaX + 0.5, mapAreaY + 0.5, mapAreaW, mapAreaH);
 
   // Таних тэмдэг ба мэдээллийн карт хоёр НЭГ доод зурваст зэрэгцэнэ.
+  /* Таних тэмдэг ба мэдээллийн карт ҮРГЭЛЖ доод зурваст ЗЭРЭГЦЭНЭ (босоо ч
+     мөн). Үсэг жижиг болсон тул нарийн хуудсанд ч багтана. */
   const cardBottom = mapAreaY + mapAreaH - CARD_INSET;
   let legendRight = mapAreaX + CARD_INSET;
   if (legend.length) {
@@ -803,18 +839,19 @@ export function composePrintPage(
        шугамд эгнэнэ. Элемент олон бол мөрийг ЖИЖИГРҮҮЛЭХГҮЙ, оронд нь
        ХОЁР БАГАНА болгоно (жижиг үсэг цаасан дээр уншигдахгүй). */
     const legendH = INFO_CARD_H;
-    const headerH = 26;
-    const rowH = 15;
-    const maxRows = Math.max(1, Math.floor((legendH - headerH - 6) / rowH));
-    const cols = Math.min(2, Math.ceil(legend.length / maxRows));
+    const headerH = 16;
+    const rowH = 10;
+    const maxRows = Math.max(1, Math.floor((legendH - headerH - 4) / rowH));
+    const maxCols = 3;
+    const cols = Math.max(1, Math.min(maxCols, Math.ceil(legend.length / maxRows)));
     const perCol = Math.ceil(legend.length / cols);
 
-    ctx.font = "bold 11px sans-serif";
+    ctx.font = "bold 8px sans-serif";
     const titleTextWidth = ctx.measureText("Таних тэмдэг").width;
-    ctx.font = "10px sans-serif";
+    ctx.font = "7px sans-serif";
     const maxRowTextWidth = Math.max(...legend.map((item) => ctx.measureText(item.label).width));
-    const colW = Math.max(140, maxRowTextWidth + 34);
-    const legendW = Math.max(titleTextWidth + 20, colW * cols + 10);
+    const colW = Math.max(92, maxRowTextWidth + 21);
+    const legendW = Math.max(titleTextWidth + 16, colW * cols + 6);
     const legendX = mapAreaX + CARD_INSET;
     const legendY = cardBottom - legendH;
     legendRight = legendX + legendW + CARD_INSET;
@@ -827,33 +864,33 @@ export function composePrintPage(
     ctx.stroke();
 
     ctx.fillStyle = "#334155";
-    ctx.font = "bold 11px sans-serif";
+    ctx.font = "bold 8px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText("Таних тэмдэг", legendX + 10, legendY + 8);
+    ctx.fillText("Таних тэмдэг", legendX + 6, legendY + 5);
 
-    ctx.font = "10px sans-serif";
+    ctx.font = "7px sans-serif";
     legend.forEach((item, i) => {
       const col = Math.floor(i / perCol);
       const row = i % perCol;
-      const x = legendX + 10 + col * colW;
+      const x = legendX + 6 + col * colW;
       const swatchY = legendY + headerH + row * rowH + rowH / 2;
       if (item.line) {
         // Хилийн давхарга — ШУГАМААР (хэвлэхэд дүүргэлт байхгүй тул
         // дөрвөлжин тэмдэг нь бодит харагдацтай таарахгүй).
         ctx.strokeStyle = item.color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(x, swatchY);
-        ctx.lineTo(x + 14, swatchY);
+        ctx.lineTo(x + 9, swatchY);
         ctx.stroke();
       } else {
         ctx.fillStyle = item.color;
-        ctx.fillRect(x, swatchY - 5, 14, 10);
+        ctx.fillRect(x, swatchY - 3, 9, 6);
       }
       ctx.fillStyle = "#334155";
       ctx.textBaseline = "middle";
-      ctx.fillText(ellipsize(ctx, item.label, colW - 24), x + 18, swatchY);
+      ctx.fillText(ellipsize(ctx, item.label, colW - 16), x + 12, swatchY);
       ctx.textBaseline = "top";
     });
   }
@@ -879,14 +916,14 @@ export function composePrintPage(
 
     // Гарчиг — таних тэмдэгтэй ижил хэлбэр
     ctx.fillStyle = "#334155";
-    ctx.font = "bold 11px sans-serif";
+    ctx.font = "bold 8px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText("Дэлгэрэнгүй мэдээлэл", infoX + 12, infoY + 8);
+    ctx.fillText("Дэлгэрэнгүй мэдээлэл", infoX + 8, infoY + 5);
 
-    const padX = 12;
-    const rowH = 17;
-    const pieBoxW = 108;
+    const padX = 8;
+    const rowH = 10.5;
+    const pieBoxW = 62;
     const colW = (infoW - padX * 2 - pieBoxW) / 2;
     const col1X = infoX + padX;
     const col2X = col1X + colW;
@@ -895,17 +932,21 @@ export function composePrintPage(
     const drawRow = (x: number, y: number, label: string, value: string, maxW: number) => {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = "9.5px sans-serif";
+      ctx.font = "6.8px sans-serif";
       ctx.fillStyle = "#64748b";
-      ctx.fillText(label, x, y);
-      const labelW = Math.min(ctx.measureText(label).width + 5, maxW * 0.6);
-      ctx.font = "bold 10.5px sans-serif";
+      /* ШОШГЫГ ЗААВАЛ тайрна. Өмнө нь шошгыг бүтнээр нь зураад утгыг
+         maxW*0.6 дээр эхлүүлдэг байсан тул урт шошготой мөр дээр хоёул
+         ДАВХАРЛАДАГ байв (босоо хэвлэхэд илт харагдана). */
+      const labelText = ellipsize(ctx, label, maxW * 0.62);
+      ctx.fillText(labelText, x, y);
+      const labelW = ctx.measureText(labelText).width + 3;
+      ctx.font = "bold 7.6px sans-serif";
       ctx.fillStyle = "#1e293b";
       // fillText-ийн maxWidth нь текстийг ШАХДАГ тул оронд нь тайрч "…" залгана.
       ctx.fillText(ellipsize(ctx, value || "—", maxW - labelW), x + labelW, y);
     };
 
-    let y = infoY + 34;
+    let y = infoY + 21;
     drawRow(col1X, y, "Төлөвлөлтийн дугаар:", info.planCode || "—", colW - 8); y += rowH;
     drawRow(col1X, y, "Төлөвлөлтийн нэр:", info.planName || "—", colW - 8); y += rowH;
     drawRow(col1X, y, "Чөлөөлөх талбай:", areaText(info.acquisitionAreaM2), colW - 8); y += rowH;
@@ -915,24 +956,24 @@ export function composePrintPage(
       if (denominator > 0) drawRow(col1X, y, "Масштаб:", `1:${denominator.toLocaleString("en-US")}`, colW - 8);
     }
 
-    y = infoY + 34;
+    y = infoY + 21;
     const dept = [info.departmentCode, info.departmentName].filter(Boolean).join(" · ");
     drawRow(col2X, y, "Хэлтэс:", dept || "—", colW - 8); y += rowH;
     drawRow(col2X, y, "Явц:", info.statusName || "—", colW - 8); y += rowH;
     drawRow(col2X, y, "Хариуцсан:", (info.specialists ?? []).join(", ") || "—", colW - 8); y += rowH;
     drawRow(col2X, y, "Огноо:", formatDateDots(new Date()), colW - 8);
 
-    const pieCy = infoY + 30 + (INFO_CARD_H - 30) / 2 - 6;
-    const pieR = Math.min(32, INFO_CARD_H / 2 - 16);
+    const pieCy = infoY + 18 + (INFO_CARD_H - 18) / 2 - 4;
+    const pieR = Math.min(19, INFO_CARD_H / 2 - 11);
     drawProgressPie(ctx, pieCx, pieCy, pieR, info.progressBreakdown ?? []);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = "#0acf97";
-    ctx.font = "bold 13px sans-serif";
+    ctx.font = "bold 9px sans-serif";
     ctx.fillText(`${Math.round(info.progressPercent ?? 0)}%`, pieCx, pieCy);
     ctx.fillStyle = "#64748b";
-    ctx.font = "9px sans-serif";
-    ctx.fillText("Гүйцэтгэл", pieCx, infoY + INFO_CARD_H - 11);
+    ctx.font = "6.5px sans-serif";
+    ctx.fillText("Гүйцэтгэл", pieCx, infoY + INFO_CARD_H - 8);
   }
 
   return page;

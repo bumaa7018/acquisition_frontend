@@ -289,6 +289,9 @@ export default function PrintMapDialog({
           styles: PRINT_STYLES[id],
           cql: id.startsWith("au") ? undefined : acqFilter,
           opacity: def.opacity ?? 0.9,
+          // ЗААВАЛ: чөлөөлөлтийн хил + нэгж талбарууд. Бусад нь туслах —
+          // унавал алгасаад үлдсэнийг нь хэвлэнэ.
+          required: id === "v_acquisition_plan" || id.startsWith("v_parcel_"),
         });
       });
 
