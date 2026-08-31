@@ -42,6 +42,9 @@ const BOUNDARY_IDS = ["v_acquisition_plan", "v_plan_acquisition", "au1", "au2", 
 
 // Хэвлэхэд зориулсан style-ууд (GeoServer дээр make config-оор ачаалагдана)
 const PRINT_STYLES: Record<string, string> = {
+  au1: "au1_boundary_print",
+  au2: "au2_boundary_print",
+  au3: "au3_boundary_print",
   v_acquisition_plan: "acquisition_plan_print",
   v_plan_acquisition: "plan_acquisition_print",
   v_parcel_s0: "parcel_s0_print",
