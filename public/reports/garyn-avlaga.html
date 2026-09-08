@@ -1,0 +1,1261 @@
+<title>Газар чөлөөлөлтийн гарын авлага</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap&subset=cyrillic,cyrillic-ext,latin">
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   ТОКЕН — гэрэл (үндсэн). Бүх өнгө ЭНД тодорхойлогдоно.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --ground:      #f4f7f7;
+  --surface:     #ffffff;
+  --surface-2:   #eef3f3;
+  --ink:         #0d2427;
+  --ink-2:       #3f5b5e;
+  --ink-3:       #6e8688;
+  --rule:        #d3e0e0;
+  --rule-soft:   #e5eded;
+
+  --accent:      #067c85;
+  --accent-ink:  #045057;
+  --accent-wash: #e2f2f3;
+  --accent-line: #9ed3d7;
+
+  --good:        #0a7a55;
+  --good-wash:   #e0f2ea;
+  --warn:        #9d6100;
+  --warn-wash:   #f9eedb;
+  --stop:        #b03227;
+  --stop-wash:   #f8e7e5;
+  --calm:        #3c5c9b;
+  --calm-wash:   #e6ecf7;
+
+  --shadow:      0 1px 2px rgba(13,36,39,.05), 0 8px 24px -16px rgba(13,36,39,.30);
+  --maxw:        980px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0c1416;
+    --surface:     #141e21;
+    --surface-2:   #1b282b;
+    --ink:         #e7f0f0;
+    --ink-2:       #a9c0c2;
+    --ink-3:       #7b9497;
+    --rule:        #27383b;
+    --rule-soft:   #1f2e31;
+
+    --accent:      #37c2ca;
+    --accent-ink:  #8fe0e5;
+    --accent-wash: #102f32;
+    --accent-line: #1d565b;
+
+    --good:        #43c493;
+    --good-wash:   #0e2c22;
+    --warn:        #e0a445;
+    --warn-wash:   #302413;
+    --stop:        #f0837a;
+    --stop-wash:   #331917;
+    --calm:        #8fabe4;
+    --calm-wash:   #16203a;
+
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:      #0c1416;
+  --surface:     #141e21;
+  --surface-2:   #1b282b;
+  --ink:         #e7f0f0;
+  --ink-2:       #a9c0c2;
+  --ink-3:       #7b9497;
+  --rule:        #27383b;
+  --rule-soft:   #1f2e31;
+
+  --accent:      #37c2ca;
+  --accent-ink:  #8fe0e5;
+  --accent-wash: #102f32;
+  --accent-line: #1d565b;
+
+  --good:        #43c493;
+  --good-wash:   #0e2c22;
+  --warn:        #e0a445;
+  --warn-wash:   #302413;
+  --stop:        #f0837a;
+  --stop-wash:   #331917;
+  --calm:        #8fabe4;
+  --calm-wash:   #16203a;
+
+  --shadow:      0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.8);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink-2);
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.62;
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3 {
+  font-family: "PT Serif", Georgia, "Times New Roman", serif;
+  color: var(--ink);
+  line-height: 1.22;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: clamp(28px, 5.2vw, 42px); letter-spacing: -.015em; }
+h2 { font-size: clamp(20px, 3.4vw, 26px); }
+h3 { font-size: 17px; }
+
+a { color: var(--accent-ink); }
+a:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Скелет ────────────────────────────────────────────────── */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--ground);
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--rule);
+}
+.topbar-in {
+  max-width: var(--maxw); margin: 0 auto;
+  padding: 10px 20px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.brand {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--accent-ink); font-weight: 600;
+}
+.topnav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.topnav a {
+  font-size: 12.5px; font-weight: 500; text-decoration: none;
+  color: var(--ink-3); padding: 4px 9px; border-radius: 999px;
+}
+.topnav a:hover { color: var(--accent-ink); background: var(--accent-wash); }
+
+.page { max-width: var(--maxw); margin: 0 auto; padding: 0 20px 96px; }
+
+/* ── Гарчиг блок ───────────────────────────────────────────── */
+.masthead { padding: 44px 0 30px; border-bottom: 2px solid var(--ink); }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--accent-ink); font-weight: 600; margin-bottom: 14px;
+}
+.lede { font-size: 16.5px; margin: 14px 0 0; max-width: 62ch; }
+.meta {
+  display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 22px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-3);
+}
+.meta b { color: var(--ink-2); font-weight: 600; }
+
+/* ── Хэсгийн толгой ────────────────────────────────────────── */
+.part {
+  margin: 54px 0 0; padding-top: 22px;
+  border-top: 1px solid var(--rule);
+}
+.part-label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 600;
+}
+.part h2 { margin-top: 6px; }
+.part-note { margin: 10px 0 0; max-width: 62ch; font-size: 14.5px; }
+
+/* ── Ролийн туузан ─────────────────────────────────────────── */
+.roles { display: grid; gap: 10px; margin: 22px 0 0; }
+@media (min-width: 620px) { .roles { grid-template-columns: 1fr 1fr; } }
+@media (min-width: 900px) { .roles { grid-template-columns: repeat(3, 1fr); } }
+.role {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 10px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.role b { color: var(--ink); font-size: 14px; font-weight: 600; }
+.role span { font-size: 12.5px; color: var(--ink-3); line-height: 1.45; }
+.role code {
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  color: var(--accent-ink); letter-spacing: .02em;
+}
+
+/* ── 1-р хэсгийн дугаарласан картууд ───────────────────────── */
+.map { display: grid; gap: 14px; margin-top: 26px; }
+@media (min-width: 780px) { .map { grid-template-columns: 1fr 1fr; } }
+.mapcard {
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 12px; padding: 16px 18px 14px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.mapcard > header { display: flex; align-items: baseline; gap: 10px; }
+.num {
+  font-family: "IBM Plex Mono", monospace; font-weight: 600;
+  font-size: 12px; color: var(--surface); background: var(--accent);
+  border-radius: 6px; padding: 3px 8px; letter-spacing: .04em;
+  flex: 0 0 auto;
+}
+.mapcard h3 { font-size: 17.5px; }
+.mapcard > p { margin: 0; font-size: 13.5px; color: var(--ink-3); }
+.mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.mini li { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.5; }
+.mini .k {
+  font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 600;
+  color: var(--accent-ink); flex: 0 0 30px; padding-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.mini b { color: var(--ink); font-weight: 600; }
+
+/* ── Дэлгэрэнгүй хэсэг ─────────────────────────────────────── */
+.detail { margin-top: 40px; scroll-margin-top: 72px; }
+.detail > header {
+  display: flex; align-items: baseline; gap: 12px;
+  border-bottom: 1.5px solid var(--accent-line); padding-bottom: 8px;
+}
+.detail > header .num { background: var(--ink); }
+.sub { margin-top: 30px; scroll-margin-top: 72px; }
+.sub > h3 {
+  display: flex; align-items: baseline; gap: 9px;
+  border-bottom: 1px solid var(--rule); padding-bottom: 6px;
+}
+.sub > h3 .tag {
+  font-family: "IBM Plex Mono", monospace; font-size: 12px;
+  color: var(--accent-ink); font-weight: 600; flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.sub p { margin: 10px 0; }
+
+/* ── Алхмын зам ────────────────────────────────────────────── */
+.steps { list-style: none; margin: 14px 0; padding: 0 0 0 30px; position: relative; }
+.steps::before {
+  content: ""; position: absolute; left: 9px; top: 8px; bottom: 8px;
+  width: 2px; background: var(--rule); border-radius: 2px;
+}
+.steps > li { position: relative; margin: 0 0 14px; font-size: 14.5px; }
+.steps > li:last-child { margin-bottom: 0; }
+.steps > li::before {
+  content: counter(step); counter-increment: step;
+  position: absolute; left: -30px; top: 1px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); color: #fff;
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.steps { counter-reset: step; }
+.steps b { color: var(--ink); font-weight: 600; }
+
+.plain { margin: 12px 0; padding-left: 20px; }
+.plain li { margin: 5px 0; font-size: 14.5px; }
+.plain b { color: var(--ink); font-weight: 600; }
+
+/* ── Товч, шошго ───────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--rule);
+}
+.chip.ok   { background: var(--good-wash); color: var(--good); border-color: transparent; }
+.chip.warn { background: var(--warn-wash); color: var(--warn); border-color: transparent; }
+.chip.stop { background: var(--stop-wash); color: var(--stop); border-color: transparent; }
+.chip.calm { background: var(--calm-wash); color: var(--calm); border-color: transparent; }
+.chip.acc  { background: var(--accent-wash); color: var(--accent-ink); border-color: transparent; }
+.chiprow { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+
+.btn {
+  display: inline-block;
+  font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 600;
+  padding: 1px 8px; border-radius: 6px;
+  background: var(--accent-wash); color: var(--accent-ink);
+  border: 1px solid var(--accent-line); white-space: nowrap;
+}
+code, .path {
+  font-family: "IBM Plex Mono", monospace; font-size: 12.5px;
+  color: var(--accent-ink); background: var(--accent-wash);
+  padding: 1px 5px; border-radius: 4px;
+}
+
+/* ── Тэмдэглэл ─────────────────────────────────────────────── */
+.callout {
+  border-left: 3px solid var(--accent); background: var(--surface);
+  border-radius: 0 10px 10px 0; padding: 11px 15px; margin: 14px 0;
+  font-size: 13.8px;
+}
+.callout.warn { border-left-color: var(--warn); }
+.callout.stop { border-left-color: var(--stop); }
+.callout b { color: var(--ink); }
+.callout .lbl {
+  display: block; font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 600; margin-bottom: 3px;
+}
+
+/* ── Хүснэгт ───────────────────────────────────────────────── */
+.tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; margin: 14px 0; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13px; }
+th {
+  background: var(--surface-2); color: var(--ink);
+  font-family: "IBM Plex Sans", sans-serif; font-weight: 600;
+  font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+  text-align: left; padding: 9px 12px; white-space: nowrap;
+  border-bottom: 1px solid var(--rule);
+}
+td { padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; color: var(--ink-2); }
+tbody tr:last-child td { border-bottom: none; }
+td b { color: var(--ink); font-weight: 600; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.grp td {
+  background: var(--accent-wash); color: var(--accent-ink);
+  font-family: "IBM Plex Mono", monospace; font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+}
+
+/* ── Урсгалын диаграм ──────────────────────────────────────── */
+.flowbox { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; margin: 16px 0; overflow-x: auto; }
+.flowbox svg { display: block; min-width: 560px; width: 100%; height: auto; }
+.flowbox figcaption { margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
+
+.foot {
+  margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--rule);
+  font-size: 12.5px; color: var(--ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="brand">Гарын авлага</span>
+    <nav class="topnav">
+      <a href="#toim">Товч тойм</a>
+      <a href="#s1">1 · Самбар, тайлан</a>
+      <a href="#s2">2 · Ажлын урсгал</a>
+      <a href="#s3">3 · Тохиргоо</a>
+      <a href="#s4">4 · Туслах</a>
+    </nav>
+  </div>
+</div>
+
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Газрын удирдлагын нэгдсэн мэдээллийн систем</p>
+  <h1>Газар чөлөөлөлтийн дэд системийн гарын авлага</h1>
+  <p class="lede">Энэ авлага хоёр хэсэгтэй. Эхний хэсэг нь системийн бүх боломж, ажлын
+  алхмуудыг дугаарлан нэг хуудсанд харуулна. Хоёр дахь хэсэг нь тэр дугаар бүрийн
+  дэлгэрэнгүй тайлбар, дэлгэц дээр дарах товч бүрийн зааврыг агуулна.</p>
+  <div class="meta">
+    <span><b>4</b> үндсэн бүлэг</span>
+    <span><b>29</b> дугаарласан сэдэв</span>
+    <span><b>6</b> хэрэглэгчийн роль</span>
+    <span><b>35</b> дэлгэц</span>
+    <span><b>12</b> албан баримтын загвар</span>
+  </div>
+</header>
+
+<!-- ═══════════════ 1-Р ХЭСЭГ: ТОВЧ ТОЙМ ═══════════════ -->
+<section class="part" id="toim">
+  <p class="part-label">Нэгдүгээр хэсэг</p>
+  <h2>Системийн боломж, алхмуудын товч тойм</h2>
+  <p class="part-note">Доорх дугаарлалт бол авлагын нуруу. Дугаар бүр хоёр дахь
+  хэсэгт ижил дугаараар задарна — жишээ нь <code>2.11</code> нь «Үнэлгээ хийх» алхмын
+  дэлгэрэнгүй заавар.</p>
+
+  <h3 style="margin-top:30px">Хэн юу хийдэг вэ</h3>
+  <div class="roles">
+    <div class="role">
+      <b>Систем администратор</b>
+      <span>Хэрэглэгч, роль, эрх, бүх лавлах тохиргоо. Баталгаажсан чөлөөлөлтийг харах цорын ганц роль.</span>
+      <code>admin</code>
+    </div>
+    <div class="role">
+      <b>Ахлах мэргэжилтэн</b>
+      <span>Чөлөөлөлт үүсгэх, ажилтан хуваарилах, явц шилжүүлэх, баталгаажуулах. «Тайлан» цэс, «Мэдээ татах» товч зөвхөн энэ ролид.</span>
+      <code>senior_specialist</code>
+    </div>
+    <div class="role">
+      <b>Мэргэжилтэн</b>
+      <span>Өөрт хуваарилагдсан чөлөөлөлтийн нэгж талбартай ажиллана — эзэмшигч, баримт, олговрын бүртгэл.</span>
+      <code>land:*</code>
+    </div>
+    <div class="role">
+      <b>Мэргэжлийн (үнэлгээний) байгууллага</b>
+      <span>Зөвхөн өөрт оногдсон чөлөөлөлт/нэгж талбар. Хөрөнгө, үнэлгээ оруулж илгээнэ.</span>
+      <code>professional_org</code>
+    </div>
+    <div class="role">
+      <b>МИКА</b>
+      <span>Гурав дахь буюу МИКА-гийн үнэлгээний урсгалыг оруулж, засварлана.</span>
+      <code>mika</code>
+    </div>
+    <div class="role">
+      <b>Санхүүгийн мэргэжилтэн</b>
+      <span>Илгээсэн үнэлгээг хянаж <b>баталгаажуулах</b> эсвэл <b>буцаах</b>. Үндсэн урсгалыг сонгоно.</span>
+      <code>finance_specialist</code>
+    </div>
+  </div>
+  <div class="callout">
+    <span class="lbl">Эрхийн зарчим</span>
+    Цэс, таб, товч бүр эрхээр шүүгддэг. Эрхгүй хэсэг <b>харагдахгүй</b> — «дарж болдоггүй»
+    биш. Гадаад ролиуд (үнэлгээний байгууллага, МИКА, санхүү) удирдлагын цэсэнд
+    хэзээ ч орохгүй, тусдаа <code>/prof</code> сувгаар ажиллана.
+  </div>
+
+  <div class="map">
+
+    <article class="mapcard">
+      <header><span class="num">1</span><h3>Хяналтын самбар ба тайлан</h3></header>
+      <p>Харах, шүүх, татах бүх боломж.</p>
+      <ul class="mini">
+        <li><span class="k">1.1</span><span><b>Дотоод самбар</b> — 6 шүүлтүүр, 4 үзүүлэлт, чөлөөлөгдсөн талбай, гүйцэтгэлийн хувь, зураг, огнооны график, чөлөөлөлтийн жагсаалт.</span></li>
+        <li><span class="k">1.2</span><span><b>Гадаад самбар</b> — үнэлгээний байгууллага, МИКА, санхүүд зориулсан ажлын дараалал ба төлөвийн график.</span></li>
+        <li><span class="k">1.3</span><span><b>Тайлан хуудас</b> — 18 баганат ГЧХ маягт, 10 шүүлтүүр, нэгтгэсэн статистик.</span></li>
+        <li><span class="k">1.4</span><span><b>Татаж авах 7 төрлийн файл</b> — ГЧХ-2 ажлын мэдээ, нэгдсэн тайлан, чөлөөлөлтийн тайлан, захирамжийн тайлан, ажлын зураг, DOCX баримт, эх файл.</span></li>
+      </ul>
+    </article>
+
+    <article class="mapcard">
+      <header><span class="num">2</span><h3>Газар чөлөөлөлтийн ажлын урсгал</h3></header>
+      <p>Нэвтрэхээс баталгаажуулах хүртэлх 16 алхам, дарааллаараа.</p>
+      <ul class="mini">
+        <li><span class="k">2.1</span><span>Нэвтрэх, ажлын байрандаа орох</span></li>
+        <li><span class="k">2.2</span><span>Чөлөөлөлт үүсгэх (төлөвлөгөө хайх → мэдээлэл бөглөх)</span></li>
+        <li><span class="k">2.3</span><span>Ажилтан хуваарилах, мэргэжлийн байгууллага оноох</span></li>
+        <li><span class="k">2.4</span><span>Санхүүжилтын эх үүсвэр бүртгэх</span></li>
+        <li><span class="k">2.5</span><span>Чөлөөлөлтийн хавсралт байршуулах</span></li>
+        <li><span class="k">2.6</span><span>Байршил, хил засах, дроны ортофото</span></li>
+        <li><span class="k">2.7</span><span>Нэгж талбарыг хилээр татах</span></li>
+        <li><span class="k">2.8</span><span>Нэгж талбарын мэдээллийг ГУС-аас дуудах (19 дуудлага)</span></li>
+        <li><span class="k">2.9</span><span>Эзэмшигч, итгэмжлэгдсэн төлөөлөгч, төлбөр авагч</span></li>
+        <li><span class="k">2.10</span><span>Барьцаа, төлбөр, шүүхийн шийдвэр шалгах</span></li>
+        <li><span class="k">2.11</span><span><b>Үнэлгээ хийх</b> — 3 зэрэгцээ урсгал, үнэлгээний байгууллагын үйлдэл</span></li>
+        <li><span class="k">2.12</span><span><b>Илгээх → Баталгаажуулах / Буцаах</b> — санхүүгийн хяналт</span></li>
+        <li><span class="k">2.13</span><span>Баримт бичиг, 12 эх хэвлэл, гэрээ</span></li>
+        <li><span class="k">2.14</span><span>Захирамжийн төсөл бэлтгэх, батлах</span></li>
+        <li><span class="k">2.15</span><span>Нэгж талбарын явцыг шилжүүлэх</span></li>
+        <li><span class="k">2.16</span><span>Чөлөөлөлтийг баталгаажуулж хаах</span></li>
+      </ul>
+    </article>
+
+    <article class="mapcard">
+      <header><span class="num">3</span><h3>Системийн тохиргоо</h3></header>
+      <p>Кодод хүрэлгүйгээр дүрмээ өөрчлөх хэсэг.</p>
+      <ul class="mini">
+        <li><span class="k">3.1</span><span><b>Хэрэглэгчид</b> — үүсгэх, ажилтантай холбох, роль өгөх, нууц үг солих, идэвхгүй болгох</span></li>
+        <li><span class="k">3.2</span><span><b>Эрх &amp; Роль</b> — роль үүсгэх, цэс тус бүрийн эрх тохируулах</span></li>
+        <li><span class="k">3.3</span><span><b>Хүний нөөц</b> — иргэн/хуулийн этгээд, ажилтан, байгууллага, алба хэлтэс, албан тушаал</span></li>
+        <li><span class="k">3.4</span><span><b>Үнэлгээний байгууллага</b> — тусгай зөвшөөрөл, ажилтан, нэвтрэх эрх</span></li>
+        <li><span class="k">3.5</span><span><b>10 лавлах</b> — ангилал, статус, ажлын урсгал, хөрөнгийн төрлүүд, ажлын төрөл, төсөв</span></li>
+        <li><span class="k">3.6</span><span><b>Үйлдлийн лог</b> — хэн, хэзээ, юуг өөрчилснийг шүүж харах</span></li>
+      </ul>
+    </article>
+
+    <article class="mapcard">
+      <header><span class="num">4</span><h3>Бусад туслах үйлдэл, боломж</h3></header>
+      <p>Өдөр тутмын ажлыг хөнгөвчлөх хэсгүүд.</p>
+      <ul class="mini">
+        <li><span class="k">4.1</span><span><b>Газрын зураг</b> — давхарга, 2D/3D, обьектын мэдээлэл, ажлын зураг хэвлэх</span></li>
+        <li><span class="k">4.2</span><span><b>Мэдэгдэл</b> — шууд дамжуулалт, дарахад холбогдох бичлэг рүү очих</span></li>
+        <li><span class="k">4.3</span><span><b>Хайлт, шүүлт, түүх</b> — ухаалаг сонголт, түүхэн бичлэг</span></li>
+        <li><span class="k">4.4</span><span><b>Нэгж талбарын түүх, Нөхөх олговорын түүх</b> — бие даасан хайлтын дэлгэц</span></li>
+        <li><span class="k">4.5</span><span><b>Профайл, харагдац</b> — хувийн мэдээлэл, өдөр/шөнийн горим, цэс хумих</span></li>
+        <li><span class="k">4.6</span><span><b>Хамгаалалт, хаалтууд</b> — юуг хэзээ засаж болохгүйн дүрэм</span></li>
+      </ul>
+    </article>
+
+  </div>
+
+  <h3 style="margin-top:36px">Нэг чөлөөлөлтийн бүтэн зам</h3>
+  <figure class="flowbox">
+    <svg viewBox="0 0 720 148" role="img" aria-label="Чөлөөлөлтийн үе шатны диаграм">
+      <defs>
+        <marker id="ar" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+          <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Sans, sans-serif" font-size="11">
+        <!-- мөр 1: чөлөөлөлтийн төлөв -->
+        <text x="0" y="14" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="currentColor" opacity=".55" letter-spacing="1">ЧӨЛӨӨЛӨЛТИЙН ТӨЛӨВ</text>
+        <g>
+          <rect x="0" y="24" width="118" height="30" rx="7" fill="var(--calm-wash)" stroke="var(--calm)" stroke-width="1"/>
+          <text x="59" y="43" text-anchor="middle" fill="var(--calm)" font-weight="600">1 · Шинэ</text>
+          <path d="M124 39 H 156" stroke="var(--rule)" stroke-width="1.5" color="var(--rule)" marker-end="url(#ar)"/>
+          <rect x="162" y="24" width="150" height="30" rx="7" fill="var(--warn-wash)" stroke="var(--warn)" stroke-width="1"/>
+          <text x="237" y="43" text-anchor="middle" fill="var(--warn)" font-weight="600">2 · Хээрийн судалгаа</text>
+          <path d="M318 39 H 350" stroke="var(--rule)" stroke-width="1.5" color="var(--rule)" marker-end="url(#ar)"/>
+          <rect x="356" y="24" width="140" height="30" rx="7" fill="var(--good-wash)" stroke="var(--good)" stroke-width="1"/>
+          <text x="426" y="43" text-anchor="middle" fill="var(--good)" font-weight="600">3 · Баталгаажсан</text>
+          <rect x="540" y="24" width="130" height="30" rx="7" fill="var(--stop-wash)" stroke="var(--stop)" stroke-width="1"/>
+          <text x="605" y="43" text-anchor="middle" fill="var(--stop)" font-weight="600">4 · Цуцлагдсан</text>
+        </g>
+        <!-- мөр 2: нэгж талбарын төлөв -->
+        <text x="0" y="80" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="currentColor" opacity=".55" letter-spacing="1">НЭГЖ ТАЛБАРЫН ТӨЛӨВ</text>
+        <g>
+          <rect x="0" y="90" width="104" height="28" rx="7" fill="var(--surface-2)" stroke="var(--rule)"/>
+          <text x="52" y="108" text-anchor="middle" fill="var(--ink-2)">Хүлээгдэж буй</text>
+          <path d="M110 104 H 134" stroke="var(--rule)" stroke-width="1.5" color="var(--rule)" marker-end="url(#ar)"/>
+          <rect x="140" y="90" width="118" height="28" rx="7" fill="var(--surface-2)" stroke="var(--rule)"/>
+          <text x="199" y="108" text-anchor="middle" fill="var(--ink-2)">Зөвшилцөх шатанд</text>
+          <path d="M264 104 H 288" stroke="var(--rule)" stroke-width="1.5" color="var(--rule)" marker-end="url(#ar)"/>
+          <rect x="294" y="90" width="104" height="28" rx="7" fill="var(--accent-wash)" stroke="var(--accent)"/>
+          <text x="346" y="108" text-anchor="middle" fill="var(--accent-ink)" font-weight="600">Үнэлгээ хийх</text>
+          <path d="M404 104 H 428" stroke="var(--rule)" stroke-width="1.5" color="var(--rule)" marker-end="url(#ar)"/>
+          <rect x="434" y="90" width="90" height="28" rx="7" fill="var(--good-wash)" stroke="var(--good)"/>
+          <text x="479" y="108" text-anchor="middle" fill="var(--good)" font-weight="600">Чөлөөлсөн</text>
+          <rect x="540" y="90" width="130" height="28" rx="7" fill="var(--surface-2)" stroke="var(--rule)" stroke-dasharray="3 3"/>
+          <text x="605" y="108" text-anchor="middle" fill="var(--ink-3)" font-size="10.5">Татгалзсан / Гарсан</text>
+        </g>
+        <text x="0" y="140" font-size="10.5" fill="currentColor" opacity=".6">«Үнэлгээ хийх» төлөвт л гадны байгууллага орж ирнэ · «Чөлөөлсөн» болгохын өмнө олговор баталгаажсан байх ёстой</text>
+      </g>
+    </svg>
+    <figcaption>Дээд мөр — чөлөөлөлтийн 4 төлөв. Доод мөр — нэгж талбарын 6 төлөв.
+    Хоёр урсгал бие даасан: чөлөөлөлт зөвхөн бүх нэгж талбар эцсийн төлөвт орсны дараа баталгаажна.</figcaption>
+  </figure>
+</section>
+
+<!-- ═══════════════ 2-Р ХЭСЭГ: ДЭЛГЭРЭНГҮЙ ═══════════════ -->
+<section class="part">
+  <p class="part-label">Хоёрдугаар хэсэг</p>
+  <h2>Дэлгэрэнгүй тайлбар ба алхмын заавар</h2>
+  <p class="part-note">Дугаарууд дээрх тоймтой яг таарна. Бүлэг тус бүрд «юу харагдах»,
+  «юу хийж болох», «хэн хийж чадах», «юу нь хаалттай» гэсэн дарааллаар тайлбарлав.</p>
+</section>
+
+<!-- ───────── 1. САМБАР, ТАЙЛАН ───────── -->
+<section class="detail" id="s1">
+  <header><span class="num">1</span><h2>Хяналтын самбар ба тайлан</h2></header>
+
+  <div class="sub" id="s1-1">
+    <h3><span class="tag">1.1</span> Дотоод ажилтны хяналтын самбар</h3>
+    <p>Нэвтэрсний дараа хамгийн түрүүнд нээгддэг нүүр хуудас (<code>/</code>).
+    Бүх тоо баримт <b>шүүлтүүрийн хүрээнд</b> тооцогдоно — хуудас нээгдэхэд
+    автоматаар энэ он сонгогдсон байна.</p>
+
+    <h4 style="font-size:14px;color:var(--ink);margin:16px 0 0">Шүүлтүүрийн 6 талбар</h4>
+    <div class="tw"><table>
+      <thead><tr><th>Талбар</th><th>Хэрхэн ажиллах</th></tr></thead>
+      <tbody>
+        <tr><td><b>Чөлөөлөлт</b></td><td>Нэрээр нь бичихэд сануулга гарч ирнэ (300мс хүлээгээд хайна). Сонгосны дараа <span class="btn">✕</span> дарж цэвэрлэнэ.</td></tr>
+        <tr><td><b>Төлөвлөгөө</b></td><td>Газар зохион байгуулалтын төлөвлөгөөний кодоор.</td></tr>
+        <tr><td><b>Он</b></td><td>Олон он зэрэг сонгож болно (2000 оноос хойш).</td></tr>
+        <tr><td><b>Хариуцсан ажилтан</b></td><td>Нэр, албан тушаалаар хайж сонгоно.</td></tr>
+        <tr><td><b>Сум/дүүрэг</b></td><td>Зөвхөн чөлөөлөлт бүртгэгдсэн дүүргүүд жагсаана.</td></tr>
+        <tr><td><b>Ерөнхий / дэд ангилал</b></td><td>Ерөнхий ангилал сонгосны дараа л дэд ангиллын талбар нэмэгдэнэ.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Сонголтоо хийгээд <span class="btn">Харах</span> дарна — <b>дархаас нь өмнө тоо өөрчлөгдөхгүй</b>.
+    <span class="btn">✕</span> нь бүх шүүлтийг анхны байдалд буцаана.</p>
+
+    <h4 style="font-size:14px;color:var(--ink);margin:18px 0 0">Харагдах мэдээлэл</h4>
+    <ul class="plain">
+      <li><b>4 үндсэн үзүүлэлт</b> — Төлөвлөлтийн хилийн нийт талбай (га), нэгж талбарын тоо, нийт захирамж, нийт нөхөх олговор (тэрбум ₮).</li>
+      <li><b>Чөлөөлөгдсөн нэгж талбар</b> ба <b>чөлөөлөгдсөн талбай</b> — тоо, явцын зураас, хувь.</li>
+      <li><b>Чөлөөлөлтийн гүйцэтгэл</b> — эцсийн төлөвт шилжсэн нэгж талбарын эзлэх хувь. Нэг чөлөөлөлт сонгосон бол түүний явц; олон бол «бүрэн / дутуу / шинэ» гэсэн задаргаа.</li>
+      <li><b>Нэгж талбарын мэдээлэл</b> — төлөв бүрийн тоо хэвтээ баараар.</li>
+      <li><b>Нэгж талбарын талбай</b> — төлөв бүрийн талбай га-гаар.</li>
+      <li><b>Тайлбар</b> — төлөвийн өнгөний тайлбар.</li>
+      <li><b>Газрын зураг</b> — шүүлтэд тохирсон давхаргууд ачаалагдаж, олдсон хэсэг рүү автоматаар зумлана.</li>
+      <li><b>Эхлэсэн огноогоор нэгж талбар</b> — талбайн график.</li>
+      <li><b>Чөлөөлөлтүүд</b> — баруун талын жагсаалт, мөр бүр дээр явцын хувь ба <span class="btn">🖨 Ажлын зураг</span> товч.</li>
+    </ul>
+    <div class="callout">
+      <span class="lbl">Гүйцэтгэлийн хувь хэрхэн бодогддог вэ</span>
+      Мөрөөр дундажлахгүй, <b>нэгж талбараар жинлэнэ</b>. 3 талбартай чөлөөлөлт
+      300 талбартайтай ижил жин авбал дүр зураг гажина.
+    </div>
+  </div>
+
+  <div class="sub" id="s1-2">
+    <h3><span class="tag">1.2</span> Гадаад байгууллагын хяналтын самбар</h3>
+    <p>Үнэлгээний байгууллага, МИКА, санхүүгийн мэргэжилтэн нэвтрэхэд өөр самбар нээгдэнэ —
+    тэдэнд статистик биш, <b>ажлын дараалал</b> хэрэгтэй.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Роль</th><th>4 үзүүлэлт</th><th>Жагсаалтын товч</th></tr></thead>
+      <tbody>
+        <tr><td><b>Үнэлгээний байгууллага / МИКА</b></td><td class="n">Ажиллах үнэлгээ · Илгээсэн · Буцаагдсан · Баталгаажсан</td><td><span class="btn">Ажиллах</span></td></tr>
+        <tr><td><b>Санхүүгийн мэргэжилтэн</b></td><td class="n">Хянах үнэлгээ · Баталгаажсан · Буцаасан · Үнэлгээ хийх нэгж талбар</td><td><span class="btn">Хянах</span></td></tr>
+      </tbody>
+    </table></div>
+    <ul class="plain">
+      <li><b>Үнэлгээний ажлын график</b> — төлөв тус бүрийн эзлэх хувь (бөгж диаграм + задаргаа).</li>
+      <li><b>Оруулсан / хянагдаж буй нөхөх олговор</b> — нийт дүн, санхүүд нэмж «баталгаажуулалтын явц» хувь.</li>
+      <li><b>Үнэлгээний төрлөөр дүн</b> — хөрөнгийн, хөндлөнгийн, МИКА үнэлгээний сая ₮.</li>
+      <li><b>Ажлын төлөв</b> — нэгж талбарын төлөвийн задаргаа.</li>
+      <li><b>Ажиллах чөлөөлөлтүүд</b> — мөр бүрт явцын хувь, нэгж талбарын тоо, ажлын зураг бэлдэх товч.</li>
+    </ul>
+  </div>
+
+  <div class="sub" id="s1-3">
+    <h3><span class="tag">1.3</span> Тайлан хуудас</h3>
+    <p><code>/report</code> цэс — <b>зөвхөн ахлах мэргэжилтэн, администратор</b>. Энэ хуудас
+    хуваарилалт үл харгалзан <b>бүх</b> чөлөөлөлтийн нэгж талбарыг нэгтгэдэг.</p>
+    <p>Хүснэгтийн толгой нь татаж авах Excel загварын (report_template.xlsx) толгойтой
+    <b>яг ижил 18 багана</b> — дэлгэц дээр харсан зүйл файлд ижилхэн буудаг.</p>
+    <div class="tw"><table>
+      <thead><tr><th class="n">№</th><th>Багана</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1–3</td><td>№ · Бүтээн байгуулалтын төрөл · Бүтээн байгуулалтын ажлын нэр</td></tr>
+        <tr><td class="n">4–6</td><td>НЗД-ын захирамжийн огноо, дугаар · Өмчлөгч/эзэмшигчийн нэр, регистр · Хаяг</td></tr>
+        <tr><td class="n">7–9</td><td>Нэгж талбарын дугаар · Үндсэн талбайн хэмжээ (м²) · Эдэлбэрийн хэлбэр</td></tr>
+        <tr><td class="n">10–11</td><td>Нөлөөлөлд өртсөн газрын үнэлгээ — хэмжээ (м²), үнэ (₮)</td></tr>
+        <tr><td class="n">12–13</td><td>Хөрөнгийн нөхөх олговор — үл хөдлөх хөрөнгө, эд хөрөнгө</td></tr>
+        <tr><td class="n">14–15</td><td>Нийт нөхөх олговор (₮) · Үлдэх газрын хэмжээ (м²)</td></tr>
+        <tr><td class="n">16–18</td><td>Мэдээллийн санд өөрчлөлт орсон эсэх · Өөрчлөгдсөн нэгж талбарын дугаар · Талбайн хэмжээ</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>10 шүүлтүүр:</b> төлөвлөгөөний дугаар, чөлөөлөлтийн нэр, он (олон), эрхийн төрөл
+    (Ашиглах / Эзэмших / Өмчлөх), газрын зориулалт, олговрын хэлбэр (Мөнгөн / Газраар),
+    ерөнхий ба дэд ангилал. <span class="btn">Хайх</span> дарж хэрэглэнэ,
+    <span class="btn">Цэвэрлэх</span> нь бүгдийг арилгана. Нэг хуудсанд 20 мөр.</p>
+    <p>Дээд талын 4 карт нь <b>хуудаслалтгүй, бүх үр дүнгээр</b> тооцсон нэгтгэл харуулна —
+    нийт чөлөөлөлт ба талбай, статусаар нэгж талбар, нөхөх олговрын задаргаа, оны задаргаа.</p>
+  </div>
+
+  <div class="sub" id="s1-4">
+    <h3><span class="tag">1.4</span> Татаж авах боломжтой бүх зүйл</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Юу</th><th>Хаанаас</th><th>Формат</th><th>Хэн</th></tr></thead>
+      <tbody>
+        <tr><td><b>ГЧХ-2 ажлын мэдээ</b></td><td>Хяналтын самбар → <span class="btn">Мэдээ татах</span></td><td class="n">.xlsx</td><td>Ахлах мэргэжилтэн</td></tr>
+        <tr><td><b>Нэгдсэн тайлан</b></td><td>Тайлан → <span class="btn">Тайлан татах</span></td><td class="n">.xlsx</td><td>Ахлах мэргэжилтэн</td></tr>
+        <tr><td><b>Чөлөөлөлтийн тайлан</b></td><td>Чөлөөлөлтийн дэлгэрэнгүй → <span class="btn">Тайлан татах</span></td><td class="n">.xlsx</td><td>Дотоод ажилтан</td></tr>
+        <tr><td><b>Захирамжийн тайлан</b></td><td>Захирамжийн төсөл → <span class="btn">Тайлан</span></td><td class="n">.xlsx</td><td><code>decision:read</code></td></tr>
+        <tr><td><b>Захирамжийн төслийн бичиг</b></td><td>Захирамжийн төслийн дэлгэрэнгүй</td><td class="n">.docx</td><td><code>decision:read</code></td></tr>
+        <tr><td><b>Ажлын зураг</b></td><td>Самбар / Байршил таб → <span class="btn">🖨</span></td><td class="n">Зураг</td><td>Бүгд</td></tr>
+        <tr><td><b>12 албан баримт</b></td><td>Нэгж талбар → <b>Эх хэвлэл</b> таб</td><td class="n">.docx / .xlsx</td><td>Дотоод ажилтан</td></tr>
+        <tr><td><b>Хавсаргасан эх файл</b></td><td>Баримт бичиг, Хавсралт таб</td><td class="n">.pdf гэх мэт</td><td>Хандах эрхтэй нь</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">Том тайлан татахад</span>
+      Нэгдсэн тайлан минут дамжиж болно. Тиймээс сервер явцаа шууд дамжуулж,
+      «<b>350/2000 чөлөөлөлт</b>» гэсэн явцын цонх гарч ирнэ. Цонхыг хаалгүй хүлээнэ үү —
+      дуусахад файл өөрөө татагдана.
+    </div>
+    <div class="callout warn">
+      <span class="lbl">Анхаарах</span>
+      ГЧХ-2 мэдээ нь <b>сүүлд «Харах» дарсан шүүлтээр</b> татагддаг — дэлгэц дээр
+      харагдаж буй тоотой яг тохирно. Шүүлтээ өөрчлөөд «Харах» дарахаа мартвал
+      хуучин хүрээгээр татагдана.
+    </div>
+  </div>
+</section>
+
+<!-- ───────── 2. АЖЛЫН УРСГАЛ ───────── -->
+<section class="detail" id="s2">
+  <header><span class="num">2</span><h2>Газар чөлөөлөлтийн ажлын урсгал</h2></header>
+  <p>Доорх 16 алхам нь <b>дарааллаараа</b> бичигдсэн. Алхам бүрд аль дэлгэц, аль таб дээр
+  ажиллахыг эхэнд нь заасан.</p>
+
+  <div class="sub" id="s2-1">
+    <h3><span class="tag">2.1</span> Нэвтрэх</h3>
+    <ol class="steps">
+      <li>Нэвтрэх хуудсанд <b>хэрэглэгчийн нэр эсвэл имэйл</b> болон нууц үгээ оруулна.</li>
+      <li>Нэвтрэхэд роль тань тодорхойлогдож, <b>зөвхөн танд хамаарах цэс</b> зүүн талд гарч ирнэ.</li>
+      <li>Мэргэжлийн байгууллага нэвтэрвэл «Газар чөлөөлөлт» цэс нь автоматаар
+        <code>/my_acquisitions</code> руу — өөрт оногдсон ажлын жагсаалт руу чиглүүлнэ.</li>
+    </ol>
+    <div class="callout stop">
+      <span class="lbl">Хамгаалалт</span>
+      Нэг хаягаас минутад 30-аас олон нэвтрэх оролдлого хийвэл түр хоригдоно.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-2">
+    <h3><span class="tag">2.2</span> Чөлөөлөлт үүсгэх</h3>
+    <p><b>Хаана:</b> Газар чөлөөлөлт → <span class="btn">+ Нэмэх</span>.
+    <b>Хэн:</b> ахлах мэргэжилтэн, администратор.</p>
+    <ol class="steps">
+      <li><b>Алхам 1/2 — Төлөвлөгөө хайх.</b> Газар зохион байгуулалтын тухайн жилийн
+        төлөвлөгөөний <b>нэгж талбарын дугаарыг</b> бичиж хайна. Систем төлөвлөгөөг олж,
+        хилтэй эсэхийг шалгана.</li>
+      <li><b>Алхам 2/2 — Мэдээлэл бөглөх.</b> Чөлөөлөлтийн нэр, ерөнхий ангилал, дэд ангилал,
+        эхлэх огноо (эдгээр нь заавал), хэрэгжүүлэгч байгууллага, хариуцах байгууллага,
+        чөлөөлөх шалтгаан.</li>
+      <li><span class="btn">Хадгалах</span> дарна. Чөлөөлөлтийн нэрийн өмнө төлөвлөгөөний
+        дугаар автоматаар залгагдана — <code>(12346) Нэр</code>.</li>
+      <li>Систем чөлөөлөлтийн хилийг <b>төлөвлөгөөний хилээс хуулж</b> авч, огтлолцох
+        баг/хороог тодорхойлж мэдэгдэнэ.</li>
+    </ol>
+    <div class="callout warn">
+      <span class="lbl">Гарч болох алдаа</span>
+      «<b>Төлөвлөгөөнд хил бүртгэгдээгүй тул чөлөөлөлт үүсгэх боломжгүй</b>» —
+      чөлөөлөлтийн хил төлөвлөгөөнөөс хуулагддаг тул хилгүй төлөвлөгөөгөөр
+      үргэлжлүүлэх боломжгүй. Өөр төлөвлөгөө сонгоно уу.
+    </div>
+    <p>Шинэ чөлөөлөлт <span class="chip calm">1 · Шинэ</span> төлөвтэй үүснэ. Энэ төлөвт л
+    чөлөөлөлтийг <b>устгаж</b> болно.</p>
+  </div>
+
+  <div class="sub" id="s2-3">
+    <h3><span class="tag">2.3</span> Ажилтан хуваарилах, байгууллага оноох</h3>
+    <p><b>Хаана:</b> Чөлөөлөлтийн дэлгэрэнгүй → <b>Ажилтнууд</b> таб.</p>
+    <ol class="steps">
+      <li><span class="btn">Ажилтан нэмэх</span> дарж нэр, албан тушаалаар хайна.</li>
+      <li>Хэд хэдэн ажилтныг сонгоод <span class="btn">Үргэлжлүүлэх</span> → жагсаалтаа
+        шалгаад <span class="btn">Баталгаажуулах</span>.</li>
+      <li>Ажилтныг хасахдаа мөрийн ард байрлах устгах товчийг дарж баталгаажуулна.</li>
+    </ol>
+    <p><b>Мэргэжлийн байгууллагыг</b> Ерөнхий мэдээлэл табаас чөлөөлөлт бүхэлд нь оноодог.
+    Тухайн байгууллагын <b>аль ч ажилтан</b> тэр чөлөөлөлт дээр ажиллах эрхтэй болно
+    (нэг хүнээр хязгаарлагдахгүй).</p>
+    <p><b>Хөндлөнгийн байгууллагыг</b> нэгж талбар тус бүр дээр тусад нь холбоно —
+    доор <a href="#s2-11">2.11</a>-г үзнэ үү.</p>
+  </div>
+
+  <div class="sub" id="s2-4">
+    <h3><span class="tag">2.4</span> Санхүүжилтын эх үүсвэр</h3>
+    <p><b>Хаана:</b> Чөлөөлөлтийн дэлгэрэнгүй → <b>Санхүүжилт</b> таб.</p>
+    <ol class="steps">
+      <li>Санхүүжилт хийх байгууллагын нэр (заавал).</li>
+      <li>Санхүүжилтын эх үүсвэрийн төрөл (заавал) — Улсын төсөв, орон нутгийн төсөв, гадаадын зээл гэх мэт.</li>
+      <li>Санхүүжилтын дүн ба тайлбар.</li>
+      <li><span class="btn">Хадгалах</span>. Жагсаалтын доод мөрөнд <b>нийт дүн</b> харагдана.</li>
+    </ol>
+    <div class="callout">
+      <span class="lbl">Яагаад чухал вэ</span>
+      Захирамжийн төсөлд нэгж талбар холбохдоо <b>энд бүртгэсэн эх үүсвэрээс</b>
+      сонгоно (<a href="#s2-14">2.14</a>). Эх үүсвэргүй бол холбох алхам зогсоно.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-5">
+    <h3><span class="tag">2.5</span> Чөлөөлөлтийн хавсралт</h3>
+    <p><b>Хаана:</b> <b>Хавсралт</b> таб. Зөвхөн <b>PDF</b>, дээд хэмжээ <b>50 MB</b>.</p>
+    <ol class="steps">
+      <li><span class="btn">Баримт нэмэх</span> → файлын төрлөө сонгоно (төрлүүд нь
+        тохиргооноос удирдагдана — <a href="#s3-5">3.5</a>).</li>
+      <li>PDF файлаа сонгож, харагдах нэрийг бичнэ.</li>
+      <li><span class="btn">Хадгалах</span>. Жагсаалтаас татах, харах, устгах боломжтой.</li>
+    </ol>
+  </div>
+
+  <div class="sub" id="s2-6">
+    <h3><span class="tag">2.6</span> Байршил, хил, дроны ортофото</h3>
+    <p><b>Хаана:</b> <b>Байршил</b> таб.</p>
+    <ul class="plain">
+      <li><b>Газрын зураг</b> — чөлөөлөлтийн хил, нэгж талбарууд, төлөвийн өнгө.</li>
+      <li><b>Талбайг автоматаар тооцох</b> — Ерөнхий мэдээлэл табын талбайн мөрөнд
+        байрлах тооцоолох товч нь хилээс нь талбайг бодож өгнө («Автоматаар тооцоологдсон» гэж тэмдэглэгдэнэ).</li>
+      <li><b>Хил солих</b> — төлөвлөгөөний хилээс дахин хуулна; баталгаажуулах цонх гарна.</li>
+      <li><b>Ажлын зураг</b> — гарчиг, цаасны хэмжээ, чиглэл (хэвтээ/босоо) сонгоод хэвлэнэ.</li>
+    </ul>
+    <h4 style="font-size:14px;color:var(--ink);margin:16px 0 0">Дроны зураг байршуулах</h4>
+    <ol class="steps">
+      <li><b>GeoTIFF</b> (<code>.tif</code> / <code>.tiff</code>) файлаа сонгоно — өөр өргөтгөл хүлээж авахгүй.</li>
+      <li>Файл шууд файлын санд байршиж, дараа нь бүртгэгдэнэ.</li>
+      <li><span class="btn">Шинэчлэх</span> дарж газрын зургийн серверт давхаргыг мэдэгдэнэ.</li>
+      <li>Жагсаалтаас <b>«Зураг дээр очих»</b> дарж тухайн ортофото руу зумлана; хэрэггүй болсныг устгана.</li>
+    </ol>
+    <div class="callout warn">
+      <span class="lbl">Гүйцэтгэлийн зөвлөмж</span>
+      Зураг бүр өөрийн дотоод индекстэй (COG хэлбэрээр бэлтгэгдсэн) байх шаардлагатай.
+      Индексгүй энгийн TIFF байвал нээх үед минут шаардаж болно — <b>файлын хэмжээ биш,
+      бэлтгэлийн формат</b> нь шалтгаан болдог.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-7">
+    <h3><span class="tag">2.7</span> Нэгж талбарыг татах</h3>
+    <p><b>Хаана:</b> <b>Нэгж талбарууд</b> таб → <span class="btn">Нэгж талбар татах</span>.
+    <b>Хэн:</b> дотоод ажилтан (гадаад ролид энэ товч харагдахгүй).</p>
+    <ol class="steps">
+      <li>Товч дарахад баталгаажуулах цонх гарч, ойролцоогоор хэдэн минут шаардахыг мэдэгдэнэ.</li>
+      <li><span class="btn">Татах</span> дарна. Систем <b>чөлөөлөх хилтэй огтлолцох</b>
+        нэгж талбаруудыг кадастрын системээс тодорхойлж бүртгэнэ.</li>
+      <li>Дуусахад «<b>N нэгж талбар шинээр бүртгэгдлээ</b>» гэж мэдэгдэнэ. Жагсаалт
+        эхний хуудас руугаа буцаж, шүүлт цэвэрлэгдэнэ — шинэ бичлэгүүд шууд харагдана.</li>
+    </ol>
+    <p>Хилтэй огтлолцох талбар олдоогүй бол «<b>Чөлөөлөх хилтэй давхцах нэгж талбар олдсонгүй</b>»
+    гэж анхааруулна — хилээ шалгана уу.</p>
+    <p>Жагсаалтыг дугаар, аймаг/нийслэл, сум/дүүрэг, баг/хороо, эрхийн төрөл, газрын
+    зориулалт, төлөвөөр шүүнэ. Мөр бүрээс нэгж талбарын дэлгэрэнгүй рүү орно.</p>
+  </div>
+
+  <div class="sub" id="s2-8">
+    <h3><span class="tag">2.8</span> Нэгж талбарын мэдээллийг ГУС-аас дуудах</h3>
+    <p><b>Хаана:</b> Нэгж талбарын дэлгэрэнгүй → <b>Ерөнхий мэдээлэл</b> таб →
+    <span class="btn">Нэгж талбарын мэдээлэл дуудах</span>.</p>
+    <p>Энэ нэг товч <b>19 дуудлагыг 4 бүлгээр</b> дараалуулан гүйцэтгэж, явцыг харуулна.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Бүлэг</th><th class="n">Тоо</th><th>Юу татагдах</th></tr></thead>
+      <tbody>
+        <tr><td><b>Кадастрын мэдээлэл</b></td><td class="n">7</td><td>Нэгж талбарын дэлгэрэнгүй · иргэн, хуулийн этгээдийн мэдээлэл · өргөдөл · иргэний үнэмлэх, ААН-ийн гэрчилгээ · кадастрын зураг · гэрээ · эрхийн гэрчилгээ</td></tr>
+        <tr><td><b>Газрын төлбөр, үнэлгээ</b></td><td class="n">7</td><td>Газрын суурь үнэ · төлбөрийн мэдээлэл · төлбөрийн бодолт · барьцааны мэдээлэл · шүүхийн шийдвэр · барьцааны гэрээний хавсралт · тооцоо нийлсэн акт</td></tr>
+        <tr><td><b>Мониторинг</b></td><td class="n">4</td><td>Хянан баталгааны мэдээлэл · дүгнэлт хавсралт · чанарын хянан баталгааны дүгнэлт · захиалгат хянан баталгааны дүгнэлт</td></tr>
+        <tr><td><b>Бусад хавсралт</b></td><td class="n">1</td><td>Үлдсэн бүх холбоотой хавсралт</td></tr>
+      </tbody>
+    </table></div>
+    <p>Татагдсан мэдээлэл нь <b>Эзэмшигч</b>, <b>Барьцаа, төлбөр</b>, <b>Баримт бичиг</b>
+    табуудад автоматаар байрлана.</p>
+  </div>
+
+  <div class="sub" id="s2-9">
+    <h3><span class="tag">2.9</span> Эзэмшигч, төлөөлөгч, төлбөр авагч</h3>
+    <p><b>Хаана:</b> Нэгж талбар → <b>Эзэмшигч</b> таб.</p>
+    <ul class="plain">
+      <li><b>Эзэмшигч, өмчлөгч</b> — кадастраас татагдсан нэр, регистр, хаяг, гэрээ, гэрчилгээ, улсын бүртгэл, газрын үнэлгээ.</li>
+      <li><b>Итгэмжлэгдсэн төлөөлөгч бүртгэх</b> — овог, нэр (заавал), регистр, утас, и-мэйл, хаяг, тэмдэглэл.</li>
+      <li><b>Нөхөн төлбөр авагч сонгох</b> — эзэмшигч эсвэл төлөөлөгчийн аль нэгийг олговор хүлээн авагчаар тэмдэглэнэ.</li>
+      <li><b>Өргөдлийн мэдээлэл</b> — өмчлөл, гэрээ/гэрчилгээ, улсын бүртгэл, газрын үнэлгээний хэсгүүдээр бүлэглэн харагдана.</li>
+    </ul>
+    <div class="callout">
+      <span class="lbl">Мэргэжлийн байгууллагад</span>
+      Эзэмшигчийн таб нь <b>үнэлгээний байгууллагад ч нээлттэй</b> — үнэлгээ хийхэд
+      эзэмшигчийн мэдээлэл шаардлагатай тул. Харин бусад гадаад ролид хаалттай.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-10">
+    <h3><span class="tag">2.10</span> Барьцаа, төлбөр, шүүхийн шийдвэр</h3>
+    <p><b>Хаана:</b> Нэгж талбар → <b>Барьцаа, төлбөр</b> таб. Зөвхөн дотоод ажилтан.</p>
+    <ul class="plain">
+      <li><b>Газрын төлбөрийн нэхэмжлэл</b> — нийт дүн, төлсөн, үлдэгдэл гурав тусад нь харагдана.</li>
+      <li><b>Газрын төлбөрийн бодолт</b> ба <b>газрын суурь үнэ</b> — засаж хадгална.</li>
+      <li><b>Барьцааны мэдээлэл</b> — барьцаанд байгаа эсэх, гэрээний хавсралт.</li>
+      <li><b>Шүүхийн шийдвэрийн мэдээлэл</b> — маргаантай эсэх.</li>
+    </ul>
+    <p>Эдгээр нь олговор олгохын өмнөх <b>эрсдэлийн шалгалт</b> — өр, барьцаа, маргаантай
+    талбарыг эрт илрүүлэхэд зориулагдсан.</p>
+  </div>
+
+  <div class="sub" id="s2-11">
+    <h3><span class="tag">2.11</span> Үнэлгээ хийх — 3 зэрэгцээ урсгал</h3>
+    <p><b>Хаана:</b> Нэгж талбар → <b>Нөхөх олговор</b> таб.
+    <b>Урьдчилсан нөхцөл:</b> нэгж талбар <span class="chip acc">Үнэлгээ хийх</span>
+    төлөвтэй байх ёстой — өөр төлөвт гадны байгууллага орж чадахгүй.</p>
+
+    <div class="tw"><table>
+      <thead><tr><th>Урсгал</th><th>Хэн оруулах</th><th>Хэн харах</th></tr></thead>
+      <tbody>
+        <tr><td><b>Үндсэн үнэлгээ</b><br><span style="font-size:12px;color:var(--ink-3)">Чөлөөлөлтөд оногдсон мэргэжлийн байгууллага</span></td><td>Тухайн байгууллага</td><td>Байгууллага, МИКА, санхүү</td></tr>
+        <tr><td><b>Хөндлөнгийн үнэлгээ</b><br><span style="font-size:12px;color:var(--ink-3)">Нэгж талбарт тусад нь холбосон байгууллага</span></td><td>Холбогдсон байгууллага</td><td>Холбогдсон байгууллага, МИКА, санхүү</td></tr>
+        <tr><td><b>МИКА</b><br><span style="font-size:12px;color:var(--ink-3)">Хараат бус хяналтын үнэлгээ</span></td><td>МИКА</td><td>МИКА, санхүү</td></tr>
+      </tbody>
+    </table></div>
+
+    <h4 style="font-size:14px;color:var(--ink);margin:18px 0 0">Үнэлгээний байгууллага нэвтэрч ороод хийх үйлдэл</h4>
+    <ol class="steps">
+      <li><b>Нэвтэрнэ.</b> Хяналтын самбарт «Ажиллах үнэлгээ», «Илгээсэн», «Буцаагдсан»,
+        «Баталгаажсан» гэсэн 4 тоо шууд харагдана.</li>
+      <li><span class="btn">Ажиллах</span> эсвэл «Газар чөлөөлөлт» цэсээр өөрт оногдсон
+        чөлөөлөлтөө нээнэ. <b>Зөвхөн «Хээрийн судалгаа» төлөвтэй</b> чөлөөлөлт харагдана.</li>
+      <li><b>Нэгж талбарууд</b> табаас ажиллах талбараа сонгоно. Байгууллагад
+        <b>Ерөнхий мэдээлэл</b>, <b>Эзэмшигч</b>, <b>Нөхөх олговор</b> гурван таб нээлттэй.</li>
+      <li><b>Нөхөх олговор</b> табт өөрийн урсгалын дэд таб (Үндсэн / Хөндлөнгийн) идэвхтэй байна.</li>
+      <li><b>Газрын үнэлгээг</b> бөглөнө — чөлөөлөлтөнд өртсөн газрын хэмжээ, 1 м²-ийн суурь
+        үнэ; систем үржүүлж газрын үнэлгээг гаргана. Үнэлгээний байгууллагын нэр, захирал,
+        регистр, холбоо барих мэдээллийг мөн бичнэ.</li>
+      <li><b>Хөрөнгө нэмнэ.</b> Төрөл (Үл хөдлөх хөрөнгө / Эд хөрөнгө), нэр, тодорхойлолт,
+        барилгын үзүүлэлт, өртгийн хандлагын тооцоолол (талбай, нэгж өртөг гэх мэт).</li>
+      <li><b>Хөрөнгө бүрд зураг</b> хавсаргана — зураггүй үл хөдлөх хөрөнгө байвал илгээхэд
+        анхааруулна.</li>
+      <li><b>Үнэлгээний задаргаа</b> нэмнэ — хэлбэр (Мөнгө / Дүйцүүлсэн), хувь, дүн.</li>
+      <li><b>Үнэлгээний тайланг</b> (PDF) хавсаргана.</li>
+      <li>Нэгтгэл хэсгээс <b>газар + үл хөдлөх + эд хөрөнгийн нийт дүн</b> шалгана.</li>
+      <li>Бэлэн болмогц <span class="btn">Илгээх</span> — <a href="#s2-12">2.12</a>-т үргэлжилнэ.</li>
+    </ol>
+
+    <h4 style="font-size:14px;color:var(--ink);margin:18px 0 0">Excel-ээс үнэлгээ оруулах (хурдан арга)</h4>
+    <ol class="steps">
+      <li>Үнэлгээний Excel файлаа (<code>.xlsx</code>) сонгоно.</li>
+      <li>Систем задлаад <b>урьдчилсан харагдац</b> үзүүлнэ — үнэлгээний байгууллага, газрын
+        үнэлгээ, хөрөнгийн тодорхойлолт, барилгын өртгийн хандлага, чөлөөлөх/түр суурьшуулах
+        зардал, нэгтгэл.</li>
+      <li>Оруулахгүй мөрөө тэмдэглэж хасна.</li>
+      <li>Баталгаажуулж оруулна. <b>Анхаар:</b> уг нэгж талбарт өмнө нь бүртгэгдсэн хөрөнгө,
+        үнэлгээ байвал <b>бүгд устаж</b> Excel-ийн мэдээллээр солигдоно — цонх үүнийг
+        тодорхой анхааруулна.</li>
+    </ol>
+    <p><b>Багана, мөр, хуудасны байрлал өөрчлөгдсөн ч</b> файлыг уншиж чаддагаар
+    боловсруулагдсан.</p>
+  </div>
+
+  <div class="sub" id="s2-12">
+    <h3><span class="tag">2.12</span> Илгээх → Баталгаажуулах / Буцаах</h3>
+    <p>Энэ нь <b>нэгж талбарын төлөвөөс тусдаа</b> ажилладаг үнэлгээний өөрийн урсгал.
+    Урсгал бүр (үндсэн, хөндлөнгийн, МИКА) өөрийн төлөвтэй.</p>
+
+    <figure class="flowbox">
+      <svg viewBox="0 0 700 106" role="img" aria-label="Үнэлгээний төлөвийн урсгал">
+        <defs>
+          <marker id="ar2" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g font-family="IBM Plex Sans, sans-serif" font-size="11.5">
+          <rect x="0" y="34" width="108" height="32" rx="8" fill="var(--surface-2)" stroke="var(--rule)"/>
+          <text x="54" y="54" text-anchor="middle" fill="var(--ink-2)" font-weight="600">Ноорог</text>
+
+          <path d="M114 50 H 152" stroke="var(--accent)" stroke-width="1.6" color="var(--accent)" marker-end="url(#ar2)"/>
+          <text x="133" y="43" text-anchor="middle" font-size="10" fill="var(--accent-ink)">Илгээх</text>
+
+          <rect x="158" y="34" width="118" height="32" rx="8" fill="var(--warn-wash)" stroke="var(--warn)"/>
+          <text x="217" y="54" text-anchor="middle" fill="var(--warn)" font-weight="600">Илгээсэн</text>
+
+          <path d="M282 50 H 322" stroke="var(--good)" stroke-width="1.6" color="var(--good)" marker-end="url(#ar2)"/>
+          <text x="302" y="43" text-anchor="middle" font-size="10" fill="var(--good)">Зөвшөөрөх</text>
+
+          <rect x="328" y="34" width="140" height="32" rx="8" fill="var(--good-wash)" stroke="var(--good)"/>
+          <text x="398" y="54" text-anchor="middle" fill="var(--good)" font-weight="600">Баталгаажсан</text>
+
+          <path d="M217 72 V 90 H 60 V 68" stroke="var(--stop)" stroke-width="1.6" fill="none" color="var(--stop)" marker-end="url(#ar2)"/>
+          <text x="140" y="102" text-anchor="middle" font-size="10" fill="var(--stop)">Буцаах — засаад дахин илгээнэ</text>
+
+          <rect x="520" y="34" width="180" height="32" rx="8" fill="var(--accent-wash)" stroke="var(--accent-line)" stroke-dasharray="4 3"/>
+          <text x="610" y="48" text-anchor="middle" fill="var(--accent-ink)" font-size="10.5" font-weight="600">Санхүү үндсэн урсгалыг</text>
+          <text x="610" y="61" text-anchor="middle" fill="var(--accent-ink)" font-size="10.5" font-weight="600">сонгож тогтооно</text>
+        </g>
+      </svg>
+      <figcaption>Шилжилт бүрд <b>тайлбар заавал</b>. Бүх шилжилт түүхэнд бичигдэж,
+      <span class="btn">Түүх</span> товчоор хэн, хэзээ, ямар тайлбартай өөрчилснийг харна.</figcaption>
+    </figure>
+
+    <ol class="steps">
+      <li><b>Үнэлгээний байгууллага / МИКА:</b> <span class="btn">Илгээх</span> дарж,
+        тайлбар бичнэ. Илгээсний дараа <b>үнэлгээ засах боломжгүй</b> болно.</li>
+      <li><b>Санхүүгийн мэргэжилтэн:</b> жагсаалтад зөвхөн <b>«Илгээсэн»</b> төлөвтэй
+        үнэлгээтэй нэгж талбар харагдана. Дэлгэрэнгүйг нээж шалгана.</li>
+      <li>Зөв бол <span class="btn">Нөхөх олговор баталгаажуулах</span> — тайлбар бичиж
+        баталгаажуулна. Тухайн урсгал <b>үндсэн үнэлгээ</b> болж тэмдэглэгдэж, бусад урсгал
+        «Идэвхгүй» болно.</li>
+      <li>Дутуу бол <span class="btn">Буцаах</span> — шалтгаанаа бичнэ. Байгууллага засаад
+        дахин илгээх боломжтой болно; буцаасан шалтгаан дэлгэц дээр харагдана.</li>
+    </ol>
+    <div class="callout stop">
+      <span class="lbl">Гол хаалт</span>
+      Нөхөх олговор <b>баталгаажаагүй</b> байхад нэгж талбарыг дараагийн явц руу
+      шилжүүлэх боломжгүй. Товч идэвхгүй болж, шалтгааныг улаан хайрцгаар мэдэгдэнэ.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-13">
+    <h3><span class="tag">2.13</span> Баримт бичиг ба эх хэвлэл</h3>
+    <p><b>Хаана:</b> Нэгж талбар → <b>Баримт бичиг</b> ба <b>Эх хэвлэл</b> табууд.</p>
+    <p><b>Баримт бичиг</b> таб — PDF (50 MB хүртэл) хавсаргах, харах, устгах. Мөн
+    кадастраас татагдсан эх хавсралтууд тусад нь жагсана.</p>
+    <p><b>Эх хэвлэл</b> таб — системийн мэдээллээр өөрөө бөглөгдсөн <b>12 албан баримт</b>:</p>
+    <div class="tw"><table>
+      <thead><tr><th>Баримт</th><th>Формат</th><th>Тайлбар</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="3">Мэдэгдэх, судлах</td></tr>
+        <tr><td>Урьдчилан мэдэгдэх хуудас</td><td class="n">.docx</td><td>Эзэмшигч, талбарын мэдээллээр бөглөгдөнө</td></tr>
+        <tr><td>Санал асуулгын хуудас</td><td class="n">.docx</td><td>Нөлөөлөлд өртсөн этгээдэд</td></tr>
+        <tr><td>Нийгэм эдийн засгийн судалгаа</td><td class="n">.docx</td><td>Судалгааны маягт</td></tr>
+        <tr><td>Шалгах хуудас</td><td class="n">.docx</td><td>Хээрийн судалгааны шалгах хуудас</td></tr>
+        <tr class="grp"><td colspan="3">Хурал, уулзалт</td></tr>
+        <tr><td>Хурлын тэмдэглэл</td><td class="n">.docx</td><td>Тухай бүр үйлдэж хавсаргана</td></tr>
+        <tr><td>Уулзалтын тэмдэглэл</td><td class="n">.docx</td><td>Иргэнтэй хийсэн уулзалт</td></tr>
+        <tr class="grp"><td colspan="3">Гэрээ, шийдвэр</td></tr>
+        <tr><td>Гэрээ</td><td class="n">.docx</td><td>Хурлын тэмдэглэлийг хавсралт болгон нийлүүлж хэвлэнэ</td></tr>
+        <tr><td>Захирамжийн төсөл</td><td class="n">.xlsx</td><td>Талбар, эзэмшигч, дүнгээр бөглөгдөнө</td></tr>
+        <tr class="grp"><td colspan="3">Хүлээлцэх, хяналт, төлбөр</td></tr>
+        <tr><td>Чөлөөлсөн газрыг хүлээлцсэн акт</td><td class="n">.docx</td><td>Хоёр хувилбартай</td></tr>
+        <tr><td>Чөлөөлсөн газрыг хүлээлцсэн акт 2</td><td class="n">.docx</td><td>Өөр загвар</td></tr>
+        <tr><td>Хяналтын карт</td><td class="n">.docx</td><td>Нэгж талбарын хяналтын карт</td></tr>
+        <tr><td>Төлбөрийн гүйцэтгэл</td><td class="n">.xlsx</td><td>Олговрын төлбөрийн гүйцэтгэл</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn">
+      <span class="lbl">Хэрэв юу ч татагдахгүй бол</span>
+      Хөтөч попап цонхыг блоклосон байж болно. «Попап цонх блоклогдсон байна» гэсэн
+      мэдэгдэл гарвал хөтчийн тохиргооноос энэ сайтад зөвшөөрөл өгнө үү.
+    </div>
+  </div>
+
+  <div class="sub" id="s2-14">
+    <h3><span class="tag">2.14</span> Захирамжийн төсөл</h3>
+    <p><b>Хаана:</b> «Захирамжийн төсөл» цэс. <b>Хэн:</b> <code>decision:*</code> эрхтэй
+    дотоод ажилтан. Газрын эрх (<code>land:*</code>) энд хүчингүй — тусдаа эрхийн бүлэг.</p>
+    <ol class="steps">
+      <li><span class="btn">+ Шинэ төсөл</span> — саналын хуудасны дугаар, байршил,
+        хугацаа (он), ажлын төрөл, төсөв (сүүлийн хоёр нь тохиргооны лавлахаас).</li>
+      <li><b>Санхүүгийн эх үүсвэр нэмнэ</b> — чөлөөлөлтөд бүртгэгдсэн эх үүсвэрээс сонгож,
+        энэ захирамжид ногдох мөнгөн дүнг бичнэ. Нийт болон ашигласан дүн хянагдана.</li>
+      <li><b>Нэгж талбар холбоно</b> — дугаараар хайж, аль эх үүсвэрээс санхүүжихийг
+        сонгоно. Эх үүсвэргүй үед «Эхлээд санхүүгийн эх үүсвэр нэмнэ үү» гэж зогсооно.</li>
+      <li>Шаардлагатай бол мөрийн эх үүсвэрийг сольж, эсвэл нэгж талбарыг хасна.</li>
+      <li><b>Явц бүртгэнэ</b> — хэнд (хянагч, хэлтэс, байгууллага), огноо, тайлбар.
+        Явцын түүх хадгалагдана.</li>
+      <li><b>Баталгаажуулна</b> — захирамжийн дугаар (жишээ <code>А/123</code>), захирамжийн
+        огноо, тайлбар оруулж батална.</li>
+      <li>Шаардлагатай бол <span class="btn">.docx</span> захирамжийн бичиг эсвэл
+        <span class="btn">Тайлан</span> Excel-ийг татна.</li>
+    </ol>
+    <p>Батлагдсан захирамж нь холбогдсон нэгж талбарын <b>Захирамж</b> табд харагдана.</p>
+  </div>
+
+  <div class="sub" id="s2-15">
+    <h3><span class="tag">2.15</span> Нэгж талбарын явцыг шилжүүлэх</h3>
+    <p><b>Хаана:</b> Нэгж талбар → <b>Явц</b> таб.</p>
+    <ol class="steps">
+      <li>Шилжиж болох төлвүүд ажлын урсгалын тохиргооны дагуу л жагсана
+        (<a href="#s3-5">3.5</a> — «Нэгж ажлын урсгал»).</li>
+      <li>Очих төлвөө сонгоно.</li>
+      <li><b>Шалтгаан</b> бичнэ. <span class="chip stop">Татгалзсан</span> ба
+        <span class="chip stop">Нөлөөллөөс гарсан</span> төлөвт шалтгаан <b>заавал</b>.</li>
+      <li><span class="btn">Тийм, хадгалах</span>. Шилжилт бүр түүхэнд бичигдэнэ.</li>
+    </ol>
+    <div class="callout stop">
+      <span class="lbl">Хоёр хатуу шалгуур</span>
+      <b>1.</b> Нөхөх олговор баталгаажаагүй бол дараагийн явц руу шилжихгүй.<br>
+      <b>2.</b> <span class="chip ok">Чөлөөлсөн</span> болгохын өмнө нөхөн төлбөр
+      зөвшөөрөгдсөн, үнэлгээний тайлан хавсаргагдсан байх ёстой.
+    </div>
+    <p><span class="chip ok">Чөлөөлсөн</span> ба <span class="chip">Нөлөөллөөс гарсан</span>
+    төлөвт орсон талбар цаашид засагдахгүй. <span class="chip stop">Татгалзсан</span> нь
+    бусад төлөв рүү буцаж шилжих боломжтой хэвээр.</p>
+  </div>
+
+  <div class="sub" id="s2-16">
+    <h3><span class="tag">2.16</span> Чөлөөлөлтийг баталгаажуулж хаах</h3>
+    <p><b>Хаана:</b> Чөлөөлөлт → <b>Явц</b> таб. <b>Хэн:</b> ахлах мэргэжилтэн, администратор.</p>
+    <ol class="steps">
+      <li>Очих төлвөө сонгоно (<span class="chip warn">Хээрийн судалгаа</span> →
+        <span class="chip ok">Баталгаажсан</span>).</li>
+      <li>Баталгаажуулахад <b>захирамжийн дугаар</b> ба огноо оруулна.</li>
+      <li>Систем бүх нэгж талбарын төлөвийг шалгана.</li>
+      <li>Шилжүүлэх шалтгаанаа бичээд хадгална.</li>
+    </ol>
+    <div class="callout stop">
+      <span class="lbl">Баталгаажуулах нөхцөл</span>
+      Бүх нэгж талбар <b>Чөлөөлсөн</b>, <b>Нөлөөллөөс гарсан</b>, <b>Татгалзсан</b>
+      гурвын аль нэг төлөвт орсон байх ёстой. Эс бөгөөс товч ажиллахгүй.
+    </div>
+    <p><span class="chip ok">Баталгаажсан</span> болмогц чөлөөлөлт <b>бүрэн түгжигдэнэ</b>:
+    ямар ч засвар хийгдэхгүй, гадаад ролиуд дэлгэрэнгүйд орох боломжгүй болж, зөвхөн
+    систем администратор харна.</p>
+  </div>
+</section>
+
+<!-- ───────── 3. ТОХИРГОО ───────── -->
+<section class="detail" id="s3">
+  <header><span class="num">3</span><h2>Системийн тохиргоо</h2></header>
+  <p><b>Хаана:</b> зүүн цэсний <b>Удирдлага</b> хэсэг. Гадаад ролиуд энэ хэсгийг
+  хэзээ ч харахгүй.</p>
+
+  <div class="sub" id="s3-1">
+    <h3><span class="tag">3.1</span> Хэрэглэгчид</h3>
+    <p><b>Хэн:</b> администратор (<code>users:read</code> эрхтэй).</p>
+    <ol class="steps">
+      <li><b>Хайх, шүүх</b> — нэр, овог, нэвтрэх нэр, имэйлээр; ролиор; идэвхтэй/идэвхгүйгээр.</li>
+      <li><b>Хэрэглэгч үүсгэх</b> — нэвтрэх нэр, имэйл, нууц үг, овог нэр, албан тушаал.
+        Байгаа <b>ажилтантай холбох</b> эсвэл шинээр ажилтны мэдээлэл бөглөх.</li>
+      <li><b>Роль олгох, хасах</b> — нэг хэрэглэгчид олон роль өгч болно.</li>
+      <li><b>Нууц үг солих</b> — шинэ нууц үг тохируулна.</li>
+      <li><b>Идэвхгүй болгох</b> эсвэл <b>устгах</b>.</li>
+    </ol>
+    <div class="callout stop">
+      <span class="lbl">Эрх нэмэгдүүлэлтээс сэргийлэх дүрэм</span>
+      <b>Өөрийнхөө</b> роль, төлөвийг өөрчилж, өөрийгөө устгаж болохгүй. Мөн
+      <b>өөрт байхгүй эрхийг</b> бусдад олгож чадахгүй — эдгээр нь дэлгэц дээр ч,
+      сервер дээр ч давхар шалгагдана.
+    </div>
+  </div>
+
+  <div class="sub" id="s3-2">
+    <h3><span class="tag">3.2</span> Эрх &amp; Роль</h3>
+    <ol class="steps">
+      <li><b>Роль үүсгэх</b> — нэр, тайлбар.</li>
+      <li>Ролийг сонгоод <b>цэс тус бүрээр эрх тохируулна</b> (харах, үүсгэх, засах, устгах).</li>
+      <li><span class="btn">Хадгалах</span> — хадгалаагүй өөрчлөлттэй байхад
+        өөр рүү шилжвэл систем анхааруулна.</li>
+      <li>Шаардлагагүй <b>цэсний холбоосыг хасах</b> боломжтой.</li>
+    </ol>
+    <p>Эрхийн нэр нь <code>нөөц:үйлдэл</code> хэлбэртэй — жишээ нь <code>land:update</code>,
+    <code>decision:create</code>, <code>hr:read</code>, <code>audit:read</code>.</p>
+  </div>
+
+  <div class="sub" id="s3-3">
+    <h3><span class="tag">3.3</span> Хүний нөөцийн бүртгэлүүд</h3>
+    <p>Зургаан бие даасан лавлах. <b>Хэн:</b> администратор, <code>hr:*</code> эрхтэй.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Бүртгэл</th><th>Гол талбарууд</th></tr></thead>
+      <tbody>
+        <tr><td><b>Иргэн, хуулийн этгээд</b></td><td>Төрөл (иргэн / хуулийн этгээд), регистр эсвэл ТТД, овог, нэр эсвэл хуулийн этгээдийн нэр</td></tr>
+        <tr><td><b>Ажилтан</b></td><td>Байгууллага, алба хэлтэс, албан тушаал, ажлын имэйл, утас, холбогдох иргэн</td></tr>
+        <tr><td><b>Байгууллага</b></td><td>Нэр, код</td></tr>
+        <tr><td><b>Алба, хэлтэс</b></td><td>Харьяа байгууллага, нэр, код</td></tr>
+        <tr><td><b>Албан тушаал</b></td><td>Нэр, код</td></tr>
+        <tr><td><b>Үнэлгээний байгууллага</b></td><td><a href="#s3-4">3.4</a>-т тусад нь</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout">
+      <span class="lbl">Хүн, ажилтныг устгах тухай</span>
+      Ажилтан, хэрэглэгч, иргэний бүртгэлийг <b>бүрмөсөн устгахын оронд идэвхгүй болгох</b>
+      зарчмаар ажиллана — түүхэн бичлэгүүд эзэнгүй болохоос сэргийлнэ.
+    </div>
+  </div>
+
+  <div class="sub" id="s3-4">
+    <h3><span class="tag">3.4</span> Үнэлгээний байгууллагын бүртгэл</h3>
+    <ol class="steps">
+      <li><b>Байгууллага бүртгэнэ</b> — нэр (заавал), товч нэр, ТТД/регистр,
+        тусгай зөвшөөрлийн дугаар, хүчинтэй хугацаа, утас, имэйл, хаяг, тэмдэглэл.</li>
+      <li><b>Ажилтныг нь нэмнэ</b> — овог, нэр (заавал), регистр (заавал), албан тушаал,
+        утас, имэйл, шаардлагатай бол <b>нэвтрэх нэр</b>.</li>
+      <li>Нэвтрэх нэр өгсөн ажилтан систем рүү орж, өөрт оногдсон ажлаа хийнэ.</li>
+      <li>Идэвхгүй болгох, засах, устгах боломжтой.</li>
+    </ol>
+    <p>Байгууллага нь <b>бие даасан нэгж</b> — тухайн байгууллагын аль ч ажилтан
+    байгууллагадаа оногдсон бүх ажилд хандана.</p>
+  </div>
+
+  <div class="sub" id="s3-5">
+    <h3><span class="tag">3.5</span> Лавлах, ажлын урсгалын 10 тохиргоо</h3>
+    <p>Эдгээр нь <b>кодод хүрэлгүйгээр</b> системийн дүрмийг өөрчилдөг хэсэг.
+    Бүгд ижил хэлбэртэй: нэмэх → засах → устгах → эрэмбэлэх.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Тохиргоо</th><th>Юуг удирдах</th><th>Талбарууд</th></tr></thead>
+      <tbody>
+        <tr><td><b>Чөлөөлөлтийн ангилал</b></td><td>Ерөнхий ба дэд ангилал (мод хэлбэртэй)</td><td>Нэр, хариуцсан алба, эрэмбэ</td></tr>
+        <tr><td><b>Чөлөөлөлтийн явцын статус</b></td><td>Чөлөөлөлтийн явцын нэрс</td><td>Нэр, тайлбар, эрэмбэ</td></tr>
+        <tr><td><b>Нэгж талбарын статус</b></td><td>Нэгж талбарын төлвүүд</td><td>Код, нэр, эрэмбэ</td></tr>
+        <tr><td><b>Баримт бичгийн төрөл</b></td><td>Хавсралтын төрлийн жагсаалт</td><td>Код, нэр, тайлбар</td></tr>
+        <tr><td><b>Нэгж ажлын урсгал</b></td><td>Нэгж талбар аль төлвөөс аль төлөв рүү шилжиж болохыг</td><td>Эхлэх статус, очих статус, эрэмбэ</td></tr>
+        <tr><td><b>Чөлөөлөлтийн ажлын урсгал</b></td><td>Чөлөөлөлтийн төлөвийн шилжилт</td><td>Эхлэх статус, очих статус, эрэмбэ</td></tr>
+        <tr><td><b>Байгууламжийн чанарын төрөл</b></td><td>Хөрөнгийн үзүүлэлтийн талбарууд</td><td>Код, нэр, эрэмбэ</td></tr>
+        <tr><td><b>Байгууламжийн тооцооллын төрөл</b></td><td>Өртгийн тооцооллын мөрүүд</td><td>Код, нэр, хэмжих нэгж, эрэмбэ</td></tr>
+        <tr><td><b>Ажлын төрөл</b></td><td>Захирамжийн төсөл дээрх сонголт</td><td>Нэр, эрэмбэ</td></tr>
+        <tr><td><b>Төсөв</b></td><td>Захирамжийн төсөл дээрх сонголт</td><td>Нэр, эрэмбэ</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout warn">
+      <span class="lbl">Ажлын урсгал өөрчлөхөд</span>
+      «Эхлэх статус»-ыг хоосон орхивол тэр шилжилт <b>эхний алхам</b> болно.
+      Урсгалыг өөрчилсний дараа явцын дэлгэц дээр гарч ирэх сонголтууд шууд өөрчлөгдөнө.
+    </div>
+  </div>
+
+  <div class="sub" id="s3-6">
+    <h3><span class="tag">3.6</span> Үйлдлийн лог</h3>
+    <p><b>Хэн:</b> <code>audit:read</code> эрхтэй. Хэн, хэзээ, ямар объектод юу хийснийг
+    бүрэн харуулна.</p>
+    <ul class="plain">
+      <li><b>Шүүлт</b> — үйлдлийн төрөл, объектын төрөл, объектын дугаар, огнооны хязгаар.</li>
+      <li><b>Багана</b> — Огноо, Ажилтан, Үйлдэл, Объект, Дэлгэрэнгүй.</li>
+      <li><span class="btn">Шүүлт цэвэрлэх</span> — бүх шүүлтийг арилгана.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────── 4. ТУСЛАХ ───────── -->
+<section class="detail" id="s4">
+  <header><span class="num">4</span><h2>Бусад туслах үйлдэл ба боломж</h2></header>
+
+  <div class="sub" id="s4-1">
+    <h3><span class="tag">4.1</span> Газрын зураг</h3>
+    <p><b>Хаана:</b> «Газрын зураг» цэс, эсвэл чөлөөлөлтийн «Байршил» таб,
+    эсвэл хяналтын самбарын зураг.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Давхаргын бүлэг</th><th>Давхаргууд</th></tr></thead>
+      <tbody>
+        <tr><td><b>Засаг захиргаа</b></td><td>Аймаг/Нийслэл · Сум/Дүүрэг · Баг/Хороо</td></tr>
+        <tr><td><b>Төлөвлөлт, чөлөөлөлт</b></td><td>Үндсэн төлөвлөлтийн хил · Төлөвлөгөөний хил · Чөлөөлөх талбай · Барилгын хил</td></tr>
+        <tr><td><b>Нэгж талбар</b></td><td>Нэгж талбар, мөн төлөв тус бүрээр: Хүлээгдэж буй · Зөвшилцөх шатандаа · Үнэлгээ хийх · Нөлөөлөгдсөн гарсан · Татгалзсан · Чөлөөлсөн</td></tr>
+        <tr><td><b>Дроны ортофото</b></td><td>Байршуулсан зураг бүр өөрийн давхаргатай</td></tr>
+      </tbody>
+    </table></div>
+    <ul class="plain">
+      <li><b>Давхаргын самбар</b> — давхаргыг дарж асаах/унтраах.</li>
+      <li><b>Обьект дээр дарахад</b> нэгж талбар эсвэл чөлөөлөлтийн мэдээллийн цонх нээгдэнэ.</li>
+      <li><span class="btn">3D</span> — одоогийн харагдац, зумыг хадгалан гурван хэмжээст горим руу шилжинэ.</li>
+      <li><b>Бүтэн дэлгэц</b> — зургийг дэлгэцээр дүүргэнэ.</li>
+      <li><span class="btn">🖨 Ажлын зураг</span> — гарчиг, цаас, чиглэл сонгож хэвлэх зураг бэлдэнэ.</li>
+    </ul>
+    <div class="callout">
+      <span class="lbl">Талбайн тооцоолол</span>
+      Талбайг систем нэгдсэн журмаар бодно — гараар өөр аргаар бодсон тоотой
+      зөрөх ёсгүй. Тооцоолсон утга «Автоматаар тооцоологдсон» гэж тэмдэглэгдэнэ.
+    </div>
+  </div>
+
+  <div class="sub" id="s4-2">
+    <h3><span class="tag">4.2</span> Мэдэгдэл</h3>
+    <p>Дээд баруун булангийн хонхны тэмдэг. Мэдэгдэл <b>шууд</b> ирдэг — хуудсаа
+    сэргээх шаардлагагүй.</p>
+    <ul class="plain">
+      <li>Мэдэгдэл дээр дарахад холбогдох бичлэг рүү шууд шилжинэ — чөлөөлөлт,
+        нэгж талбар, эсвэл нөхөн төлбөрийн дэлгэрэнгүй.</li>
+      <li>Уншаагүй мэдэгдлийн тоо хонхон дээр харагдана.</li>
+    </ul>
+  </div>
+
+  <div class="sub" id="s4-3">
+    <h3><span class="tag">4.3</span> Хайлт, шүүлт, түүхэн бичлэг</h3>
+    <ul class="plain">
+      <li><b>Дээд талын хайлт</b> — бүх дэлгэцээс хандах ерөнхий хайлтын талбар.</li>
+      <li><b>Ухаалаг сонголт</b> — чөлөөлөлт, төлөвлөгөө, ажилтан сонгох талбарууд
+        бичих явцад санал болгож, олдсон хэсгийг өнгөөр тодруулна.</li>
+      <li><b>Хилийн түүх</b> — чөлөөлөлтийн хил хэзээ, хэрхэн өөрчлөгдсөн.</li>
+      <li><b>Явцын түүх</b> — чөлөөлөлт ба нэгж талбарын төлөвийн бүх шилжилт,
+        шалтгаан, гүйцэтгэсэн хүн.</li>
+      <li><b>Үнэлгээний түүх</b> — Илгээх / Баталгаажуулах / Буцаах бүх үйлдэл цаг
+        хугацааны дарааллаар.</li>
+      <li><b>Нөхөн төлбөрийн түүх</b> — зөвшөөрөл, татгалзалт, шалтгаан.</li>
+    </ul>
+  </div>
+
+  <div class="sub" id="s4-4">
+    <h3><span class="tag">4.4</span> Нэгж талбарын түүх, Нөхөх олговорын түүх</h3>
+    <p>Хоёр бие даасан цэс — чөлөөлөлтөөр дамжилгүй <b>шууд хайх</b> зориулалттай.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Цэс</th><th>Шүүлтүүр</th></tr></thead>
+      <tbody>
+        <tr><td><b>Нэгж талбарын түүх</b></td><td>Талбарын дугаар, эрхийн төрөл (Ашиглах / Эзэмших / Өмчлөх), газрын зориулалт, чөлөөлөлтийн төлөв</td></tr>
+        <tr><td><b>Нөхөх олговорын түүх</b></td><td>Талбарын дугаар эсвэл эзэмшигч, олговрын хэлбэр (Мөнгөн / Газраар), төлөв (Хүлээгдэж буй / Батлагдсан / Татгалзсан)</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="sub" id="s4-5">
+    <h3><span class="tag">4.5</span> Профайл ба харагдац</h3>
+    <ul class="plain">
+      <li><b>Хувийн мэдээлэл</b> — овог, нэр, имэйл, албан тушаалаа шинэчилнэ.</li>
+      <li><b>Өдөр / шөнийн горим</b> — дэлгэцийн тодролыг сонгоно.</li>
+      <li><b>Хажуугийн цэсийг хумих</b> — нарийн дэлгэцэнд өөрөө хумигдана; сум дарж
+        гараар ч хумина.</li>
+      <li><b>Гарах</b> — системээс аюулгүй гарна.</li>
+    </ul>
+  </div>
+
+  <div class="sub" id="s4-6">
+    <h3><span class="tag">4.6</span> Хамгаалалт ба хаалтууд — товч жагсаалт</h3>
+    <div class="tw"><table>
+      <thead><tr><th>Нөхцөл</th><th>Юу хаагдах</th></tr></thead>
+      <tbody>
+        <tr><td>Чөлөөлөлт <span class="chip ok">Баталгаажсан</span></td><td>Бүх засвар. Гадаад ролиуд дэлгэрэнгүйд орохгүй. Зөвхөн администратор харна.</td></tr>
+        <tr><td>Нэгж талбар <span class="chip ok">Чөлөөлсөн</span> / <span class="chip">Нөлөөллөөс гарсан</span></td><td>Тухайн талбарын бүх засвар</td></tr>
+        <tr><td>Үнэлгээ <span class="chip warn">Илгээсэн</span></td><td>Байгууллага үнэлгээгээ засах боломжгүй — эхлээд буцаалт хэрэгтэй</td></tr>
+        <tr><td>Нөхөх олговор баталгаажаагүй</td><td>Нэгж талбарын дараагийн явц руу шилжих</td></tr>
+        <tr><td>Үнэлгээний тайлан хавсаргаагүй</td><td><span class="chip ok">Чөлөөлсөн</span> төлөв рүү шилжих</td></tr>
+        <tr><td>Бүх нэгж талбар эцсийн төлөвт ороогүй</td><td>Чөлөөлөлтийг баталгаажуулах</td></tr>
+        <tr><td>Чөлөөлөлт <span class="chip calm">Шинэ</span> биш</td><td>Чөлөөлөлтийг устгах</td></tr>
+        <tr><td>Нэгж талбар <span class="chip acc">Үнэлгээ хийх</span> биш</td><td>Гадны байгууллагын бүх хандалт</td></tr>
+        <tr><td>Өөрийн бүртгэл</td><td>Өөрийн роль солих, өөрийгөө идэвхгүй болгох, устгах</td></tr>
+        <tr><td>Өөрт байхгүй эрх</td><td>Бусдад олгох, ролиор дамжуулан дамжуулах</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<div class="foot">
+  Газрын удирдлагын нэгдсэн мэдээллийн системд суурилсан газар чөлөөлөлтийн нэгдсэн систем ·
+  Хэрэглэгчийн гарын авлага
+</div>
+
+</div>
