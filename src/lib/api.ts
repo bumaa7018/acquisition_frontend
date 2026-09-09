@@ -260,10 +260,18 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
 // _allow404: true — 404-ийг ХҮЛЭЭГДЭЖ БУЙ хариу гэж үзэх дуудалтууд (дуудсан
 // код өөрөө fallback хийдэг). Зөвхөн "Мэдээлэл олдсонгүй" анхааруулгыг
 // унтраана — loader болон бусад зан төлөв хэвээр.
+//
+// _allow403: true — 403 нь ХҮЛЭЭГДЭЖ БУЙ хариу байх дуудалтууд. Жишээ:
+// газрын зураг дээрх хилийн давхарга нь ӨӨРИЙН БИШ чөлөөлөлтийг ч ЗОРИУД
+// харуулдаг (v_plan_acquisition = нэг төлөвлөгөөний бүх чөлөөлөлт) тул тэдгээр
+// дээр дарах нь хэвийн үйлдэл. Глобал "Энэ үйлдлийг гүйцэтгэх эрх байхгүй"
+// анхааруулга нь хэрэглэгчийг ТӨӨРӨГДҮҮЛНЭ — дуудсан код өөрөө тохирох
+// мессежээ харуулна. Логлолт хэвээр (алдааг нуухгүй).
 declare module 'axios' {
   export interface AxiosRequestConfig {
     _silent?: boolean
     _allow404?: boolean
+    _allow403?: boolean
     /** 401-ийн дараа нэг л удаа дахин оролдох тэмдэглэгээ. */
     _retry?: boolean
     /** blocking-loader-ийн энэ оролдлогод харгалзах id (silent бол undefined). */
@@ -389,7 +397,7 @@ api.interceptors.response.use(
 
     // ── 403: хандах эрхгүй (backend эсвэл frontend access-policy) ──────────
     if (status === 403 && !isAuthRoute) {
-      if (!error.config?._silent) {
+      if (!error.config?._silent && !error.config?._allow403) {
         showAccessDenied('Хандах эрхгүй', 'Энэ үйлдлийг гүйцэтгэх эрх байхгүй байна.')
       }
       return Promise.reject(error)
@@ -806,8 +814,15 @@ export const landApi = {
   // (land_acquisition_au). Хоосон сонголт харагдахгүй.
   listDistricts: () =>
     api.get<ApiResponse<AU2Option[]>>('/land-acquisitions/districts').then(r => r.data.data ?? []),
-  getById: (id: string) =>
-    api.get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`).then(r => r.data.data),
+  // allow403 — 403-ыг ХҮЛЭЭЖ БУЙ дуудагчид (газрын зураг дээрх хилийн цонх нь
+  // өөрийн БИШ чөлөөлөлт дээр ч нээгддэг). Глобал "Хандах эрхгүй" анхааруулга
+  // гарахгүй; дуудагч өөрөө тохирох мессежээ харуулна.
+  getById: (id: string, opts?: { allow403?: boolean }) =>
+    api
+      .get<ApiResponse<LandAcquisition>>(`/land-acquisitions/${id}`, {
+        _allow403: opts?.allow403,
+      })
+      .then(r => r.data.data),
   create: (data: FormData) =>
     api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
       headers: { 'Content-Type': 'multipart/form-data' },

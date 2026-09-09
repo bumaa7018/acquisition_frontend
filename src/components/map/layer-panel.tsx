@@ -12,6 +12,12 @@ export interface LayerConfig {
   visible: boolean;
   color: string;
   group?: string;
+  /**
+   * Давхарга нь ДОТООД төрлөөрөө өнгө ялган зурагддаг бол төрөл тус бүрийн
+   * өнгөний тайлбар (layer-config → LAYER_TYPE_LEGEND). Давхарга АСААЛТТАЙ
+   * үед л харагдана — унтраалттай давхаргын тайлбар зай эзлэх нь утгагүй.
+   */
+  legend?: { label: string; color: string }[];
 }
 
 export interface LayerGroupConfig {
@@ -145,12 +151,12 @@ export default function LayerPanel({
               return (
                 <div
                   key={layer.id}
-                  className="flex items-center gap-2 px-3 py-2 transition-all"
                   style={{
                     opacity: layer.visible ? 1 : 0.45,
                     borderTop: idx > 0 ? `1px solid ${divClr}` : "none",
                   }}
                 >
+                  <div className="flex items-center gap-2 px-3 py-2 transition-all">
                   <button
                     onClick={() => onToggle(layer.id)}
                     className="shrink-0 h-3 w-3 rounded-sm"
@@ -178,6 +184,23 @@ export default function LayerPanel({
                       <EyeOff className="h-3 w-3" style={{ color: subClr }} />
                     )}
                   </button>
+                  </div>
+                  {/* Доторх төрлийн өнгөний тайлбар */}
+                  {layer.visible && layer.legend && layer.legend.length > 0 && (
+                    <div className="pb-2 pl-7 pr-3">
+                      {layer.legend.map((item) => (
+                        <div key={item.label} className="flex items-center gap-1.5 py-[1px]">
+                          <span
+                            className="shrink-0 rounded-sm"
+                            style={{ background: item.color, width: 8, height: 8 }}
+                          />
+                          <span className="truncate text-[10px]" style={{ color: subClr }}>
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

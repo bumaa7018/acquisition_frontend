@@ -43,8 +43,23 @@ const ACQUISITION_SCOPED_NAMES = [
 // Захиргааны нэгжийн хил — нэгж талбарын мэдээлэл агуулаагүй лавлах давхарга.
 const REFERENCE_NAMES = ['au1', 'au2', 'au3']
 
+/**
+ * ГУС-ийн (ЛМ) лавлах давхаргууд — GeoServer `data_landuse` схемээс ШУУД уншина
+ * (`ca_agreed_parcel` = шинэ зөвшилцсөн зураг, `ca_sec_parcel` = хамгаалалтын
+ * зурвас).
+ *
+ * ДОТООД ролид Л нээлттэй. Шалтгаан: эдгээрт `acquisition_id` багана БАЙХГҮЙ
+ * тул `applyScope` нь гадаад ролийн хумилтыг тавьж чадахгүй — жагсаалтад
+ * зүгээр нэмбэл мэргэжлийн/үнэлгээний байгууллага ГУС-ийн УЛС ДАЯАРЫН
+ * бүртгэлийг хязгааргүй уншина. Тиймээс гадаад ролид fail-closed.
+ */
+const GUS_REFERENCE_NAMES = ['ca_agreed_parcel', 'ca_sec_parcel']
+
 const ACQUISITION_SCOPED_LAYERS = new Set(ACQUISITION_SCOPED_NAMES)
-const ALLOWED_LAYERS = new Set(ACQUISITION_SCOPED_NAMES.concat(REFERENCE_NAMES))
+const INTERNAL_ONLY_LAYERS = new Set(GUS_REFERENCE_NAMES)
+const ALLOWED_LAYERS = new Set(
+  ACQUISITION_SCOPED_NAMES.concat(REFERENCE_NAMES, GUS_REFERENCE_NAMES),
+)
 
 // WFS-ээр нэг хүсэлтэд татах мөрийн дээд хязгаар — бөөнөөр татахаас сэргийлнэ.
 const MAX_FEATURES = 5000
@@ -202,6 +217,11 @@ async function proxy(
   }
 
   if (isExternalRoleSet(roles)) {
+    // ГУС-ийн лавлах давхаргыг гадаад ролид ОГТ нээхгүй — хумих багана нь
+    // байхгүй тул хэсэгчилэн нээх боломж алга.
+    if (layers.some((l) => INTERNAL_ONLY_LAYERS.has(l))) {
+      return NextResponse.json({ error: 'Хориотой давхарга' }, { status: 403 })
+    }
     const scope = await externalAcquisitionScope(token, roles)
     if (scope === null) {
       return NextResponse.json({ error: 'Эрх тодорхойлж чадсангүй' }, { status: 403 })

@@ -11,9 +11,53 @@ import { ProgressBadge } from "@/components/ui/progress-badge";
  *
  * Газрын зураг дээрх "бусад" давхаргууд нь бүгд чөлөөлөлтийн/төлөвлөгөөний
  * ХИЛ (v_acquisition_plan, v_plan_acquisition, v_acquisition_boundary).
- * GeoServer тэдгээрээс зөвхөн plan_code/status/талбай буцаадаг тул
- * чөлөөлөлтийн бодит мэдээллийг `acquisition_id`-аар API-аас татаж харуулна.
+ * Дэлгэрэнгүйг `acquisition_id`-аар API-аас татна.
+ *
+ * ГЭХДЭЭ API нь ХУВААРИЛАГДААГҮЙ чөлөөлөлт дээр 403 буцаадаг
+ * (RequireAssignedOrSenior). "Үндсэн төлөвлөлтийн хил" давхарга нь тухайн
+ * ТӨЛӨВЛӨГӨӨНИЙ БҮХ чөлөөлөлтийг ЗОРИУД харуулдаг тул хөршийн хил дээр дарах
+ * нь бүрэн хэвийн үйлдэл — тэр үед цонх бүхэлдээ хоосорч, гарчигт нэрийн оронд
+ * давхаргын нэр гарч, "үзэх эрх байхгүй байж болзошгүй" гэсэн эргэлзээтэй
+ * мессеж үлддэг байв.
+ *
+ * Иймд GeoServer-ийн GetFeatureInfo-оос АЛЬ ХЭДИЙН ирсэн шинжүүдийг (`fallback`)
+ * дамжуулж, дэлгэрэнгүй татагдаагүй ч НЭР, төлөвлөгөөний дугаар, төлөв, талбайг
+ * харуулна. Мессеж нь эргэлзээгүй: хандах эрхгүй гэдгийг шууд хэлнэ.
  */
+
+/** GeoServer-ийн хилийн давхаргаас ирдэг шинжүүд (view бүр өөр багцтай). */
+export interface AcquisitionFeatureProps {
+  acquisition_name?: string;
+  plan_code?: string;
+  status?: number;
+  area_m2?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+/** GetFeatureInfo-ийн түүхий шинжийг цэгцэлнэ (утга нь текст ч, тоо ч байж болно). */
+export function toAcquisitionFeatureProps(
+  props: Record<string, unknown>,
+): AcquisitionFeatureProps {
+  const text = (v: unknown): string | undefined => {
+    const s = typeof v === "string" ? v.trim() : v == null ? "" : String(v);
+    return s ? s : undefined;
+  };
+  const num = (v: unknown): number | undefined => {
+    if (v == null || v === "") return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return {
+    acquisition_name: text(props.acquisition_name),
+    plan_code: text(props.plan_code),
+    status: num(props.status),
+    // v_acquisition_plan нь plan_area_m2, бусад нь area_m2 нэрээр буцаадаг.
+    area_m2: num(props.area_m2) ?? num(props.plan_area_m2),
+    start_date: text(props.start_date),
+    end_date: text(props.end_date),
+  };
+}
 
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
@@ -30,6 +74,7 @@ export default function AcquisitionInfoModal({
   acquisitionId,
   layerLabel,
   layerColor,
+  fallback,
   onClose,
 }: {
   acquisitionId: string;
@@ -37,17 +82,30 @@ export default function AcquisitionInfoModal({
   layerLabel: string;
   /** Дарсан давхаргын өнгө — цонхыг ҮҮГЭЭР бүдэг будна */
   layerColor: string;
+  /**
+   * GeoServer-ийн GetFeatureInfo-оос ирсэн шинжүүд. Дэлгэрэнгүй татагдаагүй
+   * (403 г.м.) үед НЭР болон үндсэн мөрүүд эндээс харагдана.
+   */
+  fallback?: AcquisitionFeatureProps;
   onClose: () => void;
 }) {
-  const { data: acq, isLoading, isError } = useQuery({
+  const { data: acq, isLoading, isError, error } = useQuery({
     queryKey: ["land", acquisitionId],
-    queryFn: () => landApi.getById(acquisitionId),
+    // allow403 — хөрш чөлөөлөлт дээр дарах нь ХЭВИЙН тул глобал "Хандах эрхгүй"
+    // анхааруулга гаргахгүй; цонх өөрөө доор тохирох мессежээ харуулна.
+    queryFn: () => landApi.getById(acquisitionId, { allow403: true }),
     enabled: !!acquisitionId,
     retry: false,
     staleTime: 60_000,
   });
 
   const color = layerColor;
+  // 403 = "энэ чөлөөлөлтөд хуваарилагдаагүй" — өгөгдөл байхгүй ГЭСЭН ҮГ БИШ.
+  // Бусад алдаанаас (сүлжээ, 500) ялгаж, зөв шалтгааныг харуулна.
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  const denied = isError && status === 403;
+  // Дэлгэрэнгүй ирээгүй ч газрын зургаас ирсэн нэр байвал цонх хоосон биш.
+  const name = acq?.acquisition_name || fallback?.acquisition_name;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -67,11 +125,14 @@ export default function AcquisitionInfoModal({
             </span>
             <div className="min-w-0">
               <p className="truncate text-[14px] font-bold text-slate-800 dark:text-white">
-                {acq?.acquisition_name || layerLabel}
+                {name || layerLabel}
               </p>
               <p className="text-[11px] font-semibold" style={{ color }}>
                 {layerLabel}
-                {acq?.status ? ` · ${STATUS_LABELS[acq.status] ?? ""}` : ""}
+                {(() => {
+                  const st = acq?.status ?? fallback?.status;
+                  return st ? ` · ${STATUS_LABELS[st] ?? ""}` : "";
+                })()}
               </p>
             </div>
           </div>
@@ -91,9 +152,39 @@ export default function AcquisitionInfoModal({
               ))}
             </div>
           ) : isError || !acq ? (
-            <p className="py-8 text-center text-[13px] text-slate-500">
-              Мэдээлэл ачаалж чадсангүй — үзэх эрх байхгүй байж болзошгүй.
-            </p>
+            /*
+             * Дэлгэрэнгүй ирээгүй — гэхдээ газрын зургаас ирсэн зүйлээ ХАРУУЛНА.
+             * "Үндсэн төлөвлөлтийн хил" нь хөрш чөлөөлөлтүүдийг зориуд
+             * харуулдаг тул энэ нь алдаа биш, ЭНГИЙН тохиолдол.
+             */
+            <>
+              <div
+                className="mb-3 rounded-lg px-3 py-2 text-[12px] leading-relaxed"
+                style={{ background: `${color}1a`, color: "inherit" }}
+              >
+                {denied
+                  ? "Та энэ чөлөөлөлтөд хуваарилагдаагүй тул дэлгэрэнгүйг харах боломжгүй. Доор газрын зураг дээрх үндсэн мэдээлэл харагдаж байна."
+                  : "Дэлгэрэнгүй мэдээлэл ачаалж чадсангүй. Доор газрын зураг дээрх үндсэн мэдээлэл харагдаж байна."}
+              </div>
+              <Row label="Чөлөөлөлтийн нэр" value={fallback?.acquisition_name} />
+              <Row label="Төлөвлөгөөний дугаар" value={fallback?.plan_code} />
+              <Row
+                label="Төлөв"
+                value={fallback?.status ? STATUS_LABELS[fallback.status] : undefined}
+              />
+              <Row
+                label="Чөлөөлөх талбай"
+                value={(fallback?.area_m2 ?? 0) > 0 ? formatArea(fallback?.area_m2) : undefined}
+              />
+              <Row
+                label="Хугацаа"
+                value={
+                  fallback?.start_date || fallback?.end_date
+                    ? `${fallback.start_date ? formatDate(fallback.start_date) : "—"} — ${fallback.end_date ? formatDate(fallback.end_date) : "—"}`
+                    : undefined
+                }
+              />
+            </>
           ) : (
             <>
               <Row label="Чөлөөлөлтийн нэр" value={acq.acquisition_name} />

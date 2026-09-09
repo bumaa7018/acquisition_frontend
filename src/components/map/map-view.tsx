@@ -18,10 +18,13 @@ import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import { createBasemapLayer, watchBasemap } from './basemap'
 import FeaturePopup from './feature-popup'
 import ParcelInfoModal from './parcel-info-modal'
-import AcquisitionInfoModal from './acquisition-info-modal'
+import AcquisitionInfoModal, {
+  toAcquisitionFeatureProps,
+  type AcquisitionFeatureProps,
+} from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
 import { useFullscreen } from './use-fullscreen'
-import { fitLayerToMap, layerDef, type MapLayerDef, type MapLayerId } from './layers'
+import { fitLayerToMap, legendFor, shouldFitOnEnable, layerDef, type MapLayerDef, type MapLayerId } from './layers'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
@@ -37,6 +40,9 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('v_parcel_s3'),
   layerDef('v_parcel_s4'),
   layerDef('v_parcel_s5'),
+  // ГУС-ийн лавлах давхаргууд — жагсаалтын ЭЦЭСТ, анхнаасаа УНТРААЛТТАЙ.
+  layerDef('ca_agreed_parcel'),
+  layerDef('ca_sec_parcel'),
 ]
 
 const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
@@ -58,6 +64,7 @@ const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
 // тогтооход хэрэгтэй лавлах давхарга тул хэрэглэгч бүрд гараар асаах
 // шаардлагагүй. Давхаргын самбараас унтраах боломжтой хэвээр.
 const DEFAULT_VISIBLE = new Set<string>(['au1', 'au2', 'au3', 'v_acquisition_plan', ...PARCEL_STATUS_LAYERS])
+
 
 const PARCEL_GROUP: LayerGroupConfig = {
   id: 'parcel_status',
@@ -93,13 +100,18 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
 
   const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group }))
+    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group, legend: legendFor(d.id) }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
   // Нэгж талбарын дэлгэрэнгүй цонх — GeoServer-ийн `id` (parcel UUID) ба
   // `acquisition_id`-аар нээгдэнэ.
   const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null)
-  const [acqInfo, setAcqInfo] = useState<{ acquisitionId: string; layerLabel: string; layerColor: string } | null>(null)
+  const [acqInfo, setAcqInfo] = useState<{
+    acquisitionId: string
+    layerLabel: string
+    layerColor: string
+    fallback?: AcquisitionFeatureProps
+  } | null>(null)
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
 
@@ -195,7 +207,14 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
               }
             }
             if (BOUNDARY_INFO_LAYERS[id] && acqId) {
-              setAcqInfo({ acquisitionId: acqId, layerLabel: BOUNDARY_INFO_LAYERS[id], layerColor: layerDef(id as MapLayerId).color })
+              // GeoServer-ийн шинжүүдийг ХАМТ дамжуулна: дэлгэрэнгүйг татах
+              // эрхгүй үед цонх нэр/төлөв/талбайгаа эндээс харуулна.
+              setAcqInfo({
+                acquisitionId: acqId,
+                layerLabel: BOUNDARY_INFO_LAYERS[id],
+                layerColor: layerDef(id as MapLayerId).color,
+                fallback: toAcquisitionFeatureProps(props),
+              })
               break
             }
             setPopup({ layer: id, properties: props, position: { x: pixel[0], y: pixel[1] } })
@@ -342,7 +361,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       const next = { ...l, visible: !l.visible }
       wmsLayers.current[id]?.setVisible(next.visible)
       const def = LAYER_DEFS.find(d => d.id === id)
-      if (next.visible && def && olMap.current) {
+      // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз):
+      // WFS-ээр олон МБ татаж, зэрэг явж буй API дуудлагыг timeout-д унагаадаг.
+      if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {
         void fitLayerToMap({
           map: olMap.current,
           wfsUrl: GS_WFS,
@@ -418,6 +439,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           acquisitionId={acqInfo.acquisitionId}
           layerLabel={acqInfo.layerLabel}
           layerColor={acqInfo.layerColor}
+          fallback={acqInfo.fallback}
           onClose={() => setAcqInfo(null)}
         />
       )}

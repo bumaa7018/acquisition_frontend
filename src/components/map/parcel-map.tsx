@@ -18,7 +18,7 @@ import LayerPanel, { type LayerConfig } from "./layer-panel";
 import { createBasemapLayer, watchBasemap } from "./basemap";
 import FullscreenButton from "./fullscreen-button";
 import { useFullscreen } from "./use-fullscreen";
-import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
+import { fitLayerToMap, legendFor, shouldFitOnEnable, layerDef, type MapLayerDef } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { PARCEL_STATUS_STYLES } from "@/types";
 import { logger } from "@/lib/logger";
@@ -32,7 +32,14 @@ const WMS_LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("au2"), defaultVisible: true },
   { ...layerDef("au3"), defaultVisible: true },
   { ...layerDef("v_acquisition_plan"),     defaultVisible: true,  cqlType: "acquisition" },
-  { ...layerDef("building"),               defaultVisible: true,  cqlType: "parcel" },
+  // ГУС-ийн (ЛМ) лавлах давхаргууд — `data_landuse` схемээс GeoServer шууд
+  // уншина. `cqlType` БАЙХГҮЙ: чөлөөлөлт/нэгж талбарын багана агуулаагүй тул
+  // шүүгдэхгүй, харагдаж буй хэсгээрээ л зурагдана.
+  //
+  // Анхнаасаа УНТРААЛТТАЙ: тухайн нэгж талбар хамгаалалтын зурваст орсон эсэх,
+  // шинэ зөвшилцсөн хүрээтэй хэрхэн харьцаж байгааг ХАРАХ ҮЕДЭЭ асаана.
+  { ...layerDef("ca_agreed_parcel"),       defaultVisible: false },
+  { ...layerDef("ca_sec_parcel"),          defaultVisible: false },
 ];
 
 const VECTOR_LAYER_DEFS: MapLayerDef[] = [
@@ -84,6 +91,7 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       label: d.label,
       color: d.color,
       visible: ("defaultVisible" in d ? d.defaultVisible : true) as boolean,
+      legend: legendFor(d.id),
     })),
   );
 
@@ -99,7 +107,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
           }
           wmsLayers.current[id]?.setVisible(next.visible);
           const def = WMS_LAYER_DEFS.find((d) => d.id === id);
-          if (next.visible && def && olMap.current) {
+          // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз).
+          if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {
             void fitLayerToMap({
               map: olMap.current,
               wfsUrl: GS_WFS,

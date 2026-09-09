@@ -27,13 +27,18 @@ import FullscreenButton from "./fullscreen-button";
 import PrintButton from "./print-button";
 import FeaturePopup from "./feature-popup";
 import ParcelInfoModal from "./parcel-info-modal";
-import AcquisitionInfoModal from "./acquisition-info-modal";
+import AcquisitionInfoModal, {
+  toAcquisitionFeatureProps,
+  type AcquisitionFeatureProps,
+} from "./acquisition-info-modal";
 import PrintMapDialog from "./print-map-dialog";
 import { useFullscreen } from "./use-fullscreen";
 import {
   BASE_Z_INDEX,
   DRONE_Z_INDEX,
   fitLayerToMap,
+  legendFor,
+  shouldFitOnEnable,
   layerDef,
   type MapLayerDef,
   type MapLayerId,
@@ -121,6 +126,14 @@ const LAYER_DEFS: (MapLayerDef & {
   { ...layerDef("v_parcel_s3"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s4"), defaultVisible: true, cqlKey: "acquisition" },
   { ...layerDef("v_parcel_s5"), defaultVisible: true, cqlKey: "acquisition" },
+  // ГУС-ийн (ЛМ) лавлах давхаргууд — `data_landuse` схемээс GeoServer шууд
+  // уншина. `cqlKey` БАЙХГҮЙ: эдгээрт `acquisition_id`/`plan_code` багана
+  // байхгүй тул чөлөөлөлтөөр шүүгдэхгүй, харагдаж буй хэсгээрээ л зурагдана.
+  //
+  // Анхнаасаа УНТРААЛТТАЙ: улс даяарын бүртгэл тул зөвхөн хэрэгтэй үед
+  // (зөвшилцсөн хүрээ / хамгаалалтын зурвастай харьцуулах) асаана.
+  { ...layerDef("ca_agreed_parcel"), defaultVisible: false },
+  { ...layerDef("ca_sec_parcel"), defaultVisible: false },
 ];
 
 /**
@@ -209,7 +222,12 @@ export function AcquisitionMap({
   // Давхарга дээр дарахад: нэгж талбар бол дэлгэрэнгүй цонх, бусад нь жижиг popup.
   const [popup, setPopup] = useState<{ layer: string; properties: Record<string, unknown>; position: { x: number; y: number } } | null>(null);
   const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null);
-  const [acqInfo, setAcqInfo] = useState<{ acquisitionId: string; layerLabel: string; layerColor: string } | null>(null);
+  const [acqInfo, setAcqInfo] = useState<{
+    acquisitionId: string;
+    layerLabel: string;
+    layerColor: string;
+    fallback?: AcquisitionFeatureProps;
+  } | null>(null);
   // 3D (cesium-3d.ts): OL давхаргуудыг globe дээр давхарлана, зөвхөн хэрэглэгч сонгоход л ачаална
   const cesium3D    = useRef<Cesium3DHandle | null>(null);
   const cesium3DParcels = useRef<Cesium3DParcel[]>([]);
@@ -245,6 +263,7 @@ export function AcquisitionMap({
       color: d.color,
       visible: d.defaultVisible,
       group: d.group,
+      legend: legendFor(d.id),
     })),
   );
   const [visibleHistoryIds, setVisibleHistoryIds] = useState<Set<string>>(() => new Set());
@@ -373,7 +392,9 @@ export function AcquisitionMap({
 
           wmsLayers.current[id]?.setVisible(next.visible);
           const def = LAYER_DEFS.find((d) => d.id === id);
-          if (next.visible && def && olMap.current) {
+          // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз):
+          // WFS-ээр олон МБ татаж, зэрэг явж буй API дуудлагыг timeout-д унагаадаг.
+          if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {
             void fitLayerToMap({
               map: olMap.current,
               wfsUrl: GS_WFS,
@@ -520,7 +541,14 @@ export function AcquisitionMap({
             }
           }
           if (BOUNDARY_INFO_LAYERS[id] && acqId) {
-            setAcqInfo({ acquisitionId: acqId, layerLabel: BOUNDARY_INFO_LAYERS[id], layerColor: layerDef(id as MapLayerId).color });
+            // GeoServer-ийн шинжүүдийг ХАМТ дамжуулна: дэлгэрэнгүйг татах эрхгүй
+            // (хуваарилагдаагүй) үед цонх нэр/төлөв/талбайгаа эндээс харуулна.
+            setAcqInfo({
+              acquisitionId: acqId,
+              layerLabel: BOUNDARY_INFO_LAYERS[id],
+              layerColor: layerDef(id as MapLayerId).color,
+              fallback: toAcquisitionFeatureProps(props),
+            });
             return;
           }
           setPopup({ layer: id, properties: props, position: { x: pixel[0], y: pixel[1] } });
@@ -834,7 +862,8 @@ export function AcquisitionMap({
               <AcquisitionInfoModal
                 acquisitionId={acqInfo.acquisitionId}
                 layerLabel={acqInfo.layerLabel}
-          layerColor={acqInfo.layerColor}
+                layerColor={acqInfo.layerColor}
+                fallback={acqInfo.fallback}
                 onClose={() => setAcqInfo(null)}
               />
             )}
