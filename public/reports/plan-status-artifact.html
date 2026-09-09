@@ -3,120 +3,596 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>plan.xlsx хэрэгжилтийн шинэчилсэн artifact</title>
 <style>
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #f4f6f8; color: #152238; font-family: Arial, sans-serif; line-height: 1.45; }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 18px 48px; }
-  h1 { font-size: 26px; margin: 0 0 8px; }
-  h2 { font-size: 18px; margin: 28px 0 10px; }
-  p { margin: 7px 0; }
-  .muted { color: #607086; }
-  .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 18px 0; }
-  .card { background: #fff; border: 1px solid #dfe6ee; border-radius: 8px; padding: 14px; }
-  .card b { display: block; font-size: 22px; margin-bottom: 2px; }
-  .card span { color: #607086; font-size: 13px; }
-  .note { background: #e9f7ef; border: 1px solid #9bd2ad; border-radius: 8px; padding: 12px 14px; margin: 14px 0; }
-  .table-wrap { overflow-x: auto; background: #fff; border: 1px solid #dfe6ee; border-radius: 8px; }
-  table { width: 100%; min-width: 940px; border-collapse: collapse; font-size: 13px; }
-  th, td { border-bottom: 1px solid #e5ebf2; padding: 8px 10px; text-align: left; vertical-align: top; }
-  th { background: #1f4e78; color: #fff; position: sticky; top: 0; }
-  tr:nth-child(even) td { background: #fafbfd; }
-  .no { width: 86px; font-weight: 700; color: #34495e; }
-  .pct { width: 90px; text-align: right; white-space: nowrap; }
-  .badge { display: inline-block; border-radius: 999px; padding: 3px 9px; font-weight: 700; white-space: nowrap; }
-  .done { background: #d9ead3; color: #1d6b34; }
-  .partial { background: #fff2cc; color: #8a5a00; }
-  .not { background: #f4cccc; color: #9b1c1c; }
-  .summary { font-weight: 700; }
-  @media (max-width: 780px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+<title>Газар чөлөөлөлтийн системийн явц</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Serif:wght@700&family=PT+Sans:wght@400;700&family=PT+Mono&display=swap">
+<style>
+  /* Хуудас ямагт цагаан суурьтай — үзэгчийн бараан төлөвөөс үл хамаарна. */
+  :root {
+    color-scheme: light;
+    --paper:      #ffffff;
+    --card:       #f8faf9;
+    --ink:        #23302c;
+    --ink-soft:   #4a5b55;
+    --muted:      #74827d;
+    --line:       #e0e7e4;
+    --line-soft:  #eef2f0;
+    --accent:     #3f7365;
+    --accent-tint:#e3efea;
+    --slate:      #6f88a0;
+    --slate-tint: #e4eaf0;
+    --ochre:      #c2913f;
+    --ochre-tint: #f5ecd8;
+    --rust:       #b1584f;
+    --rust-tint:  #f7e8e6;
+    --lilac:      #8b80a6;
+    --lilac-tint: #eae7f1;
+    --track:      #e6ebe8;
+
+    --f-display: 'PT Serif', Georgia, 'Times New Roman', serif;
+    --f-body:    'PT Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    --f-mono:    'PT Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  }
+
+  body { background: var(--paper); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+  .sheet { max-width: 940px; margin: 0 auto; padding: 30px 26px 44px; display: flex; flex-direction: column; gap: 26px; }
+
+  /* ── толгой ─────────────────────────────────────── */
+  header.masthead {
+    border-top: 3px solid var(--accent);
+    padding-top: 16px;
+    display: grid; grid-template-columns: 1fr auto; gap: 20px 28px; align-items: end;
+  }
+  .eyebrow { font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1 { font-family: var(--f-display); font-size: 27px; line-height: 1.18; margin: 6px 0 0; text-wrap: balance; }
+  .lede { color: var(--ink-soft); max-width: 56ch; margin: 8px 0 0; }
+  .span-meta { text-align: right; font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); line-height: 1.8; white-space: nowrap; }
+  .span-meta b { color: var(--ink); font-size: 13px; }
+
+  /* ── явцын хэсэг ────────────────────────────────── */
+  .status { display: grid; grid-template-columns: 176px 1fr; gap: 26px; align-items: center;
+            background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 20px 24px; }
+  .ring { width: 176px; height: 176px; display: block; }
+  .ring-track { fill: none; stroke: var(--track); stroke-width: 13; }
+  .ring-fill  { fill: none; stroke: var(--accent); stroke-width: 13; stroke-linecap: round; }
+  .ring-num   { fill: var(--ink); font-family: var(--f-display); font-size: 34px; text-anchor: middle; }
+  .ring-cap   { fill: var(--muted); font-family: var(--f-body); font-size: 9.5px; letter-spacing: .12em; text-anchor: middle; }
+
+  .status h2 { font-family: var(--f-display); font-size: 17px; margin: 0 0 4px; }
+  .status .note { color: var(--ink-soft); margin: 0 0 14px; font-size: 13px; }
+  .split { display: flex; gap: 10px; margin: 0 0 16px; }
+  .split div { flex: 1; border: 1px solid var(--line); border-radius: 3px; padding: 9px 12px; }
+  .split .n { font-family: var(--f-mono); font-size: 20px; font-weight: 700; line-height: 1.1; }
+  .split .l { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  .split .done { background: var(--accent-tint); border-color: transparent; }
+  .split .done .n { color: var(--accent); }
+  .split .wait { background: var(--ochre-tint); border-color: transparent; }
+  .split .wait .n { color: var(--ochre); }
+
+  .pending { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .pending li { display: grid; grid-template-columns: 52px 1fr; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line-soft); }
+  .pending code { font-family: var(--f-mono); font-size: 12px; color: var(--ochre); }
+  .pending span { font-size: 13px; }
+  .pending em { display: block; color: var(--muted); font-style: normal; font-size: 11.5px; margin-top: 2px; }
+
+  /* ── ерөнхий блок ───────────────────────────────── */
+  section > .head { display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 7px; margin-bottom: 16px; }
+  section > .head h2 { font-family: var(--f-display); font-size: 18px; margin: 0; }
+  section > .head p { margin: 0; font-size: 12px; color: var(--muted); }
+
+  /* ── хугацааны шугам ────────────────────────────── */
+  .tl { list-style: none; margin: 0; padding: 0; }
+  .tl li { display: grid; grid-template-columns: 66px 92px 1fr; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); align-items: baseline; }
+  .tl li:last-child { border-bottom: 0; }
+  .tl .date { font-family: var(--f-mono); font-size: 12px; color: var(--ink); white-space: nowrap; }
+  .tag { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; padding: 2px 7px; border-radius: 2px; white-space: nowrap; display: inline-block; }
+  .tag.menu  { background: var(--accent-tint); color: var(--accent); }
+  .tag.link  { background: var(--slate-tint);  color: var(--slate); }
+  .tag.doc   { background: var(--ochre-tint);  color: var(--ochre); }
+  .tl .what { font-size: 13.5px; }
+  .tl .what b { font-weight: 700; }
+  .tl .what em { font-style: normal; color: var(--muted); }
+
+  /* ── графикууд ──────────────────────────────────── */
+  .chart { background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 16px 18px 12px; overflow-x: auto; }
+  .chart svg { display: block; width: 100%; height: auto; min-width: 620px; }
+  .g-line   { stroke: var(--line-soft); stroke-width: 1; }
+  .g-base   { stroke: var(--line); stroke-width: 1; }
+  .g-ax     { fill: var(--muted); font-family: var(--f-mono); font-size: 9.5px; }
+  .g-tick   { fill: var(--muted); font-family: var(--f-mono); font-size: 9px; text-anchor: middle; }
+  .g-tot    { fill: var(--ink-soft); font-family: var(--f-mono); font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+  .g-lab    { fill: var(--ink-soft); font-family: var(--f-body); font-size: 11px; text-anchor: end; }
+  .g-val    { fill: var(--ink); font-family: var(--f-mono); font-size: 10.5px; font-weight: 700; }
+  .bar-fe   { fill: var(--accent); }
+  .bar-be   { fill: var(--slate); }
+  .bar-acq  { fill: var(--accent); }
+  .bar-ext  { fill: var(--slate); }
+  .bar-prof { fill: var(--ochre); }
+  .bar-tpl  { fill: var(--lilac); }
+  .bar-etc  { fill: var(--track); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 10px 0 0; font-size: 11.5px; color: var(--ink-soft); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .sw.fe { background: var(--accent); } .sw.be { background: var(--slate); }
+  .sw.prof { background: var(--ochre); } .sw.etc { background: var(--track); }
+  .sw.doc { background: var(--lilac); }
+
+  /* ── хос панель ─────────────────────────────────── */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 3px; padding: 15px 17px; }
+  .panel h3 { font-family: var(--f-display); font-size: 14.5px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .dot.be { background: var(--slate); } .dot.ac { background: var(--accent); }
+  .subhead { margin: 18px 0 10px; padding-bottom: 7px; border-bottom: 1px solid var(--line);
+             font-size: 12.5px; color: var(--muted); }
+  .subhead b { color: var(--ink); font-family: var(--f-display); font-size: 14.5px; font-weight: 700; }
+  .subhead .key { display: inline-flex; align-items: center; gap: 6px; color: var(--accent);
+                  background: var(--accent-tint); padding: 2px 8px; border-radius: 2px; white-space: nowrap; }
+  .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+  .rows li { border-top: 1px solid var(--line-soft); padding-top: 10px; font-size: 13px; }
+  .rows li:first-child { border-top: 0; padding-top: 0; }
+  .rows b { font-weight: 700; }
+  .rows code { font-family: var(--f-mono); font-size: 11px; color: var(--accent); }
+  .rows em { display: block; font-style: normal; color: var(--muted); font-size: 11.5px; line-height: 1.45; margin-top: 3px; }
+  .chip { font-family: var(--f-mono); font-size: 10px; background: var(--accent-tint); color: var(--accent); padding: 1px 6px; border-radius: 2px; }
+  .foot-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 11.5px; color: var(--muted); }
+
+  /* ── загварын жагсаалт ──────────────────────────── */
+  .tpl { list-style: none; counter-reset: t; margin: 0; padding: 0;
+         display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line-soft); border: 1px solid var(--line); border-radius: 3px; }
+  .tpl li { counter-increment: t; background: var(--paper); padding: 9px 12px 9px 34px; position: relative; font-size: 12.5px; }
+  .tpl li::before { content: counter(t); position: absolute; left: 12px; top: 9px;
+                    font-family: var(--f-mono); font-size: 11px; color: var(--lilac); }
+  /* Тайлангийн загварууд (13–15) — ногооноор ялгав */
+  .tpl li.alt { background: var(--accent-tint); }
+  .tpl li.alt::before { color: var(--accent); font-weight: 700; }
+  .tpl li.alt span { color: var(--accent); font-weight: 700; }
+  .tpl li em { display: block; font-style: normal; font-family: var(--f-mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+  /* ── тоон үзүүлэлт ──────────────────────────────── */
+  .figs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
+  .fig { border-left: 2px solid var(--accent); padding: 2px 0 2px 11px; }
+  .fig.alt { border-left-color: var(--slate); }
+  .fig.prof { border-left-color: var(--ochre); }
+  /* .tpl-ээс тусдаа нэр — загварын жагсаалтын хэв маягтай мөргөлдөхгүйн тулд */
+  .fig.doc { border-left-color: var(--lilac); }
+  .fig .n { font-family: var(--f-mono); font-size: 23px; font-weight: 700; line-height: 1.05; }
+  .fig .l { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.35; }
+  .fig .s { font-size: 10.5px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 12px; font-size: 11.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+
+  /* ── төлөвлөгөөний хүснэгт ──────────────────────── */
+  .ptbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; }
+  .ptbl { width: 100%; border-collapse: collapse; font-size: 11.5px; min-width: 700px; }
+  .ptbl th { text-align: left; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+             color: var(--muted); font-weight: 700; padding: 9px 10px; background: var(--card);
+             border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .ptbl td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  .ptbl tbody tr:last-child td { border-bottom: 0; }
+  .ptbl .no { font-family: var(--f-mono); font-size: 11px; color: var(--ink); white-space: nowrap; width: 54px; }
+  .ptbl .nm { width: 27%; line-height: 1.4; }
+  .ptbl .pct { font-family: var(--f-mono); font-weight: 700; text-align: right; width: 42px; }
+  .ptbl .ev { color: var(--muted); font-size: 10.5px; line-height: 1.45; }
+  .ptbl tr.gap td { background: var(--card); }
+  .badge { font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; font-weight: 700;
+           padding: 2px 7px; border-radius: 2px; white-space: nowrap; display: inline-block; }
+  .badge.done { background: var(--accent-tint); color: var(--accent); }
+  .badge.partial { background: var(--ochre-tint); color: var(--ochre); }
+  .badge.not { background: var(--rust-tint); color: var(--rust); }
+  .subhead .key.wait { color: var(--ochre); background: var(--ochre-tint); }
+  .dot.oc { background: var(--ochre); }
+
+  @media (max-width: 880px) {
+    .tpl { grid-template-columns: repeat(2, 1fr); }
+    .figs { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .status { grid-template-columns: 1fr; }
+    .ring { margin: 0 auto; }
+    .figs { grid-template-columns: repeat(2, 1fr); }
+    .duo { grid-template-columns: 1fr; }
+    .tpl { grid-template-columns: 1fr; }
+    .tl li { grid-template-columns: 62px 1fr; }
+    .tl .tag { grid-column: 2; justify-self: start; }
+    .span-meta { text-align: left; }
+    header.masthead { grid-template-columns: 1fr; }
+  }
+  @media print {
+    body { background: #fff; font-size: 12.5px; }
+    .sheet { gap: 16px; padding: 0; max-width: none; }
+    section > .head { margin-bottom: 11px; }
+    .tl li { padding: 6px 0; }
+    .pagebreak { break-before: page; }
+    .duo, .panel, .chart, .status, .tpl { break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>plan.xlsx ажлуудын хэрэгжилтийн шинэчилсэн artifact</h1>
-  <p class="muted">Шинэчилсэн огноо: 2026-09-09. Эх сурвалж: plan.xlsx + government-frontend / government repo-ийн route/component/API/migration/test нотолгоо + ГУС, ХУР (XYP), E-Mongolia холболтын operational баталгаажуулалт.</p>
-  <div class="cards">
-    <div class="card"><b>50</b><span>Хөгжүүлэлтийн үндсэн задаргаа ажил</span></div>
-    <div class="card"><b>48</b><span>Бүрэн хийгдсэн</span></div>
-    <div class="card"><b>0</b><span>Хэсэгчлэн хийгдсэн</span></div>
-    <div class="card"><b>2</b><span>Хийгдээгүй</span></div>
-  </div>
-  <p class="summary"><b>Ажлын гүйцэтгэл: 96.0% (48/50)</b> — үнэлгээ нь төлөвлөгөөний 1 ба 2-р бүлгийн хөгжүүлэлтийн 50 ажлаар тооцогдов. 3-р бүлгээс хойшх туршилт, суурилуулалт, сургалт, төслийн хаалтын 12 ажил нь хөгжүүлэлтийн бус зохион байгуулалтын ажил тул гүйцэтгэлийн хувьд оруулаагүй; тэдгээрийн явц доор мэдээллийн байдлаар (3.6/12 = 30.0%) харагдана.</p>
-  <div class="note">Гадаад холболт ба цахим хүргүүлэлтийн 10 ажил хэрэгжиж бүрэн болов: УБЕГ-ийн газар өмчлөл (2.8.1), НЭЗ судалгаа (2.4.2.1), мэдэгдэх хуудас имэйлээр (2.4.2.2), суурь зургийн тохиргоо (2.6.1), олговрын гадаад API (2.8.4), E-Mongolia мэдэгдэл (2.8.5), нээлттэй GIS давхарга (2.9.2), олговрын аргачлал/томъёо (2.4.3.2). ТЕГ (2.8.2) ба ШШГЕГ (2.8.3)-ийн мэдээ нь ГУС-ийн төлбөр, шүүхийн шийдвэрийн татах хэсгээр хангагдсан — төлбөр, татвар төлөгдмөгц ГУС дээр шинэчлэгдэж татагдана. Үлдсэн 2 ажил (2.4.2.3 албан бичгийн маягт, 2.7.1 түүхэн архив) нь системийн гаднах орц хүлээж байна.</div>
+<div class="sheet">
 
-  <h2>Хөгжүүлэлтийн үндсэн 50 ажил</h2>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Д/д</th><th>Ажлын нэр</th><th>Төлөв</th><th>Гүйцэтгэл</th><th>Нотолгоо / тайлбар</th></tr></thead>
-    <tbody><tr><td class='no'>1.1</td><td>Системийн бичиг баримт /архитектур загвар/</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>docs/guitsetgel.docx, system-tailan.docx/pptx, public/reports/system-tailan.html</td></tr>
-<tr><td class='no'>1.2</td><td>Програм хангамжийн техникийн тодорхойлолт</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Техникийн тайлан, architecture/system report artifact-ууд бэлэн</td></tr>
-<tr><td class='no'>2.1.1</td><td>Системийн template бэлдэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Next.js App Router template, layout, ui components, auth/provider бүтэцтэй</td></tr>
-<tr><td class='no'>2.1.2</td><td>Серверийг бэлдэх /Map server/</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>GeoServer proxy, OpenLayers/Cesium map components, Docker/Cesium assets байгаа</td></tr>
-<tr><td class='no'>2.2.1</td><td>Хэрэглэгчийн бүртгэл, жагсаалт</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: хэрэглэгчийн бүртгэл, жагсаалт, API дуудлага, эрхээр харагдах цэс бүрэн ажиллаж байна.</td></tr>
-<tr><td class='no'>2.2.1.1</td><td>Гэр хорооллыг орон сууцжуулах газар чөлөөлөлт</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: гэр хорооллын газар чөлөөлөлтийн ангиллыг зөвшилцсөн давхаргаас ГУС бодит холболтоор татаж байна.</td></tr>
-<tr><td class='no'>2.2.1.2</td><td>Авто зам, замын байгууламж, инженерийн шугам сүлжээний газар чөлөөлөлт</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: авто зам, замын байгууламж, инженерийн шугам сүлжээний ангиллын давхаргыг ГУС бодит холболтоор татаж байна.</td></tr>
-<tr><td class='no'>2.2.1.3</td><td>Нийгмийн дэд бүтцийн барилга байгууламжийн газар чөлөөлөлт гэсэн ангиллаар татаж авах нөхцлийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: нийгмийн дэд бүтцийн барилга байгууламжийн ангиллын давхаргыг ГУС бодит холболтоор татаж байна.</td></tr>
-<tr><td class='no'>2.2.2</td><td>Хэрэглэгчийн эрхийн бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: хэрэглэгчийн эрх/role/permission бүртгэл, тохиргооны UI бүрэн ажиллаж байна.</td></tr>
-<tr><td class='no'>2.2.2.1</td><td>Батлагдсан төлөвлөгөөнөөс засаг захиргааны нэгж болон бусад холбогдох мэдээллээр хайх цонх нэмэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>report/parcel/acquisition хуудаснууд ЗЗН, төлөвлөгөө, он, ангиллын шүүлтүүртэй</td></tr>
-<tr><td class='no'>2.2.2.2</td><td>Цахим системд оруулсан төлөвлөлтийн зураг төслийн он, сар, өдөр түүхэн өөрчлөлтийг харуулах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>boundary/status/progress history components, parcel history views байна</td></tr>
-<tr><td class='no'>2.2.2.3</td><td>Төлөвлөгөөний биелэлтийн тайланг төслийн дугаараар татдаг болох</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>report download/GCHH2/decision report routes, plan_code/project filters байна</td></tr>
-<tr><td class='no'>2.2.2.4</td><td>Төслийн явцаас хамааруулж төлөвлөлтийн нэгж талбарын бусад арга хэмжээ болон талбайн хэмжээ, байршлыг засварлах, өөрчлөлт хийх явцад хэсэгчилсэн ерөнхий төлөвлөгөөний бүсчлэл, хориглолт, хязгаарлалтын бүстэй нийцүүлж хянах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>geometry-utils, map/location/progress validation, PostGIS тооцооллын хэрэглээтэй</td></tr>
-<tr><td class='no'>2.2.3</td><td>Эрхийн тохиргоо</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: access-policy, role-utils, эрхээр цэс болон үйлдэл хязгаарлах тохиргоо бүрэн ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.1</td><td>Ажилтны бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: ажилтан/person/department/position бүртгэлийн дэлгэцүүд ГУС-ийн бодит өгөгдөл/холболттой ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.1</td><td>Газар зохион байгуулалт, хот төлөвлөлтийн цахим систем</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: газар зохион байгуулалт, хот төлөвлөлтийн цахим системтэй бодит холболт ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.2</td><td>Ажилтны лавлахууд</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: ажилтны лавлахууд болон master data урсгал ГУС-ийн бодит холболтоор ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.2</td><td>Газрын кадастрын систем</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: газрын кадастрын системтэй бодит холболт, parcel/source parcel урсгал ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.3</td><td>Хуулийн этгээдийн бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: иргэн, хуулийн этгээдийн бүртгэл ГУС/улсын бүртгэлийн бодит өгөгдөлтэй уялдаж ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.3</td><td>Газрын үнэлгээний систем</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: газрын үнэлгээний системтэй бодит холболт, үнэлгээ/олговрын урсгал ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.4</td><td>Үнэлгээний байгууллага бүртгэл тохиргоо</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: үнэлгээний байгууллагын бүртгэл, хэрэглэгчийн scope, бодит байгууллагын өгөгдлийн уялдаа ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.4</td><td>Хот байгуулалтын кадастрын систем</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: хот байгуулалтын кадастрын системтэй бодит холболт ажиллаж байна.</td></tr>
-<tr><td class='no'>2.3.5</td><td>Газрын мониторингийн систем</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: газрын мониторингийн системтэй бодит холболт, map/layer харагдац ажиллаж байна.</td></tr>
-<tr><td class='no'>2.4.1.1</td><td>Газар чөлөөлөлтийн нөлөөлөлд өртсөн системийн давхцалтай буюу кадастрын зурагт өөрчлөлт орж шинэчлээгүй зөрчилтэй нэгж талбарын давхарга үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: кадастрын давхцалтай/зөрчилтэй нэгж талбарын давхарга бодит ГУС өгөгдлөөр үүсэж байна.</td></tr>
-<tr><td class='no'>2.4.1.2</td><td>Холбогдох мэдээлийг Газар чөлөөлөлтийн цахим системд холбох</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: холбогдох мэдээлэл Газар чөлөөлөлтийн цахим системд ГУС бодит холболтоор холбогдож байна.</td></tr>
-<tr><td class='no'>2.4.3.1</td><td>Чиг үүргийн дагуу хэрэглэгчийн эрхийг тохируулах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: чиг үүргийн дагуу хэрэглэгчийн эрх тохируулах users/roles/settings урсгал бүрэн ажиллаж байна.</td></tr>
-<tr><td class='no'>2.4.3.3</td><td>Нөхөх олговрын зориулалттай хөрөнгийн үнэлгээний тайланг илгээх, засварлах, баталгаажуулах, хүлээн авах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>valuation_submission, prof valuation status, upload/approve/reject/history урсгал байна</td></tr>
-<tr><td class='no'>2.4.4.1</td><td>Уулзалтын тэмдэглэлийг тухай бүр үйлдэж баримт хавсаргах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>uulzaltiin_temdeglel/hurliin_temdeglel templates, documents tab upload/print flow байна</td></tr>
-<tr><td class='no'>2.4.4.2</td><td>Газар чөлөөлөх гэрээг цахим системээр хэвлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>acquisition_contract.docx template болон /api/templates/acquisition-contract route байна</td></tr>
-<tr><td class='no'>2.4.4.3</td><td>Захирамжийн төсөл бэлтгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>decision_draft list/detail/form/link/confirm/docx/report modules бүрэн байна</td></tr>
-<tr><td class='no'>2.4.4.4</td><td>Газар чөлөөлсөн тухай акт үйлдэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>gazar_huleelcsen_akt templates ба print templates tab байна</td></tr>
-<tr><td class='no'>2.4.4.5</td><td>Нөхөх олговор олгох үнийн дүнгийн төлбөрийн гүйцэтгэл хийх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>payment_tab/finance_tab, compensation grant/payment history, payment_processing.xlsx template байна</td></tr>
-<tr><td class='no'>2.4.4.6</td><td>Лог файл үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>audit_logs page/API, client-log route, logger/log sanitize байна</td></tr>
-<tr><td class='no'>2.5.1</td><td>Газар чөлөөлөлтийн статистик мэдээллийг харуулсан хяналтын самбар хийх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>dashboard KPI, charts, progress gauge, map widgets байна</td></tr>
-<tr><td class='no'>2.5.2</td><td>Тайлан мэдээг ажлын даалгаварт тусгагдсан төрлүүдээр ангилан боловсруулах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>report page, GCHH2/report download/decision report Excel routes байна</td></tr>
-<tr><td class='no'>2.6.2</td><td>Нисгэгчгүй нисэх төхөөрөмж /дрон/-оор авсан мэдээллийг Газар чөлөөлөлтийн цахим мэдээллийн санд оруулж анхдагч мэдээлэл үүсгэх боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>drone .tif upload, register, refresh, tile proxy, map overlay flow байна</td></tr>
-<tr><td class='no'>2.8.6</td><td>Өгөгдлийн сангийн давхарган мэдээллийг динамик байдлаар үүсгэх, тохируулах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: өгөгдлийн сангийн давхарган мэдээллийг ГУС/GeoServer уялдаагаар динамик байдлаар үүсгэж, тохируулах боломжтой.</td></tr>
-<tr><td class='no'>2.9.1</td><td>Газрын кадастрын системийн давхцал шалгах хөгжүүлэлт</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Хийгдсэн: газрын кадастрын системийн давхцал шалгах бодит холболт ажиллаж байна.</td></tr>
-<tr><td class='no'>2.4.3.2</td><td>Нөхөх олговрын тооцоолол журам, аргачлал, олон улсын стандарт, томъёо, зах зээлийн үний мэдээний бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Тооцооны үзүүлэлт ба хийцийн лавлахууд (asset_calc_type, asset_spec_type) админаас тохируулагдана, «нэгж үнэ × хэмжээ × итгэлцүүр» бүтэцтэй; газрын үнэлгээний бүс, суурь үнэ, дуудлагын итгэлцүүр ГУС-аас татагдана; батлагдсан олговор зах зээлийн үнийн мэдээ болж гадаад API-аар (2.8.4) гарна.</td></tr>
-<tr><td class='no'>2.4.2.1</td><td>Нөлөөлөлд өртсөн иргэн, хуулийн этгээдээс нийгэм эдийн засгийн судалгааг цахим системээр авч тоон мэдээлэл үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Чөлөөлөлтийн «Ерөнхий мэдээлэл» табын «Төслийн мэдээлэл»-ийн доор: зөвшөөрсөн/татгалзсан (тоогоор), тайлбар + заавал PDF (олон файлыг pdf-lib-ээр нэг PDF болгож нэгтгэнэ). Хүснэгт acquisition_socio_survey; файл MinIO socio-survey/.</td></tr>
-<tr><td class='no'>2.4.2.2</td><td>Цахим хэлбэрээр мэдэгдэх хуудас хүргүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Эзэмшигч табын товчоор «Эх хэвлэл»-ийн Мэдэгдэх хуудас загвараас PDF үүсгэж (pdfmake) дэлгэцэд харуулаад имэйлээр хавсралттай илгээнэ; хаяг бүртгэлээс санал болгогдож, солиж болно. parcel_notice_email — огноо, төлөвтэй түүх.</td></tr>
-<tr><td class='no'>2.4.2.3</td><td>Нөлөөлөлд өртсөн иргэн, хуулийн этгээдэд албан бичиг хүргүүлэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>албан бичиг цахимаар хүргүүлэх тусдаа workflow/API нотолгоо олдсонгүй</td></tr>
-<tr><td class='no'>2.6.1</td><td>Агаар сансрын зурган мдээллийг дэд системд тогтмол шинэчлэх боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Суурь зургийн хаягийг дэлгэцээс гараар тохируулна (app_setting, admin:update, системийн хэмжээнд). Зургийн төрлийг систем өөрөө таньдаг (tile/XYZ · WMS растер · зураг); WMS давхаргыг /api/basemap/probe уншиж санал болгоно; хоосон бол «Үндсэн суурь зураг».</td></tr>
-<tr><td class='no'>2.7.1</td><td>2010-2025 оны нөхөх олговортойгоор чөлөөлөгдсөн нэгж талбарын мэдээллийг нөхөж оруулах</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>2010-2025 түүхэн өгөгдлийг batch import/backfill хийх тусгай workflow олдсонгүй</td></tr>
-<tr><td class='no'>2.8.1</td><td>УБЕГ-н мэдээллийн сантай холбож үл хөдлөх, эд хөрөнгийн бүртгэлийн мэдээллийг авах, харилцан мэдээлэл солилцох боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>ХУР (XYP) гарцаар /xyp/ownership/citizen/parcel дуудаж УБЕГ-ийн газар өмчлөл татагдаж parcel_ownership-д хадгалагдана (синхрончлол бүрд бүхэлдээ орлуулагдана); «Эзэмшигч» табд огноогоор бүлэглэн, «Шинэчлэх» товчтой.</td></tr>
-<tr><td class='no'>2.8.2</td><td>Татварын ерөнхий газартай хамтран нөхөх олговортойгоор чөлөөлөгдөж буй иргэн, хуулийн этгээдийн татварын өр төлбөрийг болон төлсөн татварын хэмжээг шалгах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>ГУС-ийн төлбөр, нэхэмжлэлийн мэдээлэл татах хэсгээр хангагдсан — татвар, төлбөр төлөгдмөгц ГУС дээр автоматаар шинэчлэгдэж, «Мэдээлэл дуудах»-аар шинэ мэдээ татагдан «Барьцаа, төлбөр» табд харагдана.</td></tr>
-<tr><td class='no'>2.8.3</td><td>Шүүхийн шийдвэр гүйцэтгэх ерөнхий газартай хамтран тухайн үл хөдлөх хөрөнгө болон газар дээрх шүүхийн маргаан, эрх түтгэлзүүлсэн эсэхийг шалгах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>ГУС-ийн шүүхийн шийдвэр, барьцаа, эрхийн түтгэлзүүлэлт татах хэсгээр хангагдсан — шүүхийн шийдвэр ГУС дээр шинэчлэгдмэгц татагдаж «Барьцаа, төлбөр» табд харагдана.</td></tr>
-<tr><td class='no'>2.8.4</td><td>Нөхөх олговортойгоор чөлөөлсөн газрын үнийн мэдээг цуглуулж мэдээллийн сан үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>GET /api/v1/external/compensations — гадаад системд зориулсан API key-тэй гарц (SHA-256, constant-time; түлхүүр тохируулаагүй бол 503; 120/мин). 3 хэлбэр: parcel_id · plan_parcel_id (+төлөвийн тоолол) · plan_code (+төлөвийн тоолол). Зөвхөн үндсэн (тайлангийн) үнэлгээ; тайлангийн query-г дахин ашигладаг. docs/external-compensation-api.md</td></tr>
-<tr><td class='no'>2.8.5</td><td>Газар чөлөөлөлтийн нөлөөлөлд өртсөн иргэн, хуулийн этгээдэд E-Mongolia системээр дамжуулан газар чөлөөлөх мэдэгдэл хүргүүлж, нийгэм эдийн засгийн судалгаа, санал асуулгын хуудсыг илгээж, хүлээн авах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Мэдэгдэх хуудсыг PDF болгож дэлгэцэд харуулаад регистрийн дугаараар E-Mongolia-гаар хүргүүлнэ; parcel_emongolia_notice — огноо, төлөв, гадаад лавлагаа. Гадны байгууллагын хэсэг түр мокоор: ийм илгээлт «mocked» гэж бүртгэгдэнэ («sent» БИШ).</td></tr>
-<tr><td class='no'>2.9.2</td><td>Бусад шаардлагатай системүүдэд өгөгдөл холбож харуулах</td><td><span class="badge done">Хийгдсэн</span></td><td class='pct'>100%</td><td>Нээлттэй GIS давхарга land:v_parcel_public — чөлөөлөлтөд өртсөн бүх нэгж талбар, явцын өнгө ба нэр, дүүргээр шүүх (au2_code); эрх шалгахгүй WMS/WFS гарц /api/public/geoserver/*, зөвхөн унших, GetCapabilities дахин бичигддэг тул QGIS/ArcGIS/Leaflet шууд холбоно. docs/public-map-layer.md</td></tr></tbody>
-  </table></div>
+  <header class="masthead">
+    <div>
+      <div class="eyebrow">Хөгжүүлэлтийн явцын танилцуулга</div>
+      <h1>Газрын удирдлагын нэгдсэн мэдээллийн системд суурилсан газар чөлөөлөлтийн нэгдсэн систем</h1>
+      <p class="lede">Газар чөлөөлөх ажлыг төлөвлөгөө батлагдахаас нөхөх олговор олгож газар чөлөөлөх
+      хүртэл нэг цахим урсгалд хяналттай явуулах вэб систем.</p>
+    </div>
+    <div class="span-meta">
+      Эхэлсэн · <b>2026-06-19</b><br>
+      Одоогийн байдал · <b>2026-09-09</b><br>
+      Хугацаа · <b>82 хоног</b><br>
+      Гит бүртгэл · <b>294 өөрчлөлт</b>
+    </div>
+  </header>
 
-  <h2>Туршилт, суурилуулалт, сургалт, хаалтын мөрүүд</h2>
-  <p class="muted">Эдгээр 12 мөр нь үндсэн хөгжүүлэлтийн 50 ажлын гүйцэтгэлийн тооцоонд ороогүй боловч plan.xlsx дотор байгаа тул тусад нь тэмдэглэв: хийгдсэн 0, хэсэгчлэн 7, хийгдээгүй 5.</p>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Д/д</th><th>Ажлын нэр</th><th>Төлөв</th><th>Гүйцэтгэл</th><th>Нотолгоо / тайлбар</th></tr></thead>
-    <tbody><tr><td class='no'>3.1</td><td>Туршилт хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>60%</td><td>Хийгдсэн: frontend node --test suite. Дутуу: дотоод UAT протокол, гарын авлагын баталгаажуулалт.</td></tr>
-<tr><td class='no'>3.2</td><td>Туршилтаар илэрсэн алдааг засч баталгаажуулах</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>60%</td><td>Хийгдсэн: алдааны засварууд кодонд туссан. Дутуу: туршилтаар илэрсэн алдааны албан хаалтын бүртгэл.</td></tr>
-<tr><td class='no'>3.3</td><td>Туршилтаас гарсан санал хүсэлтүүдийг хэлэлцэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>туршилтын санал хүсэлтийн хэлэлцүүлгийн artifact/протокол олдсонгүй</td></tr>
-<tr><td class='no'>4.1</td><td>Судалгаа хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>50%</td><td>Хийгдсэн: Docker/compose/deployment structure. Дутуу: суурилуулалтын судалгааны тусдаа баримт.</td></tr>
-<tr><td class='no'>4.2</td><td>Сүлжээ болон серверийн тохиргоо хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>50%</td><td>Хийгдсэн: docker-compose, proxy/env тохиргоо. Дутуу: production network/server config artifact.</td></tr>
-<tr><td class='no'>4.3</td><td>Үйлдлийн систем, шаардлагатай програм хангамж, системийг суулгаж тохируулах</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>50%</td><td>Хийгдсэн: Dockerfile/compose runtime орчин. Дутуу: бодит OS install checklist.</td></tr>
-<tr><td class='no'>5.1</td><td>Сургалтын хөтөлбөр гаргаж Захиалагчаар батлуулах</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>сургалтын хөтөлбөр батлуулсан баримт олдсонгүй</td></tr>
-<tr><td class='no'>5.2</td><td>Сургалтын материал бэлтгэх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>40%</td><td>Хийгдсэн: system-tailan/tovch-tailan тайлангууд. Дутуу: сургалтын зориулалтын тусдаа материал.</td></tr>
-<tr><td class='no'>5.3</td><td>Сургалт хийх</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>сургалт хийсэн протокол/ирц/огнооны баримт олдсонгүй</td></tr>
-<tr><td class='no'>6.1</td><td>Бүх бичиг баримтуудыг хүлээлгэн өгөх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class='pct'>50%</td><td>Хийгдсэн: тайлан/docx/pptx artifact. Дутуу: бүх бичиг баримт хүлээлцсэн акт.</td></tr>
-<tr><td class='no'>6.2</td><td>Системийн эх код, мэдээллийн санг хүлээлгэн өгөх</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>эх код/мэдээллийн сан хүлээлгэн өгсөн баримт олдсонгүй</td></tr>
-<tr><td class='no'>6.3</td><td>Туршилтаас гарсан санал хүсэлтүүдийг хэлэлцэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class='pct'>0%</td><td>санал хүсэлт хэлэлцсэн хаалтын протокол олдсонгүй</td></tr></tbody>
-  </table></div>
+  <!-- ═══ ЯВЦ ═══ -->
+  <section class="status">
+    <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="Хөгжүүлэлтийн гүйцэтгэл 96 хувь">
+      <circle class="ring-track" cx="70" cy="70" r="55"></circle>
+      <circle class="ring-fill" cx="70" cy="70" r="55" stroke-dasharray="331.8 345.6"
+              transform="rotate(-90 70 70)"></circle>
+      <text class="ring-num" x="70" y="72">96%</text>
+      <text class="ring-cap" x="70" y="88">48 / 50 АЖИЛ</text>
+    </svg>
+    <div>
+      <h2>Хөгжүүлэлтийн гүйцэтгэл</h2>
+      <p class="note">Үнэлгээ нь төлөвлөгөөний 1 ба 2-р бүлгийн хөгжүүлэлтийн 50 ажлаар тооцогдов.
+      3–6-р бүлгийн туршилт, суурилуулалт, сургалт, хаалтын 12 ажил нь зохион байгуулалтын ажил тул
+      оруулаагүй.</p>
+      <div class="split">
+        <div class="done"><div class="n">48</div><div class="l">Бүрэн хийгдсэн</div></div>
+        <div class="wait"><div class="n">2</div><div class="l">Хүлээгдэж байгаа</div></div>
+        <div><div class="n">27/27</div><div class="l">Холболтын ажил — ГУС 23 · ХУР/УБЕГ 1 · E-Mongolia 1 · гадагш гаргасан 2</div></div>
+      </div>
+      <ul class="pending">
+        <li>
+          <code>2.4.2.3</code>
+          <span>Нөлөөлөлд өртсөн иргэн, хуулийн этгээдэд албан бичиг хүргүүлэх
+          <em>Хүргүүлэх бүтэц бэлэн (PDF үүсгэлт, имэйл ба E-Mongolia суваг, огноот түүх) — албан бичгийн батлагдсан маягтыг хүлээж байна</em></span>
+        </li>
+        <li>
+          <code>2.7.1</code>
+          <span>2010–2025 оны нөхөх олговортойгоор чөлөөлөгдсөн нэгж талбарын мэдээллийг нөхөж оруулах
+          <em>Excel импортын бүтэц бэлэн — түүхэн архивын өгөгдлийг хүлээж байна</em></span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ ХУГАЦААНЫ ШУГАМ ═══ -->
+  <section>
+    <div class="head">
+      <h2>Хугацааны шугам</h2>
+      <p>цэс нэмэгдсэн дараалал · холболт · тайлан</p>
+    </div>
+    <ul class="tl">
+      <li><span class="date">06.19</span><span class="tag menu">Эхлэл</span>
+        <span class="what">Хоёр сан хөмрөг үүсэж суурь бүтэц (Next.js + Go) босов. <b>Нэвтрэлт · Хяналтын самбар · Газрын зураг · Хэрэглэгчид · Эрх &amp; Роль</b></span></li>
+      <li><span class="date">06.21</span><span class="tag menu">Цэс</span>
+        <span class="what"><b>Газар чөлөөлөлт · Нэгж талбар · Нөхөх олговор</b> <em>— системийн үндсэн гурван цэс</em></span></li>
+      <li><span class="date">06.23–24</span><span class="tag menu">Цэс</span>
+        <span class="what"><b>Тайлан · Хувийн профайл</b></span></li>
+      <li><span class="date">06.25–28</span><span class="tag menu">Цэс</span>
+        <span class="what">Тохиргооны лавлахууд: <b>нэгж талбарын статус · чөлөөлөлтийн явцын статус · баримт бичгийн төрөл · чөлөөлөлтийн ангилал · ажлын урсгал (2)</b></span></li>
+      <li><span class="date">07.02</span><span class="tag menu">Цэс</span>
+        <span class="what"><b>Байгууламжийн тооцоолол ба чанарын төрөл · «Миний чөлөөлөлтүүд»</b> <em>— мэргэжлийн байгууллагын тусгаарлагдсан портал</em></span></li>
+      <li><span class="date">07.17</span><span class="tag doc">Тайлан</span>
+        <span class="what"><b>Техникийн товч танилцуулга</b> бэлдэв; мөн өдөр <b>Аудит лог</b> цэс нэмэгдэв</span></li>
+      <li><span class="date">07.20</span><span class="tag doc">Тайлан</span>
+        <span class="what"><b>Систем хөгжүүлэлтийн дэлгэрэнгүй техникийн тайлан</b></span></li>
+      <li><span class="date">08.03</span><span class="tag menu">Цэс</span>
+        <span class="what">Хүний нөөцийн бүртгэлүүд: <b>иргэн, хуулийн этгээд · ажилтан · байгууллага · алба хэлтэс · албан тушаал</b></span></li>
+      <li><span class="date">08.13</span><span class="tag link">Холболт</span>
+        <span class="what"><b>ГУС-ийн хандах хаяг тохируулагдаж нэгж талбарын мэдээлэл татагдаж эхлэв.</b> Мөн <b>Захирамжийн төсөл · ажлын төрөл · төсөв</b> цэс нэмэгдэв</span></li>
+      <li><span class="date">08.16–18</span><span class="tag link">Холболт</span>
+        <span class="what"><b>ГУС-ийн схем рүү бүрэн шилжиж, хандах эрх зохицуулагдаж холболт ашиглалтад орсон</b> <em>— хэрэглэгч, эрх, хүний нөөц, кадастр, ГЗБ, газрын үнэлгээ, хот байгуулалт, мониторингийн дэд системүүд. 08.17-нд Үнэлгээний байгууллагын бүртгэл нэмэгдэв</em></span></li>
+      <li><span class="date">08.28</span><span class="tag doc">Тайлан</span>
+        <span class="what"><b>Төлөвлөгөөний хэрэгжилтийн хяналтын хуудас</b> (plan.xlsx-ийн 62 ажлын задаргаа)</span></li>
+      <li><span class="date">09.08</span><span class="tag doc">Тайлан</span>
+        <span class="what"><b>Хэрэглэгчийн гарын авлага</b></span></li>
+      <li><span class="date">09.01–09</span><span class="tag link">Холболт</span>
+        <span class="what"><b>Гадаад холболтын үе шат:</b> ХУР (XYP) гарцаар УБЕГ-ийн газар өмчлөл · нийгэм, эдийн засгийн судалгаа · мэдэгдэх хуудсыг имэйл ба E-Mongolia-гаар хүргүүлэх · суурь зургийн хаягийн тохиргоо · нөхөх олговрын гадаад API · нээлттэй GIS давхарга. <em>09.09-нд гурван тайлан бүрэн шинэчлэгдэв</em></span></li>
+    </ul>
+  </section>
+
+  <!-- ═══ ГИТ ЛОГ ═══ -->
+  <section class="pagebreak">
+    <div class="head">
+      <h2>Гит логоор хийгдсэн ажлын хэмжээ</h2>
+      <p>долоо хоног тутам · 294 өөрчлөлтийн багц (commit)</p>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 860 232" role="img" aria-label="Долоо хоног тутмын өөрчлөлтийн тоо">
+        <!-- шатлал -->
+        <line class="g-line" x1="56" y1="140.3" x2="840" y2="140.3"></line>
+        <line class="g-line" x1="56" y1="90.6"  x2="840" y2="90.6"></line>
+        <line class="g-line" x1="56" y1="40.8"  x2="840" y2="40.8"></line>
+        <line class="g-base" x1="56" y1="190"   x2="840" y2="190"></line>
+        <text class="g-ax" x="48" y="193" text-anchor="end">0</text>
+        <text class="g-ax" x="48" y="143.5" text-anchor="end">20</text>
+        <text class="g-ax" x="48" y="93.8"  text-anchor="end">40</text>
+        <text class="g-ax" x="48" y="44"    text-anchor="end">60</text>
+
+        <!-- 06.15 -->
+        <rect class="bar-be" x="67"    y="147.7" width="38" height="42.3"></rect>
+        <rect class="bar-fe" x="67"    y="93.0"  width="38" height="54.7"></rect>
+        <text class="g-tot" x="86"    y="87">39</text>
+        <text class="g-tick" x="86"   y="206">06/15</text>
+        <!-- 06.22 -->
+        <rect class="bar-be" x="127.3" y="135.3" width="38" height="54.7"></rect>
+        <rect class="bar-fe" x="127.3" y="38.3"  width="38" height="97.0"></rect>
+        <text class="g-tot" x="146.3" y="32.3">61</text>
+        <text class="g-tick" x="146.3" y="206">06/22</text>
+        <!-- 06.29 -->
+        <rect class="bar-be" x="187.6" y="152.7" width="38" height="37.3"></rect>
+        <rect class="bar-fe" x="187.6" y="28.4"  width="38" height="124.3"></rect>
+        <text class="g-tot" x="206.6" y="22.4">65</text>
+        <text class="g-tick" x="206.6" y="206">06/29</text>
+        <!-- 07.06 -->
+        <rect class="bar-be" x="247.9" y="172.6" width="38" height="17.4"></rect>
+        <rect class="bar-fe" x="247.9" y="160.2" width="38" height="12.4"></rect>
+        <text class="g-tot" x="266.9" y="154.2">12</text>
+        <text class="g-tick" x="266.9" y="206">07/06</text>
+        <!-- 07.13 -->
+        <rect class="bar-be" x="308.2" y="182.5" width="38" height="7.5"></rect>
+        <rect class="bar-fe" x="308.2" y="170.1" width="38" height="12.4"></rect>
+        <text class="g-tot" x="327.2" y="164.1">8</text>
+        <text class="g-tick" x="327.2" y="206">07/13</text>
+        <!-- 07.20 -->
+        <rect class="bar-be" x="368.5" y="182.5" width="38" height="7.5"></rect>
+        <rect class="bar-fe" x="368.5" y="160.1" width="38" height="22.4"></rect>
+        <text class="g-tot" x="387.5" y="154.1">12</text>
+        <text class="g-tick" x="387.5" y="206">07/20</text>
+        <!-- 07.27 -->
+        <rect class="bar-be" x="428.8" y="165.1" width="38" height="24.9"></rect>
+        <rect class="bar-fe" x="428.8" y="140.2" width="38" height="24.9"></rect>
+        <text class="g-tot" x="447.8" y="134.2">20</text>
+        <text class="g-tick" x="447.8" y="206">07/27</text>
+        <!-- 08.03 -->
+        <rect class="bar-be" x="489.1" y="185.0" width="38" height="5.0"></rect>
+        <rect class="bar-fe" x="489.1" y="170.1" width="38" height="14.9"></rect>
+        <text class="g-tot" x="508.1" y="164.1">8</text>
+        <text class="g-tick" x="508.1" y="206">08/03</text>
+        <!-- 08.10 -->
+        <rect class="bar-be" x="549.4" y="175.1" width="38" height="14.9"></rect>
+        <rect class="bar-fe" x="549.4" y="162.7" width="38" height="12.4"></rect>
+        <text class="g-tot" x="568.4" y="156.7">11</text>
+        <text class="g-tick" x="568.4" y="206">08/10</text>
+        <!-- 08.17 — ГУС -->
+        <rect class="bar-be" x="609.7" y="135.3" width="38" height="54.7"></rect>
+        <rect class="bar-fe" x="609.7" y="112.9" width="38" height="22.4"></rect>
+        <text class="g-tot" x="628.7" y="106.9">31</text>
+        <text class="g-tick" x="628.7" y="206">08/17</text>
+        <!-- 08.24 -->
+        <rect class="bar-be" x="670"   y="185.0" width="38" height="5.0"></rect>
+        <rect class="bar-fe" x="670"   y="145.2" width="38" height="39.8"></rect>
+        <text class="g-tot" x="689"   y="139.2">18</text>
+        <text class="g-tick" x="689"  y="206">08/24</text>
+        <!-- 08.31 -->
+        <rect class="bar-be" x="730.3" y="187.5" width="38" height="2.5"></rect>
+        <rect class="bar-fe" x="730.3" y="175.1" width="38" height="12.4"></rect>
+        <text class="g-tot" x="749.3" y="169.1">6</text>
+        <text class="g-tick" x="749.3" y="206">08/31</text>
+        <!-- 09.07 -->
+        <rect class="bar-be" x="790.6" y="187.5" width="38" height="2.5"></rect>
+        <rect class="bar-fe" x="790.6" y="182.5" width="38" height="5.0"></rect>
+        <text class="g-tot" x="809.6" y="176.5">3</text>
+        <text class="g-tick" x="809.6" y="206">09/07</text>
+
+        <!-- үе шатны тайлбар -->
+        <text class="g-ax" x="86"    y="224" text-anchor="middle">үндсэн модулиуд</text>
+        <text class="g-ax" x="628.7" y="224" text-anchor="middle">ГУС-ийн холболт</text>
+      </svg>
+      <div class="legend">
+        <span><i class="sw fe"></i> Вэб (frontend) — 183</span>
+        <span><i class="sw be"></i> Сервер (backend) — 111</span>
+        <span>Хамгийн ажилтай долоо хоног: 06/29–07/05 — 65 өөрчлөлт</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ҮЙЛДЛИЙН ТОО ═══ -->
+  <section>
+    <div class="head">
+      <h2>Системийн үйлдлийн тоо</h2>
+      <p>эх кодын маршрутаас шууд тоологдсон · /api/v1</p>
+    </div>
+    <div class="figs">
+      <div class="fig"><div class="n">297</div><div class="l">Нийт үйлдэл</div><div class="s">281 REST дуудлага + 15 баримтын загвар + 1 нээлттэй GIS гарц</div></div>
+      <div class="fig"><div class="n">99</div><div class="l">Чөлөөлөлт хийх үйлдэл</div><div class="s">87 чөлөөлөлт + 12 нэгж талбар</div></div>
+      <div class="fig prof"><div class="n">45</div><div class="l">Мэргэжлийн байгууллагын портал</div><div class="s">үнэлгээний байгууллагын тусгаарлагдсан суваг</div></div>
+      <div class="fig alt"><div class="n">2</div><div class="l">Гадны байгууллагад гаргасан гарц</div><div class="s">1 REST API + 1 нээлттэй GIS давхарга</div></div>
+      <div class="fig doc"><div class="n">15</div><div class="l">Эх хэвлэл, тайлангийн загвар</div><div class="s">12 «Эх хэвлэл» + 3 тайлан, захирамж</div></div>
+    </div>
+    <div class="chart">
+      <svg viewBox="0 0 860 270" role="img" aria-label="Үйлдлүүдийн бүлгээр задаргаа">
+        <!-- Газар чөлөөлөлт 87 -->
+        <text class="g-lab" x="248" y="20">Газар чөлөөлөлт (талбар, үнэлгээ, олговр, дрон)</text>
+        <rect class="bar-acq" x="256" y="8"  width="560" height="16"></rect>
+        <text class="g-val" x="824" y="21">87</text>
+        <!-- Лавлах, тохиргоо 66 -->
+        <text class="g-lab" x="248" y="49">Лавлах, тохиргоо (16 бүлэг)</text>
+        <rect class="bar-etc" x="256" y="37" width="425" height="16"></rect>
+        <text class="g-val" x="689" y="50">66</text>
+        <!-- /prof 45 -->
+        <text class="g-lab" x="248" y="78">Мэргэжлийн байгууллагын портал</text>
+        <rect class="bar-prof" x="256" y="66" width="290" height="16"></rect>
+        <text class="g-val" x="554" y="79">45</text>
+        <!-- Хэрэглэгч 26 -->
+        <text class="g-lab" x="248" y="107">Хэрэглэгч, роль, зөвшөөрөл, цэс</text>
+        <rect class="bar-etc" x="256" y="95" width="167" height="16"></rect>
+        <text class="g-val" x="431" y="108">26</text>
+        <!-- Захирамж 25 -->
+        <text class="g-lab" x="248" y="136">Захирамжийн төсөл</text>
+        <rect class="bar-etc" x="256" y="124" width="161" height="16"></rect>
+        <text class="g-val" x="425" y="137">25</text>
+        <!-- Самбар, тайлан, мэдэгдэл, нэвтрэлт 19 -->
+        <text class="g-lab" x="248" y="165">Самбар, тайлан, мэдэгдэл, аудит, нэвтрэлт</text>
+        <rect class="bar-etc" x="256" y="153" width="122" height="16"></rect>
+        <text class="g-val" x="386" y="166">19</text>
+        <!-- Эх хэвлэл 15 -->
+        <text class="g-lab" x="248" y="194">Эх хэвлэл, тайлангийн загвар</text>
+        <rect class="bar-tpl" x="256" y="182" width="97" height="16"></rect>
+        <text class="g-val" x="361" y="195">15</text>
+        <!-- Нэгж талбар 12 -->
+        <text class="g-lab" x="248" y="223">Нэгж талбар (мэдэгдэл, E-Mongolia)</text>
+        <rect class="bar-acq" x="256" y="211" width="77" height="16"></rect>
+        <text class="g-val" x="341" y="224">12</text>
+        <!-- Гадны байгууллага 2 -->
+        <text class="g-lab" x="248" y="252">Гадны байгууллагын гарц (API + GIS давхарга)</text>
+        <rect class="bar-ext" x="256" y="240" width="13" height="16"></rect>
+        <text class="g-val" x="277" y="253">2</text>
+      </svg>
+      <div class="legend">
+        <span><i class="sw fe"></i> Чөлөөлөлт хийх — 99</span>
+        <span><i class="sw doc"></i> Эх хэвлэл, тайлан — 15</span>
+        <span><i class="sw prof"></i> Мэргэжлийн байгууллага — 45</span>
+        <span><i class="sw be"></i> Гадны байгууллага — 2</span>
+        <span><i class="sw etc"></i> Дотоод удирдлага, лавлах — 136</span>
+      </div>
+    </div>
+
+    <p class="subhead"><b>Эх хэвлэл, тайлангийн 15 загвар</b> — нэгж талбарын «Эх хэвлэл» табын
+    12 төрөл мэдээллээ автоматаар бөглөж үүснэ;
+    <span class="key"><i class="dot ac"></i>13–15 нь тайлан, захирамжийн загвар</span></p>
+    <ol class="tpl">
+      <li>Урьдчилан мэдэгдэх хуудас <em>docx · pdf</em></li>
+      <li>Санал асуулгын хуудас <em>docx</em></li>
+      <li>Нийгэм эдийн засгийн судалгаа <em>docx</em></li>
+      <li>Шалгах хуудас <em>docx</em></li>
+      <li>Хурлын тэмдэглэл <em>docx</em></li>
+      <li>Уулзалтын тэмдэглэл <em>docx</em></li>
+      <li>Газар чөлөөлөх гэрээ <em>docx</em></li>
+      <li>Захирамжийн төсөл <em>xlsx</em></li>
+      <li>Чөлөөлсөн газрыг хүлээлцсэн акт <em>docx</em></li>
+      <li>Хүлээлцсэн акт — 2 дугаар хувилбар <em>docx</em></li>
+      <li>Хяналтын карт <em>docx</em></li>
+      <li>Төлбөрийн гүйцэтгэл <em>xlsx</em></li>
+      <li class="alt"><span>ГЧХ-2 ажлын мэдээний тайлан</span> <em>xlsx</em></li>
+      <li class="alt"><span>Төлбөр боловсруулалтын тайлан</span> <em>xlsx</em></li>
+      <li class="alt"><span>Захирамжийн төслийн албан бичиг</span> <em>docx</em></li>
+    </ol>
+  </section>
+
+  <!-- ═══ ГАДААД ГАРЦ + МЭДЭГДЛИЙН СУВАГ ═══ -->
+  <section>
+    <div class="head">
+      <h2>Гадны байгууллагад гаргасан гарц ба мэдэгдлийн суваг</h2>
+      <p>мэргэжлийн байгууллагын порталаас тусдаа</p>
+    </div>
+    <div class="duo">
+      <div class="panel">
+        <h3><i class="dot be"></i>Гадны байгууллагад зориулсан 2 гарц</h3>
+        <ul class="rows">
+          <li><b>Нөхөх олговрын REST API</b> <code>/api/v1/external/compensations</code>
+            <em>1 endpoint · API key (SHA-256) · 120 хүсэлт/мин · нэгж талбар / төлөвлөгөөний нэгж талбар / төлөвлөгөөний дугаараар — 3 хэлбэрийн шүүлт</em></li>
+          <li><b>Нээлттэй GIS давхарга</b> <code>land:v_parcel_public</code>
+            <em>GeoServer-ийн 16 давхаргын 1 нь эрх шалгахгүй нээлттэй · 3 гарц (WMS · OWS · WFS) · 6 зөвшөөрөгдсөн үйлдэл · чөлөөлөлтөд өртсөн бүх нэгж талбар явцын өнгө, нэртэйгээр, дүүргээр шүүнэ</em></li>
+        </ul>
+        <p class="foot-note">QGIS, ArcGIS, Leaflet зэрэг WMS/WFS дуудаж чаддаг систем хаягийг шууд тохируулж ажиллана. Зөвхөн унших — бичих, өөр давхарга дуудах хаалттай.</p>
+      </div>
+      <div class="panel">
+        <h3><i class="dot ac"></i>Мэдэгдэл илгээх 3 суваг</h3>
+        <ul class="rows">
+          <li><b>Системийн дотоод мэдэгдэл</b> <span class="chip">10 үйл явдал</span>
+            <em>Хонх ба toast-оор бодит цагт: чөлөөлөлтийн төлөв, талбарын төлөв, ажилтан оноох, байгууллага оноох, үнэлгээ хүсэх/илгээх/батлах/буцаах, олговор бүртгэх/хянах. Зөвхөн холбоотой хүнд</em></li>
+          <li><b>Имэйл (SMTP)</b> <span class="chip">хавсралттай</span>
+            <em>Мэдэгдэх хуудсыг PDF болгож иргэний имэйл рүү. Хаяг эзэмшигчийн бүртгэлээс санал болгогдож, солиж болно. Огноот түүх — <code>parcel_notice_email</code></em></li>
+          <li><b>E-Mongolia</b> <span class="chip">регистрээр</span>
+            <em>Мэдэгдэх хуудсыг регистрийн дугаараар хүргүүлнэ. Гадаад гарц түр мокоор тул түүхэд «mocked» гэж бүртгэгдэнэ — <code>parcel_emongolia_notice</code></em></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ ТӨЛӨВЛӨГӨӨНИЙ 62 АЖЛЫН ХЭРЭГЖИЛТ ═══ -->
+  <section class="pagebreak">
+    <div class="head">
+      <h2>Төлөвлөгөөний ажил тус бүрийн хэрэгжилт</h2>
+      <p>plan.xlsx · задаргаа түвшний 62 ажил · нотолгоо нь эх кодоос</p>
+    </div>
+    <p class="subhead"><b>Хөгжүүлэлтийн үндсэн 50 ажил</b> — гүйцэтгэлийн үнэлгээ эдгээрээр тооцогдоно:
+    <span class="key"><i class="dot ac"></i>48 хийгдсэн</span>
+    <span class="key wait"><i class="dot oc"></i>2 хийгдээгүй</span></p>
+    <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th class="no">Д/д</th><th>Ажлын нэр</th><th>Төлөв</th><th class="pct">%</th><th>Нотолгоо, хэрэгжилт</th></tr></thead><tbody><tr><td class="no">1.1</td><td class="nm">Системийн бичиг баримт /архитектур загвар/</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">docs/guitsetgel.docx, system-tailan.docx/pptx, public/reports/system-tailan.html</td></tr>
+<tr><td class="no">1.2</td><td class="nm">Програм хангамжийн техникийн тодорхойлолт</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Техникийн тайлан, architecture/system report artifact-ууд бэлэн</td></tr>
+<tr><td class="no">2.1.1</td><td class="nm">Системийн template бэлдэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Next.js App Router template, layout, ui components, auth/provider бүтэцтэй</td></tr>
+<tr><td class="no">2.1.2</td><td class="nm">Серверийг бэлдэх /Map server/</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">GeoServer proxy, OpenLayers/Cesium map components, Docker/Cesium assets байгаа</td></tr>
+<tr><td class="no">2.2.1</td><td class="nm">Хэрэглэгчийн бүртгэл, жагсаалт</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: хэрэглэгчийн бүртгэл, жагсаалт, API дуудлага, эрхээр харагдах цэс бүрэн ажиллаж байна.</td></tr>
+<tr><td class="no">2.2.1.1</td><td class="nm">Гэр хорооллыг орон сууцжуулах газар чөлөөлөлт</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: гэр хорооллын газар чөлөөлөлтийн ангиллыг зөвшилцсөн давхаргаас ГУС бодит холболтоор татаж байна.</td></tr>
+<tr><td class="no">2.2.1.2</td><td class="nm">Авто зам, замын байгууламж, инженерийн шугам сүлжээний газар чөлөөлөлт</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: авто зам, замын байгууламж, инженерийн шугам сүлжээний ангиллын давхаргыг ГУС бодит холболтоор татаж байна.</td></tr>
+<tr><td class="no">2.2.1.3</td><td class="nm">Нийгмийн дэд бүтцийн барилга байгууламжийн газар чөлөөлөлт гэсэн ангиллаар татаж авах нөхцлийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: нийгмийн дэд бүтцийн барилга байгууламжийн ангиллын давхаргыг ГУС бодит холболтоор татаж байна.</td></tr>
+<tr><td class="no">2.2.2</td><td class="nm">Хэрэглэгчийн эрхийн бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: хэрэглэгчийн эрх/role/permission бүртгэл, тохиргооны UI бүрэн ажиллаж байна.</td></tr>
+<tr><td class="no">2.2.2.1</td><td class="nm">Батлагдсан төлөвлөгөөнөөс засаг захиргааны нэгж болон бусад холбогдох мэдээллээр хайх цонх нэмэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">report/parcel/acquisition хуудаснууд ЗЗН, төлөвлөгөө, он, ангиллын шүүлтүүртэй</td></tr>
+<tr><td class="no">2.2.2.2</td><td class="nm">Цахим системд оруулсан төлөвлөлтийн зураг төслийн он, сар, өдөр түүхэн өөрчлөлтийг харуулах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">boundary/status/progress history components, parcel history views байна</td></tr>
+<tr><td class="no">2.2.2.3</td><td class="nm">Төлөвлөгөөний биелэлтийн тайланг төслийн дугаараар татдаг болох</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">report download/GCHH2/decision report routes, plan_code/project filters байна</td></tr>
+<tr><td class="no">2.2.2.4</td><td class="nm">Төслийн явцаас хамааруулж төлөвлөлтийн нэгж талбарын бусад арга хэмжээ болон талбайн хэмжээ, байршлыг засварлах, өөрчлөлт хийх явцад хэсэгчилсэн ерөнхий төлөвлөгөөний бүсчлэл, хориглолт, хязгаарлалтын бүстэй нийцүүлж хянах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">geometry-utils, map/location/progress validation, PostGIS тооцооллын хэрэглээтэй</td></tr>
+<tr><td class="no">2.2.3</td><td class="nm">Эрхийн тохиргоо</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: access-policy, role-utils, эрхээр цэс болон үйлдэл хязгаарлах тохиргоо бүрэн ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.1</td><td class="nm">Ажилтны бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: ажилтан/person/department/position бүртгэлийн дэлгэцүүд ГУС-ийн бодит өгөгдөл/холболттой ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.1</td><td class="nm">Газар зохион байгуулалт, хот төлөвлөлтийн цахим систем</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: газар зохион байгуулалт, хот төлөвлөлтийн цахим системтэй бодит холболт ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.2</td><td class="nm">Ажилтны лавлахууд</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: ажилтны лавлахууд болон master data урсгал ГУС-ийн бодит холболтоор ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.2</td><td class="nm">Газрын кадастрын систем</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: газрын кадастрын системтэй бодит холболт, parcel/source parcel урсгал ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.3</td><td class="nm">Хуулийн этгээдийн бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: иргэн, хуулийн этгээдийн бүртгэл ГУС/улсын бүртгэлийн бодит өгөгдөлтэй уялдаж ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.3</td><td class="nm">Газрын үнэлгээний систем</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: газрын үнэлгээний системтэй бодит холболт, үнэлгээ/олговрын урсгал ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.4</td><td class="nm">Үнэлгээний байгууллага бүртгэл тохиргоо</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: үнэлгээний байгууллагын бүртгэл, хэрэглэгчийн scope, бодит байгууллагын өгөгдлийн уялдаа ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.4</td><td class="nm">Хот байгуулалтын кадастрын систем</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: хот байгуулалтын кадастрын системтэй бодит холболт ажиллаж байна.</td></tr>
+<tr><td class="no">2.3.5</td><td class="nm">Газрын мониторингийн систем</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: газрын мониторингийн системтэй бодит холболт, map/layer харагдац ажиллаж байна.</td></tr>
+<tr><td class="no">2.4.1.1</td><td class="nm">Газар чөлөөлөлтийн нөлөөлөлд өртсөн системийн давхцалтай буюу кадастрын зурагт өөрчлөлт орж шинэчлээгүй зөрчилтэй нэгж талбарын давхарга үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: кадастрын давхцалтай/зөрчилтэй нэгж талбарын давхарга бодит ГУС өгөгдлөөр үүсэж байна.</td></tr>
+<tr><td class="no">2.4.1.2</td><td class="nm">Холбогдох мэдээлийг Газар чөлөөлөлтийн цахим системд холбох</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: холбогдох мэдээлэл Газар чөлөөлөлтийн цахим системд ГУС бодит холболтоор холбогдож байна.</td></tr>
+<tr><td class="no">2.4.3.1</td><td class="nm">Чиг үүргийн дагуу хэрэглэгчийн эрхийг тохируулах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: чиг үүргийн дагуу хэрэглэгчийн эрх тохируулах users/roles/settings урсгал бүрэн ажиллаж байна.</td></tr>
+<tr><td class="no">2.4.3.3</td><td class="nm">Нөхөх олговрын зориулалттай хөрөнгийн үнэлгээний тайланг илгээх, засварлах, баталгаажуулах, хүлээн авах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">valuation_submission, prof valuation status, upload/approve/reject/history урсгал байна</td></tr>
+<tr><td class="no">2.4.4.1</td><td class="nm">Уулзалтын тэмдэглэлийг тухай бүр үйлдэж баримт хавсаргах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">uulzaltiin_temdeglel/hurliin_temdeglel templates, documents tab upload/print flow байна</td></tr>
+<tr><td class="no">2.4.4.2</td><td class="nm">Газар чөлөөлөх гэрээг цахим системээр хэвлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">acquisition_contract.docx template болон /api/templates/acquisition-contract route байна</td></tr>
+<tr><td class="no">2.4.4.3</td><td class="nm">Захирамжийн төсөл бэлтгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">decision_draft list/detail/form/link/confirm/docx/report modules бүрэн байна</td></tr>
+<tr><td class="no">2.4.4.4</td><td class="nm">Газар чөлөөлсөн тухай акт үйлдэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">gazar_huleelcsen_akt templates ба print templates tab байна</td></tr>
+<tr><td class="no">2.4.4.5</td><td class="nm">Нөхөх олговор олгох үнийн дүнгийн төлбөрийн гүйцэтгэл хийх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">payment_tab/finance_tab, compensation grant/payment history, payment_processing.xlsx template байна</td></tr>
+<tr><td class="no">2.4.4.6</td><td class="nm">Лог файл үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">audit_logs page/API, client-log route, logger/log sanitize байна</td></tr>
+<tr><td class="no">2.5.1</td><td class="nm">Газар чөлөөлөлтийн статистик мэдээллийг харуулсан хяналтын самбар хийх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">dashboard KPI, charts, progress gauge, map widgets байна</td></tr>
+<tr><td class="no">2.5.2</td><td class="nm">Тайлан мэдээг ажлын даалгаварт тусгагдсан төрлүүдээр ангилан боловсруулах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">report page, GCHH2/report download/decision report Excel routes байна</td></tr>
+<tr><td class="no">2.6.2</td><td class="nm">Нисгэгчгүй нисэх төхөөрөмж /дрон/-оор авсан мэдээллийг Газар чөлөөлөлтийн цахим мэдээллийн санд оруулж анхдагч мэдээлэл үүсгэх боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">drone .tif upload, register, refresh, tile proxy, map overlay flow байна</td></tr>
+<tr><td class="no">2.8.6</td><td class="nm">Өгөгдлийн сангийн давхарган мэдээллийг динамик байдлаар үүсгэх, тохируулах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: өгөгдлийн сангийн давхарган мэдээллийг ГУС/GeoServer уялдаагаар динамик байдлаар үүсгэж, тохируулах боломжтой.</td></tr>
+<tr><td class="no">2.9.1</td><td class="nm">Газрын кадастрын системийн давхцал шалгах хөгжүүлэлт</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Хийгдсэн: газрын кадастрын системийн давхцал шалгах бодит холболт ажиллаж байна.</td></tr>
+<tr><td class="no">2.4.3.2</td><td class="nm">Нөхөх олговрын тооцоолол журам, аргачлал, олон улсын стандарт, томъёо, зах зээлийн үний мэдээний бүртгэл</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Тооцооны үзүүлэлт ба хийцийн лавлахууд (asset_calc_type, asset_spec_type) админаас тохируулагдана, «нэгж үнэ × хэмжээ × итгэлцүүр» бүтэцтэй; газрын үнэлгээний бүс, суурь үнэ, дуудлагын итгэлцүүр ГУС-аас татагдана; батлагдсан олговор зах зээлийн үнийн мэдээ болж гадаад API-аар (2.8.4) гарна.</td></tr>
+<tr><td class="no">2.4.2.1</td><td class="nm">Нөлөөлөлд өртсөн иргэн, хуулийн этгээдээс нийгэм эдийн засгийн судалгааг цахим системээр авч тоон мэдээлэл үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Чөлөөлөлтийн «Ерөнхий мэдээлэл» табын «Төслийн мэдээлэл»-ийн доор: зөвшөөрсөн/татгалзсан (тоогоор), тайлбар + заавал PDF (олон файлыг pdf-lib-ээр нэг PDF болгож нэгтгэнэ). Хүснэгт acquisition_socio_survey; файл MinIO socio-survey/.</td></tr>
+<tr><td class="no">2.4.2.2</td><td class="nm">Цахим хэлбэрээр мэдэгдэх хуудас хүргүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Эзэмшигч табын товчоор «Эх хэвлэл»-ийн Мэдэгдэх хуудас загвараас PDF үүсгэж (pdfmake) дэлгэцэд харуулаад имэйлээр хавсралттай илгээнэ; хаяг бүртгэлээс санал болгогдож, солиж болно. parcel_notice_email — огноо, төлөвтэй түүх.</td></tr>
+<tr><td class="no">2.4.2.3</td><td class="nm">Нөлөөлөлд өртсөн иргэн, хуулийн этгээдэд албан бичиг хүргүүлэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">албан бичиг цахимаар хүргүүлэх тусдаа workflow/API нотолгоо олдсонгүй</td></tr>
+<tr><td class="no">2.6.1</td><td class="nm">Агаар сансрын зурган мдээллийг дэд системд тогтмол шинэчлэх боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Суурь зургийн хаягийг дэлгэцээс гараар тохируулна (app_setting, admin:update, системийн хэмжээнд). Зургийн төрлийг систем өөрөө таньдаг (tile/XYZ · WMS растер · зураг); WMS давхаргыг /api/basemap/probe уншиж санал болгоно; хоосон бол «Үндсэн суурь зураг».</td></tr>
+<tr><td class="no">2.7.1</td><td class="nm">2010-2025 оны нөхөх олговортойгоор чөлөөлөгдсөн нэгж талбарын мэдээллийг нөхөж оруулах</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">2010-2025 түүхэн өгөгдлийг batch import/backfill хийх тусгай workflow олдсонгүй</td></tr>
+<tr><td class="no">2.8.1</td><td class="nm">УБЕГ-н мэдээллийн сантай холбож үл хөдлөх, эд хөрөнгийн бүртгэлийн мэдээллийг авах, харилцан мэдээлэл солилцох боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">ХУР (XYP) гарцаар /xyp/ownership/citizen/parcel дуудаж УБЕГ-ийн газар өмчлөл татагдаж parcel_ownership-д хадгалагдана (синхрончлол бүрд бүхэлдээ орлуулагдана); «Эзэмшигч» табд огноогоор бүлэглэн, «Шинэчлэх» товчтой.</td></tr>
+<tr><td class="no">2.8.2</td><td class="nm">Татварын ерөнхий газартай хамтран нөхөх олговортойгоор чөлөөлөгдөж буй иргэн, хуулийн этгээдийн татварын өр төлбөрийг болон төлсөн татварын хэмжээг шалгах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">ГУС-ийн төлбөр, нэхэмжлэлийн мэдээлэл татах хэсгээр хангагдсан — татвар, төлбөр төлөгдмөгц ГУС дээр автоматаар шинэчлэгдэж, «Мэдээлэл дуудах»-аар шинэ мэдээ татагдан «Барьцаа, төлбөр» табд харагдана.</td></tr>
+<tr><td class="no">2.8.3</td><td class="nm">Шүүхийн шийдвэр гүйцэтгэх ерөнхий газартай хамтран тухайн үл хөдлөх хөрөнгө болон газар дээрх шүүхийн маргаан, эрх түтгэлзүүлсэн эсэхийг шалгах боломжийг бүрдүүлэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">ГУС-ийн шүүхийн шийдвэр, барьцаа, эрхийн түтгэлзүүлэлт татах хэсгээр хангагдсан — шүүхийн шийдвэр ГУС дээр шинэчлэгдмэгц татагдаж «Барьцаа, төлбөр» табд харагдана.</td></tr>
+<tr><td class="no">2.8.4</td><td class="nm">Нөхөх олговортойгоор чөлөөлсөн газрын үнийн мэдээг цуглуулж мэдээллийн сан үүсгэх</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">GET /api/v1/external/compensations — гадаад системд зориулсан API key-тэй гарц (SHA-256, constant-time; түлхүүр тохируулаагүй бол 503; 120/мин). 3 хэлбэр: parcel_id · plan_parcel_id (+төлөвийн тоолол) · plan_code (+төлөвийн тоолол). Зөвхөн үндсэн (тайлангийн) үнэлгээ; тайлангийн query-г дахин ашигладаг. docs/external-compensation-api.md</td></tr>
+<tr><td class="no">2.8.5</td><td class="nm">Газар чөлөөлөлтийн нөлөөлөлд өртсөн иргэн, хуулийн этгээдэд E-Mongolia системээр дамжуулан газар чөлөөлөх мэдэгдэл хүргүүлж, нийгэм эдийн засгийн судалгаа, санал асуулгын хуудсыг илгээж, хүлээн авах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Мэдэгдэх хуудсыг PDF болгож дэлгэцэд харуулаад регистрийн дугаараар E-Mongolia-гаар хүргүүлнэ; parcel_emongolia_notice — огноо, төлөв, гадаад лавлагаа. Гадны байгууллагын хэсэг түр мокоор: ийм илгээлт «mocked» гэж бүртгэгдэнэ («sent» БИШ).</td></tr>
+<tr><td class="no">2.9.2</td><td class="nm">Бусад шаардлагатай системүүдэд өгөгдөл холбож харуулах</td><td><span class="badge done">Хийгдсэн</span></td><td class="pct">100%</td><td class="ev">Нээлттэй GIS давхарга land:v_parcel_public — чөлөөлөлтөд өртсөн бүх нэгж талбар, явцын өнгө ба нэр, дүүргээр шүүх (au2_code); эрх шалгахгүй WMS/WFS гарц /api/public/geoserver/*, зөвхөн унших, GetCapabilities дахин бичигддэг тул QGIS/ArcGIS/Leaflet шууд холбоно. docs/public-map-layer.md</td></tr></tbody></table></div>
+
+    <p class="subhead"><b>Туршилт, суурилуулалт, сургалт, хаалтын 12 мөр</b> — хөгжүүлэлтийн бус
+    зохион байгуулалтын ажил тул гүйцэтгэлийн тооцоонд ороогүй; мэдээллийн байдлаар 3.6/12 = 30%</p>
+    <div class="ptbl-wrap"><table class="ptbl"><thead><tr><th class="no">Д/д</th><th>Ажлын нэр</th><th>Төлөв</th><th class="pct">%</th><th>Нотолгоо, хэрэгжилт</th></tr></thead><tbody><tr><td class="no">3.1</td><td class="nm">Туршилт хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">60%</td><td class="ev">Хийгдсэн: frontend node --test suite. Дутуу: дотоод UAT протокол, гарын авлагын баталгаажуулалт.</td></tr>
+<tr><td class="no">3.2</td><td class="nm">Туршилтаар илэрсэн алдааг засч баталгаажуулах</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">60%</td><td class="ev">Хийгдсэн: алдааны засварууд кодонд туссан. Дутуу: туршилтаар илэрсэн алдааны албан хаалтын бүртгэл.</td></tr>
+<tr><td class="no">3.3</td><td class="nm">Туршилтаас гарсан санал хүсэлтүүдийг хэлэлцэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">туршилтын санал хүсэлтийн хэлэлцүүлгийн artifact/протокол олдсонгүй</td></tr>
+<tr><td class="no">4.1</td><td class="nm">Судалгаа хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">50%</td><td class="ev">Хийгдсэн: Docker/compose/deployment structure. Дутуу: суурилуулалтын судалгааны тусдаа баримт.</td></tr>
+<tr><td class="no">4.2</td><td class="nm">Сүлжээ болон серверийн тохиргоо хийх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">50%</td><td class="ev">Хийгдсэн: docker-compose, proxy/env тохиргоо. Дутуу: production network/server config artifact.</td></tr>
+<tr><td class="no">4.3</td><td class="nm">Үйлдлийн систем, шаардлагатай програм хангамж, системийг суулгаж тохируулах</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">50%</td><td class="ev">Хийгдсэн: Dockerfile/compose runtime орчин. Дутуу: бодит OS install checklist.</td></tr>
+<tr><td class="no">5.1</td><td class="nm">Сургалтын хөтөлбөр гаргаж Захиалагчаар батлуулах</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">сургалтын хөтөлбөр батлуулсан баримт олдсонгүй</td></tr>
+<tr><td class="no">5.2</td><td class="nm">Сургалтын материал бэлтгэх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">40%</td><td class="ev">Хийгдсэн: system-tailan/tovch-tailan тайлангууд. Дутуу: сургалтын зориулалтын тусдаа материал.</td></tr>
+<tr><td class="no">5.3</td><td class="nm">Сургалт хийх</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">сургалт хийсэн протокол/ирц/огнооны баримт олдсонгүй</td></tr>
+<tr><td class="no">6.1</td><td class="nm">Бүх бичиг баримтуудыг хүлээлгэн өгөх</td><td><span class="badge partial">Хэсэгчлэн хийгдсэн</span></td><td class="pct">50%</td><td class="ev">Хийгдсэн: тайлан/docx/pptx artifact. Дутуу: бүх бичиг баримт хүлээлцсэн акт.</td></tr>
+<tr><td class="no">6.2</td><td class="nm">Системийн эх код, мэдээллийн санг хүлээлгэн өгөх</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">эх код/мэдээллийн сан хүлээлгэн өгсөн баримт олдсонгүй</td></tr>
+<tr><td class="no">6.3</td><td class="nm">Туршилтаас гарсан санал хүсэлтүүдийг хэлэлцэх</td><td><span class="badge not">Хийгдээгүй</span></td><td class="pct">0%</td><td class="ev">санал хүсэлт хэлэлцсэн хаалтын протокол олдсонгүй</td></tr></tbody></table></div>
+  </section>
+
+  <footer>
+    <span>Тоон үзүүлэлт: 297 үйлдэл (281 REST дуудлага) · 84 өгөгдлийн хүснэгт · 35 дэлгэц · 16 GIS давхарга · 15 баримтын загвар · 536 автомат тест · ~97 мянган мөр код</span>
+    <span>2026-09-09</span>
+  </footer>
+
 </div>
 </body>
 </html>
