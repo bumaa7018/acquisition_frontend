@@ -13,7 +13,7 @@ import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import { MapPinOff } from "lucide-react";
-import { BASE_Z_INDEX } from "./layer-config";
+import { createBasemapLayer, watchBasemap } from "./basemap";
 import { logger } from "@/lib/logger";
 
 export type PreviewGeometry = {
@@ -81,19 +81,8 @@ export default function GeometryPreviewMap({
     olMap.current = new OLMap({
       target: mapRef.current,
       layers: [
-        new TileLayer({
-          zIndex: BASE_Z_INDEX,
-          source: new XYZ({
-            urls: [
-              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-            ],
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
+        // СУУРЬ зураг — тохиргооноос (тохируулаагүй бол үндсэн суурь зураг).
+        createBasemapLayer(),
         layer,
       ],
       view: new View({
@@ -106,7 +95,10 @@ export default function GeometryPreviewMap({
     });
 
     const map = olMap.current;
+    const stopBasemapWatch = watchBasemap(map);
+
     return () => {
+      stopBasemapWatch();
       map.setTarget(undefined);
       olMap.current = null;
       vectorLayer.current = null;

@@ -67,7 +67,11 @@ const nextConfig = {
     // 34 хуудсанд 2 worker хүрэлцээтэй (build-д ~2 секундын зөрүү).
     ...(IN_DOCKER_BUILD && { cpus: 2 }),
 
-    serverComponentsExternalPackages: ['exceljs'],
+    // pdfmake/pdfkit нь фонт, зурагт зориулсан хоёртын өгөгдлийг fs-ээр уншдаг
+    // тул webpack-аар bundle хийвэл сервер дээр (standalone) файлууд олдохгүй.
+    // Мэдэгдэх хуудсыг PDF болгох route (api/templates/medegdeh-huudas/pdf)
+    // эндээс хамаарна.
+    serverComponentsExternalPackages: ['exceljs', 'pdfmake'],
     // rewrites-ийн proxy-ийн хугацааны хязгаар (мс).
     //
     // ЗААВАЛ ТОХИРУУЛАХ: Next-ийн анхдагч нь ЗӨВХӨН 30 СЕКУНД

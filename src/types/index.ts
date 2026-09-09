@@ -371,6 +371,71 @@ export interface LandAcquisitionUpdateResult extends LandAcquisition {
   removed_parcels?: number;
 }
 
+/**
+ * Нийгэм, эдийн засгийн судалгааны бүртгэл (чөлөөлөлтөд НЭГ).
+ *
+ * Судалгааны эх баримт нь ЗААВАЛ PDF — олон файл сонгосон бол browser дээр
+ * НЭГ PDF болж нэгтгэгдэн хадгалагдана. file_url нь /api/files харьцангуй зам.
+ */
+export interface AcquisitionSocioSurvey {
+  id: string;
+  acquisition_id: string;
+  /** Зөвшөөрсөн иргэн, хуулийн этгээдийн тоо */
+  agreed_count: number;
+  /** Татгалзсан иргэн, хуулийн этгээдийн тоо */
+  rejected_count: number;
+  note: string;
+  file_url: string;
+  file_name: string;
+  size_bytes: number;
+  updated_at: string;
+  updated_by: string;
+}
+
+/**
+ * Урьдчилан мэдэгдэх хуудсыг имэйлээр илгээсэн НЭГ бичлэг (түүх).
+ *
+ * status: "sent" — SMTP хүлээн авсан, "failed" — илгээгдээгүй (error_message-д
+ * шалтгаан). Амжилтгүй оролдлого ч бүртгэгддэг тул "илгээсэн гэж бодох"
+ * эндүүрэл гарахгүй.
+ */
+export interface ParcelNoticeEmail {
+  id: string;
+  parcel_id: string;
+  to_email: string;
+  subject: string;
+  /** Илгээсэн ЯГ ТЭР PDF (/api/files харьцангуй зам) */
+  file_url: string;
+  file_name: string;
+  status: "sent" | "failed";
+  error_message?: string;
+  sent_at: string;
+  sent_by: string;
+}
+
+/**
+ * Мэдэгдэх хуудсыг E-Mongolia-гаар хүргүүлсэн НЭГ бичлэг (түүх).
+ *
+ * status: "sent" — гадаад систем хүлээн авсан, "mocked" — гадаад холболт
+ * байхгүй тул ТҮР бүртгэсэн (иргэнд хүрсэн гэж тооцохгүй), "failed" — алдаа.
+ */
+export interface ParcelEMongoliaNotice {
+  id: string;
+  parcel_id: string;
+  /** Хүлээн авагчийн регистрийн дугаар (E-Mongolia-ийн танигч) */
+  register_no: string;
+  recipient_name?: string;
+  subject: string;
+  file_url: string;
+  file_name: string;
+  status: "sent" | "mocked" | "failed";
+  /** Гадаад системийн лавлагааны дугаар (мок үед MOCK-…) */
+  external_ref?: string;
+  error_message?: string;
+  sent_at: string;
+  sent_by: string;
+}
+
 // Шүүлтүүрийн dropdown-ы хөнгөн бүтэц (GET /land-acquisitions/filter-options).
 // Үндсэн LandAcquisition-ы 25+ талбарын оронд зөвхөн 4 талбар — dropdown-д
 // хэрэгтэй нь тэр л. Дэлгэрэнгүйг landApi.filterOptions тайлбарт.
@@ -481,8 +546,31 @@ export interface BoundaryHistory {
   land_acquisition_id: string;
   old_geometry_wkt: string;
   new_geometry_wkt: string;
+  /**
+   * Хуучин/шинэ хилийн ТАЛБАЙ (м²). Backend нь хадгалсан геометрээс
+   * public.calculate_area_utm-ээр бодож өгдөг (нэгж талбартай ижил аргачлал)
+   * — browser дээр дахин тооцохгүй.
+   */
+  old_area_m2: number;
+  new_area_m2: number;
   changed_by: string;
   changed_at: string;
+}
+
+/**
+ * Гараас оруулах хилийн файлыг ХАДГАЛАЛГҮЙ шалгасан үр дүн
+ * (POST /land-acquisitions/:id/boundary-preview).
+ */
+export interface BoundaryPreview {
+  /** Файлаас уншсан хил (WGS84 WKT) — газрын зураг дээр харуулна. */
+  geometry_wkt: string;
+  area_m2: number;
+  /** Жишиг (төлөвлөгөөний) хилийн талбай. 0 = жишиг байхгүй. */
+  reference_area_m2: number;
+  deviation_percent: number;
+  max_deviation_percent: number;
+  /** false бол хадгалах үед сервер татгалзана. */
+  accepted: boolean;
 }
 
 export interface Document {
@@ -639,6 +727,45 @@ export interface ParcelMonitoring {
   status_name: string;
   company_name: string;
   created_at: string;
+}
+
+/**
+ * УБЕГ-ийн газар өмчлөлийн бүртгэлийн НЭГ мөр (ХУР/XYP гарц).
+ *
+ * ГУС-ийн эзэмшигч (ParcelHolder)-ээс ТУСДАА эх сурвалж: нэг нэгж талбар дээр
+ * хамтран өмчлөгчид болон өмчлөлийн ТҮҮХ (өв залгамжлал, өмчлөгч өөрчлөгдөх)
+ * мөр мөрөөр ирдэг тул нэг register_no хэд хэдэн огноотой давтагдаж болно.
+ */
+export interface ParcelOwnership {
+  id: string;
+  /** УБЕГ дээрх нэгж талбарын дугаар (prprty_parcel_id) */
+  source_parcel_id: string;
+  /** Бүртгэлийн огноо — YYYYMMDD (эх системийн хэлбэрээр) */
+  record_date: string;
+  /** Улсын бүртгэл/гэрчилгээний дугаар (ubd) */
+  certificate_no: string;
+  landuse_name: string;
+  /** Хэмжээ (м²). Эх системд текстээр ирдэг тул хөрвүүлж чадаагүй үед 0 */
+  area: number;
+  register_no: string;
+  first_name: string;
+  last_name: string;
+  /** Өмчлөлийн хэлбэр (ж: "Өмчилсөн", "Өв залгамжлуулсан") */
+  ownership_type: string;
+  ownership_code: string;
+  /** Бүртгэлийг үүсгэсэн улсын бүртгэлийн үйлчилгээ */
+  service_name: string;
+  service_code: string;
+  aimag_city_name: string;
+  aimag_code: string;
+  soum_district_name: string;
+  soum_code: string;
+  bag_khoroo_name: string;
+  bag_code: string;
+  address_street_name: string;
+  bair_number: string;
+  toot: string;
+  full_address: string;
 }
 
 /** Татаж хадгалсан бичлэгийн тоо */
@@ -830,6 +957,8 @@ export interface ParcelFull extends Parcel {
   base_price_factors?: ParcelBasePriceFactor[];
   /** Хянан баталгааны мэдээлэл */
   monitorings?: ParcelMonitoring[];
+  /** УБЕГ-ийн газар өмчлөлийн бүртгэл (ХУР/XYP гарцаас татагдсан) */
+  ownerships?: ParcelOwnership[];
   geometry_wkt: string;
   acquisition_geom_wkt: string;
   status_id: number;

@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
 import { logger } from "@/lib/logger";
 import { authStorage } from "@/lib/auth";
+import { useBasemapSync } from "@/components/map/use-basemap-sync";
 
 // axios interceptor нь HTTP хүсэлт бүрийг логлодог, гэхдээ query/mutation-ий
 // `onError` бичээгүй компонент query-г interceptor-ийн лог дараа юу болсныг
@@ -28,6 +29,12 @@ function logMutationError(
 ) {
   const status = (error as { response?: { status?: number } })?.response?.status;
   logger.error("mutation failed", { key: mutation.options?.mutationKey, status });
+}
+
+/** Тохиргоог уншиж санд тавих — QueryClientProvider ДОТОР байх ёстой. */
+function BasemapSync() {
+  useBasemapSync();
+  return null;
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -73,6 +80,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
+        {/* Газрын зургийн суурь зургийн тохиргоог нэг удаа уншиж санд тавина
+            (газрын зургууд тэр сангаас синхроноор авдаг). */}
+        <BasemapSync />
         {children}
         <Toaster richColors position="top-right" closeButton />
       </QueryClientProvider>

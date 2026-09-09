@@ -20,7 +20,9 @@ import { Box, Map as MapIcon } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
 import { landApi } from "@/lib/api";
+import { formatArea } from "@/lib/utils";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
+import { createBasemapLayer, watchBasemap } from "./basemap";
 import FullscreenButton from "./fullscreen-button";
 import PrintButton from "./print-button";
 import FeaturePopup from "./feature-popup";
@@ -459,23 +461,11 @@ export function AcquisitionMap({
       // OL-ийн өгөгдмөл +/- товчийг нуув (map-view/parcel-map-тай ижил).
       controls: defaultControls({ zoom: false }),
       layers: [
-        new TileLayer({
-          // Хамгийн доод давхарга — дрон болон бусад бүх давхарга үүний дээр
-          zIndex: BASE_Z_INDEX,
-          source: new XYZ({
-            urls: [
-              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-            ],
-            // Тайлын БАЙГАА дээд түвшин (зумлалтын хязгаар БИШ). Үүнийг
-            // заагаагүй бол z20-оос цааш байхгүй тайл гуйж, суурь зураг
-            // хоосорно; зааснаар z20-ийн тайл томсож (бүдэг) харагдана.
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
+        // СУУРЬ зураг — тохиргооноос (Давхаргууд → Суурь зураг). Хамгийн доод
+        // давхарга (BASE_Z_INDEX) тул дрон болон бусад бүх давхарга үүний дээр.
+        // Тохируулаагүй бол үндсэн суурь зураг (Google хиймэл дагуул, tile-ийн байгаа
+        // дээд түвшин z20).
+        createBasemapLayer(),
         ...LAYER_DEFS.map((d) => wmsRecord[d.id]),
       ],
       view: new View({
@@ -632,7 +622,10 @@ export function AcquisitionMap({
       })
       .catch(() => { /* нэгж талбарын 3D давхарга хоосон үлдэнэ */ });
 
+    const stopBasemapWatch = watchBasemap(map);
+
     return () => {
+      stopBasemapWatch();
       cesium3D.current?.destroy();
       cesium3D.current = null;
       map.setTarget(undefined);
@@ -764,6 +757,36 @@ export function AcquisitionMap({
                         {visible ? "Нуух" : "Харах"}
                       </button>
                     </div>
+                    {/* ТАЛБАЙН өөрчлөлт — хил солих бүрийн хуучин/шинэ талбай
+                        ба зөрүү. Талбайг backend хадгалсан геометрээс
+                        (public.calculate_area_utm) бодож өгдөг. */}
+                    {history.new_area_m2 > 0 && (
+                      <div className="mt-1.5 text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400">
+                        <p>
+                          <span className="text-slate-400 dark:text-slate-500">Талбай:</span>{" "}
+                          {formatArea(history.old_area_m2)} → {formatArea(history.new_area_m2)}
+                        </p>
+                        {history.old_area_m2 > 0 && (
+                          <p
+                            className={`font-semibold ${
+                              history.new_area_m2 >= history.old_area_m2
+                                ? "text-[#0acf97]"
+                                : "text-[#f1556c]"
+                            }`}
+                          >
+                            {history.new_area_m2 >= history.old_area_m2 ? "+" : "−"}
+                            {formatArea(Math.abs(history.new_area_m2 - history.old_area_m2))}
+                            {" ("}
+                            {(
+                              (Math.abs(history.new_area_m2 - history.old_area_m2) /
+                                history.old_area_m2) *
+                              100
+                            ).toFixed(1)}
+                            %)
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                       <span className="inline-flex items-center gap-1">
                         <span className="h-0.5 w-4 border-t-2 border-dashed border-red-500" />

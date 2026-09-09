@@ -82,10 +82,12 @@ const SYNC_STEPS = [
   },
   {
     key: "other",
-    label: "Бусад холбоотой хавсралт",
+    label: "Бусад мэдээлэл, хавсралт",
     Icon: Paperclip,
     color: "#8b5cf6",
     subSteps: [
+      // УБЕГ-ийн өмчлөлийн бүртгэл нь ГУС-аас БИШ, ХУР (XYP) гарцаас татагдана.
+      { label: "УБЕГ-ийн өмчлөлийн бүртгэл", detail: "УБЕГ-аас газар өмчлөлийн мэдээлэл татаж байна..." },
       // Кодгүй дуудна — үлдсэн БҮХ хавсралтыг хамарна. Дээрх алхмуудад
       // татагдсан нь source_doc_id-аар алгасагдах тул ЗААВАЛ хамгийн сүүлд.
       { label: "Үлдсэн хавсралтууд", detail: "Бусад хавсралтыг татаж байна..." },
@@ -333,8 +335,12 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         docs(DOC.landQualityAudit),
         docs(DOC.orderedAudit),
       ],
-      // Кодгүй — үлдсэн бүх хавсралт
-      [() => landApi.syncParcelDocuments(acqId, parcelCode, undefined, SILENT)],
+      [
+        // УБЕГ (ХУР/XYP) — нэгж талбарын дугаараар шууд, app_no шаардахгүй
+        () => landApi.syncParcelOwnerships(acqId, parcelCode, SILENT),
+        // Кодгүй — үлдсэн бүх хавсралт
+        () => landApi.syncParcelDocuments(acqId, parcelCode, undefined, SILENT),
+      ],
     ];
 
     let failCount = 0;

@@ -7,10 +7,14 @@
 //   2. Хил ЗАСАХАД төлөвлөгөөний дугаараар ДАХИН хайж, олдсон төлөвлөгөөний
 //      хилийг шинэ хил болгож тохируулна.
 //   3. Төлөвлөгөөнд хил байхгүй бол үүсгэх/солих аль аль нь 422-оор зогсоно.
-//   4. Хуучин клиент shapefile илгээсэн ч ҮЛ ХЭРЭГСЭГДЭНЭ (хил төлөвлөгөөнийх).
+//   4. ҮҮСГЭХ үед илгээсэн shapefile ҮЛ ХЭРЭГСЭГДЭНЭ (хил төлөвлөгөөнийх).
 //   5. Хил солиход нэгж талбарын өөрчлөлтийн ХУУЧИН ФЛОВ хэвээр: давхцах
 //      талбар нэмэгдэх, гадна хоцорсон нь бүрмөсөн устах, түүх бичигдэх,
 //      "Чөлөөлсөн" талбар гадна гарвал хил ХҮЛЭЭГДЭХГҮЙ.
+//   6. ЗАСВАРЛАХ үед хилийг ГАРААС (.shp) оруулж болно: талбайн зөрүү
+//      төлөвлөгөөний хилийнхээс 30%-иас бага үед л хүлээгдэнэ, төлөвлөгөөний
+//      мэдээлэл хөндөгдөхгүй, түүхэнд талбайтайгаа бичигдэнэ, бусад шалгалт
+//      (сум/дүүрэг, "Чөлөөлсөн" талбар) хэвээр ажиллана.
 //
 // Тест нь бүх хамаарлаа ӨӨРӨӨ асаана:
 //   - ХУУРАМЧ дундын сервис (/plan/project, /parcels/by/acquisition) — Node
@@ -329,8 +333,11 @@ async function geomEquals(a, b) {
  *
  * Эрэмбэ:
  *   1. `plan.boundary_wkt` — өмнө нь ЖИНХЭНЭ ГУС-аас татагдаж хадгалагдсан
- *      төлөвлөгөөний хил. Нэгж талбартай давхцаж буйг нь эхэнд тавина
- *      (хил солиход бодит талбар татагдаж, урсгал бүрэн шалгагдана).
+ *      төлөвлөгөөний хил. НЭГ сум/дүүрэгт (au2) БҮРЭН багтсаныг эхэнд тавина:
+ *      backend нь дамнасан хилийг 422-оор татгалздаг тул тэрхүү хилээр
+ *      чөлөөлөлт үүсгэж чадахгүй (өмнө нь хамгийн олон нэгж талбартайг нь
+ *      сонгож, лавлах шинэчлэгдэхэд бүх тест унадаг байв). Дараа нь нэгж
+ *      талбартай давхцаж буйг (хил солиход бодит талбар татагдана).
  *   2. Тийм мөр байхгүй бол `au2` лавлахаас нэг сум/дүүрэгт багтах полигон.
  *   3. Аль нь ч байхгүй бол (лавлах ачаалагдаагүй — backend шалгалтыг
  *      алгасдаг) Улаанбаатар орчмын тогтмол полигон.
@@ -342,17 +349,22 @@ async function geomEquals(a, b) {
 async function loadBoundariesFromDb() {
   const { rows: real } = await pool.query(
     `SELECT ST_AsText(p.boundary_wkt) AS wkt,
+            EXISTS(SELECT 1 FROM au2 a
+                    WHERE a.geometry IS NOT NULL
+                      AND ST_CoveredBy(p.boundary_wkt, a.geometry)) AS single_au2,
             (SELECT count(*) FROM parcel pa
               WHERE pa.geometry IS NOT NULL AND pa.deleted_at IS NULL
                 AND ST_Intersects(pa.geometry, p.boundary_wkt))::int AS parcels
        FROM plan p
       WHERE p.boundary_wkt IS NOT NULL
         AND p.plan_code NOT LIKE 'E2E-%'
-      ORDER BY 2 DESC, ST_Area(p.boundary_wkt) DESC
+      ORDER BY 2 DESC, 3 DESC, ST_Area(p.boundary_wkt) DESC
       LIMIT 1`,
   );
   let primary = real[0]?.wkt ?? null;
-  let source = primary ? `plan (бодит ГУС хил, ${real[0].parcels} нэгж талбар)` : null;
+  let source = primary
+    ? `plan (бодит ГУС хил, ${real[0].parcels} нэгж талбар, нэг сум/дүүрэгт багтсан: ${real[0].single_au2})`
+    : null;
 
   if (!primary) {
     const { rows } = await pool.query(
@@ -403,6 +415,79 @@ function acquisitionForm(fields, file) {
   const fd = new FormData();
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
   if (file) fd.append("shapefile", new Blob([file.data]), file.name);
+  return fd;
+}
+
+// ── Хилийн .shp файл угсрах (гараас хил оруулах замыг шалгахад) ─────────────
+//
+// Backend нь ЗӨВХӨН .shp-ийн байт бүтцийг уншдаг (.prj/.dbf хүлээж авахгүй)
+// тул тестэд ч жинхэнэ байт угсарна — хуурамч WKT биш, бодит файлын зам.
+
+/** Polygon (нэг ринг) агуулсан raw .shp файлын байт. */
+function buildShp(pts) {
+  const numParts = 1;
+  const numPoints = pts.length;
+  const contentLen = 4 + 32 + 4 + 4 + numParts * 4 + numPoints * 16;
+  const buf = Buffer.alloc(100 + 8 + contentLen);
+  buf.writeUInt32BE(9994, 0); // file code
+  buf.writeUInt32BE((100 + 8 + contentLen) / 2, 24); // урт (16 битийн үгээр)
+  buf.writeUInt32LE(1000, 28); // version
+  buf.writeUInt32LE(5, 32); // shape type = Polygon
+  buf.writeUInt32BE(1, 100); // бичлэгийн дугаар
+  buf.writeUInt32BE(contentLen / 2, 104);
+  let off = 108;
+  buf.writeUInt32LE(5, off);
+  off += 4 + 32; // shape type + bbox (уншигч алгасдаг)
+  buf.writeUInt32LE(numParts, off);
+  off += 4;
+  buf.writeUInt32LE(numPoints, off);
+  off += 4;
+  buf.writeUInt32LE(0, off); // part offset
+  off += 4;
+  for (const [x, y] of pts) {
+    buf.writeDoubleLE(x, off);
+    off += 8;
+    buf.writeDoubleLE(y, off);
+    off += 8;
+  }
+  return buf;
+}
+
+/** WKT полигоны ГАДНА рингээс .shp файл. */
+async function wktToShp(wkt) {
+  const { rows } = await pool.query(
+    `SELECT ST_X(d.geom) AS x, ST_Y(d.geom) AS y
+       FROM ST_DumpPoints(
+              ST_ExteriorRing(
+                ST_GeometryN(ST_Multi(ST_MakeValid(ST_GeomFromText($1, 4326))), 1))) AS d
+      ORDER BY d.path`,
+    [wkt],
+  );
+  assert.ok(rows.length >= 4, "хилээс ринг гаргаж чадсангүй");
+  return buildShp(rows.map((r) => [Number(r.x), Number(r.y)]));
+}
+
+/** Хилийг төвөөсөө нь МАСШТАБЛАХ (талбайн зөрүү үүсгэхэд). */
+async function scaleBoundary(wkt, areaRatio) {
+  const { rows } = await pool.query(
+    `WITH g AS (SELECT ST_MakeValid(ST_GeomFromText($1, 4326)) AS geom),
+     c AS (SELECT geom, ST_X(ST_Centroid(geom)) AS cx, ST_Y(ST_Centroid(geom)) AS cy FROM g)
+     SELECT ST_AsText(
+              ST_Translate(
+                ST_Scale(ST_Translate(geom, -cx, -cy), $2::float8, $2::float8),
+                cx, cy)
+            ) AS wkt
+       FROM c`,
+    [wkt, Math.sqrt(areaRatio)],
+  );
+  return rows[0].wkt;
+}
+
+/** Гараас хилийн файл илгээх PUT-ийн FormData. */
+function shapefileForm(fields, shp, name = "boundary.shp") {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("shapefile", new Blob([shp]), name);
   return fd;
 }
 
@@ -823,5 +908,244 @@ test('"Чөлөөлсөн" талбар шинэ хилээс гарвал хи�
 
   // Төлвийг эгүүлнэ — "Чөлөөлсөн" талбартай чөлөөлөлтийг устгах боломжгүй тул
   // цэвэрлэгээ (after) хийгдэхгүй байх байлаа.
+  await pool.query(`UPDATE parcel SET status = 0 WHERE acquisition_id = $1`, [acquisitionId]);
+});
+
+// ── 7. ГАРААС (.shp) хил засварлах ──────────────────────────────────────────
+//
+// Хээрийн хэмжилтээр төлөвлөгөөний хил засагдсан үед хилийг ГАРААС оруулна.
+// Шаардлага: талбайн зөрүү нь ТӨЛӨВЛӨГӨӨНИЙ хилийн талбайгаас 30%-иас БАГА
+// байх (талбайг нэгж талбартай ижил аргачлалаар — public.calculate_area_utm —
+// бодно). Бусад шалгалт (сум/дүүрэг, "Чөлөөлсөн" талбар, нэгж талбарын
+// зөрүү, хилийн түүх) хэвээр ажиллана.
+
+/** public.calculate_area_utm — нэгж талбарын талбай бодох ижил функц. */
+async function utmArea(wkt) {
+  const { rows } = await pool.query(
+    `SELECT public.calculate_area_utm(ST_GeomFromText($1, 4326)) AS area`,
+    [wkt],
+  );
+  return Number(rows[0].area);
+}
+
+async function currentBoundary() {
+  const { rows } = await pool.query(
+    "SELECT ST_AsText(geometry) AS geom, ST_AsText(plan_geom) AS plan_geom FROM land_acquisition WHERE id = $1",
+    [acquisitionId],
+  );
+  return rows[0];
+}
+
+async function historyCount() {
+  const { json } = await request(`/land-acquisitions/${acquisitionId}/boundary-history`);
+  return (json.data ?? []).length;
+}
+
+test("урьдчилан харах: зөрүүг төлөвлөгөөний хилээс, UTM аргаар бодно", async () => {
+  const { plan_geom: planGeom } = await currentBoundary();
+  const wkt = await scaleBoundary(planGeom, 1.1); // +10%
+  const shp = await wktToShp(wkt);
+  const historyBefore = await historyCount();
+
+  const { res, json } = await request(
+    `/land-acquisitions/${acquisitionId}/boundary-preview`,
+    { method: "POST", form: shapefileForm({}, shp) },
+  );
+
+  assert.equal(res.status, 200, `урьдчилан харах амжилтгүй: ${JSON.stringify(json)}`);
+  const preview = json.data;
+  assert.ok(preview.geometry_wkt, "файлын хил буцаагдаагүй");
+  assert.equal(preview.max_deviation_percent, 30);
+  // Жишиг талбай нь ТӨЛӨВЛӨГӨӨНИЙ хилийнх, ГУС-ийн UTM аргаар бодогдоно.
+  assert.ok(
+    Math.abs(preview.reference_area_m2 - (await utmArea(planGeom))) < 1,
+    `жишиг талбай төлөвлөгөөний хилийнхтэй таарсангүй: ${preview.reference_area_m2}`,
+  );
+  assert.ok(
+    Math.abs(preview.area_m2 - (await utmArea(preview.geometry_wkt))) < 1,
+    "файлын хилийн талбай UTM аргаар бодогдоогүй",
+  );
+  assert.ok(preview.deviation_percent < 30, `зөрүү хэтэрсэн: ${preview.deviation_percent}`);
+  assert.equal(preview.accepted, true);
+
+  // Урьдчилан харах нь юу ч ХАДГАЛАХГҮЙ.
+  assert.ok(await geomEquals((await currentBoundary()).geom, boundaryC), "урьдчилан харах хилийг өөрчлөв");
+  assert.equal(await historyCount(), historyBefore, "урьдчилан харахад түүх бичигдэв");
+});
+
+test("урьдчилан харах: зөрүү хэтэрсэн файлыг accepted=false-ээр хэлнэ", async () => {
+  const { plan_geom: planGeom } = await currentBoundary();
+  const shp = await wktToShp(await scaleBoundary(planGeom, 2.25)); // +125%
+
+  const { res, json } = await request(
+    `/land-acquisitions/${acquisitionId}/boundary-preview`,
+    { method: "POST", form: shapefileForm({}, shp) },
+  );
+
+  assert.equal(res.status, 200);
+  assert.equal(json.data.accepted, false, "хэт зөрүүтэй файл хүлээгдэхээр харагдав");
+  assert.ok(json.data.deviation_percent > 30);
+});
+
+test("талбайн зөрүү 30%-иас их файлаар хил солих боломжгүй (422)", async () => {
+  const before = await currentBoundary();
+  const historyBefore = await historyCount();
+  const shp = await wktToShp(await scaleBoundary(before.plan_geom, 2.25));
+
+  const { res, json } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm({ acquisition_name: `E2E чөлөөлөлт ${suffix}` }, shp),
+  });
+
+  assert.equal(res.status, 422, `хэт зөрүүтэй хил хадгалагдав: ${JSON.stringify(json)}`);
+  assert.match(json.error ?? json.message ?? "", /30%/);
+  const after = await currentBoundary();
+  assert.ok(await geomEquals(after.geom, before.geom), "татгалзсан файл хилийг эвдэв");
+  assert.equal(await historyCount(), historyBefore, "татгалзсан файлд түүх бичигдэв");
+});
+
+test("төлөвлөгөө ба файлыг зэрэг илгээвэл татгалзана (400)", async () => {
+  const before = await currentBoundary();
+  const shp = await wktToShp(await scaleBoundary(before.plan_geom, 1.1));
+
+  const { res } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm(
+      { acquisition_name: `E2E чөлөөлөлт ${suffix}`, plan_parcel_id: PLAN_C },
+      shp,
+    ),
+  });
+
+  assert.equal(res.status, 400);
+  assert.ok(await geomEquals((await currentBoundary()).geom, before.geom), "татгалзсан хүсэлт хилийг эвдэв");
+});
+
+test("shapefile биш файлаар хил солих боломжгүй (422)", async () => {
+  const before = await currentBoundary();
+
+  const { res, json } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm(
+      { acquisition_name: `E2E чөлөөлөлт ${suffix}` },
+      Buffer.from("not-a-shapefile-at-all-but-long-enough-to-pass-size"),
+    ),
+  });
+
+  assert.equal(res.status, 422, `хог файл хүлээгдэв: ${JSON.stringify(json)}`);
+  assert.ok(await geomEquals((await currentBoundary()).geom, before.geom));
+});
+
+test("Монголоос гадуурх координаттай файл татгалзана (422)", async () => {
+  const before = await currentBoundary();
+  // Парисын орчим — координат нь градус боловч Монголын хүрээнд байхгүй.
+  const shp = buildShp([
+    [2.30, 48.85], [2.40, 48.85], [2.40, 48.90], [2.30, 48.90], [2.30, 48.85],
+  ]);
+
+  const { res } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm({ acquisition_name: `E2E чөлөөлөлт ${suffix}` }, shp),
+  });
+
+  assert.equal(res.status, 422);
+  assert.ok(await geomEquals((await currentBoundary()).geom, before.geom));
+});
+
+test("зөрүү 30%-иас бага файлаар хил СОЛИГДОЖ, түүхэнд талбайтайгаа бичигдэнэ", async () => {
+  const before = await currentBoundary();
+  const historyBefore = await historyCount();
+  const wkt = await scaleBoundary(before.plan_geom, 1.1);
+  const shp = await wktToShp(wkt);
+
+  // Хадгалагдах хил нь ЯГ файлаас уншсан хил байх ёстой — урьдчилан харахаас
+  // авсан WKT-тэй харьцуулна (уншигч нь 6 орны нарийвчлалаар бичдэг).
+  const { json: previewJson } = await request(
+    `/land-acquisitions/${acquisitionId}/boundary-preview`,
+    { method: "POST", form: shapefileForm({}, shp) },
+  );
+  const expectedWKT = previewJson.data.geometry_wkt;
+
+  const { res, json } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm({ acquisition_name: `E2E чөлөөлөлт ${suffix}` }, shp),
+  });
+
+  assert.equal(res.status, 200, `файлаар хил солих амжилтгүй: ${JSON.stringify(json)}`);
+  assert.ok(await geomEquals(json.data.geometry_wkt, expectedWKT), "хил файлаас авагдаагүй");
+
+  const after = await currentBoundary();
+  assert.ok(await geomEquals(after.geom, expectedWKT), "DB дээрх хил файлынхтай таарсангүй");
+  // Төлөвлөгөө нь ЖИШИГ хэвээр — файлаар зассан ч хөндөгдөхгүй.
+  assert.ok(await geomEquals(after.plan_geom, before.plan_geom), "төлөвлөгөөний хил хөндөгдөв");
+  const { rows } = await pool.query(
+    "SELECT plan_code FROM land_acquisition WHERE id = $1",
+    [acquisitionId],
+  );
+  assert.equal(rows[0].plan_code, PLAN_C, "төлөвлөгөөний дугаар хөндөгдөв");
+  // Талбай нь шинэ хилээс автоматаар бодогдоно.
+  assert.ok(
+    Math.abs(json.data.area_m2 - (await utmArea(expectedWKT))) < 1,
+    "талбай шинэ хилээс UTM аргаар бодогдоогүй",
+  );
+
+  // Хилийн ӨӨРЧЛӨЛТИЙН түүх — хуучин/шинэ талбайтайгаа (байршил таб дээр
+  // энэ мэдээллээр талбайн өөрчлөлтийг харуулна).
+  const history = (await request(`/land-acquisitions/${acquisitionId}/boundary-history`)).json.data;
+  assert.equal(history.length, historyBefore + 1, "файлаар хил солиход түүх бичигдээгүй");
+  const latest = history[0];
+  assert.ok(await geomEquals(latest.old_geometry_wkt, before.geom));
+  assert.ok(await geomEquals(latest.new_geometry_wkt, expectedWKT));
+  assert.ok(latest.old_area_m2 > 0 && latest.new_area_m2 > 0, "түүхэд талбай бичигдээгүй");
+  assert.ok(
+    Math.abs(latest.old_area_m2 - (await utmArea(before.geom))) < 1,
+    "түүхийн хуучин талбай зөрүүтэй",
+  );
+  assert.ok(
+    Math.abs(latest.new_area_m2 - (await utmArea(expectedWKT))) < 1,
+    "түүхийн шинэ талбай зөрүүтэй",
+  );
+  assert.ok(latest.new_area_m2 > latest.old_area_m2, "хил томорсон ч талбай өсөөгүй");
+
+  // Нэгж талбарын урсгал хэвээр: бүртгэлтэй талбар бүр шинэ хилтэй давхцана.
+  const { rows: outside } = await pool.query(
+    `SELECT count(*) FILTER (
+              WHERE geometry IS NOT NULL
+                AND NOT ST_Intersects(geometry, ST_GeomFromText($1, 4326))
+            )::int AS n
+       FROM parcel WHERE acquisition_id = $2 AND deleted_at IS NULL`,
+    [expectedWKT, acquisitionId],
+  );
+  assert.equal(outside[0].n, 0, "шинэ хилтэй давхцахгүй нэгж талбар үлдэв");
+});
+
+test('файлаар ч "Чөлөөлсөн" талбарыг хилээс гаргаж болохгүй (409)', async () => {
+  const staying = await registeredParcelIDs();
+  assert.ok(staying.length > 0, "тестийн бэлтгэл: бүртгэлтэй талбар байх ёстой");
+  await pool.query(
+    `UPDATE parcel SET status = 5 WHERE acquisition_id = $1 AND parcel_id = $2`,
+    [acquisitionId, staying[0]],
+  );
+
+  const before = await currentBoundary();
+  const historyBefore = await historyCount();
+  // ХЭМЖЭЭ нь ижил (талбайн зөрүү ~0) ч ӨӨР БАЙРЛАЛД шилжүүлсэн хил —
+  // "Чөлөөлсөн" талбар гадна үлдэнэ.
+  const { rows: far } = await pool.query(
+    `SELECT ST_AsText(ST_Translate(ST_GeomFromText($1, 4326), 0.05, 0.05)) AS wkt`,
+    [before.geom],
+  );
+  const shp = await wktToShp(far[0].wkt);
+
+  const { res, json } = await request(`/land-acquisitions/${acquisitionId}`, {
+    method: "PUT",
+    form: shapefileForm({ acquisition_name: `E2E чөлөөлөлт ${suffix}` }, shp),
+  });
+
+  assert.equal(res.status, 409, `чөлөөлсөн талбартай хил файлаар солигдов: ${JSON.stringify(json)}`);
+  assert.ok(await geomEquals((await currentBoundary()).geom, before.geom), "татгалзсан солилт хилийг эвдэв");
+  assert.deepEqual(await registeredParcelIDs(), staying, "татгалзсан солилт талбарыг хөндөв");
+  assert.equal(await historyCount(), historyBefore, "татгалзсан солилтод түүх бичигдэв");
+
+  // Төлвийг эгүүлнэ (цэвэрлэгээ устгалт хийж чадахгүй байх байлаа).
   await pool.query(`UPDATE parcel SET status = 0 WHERE acquisition_id = $1`, [acquisitionId]);
 });

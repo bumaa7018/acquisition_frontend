@@ -15,6 +15,7 @@ import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./layer-panel";
+import { createBasemapLayer, watchBasemap } from "./basemap";
 import FullscreenButton from "./fullscreen-button";
 import { useFullscreen } from "./use-fullscreen";
 import { fitLayerToMap, layerDef, type MapLayerDef } from "./layers";
@@ -159,18 +160,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       // OL-ийн өгөгдмөл +/- товчийг нуув (map-view/acquisition-map-тай ижил).
       controls: defaultControls({ zoom: false }),
       layers: [
-        new TileLayer({
-          source: new XYZ({
-            urls: [
-              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-            ],
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
+        // СУУРЬ зураг — тохиргооноос (тохируулаагүй бол үндсэн суурь зураг).
+        createBasemapLayer(),
         ...WMS_LAYER_DEFS.map((d) => wmsRecord[d.id]),
         ...VECTOR_LAYER_DEFS.map((d) => vRecord[d.id]),
       ],
@@ -185,7 +176,10 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
 
     olMap.current = map;
 
+    const stopBasemapWatch = watchBasemap(map);
+
     return () => {
+      stopBasemapWatch();
       map.setTarget(undefined);
       olMap.current = null;
       vectorLayers.current = {};

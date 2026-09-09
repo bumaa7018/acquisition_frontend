@@ -58,6 +58,7 @@ function showNotFound(description?: string) {
   })
 }
 
+import type { BasemapSetting } from '@/components/map/basemap-config'
 import type {
   ApiResponse, PaginatedResponse, LoginResponse,
   User, Role, Permission, Menu,
@@ -65,10 +66,10 @@ import type {
   ValuationOrg, ValuationOrgPayload,
   AuditLog,
   Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
-  AcquisitionProgress, Document, StatusOption,
+  AcquisitionProgress, AcquisitionSocioSurvey, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
-  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, FundingSource,
+  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, BoundaryPreview, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
@@ -811,16 +812,29 @@ export const landApi = {
     api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
-  // timeout: 0 — ХИЛ солиход (plan_parcel_id илгээгдсэн үед) backend нь
-  // төлөвлөгөөний хилээр ГУС-аас нэгж талбарыг 100-гийн багцаар татаж, шинэ
+  // timeout: 0 — ХИЛ солиход (plan_parcel_id эсвэл shapefile илгээгдсэн үед)
+  // backend нь шинэ хилээр ГУС-аас нэгж талбарыг 100-гийн багцаар татаж, шинэ
   // хилд ороогүй болсныг устгах ажлыг ДОТРОО хийдэг тул ердийн 30 сек-т
   // багтахгүй байж болно. Хил хөндөөгүй ердийн засварт хязгаар хэвээр
   // (алдааг эрт харуулах нь дээр).
   update: (id: string, data: FormData) =>
     api.put<ApiResponse<LandAcquisitionUpdateResult>>(`/land-acquisitions/${id}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      ...(data.has('plan_parcel_id') ? { timeout: 0 } : {}),
+      ...(data.has('plan_parcel_id') || data.has('shapefile') ? { timeout: 0 } : {}),
     }).then(r => r.data.data),
+  // Гараас оруулах хилийг ХАДГАЛАЛГҮЙ шалгуулна: хилийн WKT (зураг дээр
+  // харуулах) ба төлөвлөгөөний хилээс хэдэн хувиар зөрснийг буцаана.
+  //
+  // ЯАГААД сервер рүү: .shp-г browser дээр задлавал проекц/полигоны шалгалт,
+  // талбайн тооцоо (UTM) хоёулаа хоёр газар давхардаж, дэлгэц дээрх тоо
+  // серверийн шийдвэрээс зөрөх эрсдэлтэй.
+  previewBoundary: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('shapefile', file);
+    return api.post<ApiResponse<BoundaryPreview>>(`/land-acquisitions/${id}/boundary-preview`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data);
+  },
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
@@ -958,6 +972,14 @@ export const landApi = {
       `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/monitoring`,
       undefined, { _silent: opts?.silent },
     ).then(r => r.data.data),
+  // УБЕГ-ийн газар өмчлөлийн бүртгэл — ГУС-аас БИШ, ХУР (XYP) гарцаас.
+  // app_no шаардахгүй (нэгж талбарын дугаараар шууд) тул татах дарааллаас
+  // хамаарахгүй. Бүртгэл байхгүй үед found=0.
+  syncParcelOwnerships: (acqId: string, parcelCode: string, opts?: { silent?: boolean }) =>
+    api.post<ApiResponse<ParcelSyncCountResult>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/ownership`,
+      undefined, { _silent: opts?.silent },
+    ).then(r => r.data.data),
   syncParcelDocuments: (acqId: string, parcelCode: string, roles?: string[], opts?: { silent?: boolean }) =>
     api.post<ApiResponse<ParcelDocumentSyncResult>>(
       `/land-acquisitions/${acqId}/parcels/${parcelCode}/sync/documents`,
@@ -1004,6 +1026,27 @@ export const landApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/land-acquisitions/${id}/documents/${docId}`),
+  // Нийгэм, эдийн засгийн судалгаа — чөлөөлөлтөд НЭГ бүртгэл.
+  // Бүртгэл ороогүй үед data=null ирдэг тул null-ийг хүлээж авна.
+  getSocioSurvey: (id: string) =>
+    api.get<ApiResponse<AcquisitionSocioSurvey | null>>(`/land-acquisitions/${id}/socio-survey`)
+      .then(r => r.data.data ?? null),
+  // Судалгааны файл нь ЗӨВХӨН PDF. Хэрэглэгч олон файл сонговол дэлгэц дээр
+  // НЭГ PDF болж нэгтгэгдээд ирнэ — сервер рүү үргэлж нэг файл явна.
+  // Хадгалагдсан бүртгэл дээр file-гүй илгээвэл өмнөх файл хэвээр үлдэнэ.
+  saveSocioSurvey: (
+    id: string,
+    body: { agreed_count: number; rejected_count: number; note?: string; file?: File | null },
+  ) => {
+    const fd = new FormData()
+    fd.append('agreed_count', String(body.agreed_count))
+    fd.append('rejected_count', String(body.rejected_count))
+    fd.append('note', body.note ?? '')
+    if (body.file) fd.append('file', body.file)
+    return api.post<ApiResponse<AcquisitionSocioSurvey>>(`/land-acquisitions/${id}/socio-survey`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
 
   // ── Дроны ортофото (.tif) ──────────────────────────────────────────────
   // Нэг хүсэлтэд НЭГ файл — олон зургийг дараалан байршуулна.
@@ -1184,6 +1227,31 @@ export const parcelApi = {
   },
   deleteDocument: (id: string, docId: string) =>
     api.delete(`/parcels/${id}/documents/${docId}`),
+  // Урьдчилан мэдэгдэх хуудсыг имэйлээр илгээх ба илгээсэн түүх.
+  // PDF-ийг /api/templates/medegdeh-huudas/pdf үүсгэж, файлаар нь илгээнэ.
+  listNoticeEmails: (id: string) =>
+    api.get<ApiResponse<ParcelNoticeEmail[]>>(`/parcels/${id}/notice-emails`).then(r => r.data.data ?? []),
+  sendNoticeEmail: (id: string, to: string, file: File) => {
+    const fd = new FormData()
+    fd.append('to', to)
+    fd.append('file', file)
+    return api.post<ApiResponse<ParcelNoticeEmail>>(`/parcels/${id}/notice-emails`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
+  // E-Mongolia-гаар мэдэгдэл хүргүүлэх ба илгээсэн түүх (2.8.5).
+  // Гадаад холболт одоогоор МОК — хариултын status="mocked" ирнэ.
+  listEMongoliaNotices: (id: string) =>
+    api.get<ApiResponse<ParcelEMongoliaNotice[]>>(`/parcels/${id}/emongolia-notices`).then(r => r.data.data ?? []),
+  sendEMongoliaNotice: (id: string, registerNo: string, recipientName: string, file: File) => {
+    const fd = new FormData()
+    fd.append('register_no', registerNo)
+    fd.append('recipient_name', recipientName)
+    fd.append('file', file)
+    return api.post<ApiResponse<ParcelEMongoliaNotice>>(`/parcels/${id}/emongolia-notices`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
   getAvailableStatuses: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatus[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/available-statuses`)
       .then(r => r.data.data ?? []),
@@ -1194,6 +1262,21 @@ export const parcelApi = {
   listStatusHistory: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatusHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`)
       .then(r => r.data.data ?? []),
+}
+
+// ── Системийн тохиргоо (газрын зургийн суурь зураг) ───
+//
+// Уншилтыг нэвтэрсэн бүх хэрэглэгч хийнэ (газрын зураг ижил суурь зурагтай
+// байх ёстой), СОЛИХ нь admin:update эрхтэйд (backend хаалгална).
+export const settingsApi = {
+  // Тохируулаагүй үед data=null ирнэ — дэлгэц өгөгдмөл суурь зургаа хэрэглэнэ.
+  getBasemap: () =>
+    api.get<ApiResponse<BasemapSetting | null>>('/settings/basemap', { _allow404: true })
+      .then(r => r.data.data ?? null)
+      .catch(() => null),
+  saveBasemap: (body: BasemapSetting) =>
+    api.put<ApiResponse<BasemapSetting>>('/settings/basemap', body).then(r => r.data.data),
+  resetBasemap: () => api.delete('/settings/basemap').then(r => r.data),
 }
 
 // ── Parcel Workflow ───────────────────────────────────

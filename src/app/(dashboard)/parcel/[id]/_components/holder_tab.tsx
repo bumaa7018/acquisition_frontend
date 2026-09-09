@@ -4,10 +4,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { formatDate, getApiError } from "@/lib/utils";
-import { UserCheck, UserPlus, Trash2, Users, Wallet, X } from "lucide-react";
+import { UserCheck, UserPlus, Trash2, Users, Wallet, X, Landmark, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
-import type { ParcelHolder, RepresentativeInput } from "@/types";
+import type { ParcelHolder, ParcelOwnership, RepresentativeInput } from "@/types";
+import { NoticeSection } from "./notice_section";
 
 function row(label: string, value?: React.ReactNode) {
   return (
@@ -21,6 +22,131 @@ function row(label: string, value?: React.ReactNode) {
 /** Хуулийн этгээд үед last_name хоосон, name-д байгууллагын бүтэн нэр байна */
 function holderFullName(holder: ParcelHolder) {
   return [holder.last_name, holder.name].filter(Boolean).join(" ").trim();
+}
+
+/**
+ * УБЕГ-ийн огноо YYYYMMDD хэлбэрээр (ж: "20110414") ирдэг — Date() үүнийг
+ * уншиж чаддаггүй тул formatDate ХЭРЭГЛЭХГҮЙ, шууд задалж харуулна.
+ */
+function formatUbegDate(value?: string) {
+  const digits = (value ?? "").trim();
+  if (!/^\d{8}$/.test(digits)) return digits || "—";
+  return `${digits.slice(0, 4)}.${digits.slice(4, 6)}.${digits.slice(6, 8)}`;
+}
+
+/**
+ * УБЕГ-ийн (Улсын бүртгэлийн ерөнхий газар) газар өмчлөлийн бүртгэл.
+ *
+ * ГУС-ийн эзэмшигчийн жагсаалттай ХОЛИХГҮЙ — тусдаа эх сурвалж (ХУР/XYP)
+ * бөгөөд өмчлөлийн ТҮҮХ (өв залгамжлал, өмчлөгч өөрчлөгдөх) мөр мөрөөр ирдэг
+ * тул нэг регистр хэд хэдэн огноотой давтагдана. Иймд мөрүүдийг ЯГ ирсэн
+ * байдлаараа, огноогоор бүлэглэн харуулна (аль нь "одоогийн" гэдгийг эх
+ * систем заадаггүй тул бид ТААМАГЛАХГҮЙ).
+ */
+function UbegOwnershipCard({
+  items,
+  onRefresh,
+  refreshing = false,
+}: {
+  items: ParcelOwnership[];
+  /** Тохируулаагүй бол (гадны хэрэглэгч / хаалттай чөлөөлөлт) товч гарахгүй */
+  onRefresh?: () => void;
+  refreshing?: boolean;
+}) {
+  // Огноогоор бүлэглэнэ — шинэ бүртгэл эхэнд.
+  const groups = new Map<string, ParcelOwnership[]>();
+  for (const item of items) {
+    const key = item.record_date || "";
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  const ordered = Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  // Толгойн мэдээлэл (гэрчилгээ, зориулалт, хэмжээ, хаяг) мөр бүрт давтагдан
+  // ирдэг тул ХАМГИЙН ШИНЭ бүртгэлээс нэг удаа харуулна.
+  const latest = ordered[0]?.[1]?.[0];
+
+  return (
+    <div className="ap-card p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <Landmark className="h-4 w-4 text-[#8b5cf6]" />
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          УБЕГ-ийн өмчлөлийн бүртгэл
+        </p>
+        {items.length > 0 && (
+          <span className="rounded-full bg-[#8b5cf6]/10 px-2 py-0.5 text-[11px] font-semibold text-[#8b5cf6]">
+            {items.length}
+          </span>
+        )}
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#8b5cf6]/30 bg-[#8b5cf6]/10 px-3 text-[12px] font-semibold text-[#8b5cf6] transition-colors hover:bg-[#8b5cf6]/20 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Шинэчлэх
+          </button>
+        )}
+      </div>
+
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-[13px] text-slate-400 dark:border-[#37394d] dark:text-slate-500">
+          УБЕГ-ийн өмчлөлийн мэдээлэл татагдаагүй байна.
+        </div>
+      ) : (
+        <>
+          {latest && (
+            <div className="mb-4">
+              {row("Гэрчилгээний дугаар", latest.certificate_no)}
+              {row("Зориулалт", latest.landuse_name)}
+              {row("Хэмжээ", latest.area ? `${latest.area.toLocaleString()} м²` : undefined)}
+              {row("Хаяг", latest.full_address)}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {ordered.map(([date, rows]) => (
+              <div key={date || "no-date"}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-[#252630] dark:text-slate-300">
+                    {formatUbegDate(date)}
+                  </span>
+                  {/* Бүлгийн үйлчилгээ/өмчлөлийн хэлбэр мөр бүрт ижил ирдэг */}
+                  <span className="min-w-0 truncate text-[11px] text-slate-400 dark:text-slate-500" title={rows[0].service_name}>
+                    {rows[0].service_name || "—"}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {rows.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 dark:border-white/[0.06] dark:bg-[#191b22]"
+                    >
+                      <span className="text-[13px] font-semibold text-slate-800 dark:text-white">
+                        {[item.last_name, item.first_name].filter(Boolean).join(" ") || "—"}
+                      </span>
+                      {item.register_no && (
+                        <span className="rounded-md bg-slate-200/70 px-2 py-0.5 font-mono text-[11px] text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+                          {item.register_no}
+                        </span>
+                      )}
+                      {item.ownership_type && (
+                        <span className="ml-auto shrink-0 rounded-full bg-[#8b5cf6]/10 px-2 py-0.5 text-[10.5px] font-semibold text-[#8b5cf6]">
+                          {item.ownership_type}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -142,6 +268,26 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
+  // УБЕГ-ийн өмчлөлийн бүртгэлийг ХУР (XYP) гарцаас дахин татна. Нэгж талбарын
+  // ДУГААРААР (UUID биш) хандана. Мөрүүд бүхэлдээ орлогддог тул дахин дарахад
+  // давхардал үүсэхгүй. /prof маршрутад ийм гарц БАЙХГҮЙ тул товч нь зөвхөн
+  // дотоод ажилтанд (isExternal биш) харагдана.
+  const ownershipSyncMutation = useMutation({
+    mutationFn: () => {
+      if (!data?.parcel_id) throw new Error("Нэгж талбарын дугаар олдсонгүй");
+      return landApi.syncParcelOwnerships(acqId, data.parcel_id);
+    },
+    onSuccess: (res) => {
+      toast.success(
+        res?.found
+          ? `УБЕГ-ийн ${res.saved} бүртгэл шинэчлэгдлээ`
+          : "УБЕГ-д өмчлөлийн бүртгэл олдсонгүй",
+      );
+      void refetchHolders();
+    },
+    onError: (err) => toast.error(getApiError(err, "УБЕГ-ийн мэдээлэл татахад алдаа гарлаа")),
+  });
+
   const payeeMutation = useMutation({
     mutationFn: (holderRowId: string) => svc.setPaymentRecipient(acqId, parcelId, holderRowId),
     onSuccess: () => {
@@ -151,6 +297,9 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
     onError: (err) => toast.error(getApiError(err, "Сонгоход алдаа гарлаа")),
   });
   const canEditPayee = !isExternal && !isLocked;
+  // УБЕГ-аас дахин татах нь мэдээлэл БИЧИХ үйлдэл — гадны хэрэглэгч
+  // (мэрг. байгууллага, МИКА, санхүү) болон хаалттай чөлөөлөлтөд байхгүй.
+  const canSyncOwnership = !isExternal && !isLocked;
 
   const handleRepSubmit = () => {
     const errors = { last_name: !repForm.last_name.trim(), first_name: !repForm.first_name.trim() };
@@ -171,6 +320,8 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
   // Эх системд нэгээс олон үндсэн өргөдөл гаргагч ирэх тохиолдол БАЙНА —
   // тиймээс "Эзэмшигч" хэсэг нэг бичлэг биш, ЖАГСААЛТ хэлбэртэй.
   const holders = data.holders ?? [];
+  // УБЕГ-ийн өмчлөлийн бүртгэл — ХУР/XYP-ээс татагдаж хадгалагдсан мөрүүд
+  const ownerships = data.ownerships ?? [];
   const isRep = (h: ParcelHolder) => h.holder_role === "representative";
   const mainHolders = holders.filter((h) => h.main_applicant && !isRep(h));
   const coHolders = holders.filter((h) => !h.main_applicant && !isRep(h));
@@ -193,12 +344,17 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
         {/* Эзэмшигч (үндсэн өргөдөл гаргагч) */}
         <div className="ap-card p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Эзэмшигч, өмчлөгч</p>
-            {mainHolders.length > 1 && (
-              <span className="rounded-full bg-[#02c0ce]/10 px-2 py-0.5 text-[11px] font-semibold text-[#02c0ce]">
-                {mainHolders.length} эзэмшигч
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Эзэмшигч, өмчлөгч</p>
+              {mainHolders.length > 1 && (
+                <span className="rounded-full bg-[#02c0ce]/10 px-2 py-0.5 text-[11px] font-semibold text-[#02c0ce]">
+                  {mainHolders.length} эзэмшигч
+                </span>
+              )}
+            </div>
+            {/* Мэдэгдэх хуудас илгээх — ЗӨВХӨН товч. Дарахад илгээсэн түүх ба
+                дээд талд шинээр илгээх (имэйл / Е-Монголиа) хэсэг гарна. */}
+            <NoticeSection parcelId={parcelId} parcel={data} canSend={canSyncOwnership} />
           </div>
           {mainHolders.length > 0 ? (
             <>
@@ -235,6 +391,14 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
             <p className="text-[13px] text-slate-400 dark:text-slate-500 text-center py-8">Байхгүй</p>
           )}
         </div>
+
+        {/* УБЕГ-ийн өмчлөлийн бүртгэл — ГУС-ийн эзэмшигчээс ТУСДАА эх сурвалж.
+            "Мэдээлэл дуудах"-ын "Бусад" бүлгээс татагдана. */}
+        <UbegOwnershipCard
+          items={ownerships}
+          onRefresh={canSyncOwnership ? () => ownershipSyncMutation.mutate() : undefined}
+          refreshing={ownershipSyncMutation.isPending}
+        />
 
         {/* Хамтран эзэмшигч, өмчлөгч — үндсэн бус өргөдөл гаргагчид.
             Хоосон байсан ч хэсэг нь ҮРГЭЛЖ харагдана. */}

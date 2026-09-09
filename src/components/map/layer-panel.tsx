@@ -1,7 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { Eye, EyeOff, Layers, ChevronDown } from "lucide-react";
+import { Eye, EyeOff, Layers, ChevronDown, Settings2 } from "lucide-react";
+import { hasPermission } from "@/lib/role-utils";
+import BasemapSettingsDialog from "./basemap-settings-dialog";
+import { getBasemapSetting, subscribeBasemap, type BasemapSetting } from "./basemap-config";
 
 export interface LayerConfig {
   id: string;
@@ -29,6 +32,17 @@ export default function LayerPanel({
   onToggle,
 }: LayerPanelProps) {
   const [collapsed, setCollapsed] = useState(false);
+  // СУУРЬ зургийн тохиргоо — зөвхөн admin:update эрхтэй хэрэглэгч солино.
+  const [basemapOpen, setBasemapOpen] = useState(false);
+  const [basemap, setBasemap] = useState<BasemapSetting | null>(() => getBasemapSetting());
+  const [canEditBasemap, setCanEditBasemap] = useState(false);
+  useEffect(() => {
+    // Эрхийг ЗӨВХӨН browser дээр шалгана (SSR-д токен байхгүй тул зөрөх бөгөөс
+    // hydration warning гарна).
+    setCanEditBasemap(hasPermission("admin:update"));
+    setBasemap(getBasemapSetting());
+    return subscribeBasemap(setBasemap);
+  }, []);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     () => new Set(groups.map((g) => g.id)),
   );
@@ -68,8 +82,11 @@ export default function LayerPanel({
 
   return (
     <div
-      className="absolute top-3 right-3 z-10 w-56 rounded-xl overflow-hidden"
+      className="absolute top-3 right-3 z-10 flex w-56 flex-col rounded-xl overflow-hidden"
       style={{
+        // Газрын зургийн өндрөөс ХЭТРЭХГҮЙ (доод мөрүүд тасарч харагдахгүй
+        // болохоос сэргийлнэ). Дотор нь зөвхөн давхаргын жагсаалт гүйнэ.
+        maxHeight: "calc(100% - 24px)",
         background: bg,
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -82,7 +99,7 @@ export default function LayerPanel({
       {/* Header */}
       <button
         onClick={() => setCollapsed((v) => !v)}
-        className="w-full flex items-center justify-between px-3 py-2.5 transition-colors"
+        className="w-full shrink-0 flex items-center justify-between px-3 py-2.5 transition-colors"
         onMouseEnter={(e) => (e.currentTarget.style.background = hover)}
         onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
@@ -118,8 +135,10 @@ export default function LayerPanel({
       </button>
 
       {!collapsed && (
-        <div style={{ borderTop: `1px solid ${divClr}` }}>
-          <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
+        <div className="flex min-h-0 flex-1 flex-col" style={{ borderTop: `1px solid ${divClr}` }}>
+          {/* Зөвхөн ЭНЭ хэсэг гүйнэ. min-h-0 байхгүй бол flex хүү нь агуулгаараа
+              тэлж, панель газрын зургаас гарч доод мөрүүд харагдахгүй болно. */}
+          <div className="min-h-0 flex-1 overflow-y-auto" style={{ maxHeight: 260 }}>
             {/* Standalone layers */}
             {standalone.map((layer) => {
               const idx = rowIndex++;
@@ -295,9 +314,37 @@ export default function LayerPanel({
             })}
           </div>
 
+          {/* Суурь зураг — одоогийн эх сурвалж ба (эрхтэй бол) тохиргооны товч.
+              shrink-0: жагсаалт урт байсан ч энэ мөр агшиж алга болохгүй. */}
+          <div
+            className="shrink-0 px-3 py-2 flex items-center gap-2"
+            style={{ borderTop: `1px solid ${divClr}` }}
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: subClr }}>
+                Суурь зураг
+              </p>
+              <p className="truncate text-[11px]" style={{ color: lblClr }} title={basemap?.url || undefined}>
+                {basemap?.enabled
+                  ? basemap.name || basemap.url
+                  : "Үндсэн суурь зураг (хиймэл дагуул)"}
+              </p>
+            </div>
+            {canEditBasemap && (
+              <button
+                onClick={() => setBasemapOpen(true)}
+                title="Суурь зургийн хаягийг тохируулах"
+                className="shrink-0 flex h-6 w-6 items-center justify-center rounded-md transition-colors"
+                style={{ background: "#02c0ce20" }}
+              >
+                <Settings2 className="h-3.5 w-3.5" style={{ color: "#02c0ce" }} />
+              </button>
+            )}
+          </div>
+
           {/* Footer */}
           <div
-            className="px-3 py-2 flex justify-between gap-2"
+            className="shrink-0 px-3 py-2 flex justify-between gap-2"
             style={{ borderTop: `1px solid ${divClr}` }}
           >
             <button
@@ -319,6 +366,8 @@ export default function LayerPanel({
           </div>
         </div>
       )}
+
+      {basemapOpen && <BasemapSettingsDialog onClose={() => setBasemapOpen(false)} />}
     </div>
   );
 }

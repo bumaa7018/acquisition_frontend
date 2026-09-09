@@ -15,6 +15,7 @@ import "ol/ol.css";
 import { Box, Map as MapIcon } from "lucide-react";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
+import { createBasemapLayer, watchBasemap } from './basemap'
 import FeaturePopup from './feature-popup'
 import ParcelInfoModal from './parcel-info-modal'
 import AcquisitionInfoModal from './acquisition-info-modal'
@@ -136,18 +137,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       // (scroll) болон хос товшилтоор хэвээр ажиллана.
       controls: defaultControls({ zoom: false }),
       layers: [
-        new TileLayer({
-          source: new XYZ({
-            urls: [
-              "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt2.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-              "https://mt3.google.com/vt/lyrs=s&x={x}&y={y}&z={z}",
-            ],
-            maxZoom: 20,
-            crossOrigin: "anonymous",
-          }),
-        }),
+        // СУУРЬ зураг — тохиргооноос (Тохиргоо → Суурь зураг). Тохируулаагүй
+        // бол үндсэн суурь зураг (Google хиймэл дагуул). Хаяг солиход watchBasemap нь
+        // зөвхөн энэ давхаргыг сольж, зургийг дахин үүсгэхгүй.
+        createBasemapLayer(),
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -215,7 +208,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     })
 
     olMap.current = map
+    const stopBasemapWatch = watchBasemap(map)
+
     return () => {
+      stopBasemapWatch()
       cesium3D.current?.destroy()
       cesium3D.current = null
       map.setTarget(undefined)

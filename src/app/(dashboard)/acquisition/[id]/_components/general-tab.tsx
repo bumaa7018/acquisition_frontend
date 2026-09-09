@@ -12,6 +12,11 @@ import type { Plan } from "@/types";
 import { PlanCodeSearch, planHasBoundary } from "@/components/ui/plan-code-search";
 import { STATUS_CFG } from "./shared";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import {
+  BoundaryShapefileInput,
+  type BoundaryFileSelection,
+} from "./boundary-shapefile-input";
+import { SocioSurveySection } from "./socio-survey-section";
 
 export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -80,10 +85,13 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setAreaCalcBusy(false);
     }
   };
-  // Хил солих: чөлөөлөлт ҮҮСГЭХ хэсэгтэй ЯГ ИЖИЛ байдлаар төлөвлөгөөг нэгж
-  // талбарын дугаараар хайж олоод, олдсон төлөвлөгөөний хилээр солино.
-  // Гараас shapefile оруулах зам БАЙХГҮЙ.
+  // Хил солих ХОЁР зам (нэг удаад зөвхөн НЭГ нь):
+  //  1. Төлөвлөгөө — чөлөөлөлт ҮҮСГЭХ хэсэгтэй ЯГ ИЖИЛ байдлаар нэгж талбарын
+  //     дугаараар хайж олоод, олдсон төлөвлөгөөний хилээр солино.
+  //  2. Гараас .shp файл — хээрийн хэмжилтээр төлөвлөгөөний хил засагдсан үед.
+  //     Талбайн зөрүү 30%-иас бага байх ёстой (серверт шалгагдана).
   const [boundaryPlan, setBoundaryPlan] = useState<Plan | null>(null);
+  const [boundaryFile, setBoundaryFile] = useState<BoundaryFileSelection | null>(null);
 
   useEffect(() => {
     if (acq) {
@@ -101,6 +109,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setAreaM2(String(acq.area_m2 ?? ""));
       setAreaAutoCalc(false);
       setBoundaryPlan(null);
+      setBoundaryFile(null);
     }
   }, [acq]);
 
@@ -126,6 +135,11 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       if (boundaryPlan) {
         fd.append("plan_parcel_id", boundaryPlan.parcel_id || boundaryPlan.plan_code || boundaryPlan.code || "");
       }
+      // Гараас оруулсан хилийн файл. Хоёуланг зэрэг илгээхгүй (сервер 400
+      // буцаана) — UI дээр нэг нь сонгогдвол нөгөө нь хаагдана.
+      if (boundaryFile) {
+        fd.append("shapefile", boundaryFile.file, boundaryFile.file.name);
+      }
       const updated = await landApi.update(id, fd);
       // Мэргэжлийн байгууллагыг ерөнхий update PUT уншдаггүй — зориулалтын
       // /professional-org endpoint-оор тусад нь солино (өөрчлөгдсөн үед л).
@@ -148,6 +162,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setEditing(false);
       setAreaAutoCalc(false);
       setBoundaryPlan(null);
+      setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
       queryClient.invalidateQueries({ queryKey: ["land-parcels", id], refetchType: "all" });
       // Хил солиход нэгж талбарын НИЙТ тоо ба хилийн түүх хоёулаа хуучирна.
@@ -158,9 +173,35 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   });
 
   // Хил солих нь БУЦААХ БОЛОМЖГҮЙ үйлдэл (шинэ хилд ороогүй нэгж талбар
-  // үнэлгээ/олговор/баримттайгаа хамт устана) тул төлөвлөгөө сонгосон үед
-  // зөвшөөрөл авна. Төлөвлөгөө сонгоогүй ердийн засварт шууд хадгална.
+  // үнэлгээ/олговор/баримттайгаа хамт устана) тул хил хөндөх сонголт хийсэн
+  // үед зөвшөөрөл авна. Хил хөндөөгүй ердийн засварт шууд хадгална.
   const requestSave = () => {
+    // Хоёр замыг зэрэг илгээвэл сервер татгалзана — UI-д ч гаргахгүй.
+    if (boundaryPlan && boundaryFile) {
+      toast.error(
+        "Төлөвлөгөөгөөр эсвэл файлаар — хил солих нэг аргыг л сонгоно уу",
+      );
+      return;
+    }
+    // Гараас оруулсан хилээр солих.
+    if (boundaryFile) {
+      if (!boundaryFile.preview.accepted) {
+        toast.error(
+          `Талбайн зөрүү ${boundaryFile.preview.deviation_percent.toFixed(1)}% — ` +
+            `зөвшөөрөх дээд хэмжээ ${boundaryFile.preview.max_deviation_percent.toFixed(0)}%`,
+        );
+        return;
+      }
+      setPendingConfirm({
+        title: "Чөлөөлөх хилийг файлаар солих уу?",
+        description:
+          `«${boundaryFile.file.name}» файлын хилээр чөлөөлөлтийн хил солигдож (талбайн зөрүү ${boundaryFile.preview.deviation_percent.toFixed(1)}%), нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
+        confirmLabel: "Зөвшөөрөх",
+        confirmColor: "#f59e0b",
+        onConfirm: () => saveMutation.mutate(),
+      });
+      return;
+    }
     if (!boundaryPlan) {
       saveMutation.mutate();
       return;
@@ -201,6 +242,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     setAreaM2(String(acq.area_m2 ?? ""));
     setAreaAutoCalc(false);
     setBoundaryPlan(null);
+    setBoundaryFile(null);
   };
 
   const row = (label: string, value: React.ReactNode, last = false) => (
@@ -337,8 +379,35 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               </div>
             </div>
           )}
+          {/* Хил солих ХОЁРДУГААР зам: гараас .shp файл. Хээрийн хэмжилтээр
+              төлөвлөгөөний хил засагдсан үед хэрэглэнэ — талбайн зөрүү
+              төлөвлөгөөнийхөөс 30%-иас бага байх ёстой (сервер шалгана). */}
+          {editing && (
+            <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40 pt-1.5">
+                Хилийн файл (.shp)
+              </span>
+              <div className="min-w-0 flex-1">
+                <BoundaryShapefileInput
+                  acquisitionId={id}
+                  currentGeometryWKT={acq.geometry_wkt}
+                  selection={boundaryFile}
+                  onChange={setBoundaryFile}
+                  disabled={!!boundaryPlan}
+                />
+                {!boundaryFile && !boundaryPlan && (
+                  <p className="mt-1.5 text-[11.5px] text-slate-400 dark:text-slate-500">
+                    Хээрийн хэмжилтээр засварласан хилийг гараас оруулна.
+                    Талбайн зөрүү нь төлөвлөгөөний хилийн талбайгаас 30%-иас
+                    бага байх шаардлагатай.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           {/* Хил солих нь нэгж талбарыг УСТГАЖ болох тул анхааруулна */}
-          {editing && boundaryPlan && planHasBoundary(boundaryPlan) && (
+          {editing && (boundaryFile?.preview.accepted ||
+            (boundaryPlan && planHasBoundary(boundaryPlan))) && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
               <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
@@ -626,6 +695,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               )}
             </div>
           </div>
+
+          {/* Нийгэм эдийн засгийн судалгаа — өөрийн цонх, өөрийн хадгалалттай
+              тул "Засах" режимээс ХАМААРАХГҮЙ (тусдаа endpoint). */}
+          <SocioSurveySection id={id} canEdit={canEdit} />
         </div>
       </div>
 

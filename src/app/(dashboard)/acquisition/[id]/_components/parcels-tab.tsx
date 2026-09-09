@@ -601,8 +601,6 @@ export function ParcelsTab({
                               <Link
                                 prefetch={false}
                                 href={`/parcel/${p.id}?acq=${id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
                               >
                                 <Info className="h-3 w-3" /> Дэлгэрэнгүй
