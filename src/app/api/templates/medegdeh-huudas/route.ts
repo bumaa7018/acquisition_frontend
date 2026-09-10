@@ -21,7 +21,9 @@ const ALLOWED_TEMPLATES = new Set([
   "uulzaltiin_temdeglel.docx",
   "gazar_huleelcsen_akt.docx",
   "gazar_huleelcsen_akt-2.docx",
+  "geree_dugnesen_akt.docx",
   "hynalt_card.docx",
+  "hyanalt_card_2.docx",
 ]);
 
 function resolveTemplatePath(filename: unknown): { filename: string; fullPath: string } {

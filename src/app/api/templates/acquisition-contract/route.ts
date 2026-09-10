@@ -10,7 +10,20 @@ import { isAuthenticated, unauthorizedResponse } from "@/lib/server/verify-auth"
 
 export const runtime = "nodejs";
 
-const TEMPLATE_FILENAME = "acquisition_contract.docx";
+const DEFAULT_TEMPLATE_FILENAME = "acquisition_contract.docx";
+// Гэрээний загваруудын цагаан жагсаалт — client-ээс ирсэн `template` талбарыг
+// зөвхөн эдгээрийн аль нэг байвал зөвшөөрнө (замын халдлагаас хамгаална).
+const ALLOWED_TEMPLATES = new Set([
+  "acquisition_contract.docx",
+  "acquisition_contract_add_gazar.docx",
+  "acquisition_contract_only_gazar.docx",
+]);
+
+function resolveTemplateFilename(value: unknown): string {
+  const requested = typeof value === "string" ? path.basename(value) : "";
+  return ALLOWED_TEMPLATES.has(requested) ? requested : DEFAULT_TEMPLATE_FILENAME;
+}
+
 // Go backend-ийн parcel document upload-той ижил дээд хэмжээ (upload_validation.go
 // maxDocumentUploadSize) — гар аргаар шууд route руу хавсаргасан асар том файлаас хамгаална.
 const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
@@ -114,8 +127,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const templateFilename = resolveTemplateFilename(form.get("template"));
     const templatesDir = path.join(process.cwd(), "public", "templates");
-    const templatePath = path.join(templatesDir, TEMPLATE_FILENAME);
+    const templatePath = path.join(templatesDir, templateFilename);
     const template = await readFile(templatePath);
     const templateWithRows = await injectPropertyRows(Buffer.from(template), propertyRows);
     const rendered = await renderDocxTemplate(templateWithRows, values);

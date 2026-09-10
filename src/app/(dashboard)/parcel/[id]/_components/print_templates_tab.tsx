@@ -200,6 +200,7 @@ function findMeetingMinutesDocxAttachment(
 }
 
 async function downloadAcquisitionContract(params: {
+  template: string;
   parcel?: ParcelFull;
   acquisition?: LandAcquisition;
   assets: Asset[];
@@ -207,7 +208,7 @@ async function downloadAcquisitionContract(params: {
   landValuation?: LandValuation | null;
   attachment?: Document;
 }) {
-  const { parcel, acquisition, assets, compensations, landValuation, attachment } = params;
+  const { template, parcel, acquisition, assets, compensations, landValuation, attachment } = params;
   if (parcel?.acquisition_id && !acquisition) {
     throw new Error("Чөлөөлөлтийн мэдээлэл ачаалж байна. Түр хүлээгээд дахин татна уу.");
   }
@@ -223,6 +224,7 @@ async function downloadAcquisitionContract(params: {
 
   const { values, propertyRows } = buildAcquisitionContractValues(parcel, acquisition, assets, compensations, landValuation);
   const fd = new FormData();
+  fd.append("template", template);
   fd.append("values", JSON.stringify(values));
   fd.append("property_rows", JSON.stringify(propertyRows));
   // attachment.name бол дэлгэцийн нэр (өргөтгөлгүй байж болно) — жинхэнэ файлын
@@ -236,7 +238,7 @@ async function downloadAcquisitionContract(params: {
     throw new Error(data?.error || "Гэрээ үүсгэхэд алдаа гарлаа");
   }
   const blob = await res.blob();
-  triggerDownload(blob, `gereee_${parcel?.parcel_id || "template"}.docx`);
+  triggerDownload(blob, `${template.replace(/\.docx$/i, "")}_${parcel?.parcel_id || "template"}.docx`);
 }
 
 // Статик файлыг (docx) шууд татна
@@ -377,11 +379,34 @@ const TEMPLATES: PrintTemplate[] = [
   },
   {
     id: "acquisition_contract",
-    name: "Гэрээ",
+    name: "Нөхөх олговор олгох гэрээ",
     description: "Нөхөх олговрын гэрээ — үл хөдлөх хөрөнгийн бүртгэлээр автоматаар бөглөнө. Хэвлэхийн өмнө \"Хурлын тэмдэглэл\" (DOCX) хавсралт шаардлагатай бөгөөд гэрээний ард залгагдана",
     filename: "acquisition_contract.docx",
     isDownload: true,
     requiresMeetingMinutes: true,
+  },
+  {
+    id: "acquisition_contract_add_gazar",
+    name: "Газар+Нөхөх олговор гэрээ",
+    description: "Газар чөлөөлөх гэрээ (газар дүйцүүлэлт ба нөхөх олговор) — үл хөдлөх хөрөнгийн бүртгэлээр автоматаар бөглөнө. Хэвлэхийн өмнө \"Хурлын тэмдэглэл\" (DOCX) хавсралт шаардлагатай бөгөөд гэрээний ард залгагдана",
+    filename: "acquisition_contract_add_gazar.docx",
+    isDownload: true,
+    requiresMeetingMinutes: true,
+  },
+  {
+    id: "acquisition_contract_only_gazar",
+    name: "Газар дүйцүүлэх гэрээ",
+    description: "Газар чөлөөлөх гэрээ (зөвхөн газар дүйцүүлэлт). Хэвлэхийн өмнө \"Хурлын тэмдэглэл\" (DOCX) хавсралт шаардлагатай бөгөөд гэрээний ард залгагдана",
+    filename: "acquisition_contract_only_gazar.docx",
+    isDownload: true,
+    requiresMeetingMinutes: true,
+  },
+  {
+    id: "contract_review_act",
+    name: "Гэрээ дүгнэсэн акт",
+    description: "Нөхөх олговрын гэрээний гүйцэтгэлийг дүгнэсэн акт",
+    filename: "geree_dugnesen_akt.docx",
+    isDownload: true,
   },
   {
     id: "appointment_minutes",
@@ -389,6 +414,20 @@ const TEMPLATES: PrintTemplate[] = [
     description: "Уулзалтын тэмдэглэлийн загвар маягт",
     filename: "uulzaltiin_temdeglel.docx",
     isDownload: true,
+  },
+  {
+    id: "conflict_of_interest_employee",
+    name: "Ашиг сонирхолын мэдүүлэг (Ажилтан)",
+    description: "Ажилтны ашиг сонирхлын урьдчилсан мэдүүлгийн маягт",
+    filename: "ashig_sonirholiin_medegdel_employee.docx",
+    isStaticFile: true,
+  },
+  {
+    id: "conflict_of_interest_director",
+    name: "Ашиг сонирхолын мэдүүлэг (Дарга)",
+    description: "Даргын ашиг сонирхлын урьдчилсан мэдүүлгийн маягт",
+    filename: "ashig_sonirholiin-medegdel_darga.docx",
+    isStaticFile: true,
   },
   {
     id: "decision_draft",
@@ -416,6 +455,13 @@ const TEMPLATES: PrintTemplate[] = [
     name: "Хяналтын карт",
     description: "Нэгж талбарын хяналтын картын маягт",
     filename: "hynalt_card.docx",
+    isDownload: true,
+  },
+  {
+    id: "monitoring_card_2",
+    name: "Хяналтын карт 2",
+    description: "Гүйцэтгэлийн гэрээ байгуулах явцын хяналтын карт — 2 дахь хувилбар",
+    filename: "hyanalt_card_2.docx",
     isDownload: true,
   },
   {
@@ -520,6 +566,7 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
               onClick={() =>
                 tpl.requiresMeetingMinutes
                   ? downloadAcquisitionContract({
+                      template: tpl.filename,
                       parcel,
                       acquisition,
                       assets,
