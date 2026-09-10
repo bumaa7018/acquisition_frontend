@@ -13,6 +13,7 @@ function safeFilePart(value: unknown): string {
 
 const ALLOWED_TEMPLATES = new Set([
   "medegdeh_huudas.docx",
+  "medegdeh_huudas_org.docx",
   "sanal_asuulgiin_huudas.docx",
   "niigem_ediin_zasag_sudalgaa.docx",
   "shalgah_huudas.docx",

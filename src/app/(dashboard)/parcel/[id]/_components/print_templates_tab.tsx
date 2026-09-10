@@ -76,6 +76,28 @@ function sumAmount(list: { amount: number }[]): number {
   return list.reduce((sum, c) => sum + (c.amount || 0), 0);
 }
 
+/**
+ * Үндсэн эзэмшигч ХУУЛИЙН ЭТГЭЭД (байгууллага) эсэхийг тодорхойлно.
+ *
+ * Дүрэм (holder_tab.tsx-ийн `holderFullName`-тай ижил): хуулийн этгээд үед
+ * `last_name` хоосон, нэр нь бүтнээрээ `name`/`holder_name`-д ордог.
+ * `person_type` талбарт ("3: Монгол улсын хуулийн этгээд" мэт) шууд тэмдэглэгээ
+ * ирвэл түүнийг давуу эрхээр авна.
+ *
+ * Үүнээс хамаарч "Урьдчилан мэдэгдэх хуудас"-ын иргэн/байгууллагын аль
+ * хувилбарыг харуулахыг шийднэ.
+ */
+function isLegalEntityHolder(parcel?: ParcelFull): boolean {
+  const holders = (parcel?.holders ?? []).filter((h) => h.holder_role !== "representative");
+  const main = holders.find((h) => h.main_applicant) ?? holders[0];
+  if (main) {
+    if (/хуулийн этгээд|legal/i.test(main.person_type || "")) return true;
+    return !main.last_name?.trim() && !!main.name?.trim();
+  }
+  const d = parcel?.detail;
+  return !!d && !d.holder_last_name?.trim() && !!d.holder_name?.trim();
+}
+
 // Гэрээний хүснэгтийг (Газар/Барилга байгууламж/Эд хөрөнгө бусад/Нийт) системд
 // бүртгэгдсэн хөрөнгө (Asset) болон баталгаажсан нөхөх олговрын (Compensation)
 // мэдээллээр бөглөнө — сонгогдсон үнэлгээний урсгалаар (parcel.selected_valuation_type) шүүнэ.
@@ -319,6 +341,13 @@ const TEMPLATES: PrintTemplate[] = [
     isDownload: true,
   },
   {
+    id: "medegdekh_huudas_org",
+    name: "Урьдчилан мэдэгдэх хуудас (Байгууллага)",
+    description: "Захиргааны Ерөнхий хуулийн 26-р зүйлийн дагуу урьдчилан мэдэгдэх хуудас",
+    filename: "medegdeh_huudas_org.docx",
+    isDownload: true,
+  },
+  {
     id: "survey_form",
     name: "Санал асуулгын хуудас",
     description: "Санал асуулгын маягт",
@@ -442,6 +471,15 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
 
   const meetingMinutesAttachment = findMeetingMinutesDocxAttachment(docs, docTypes);
 
+  // Иргэн бол "Урьдчилан мэдэгдэх хуудас", хуулийн этгээд бол түүний
+  // БАЙГУУЛЛАГЫН хувилбарыг л харуулна (нөгөөг нь нуух).
+  const orgHolder = isLegalEntityHolder(parcel);
+  const visibleTemplates = TEMPLATES.filter((t) =>
+    t.id === "medegdekh_huudas" ? !orgHolder
+      : t.id === "medegdekh_huudas_org" ? orgHolder
+        : true,
+  );
+
   return (
     <div className="ap-card overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
@@ -451,7 +489,7 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
         </p>
       </div>
       <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
-        {TEMPLATES.map((tpl, idx) => (
+        {visibleTemplates.map((tpl, idx) => (
           <div
             key={tpl.id}
             className="flex items-center gap-3 px-5 py-4 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
