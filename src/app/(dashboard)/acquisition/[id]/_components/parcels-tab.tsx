@@ -343,29 +343,14 @@ export function ParcelsTab({
     <>
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          {/* Жагсаалтын толгой — татах товч гарчгийн ХАЖУУД (шүүлтүүрийн мөрөнд биш) */}
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-2">
-            <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                Нэгж талбарууд
-              </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {parcels?.total ?? 0} нэгж талбар
-              </p>
-              {/* "Шинэ" төлөв = БҮРДЭЛийн шат. Нэгж талбартай ажиллах
-                  (үнэлгээ, олговор, төлөв) нь "Хээрийн судалгаа"-аас эхэлнэ. */}
-              {isBeforeFieldStage && (
-                <p className="mt-1.5 inline-flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                  <Info className="mt-[1px] h-3 w-3 shrink-0" />
-                  <span>
-                    Одоо <strong>&quot;Шинэ&quot;</strong> төлөвт байна — нэгж
-                    талбарыг <strong>татах, давхардлыг арилгах</strong> шат.
-                    Үнэлгээ, нөхөх олговор, төлөв оруулах нь{" "}
-                    <strong>&quot;Хээрийн судалгаа&quot;</strong> төлөвөөс эхэлнэ.
-                  </span>
-                </p>
-              )}
-            </div>
+          {/* Жагсаалтын толгой.
+              Товч нь ГАРЧГИЙН МӨРӨНД өөрт нь байрлана — доорх тоо/анхааруулга
+              нь тусдаа мөр. Ингэснээр "Шинэ" төлөвийн анхааруулга гарч ирэхэд
+              зүүн багана өндөрсөж, товч түүний голд хөвөн далийхгүй. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+              Нэгж талбарууд
+            </p>
             {/* Гадаад ролиуд болон хаалттай чөлөөлөлт дээр дуудалт хийгдэхгүй
                 (backend нь land:create + хаалттай биш байхыг шаардана) */}
             {!isExternal && !isAcqLocked && (
@@ -383,7 +368,7 @@ export function ParcelsTab({
                   })
                 }
                 disabled={importRunning}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3.5 text-[12.5px] font-semibold text-[#0acf97] hover:bg-[#0acf97]/20 disabled:opacity-50 transition-colors"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3 text-[12px] font-semibold text-[#0acf97] hover:bg-[#0acf97]/20 disabled:opacity-50 transition-colors"
               >
                 {importRunning ? (
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -394,6 +379,22 @@ export function ParcelsTab({
               </button>
             )}
           </div>
+          <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+            {parcels?.total ?? 0} нэгж талбар
+          </p>
+          {/* "Шинэ" төлөв = БҮРДЭЛийн шат. Нэгж талбартай ажиллах
+              (үнэлгээ, олговор, төлөв) нь "Хээрийн судалгаа"-аас эхэлнэ. */}
+          {isBeforeFieldStage && (
+            <p className="mt-1.5 inline-flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              <Info className="mt-[1px] h-3 w-3 shrink-0" />
+              <span>
+                Одоо <strong>&quot;Шинэ&quot;</strong> төлөвт байна — нэгж
+                талбарыг <strong>татах, давхардлыг арилгах</strong> шат.
+                Үнэлгээ, нөхөх олговор, төлөв оруулах нь{" "}
+                <strong>&quot;Хээрийн судалгаа&quot;</strong> төлөвөөс эхэлнэ.
+              </span>
+            </p>
+          )}
 
           <div className="mt-3 flex w-full items-center gap-2">
             <input

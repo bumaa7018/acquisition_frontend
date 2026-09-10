@@ -913,6 +913,11 @@ export const landApi = {
   // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв
   // ТӨСӨӨЛЛИЙН үнэлгээ — value=null бол арилгана (талбарыг үргэлж илгээнэ:
   // "огт өгөөгүй" ба "арилга" хоёрыг backend ялгадаг).
+  calculateParcelEstimatedValue: (acqId: string, parcelId: string, confidencePercent: number, baseFeePerM2?: number) =>
+    api.patch<ApiResponse<{ estimated_value: number; estimated_confidence_percent: number }>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
+      { confidence_percent: confidencePercent, ...(baseFeePerM2 != null ? { base_fee_per_m2: baseFeePerM2 } : {}) },
+    ).then(r => r.data.data),
   setParcelEstimatedValue: (acqId: string, parcelId: string, value: number | null) =>
     api.patch<ApiResponse<{ estimated_value: number | null }>>(
       `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
@@ -1044,7 +1049,7 @@ export const landApi = {
       decree_number: decreeNumber ?? '',
       decree_date: decreeDate ?? null,
     }).then(r => r.data.data),
-  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: boolean, changedParcelId: string, acquisitionAreaM2?: number, acquisitionGeomWkt?: string) =>
+  updateParcelMeta: (acqId: string, parcelId: string, dbChanged: string, changedParcelId: string, acquisitionAreaM2?: number, acquisitionGeomWkt?: string) =>
     api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/meta`, {
       db_changed: dbChanged,
       changed_parcel_id: changedParcelId,

@@ -1250,7 +1250,7 @@ export default function ReportPage() {
                         {p.remaining_area_m2 > 0 ? p.remaining_area_m2.toLocaleString() : "—"}
                       </td>
                       <td className="px-3 py-3.5 text-slate-600 dark:text-slate-300">
-                        {p.db_changed ? "Тийм" : "Үгүй"}
+                        {p.db_changed || "—"}
                       </td>
                       <td className="px-3 py-3.5 font-mono text-[12px] text-slate-600 dark:text-slate-300">
                         {p.changed_parcel_id || "—"}

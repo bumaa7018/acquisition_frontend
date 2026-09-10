@@ -275,6 +275,13 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               value={hasBasePrice ? `${num(basePricePerHa)}₮` : "—"}
               strong
             />
+            {fees.length > 0 ? fees.map((fee, index) => (
+              <InfoRow
+                key={`confidence-${index}`}
+                label={fees.length === 1 ? "Дуудлага худалдааны анхны үнийн итгэлцүүр (%)" : `Дуудлага худалдааны анхны үнийн итгэлцүүр — ${fee.zone_name || fee.zone_no || `Бүс ${index + 1}`} (%)`}
+                value={Number.isFinite(fee.confidence_percent) ? fee.confidence_percent.toLocaleString("mn-MN", { maximumFractionDigits: 8 }) : "—"}
+              />
+            )) : <InfoRow label="Дуудлага худалдааны анхны үнийн итгэлцүүр (%)" value="—" />}
             <InfoRow label="Газрын зориулалт" value={landusePurpose} />
             <InfoRow label="Нийт талбай" value={formatArea(data.area_m2)} />
             {data.detail?.valuation_zone ? (

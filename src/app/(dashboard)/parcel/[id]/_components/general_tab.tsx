@@ -5,13 +5,14 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { RIGHT_TYPE_LABELS, type AU, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelFeeSyncResult, type ParcelSyncCountResult } from "@/types";
+import { RIGHT_TYPE_LABELS, type AU, type LandValuation, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelFeeSyncResult, type ParcelSyncCountResult } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { layerTextToWkt } from "@/lib/geometry-utils";
 import { logger } from "@/lib/logger";
+import { EstimatedValueDialog } from "./estimated_value_dialog";
 
 const ParcelMap = dynamic(
   () => import("@/components/map/parcel-map").then((m) => m.ParcelMap),
@@ -170,8 +171,21 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
     enabled: !!acqId,
   });
+  // Өмчлөх эрхийн гэрчилгээ — нөхөх олговрын хэсэгт (real_estate_tab) харуулдаг
+  // land_valuation.ownership_cert_no-г ерөнхий мэдээлэл дээр ч давхар харуулна.
+  // Тэндхийг өөрчлөхгүй — ижил query түлхүүр тул нэмэлт хүсэлт үүсэхгүй.
+  const parcelCode = data?.parcel_id ?? "";
+  const valuationType = data?.selected_valuation_type ?? "asset";
+  const { data: landValuation } = useQuery<LandValuation | null>({
+    queryKey: ["land-valuation", acqId, parcelCode, valuationType],
+    queryFn: () =>
+      isProfOrg
+        ? profApi.profGetLandValuation(acqId, parcelCode, valuationType)
+        : landApi.getLandValuation(acqId, parcelCode, valuationType),
+    enabled: !!acqId && !!parcelCode,
+  });
   const [editingMeta, setEditingMeta] = useState(false);
-  const [dbChanged, setDbChanged] = useState(false);
+  const [dbChanged, setDbChanged] = useState("");
   const [changedParcelId, setChangedParcelId] = useState("");
   const [acquisitionAreaM2, setAcquisitionAreaM2] = useState<string>("");
   const [acquisitionGeomWkt, setAcquisitionGeomWkt] = useState("");
@@ -179,7 +193,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
 
   useEffect(() => {
     if (data) {
-      setDbChanged(data.db_changed ?? false);
+      setDbChanged(data.db_changed ?? "");
       setChangedParcelId(data.changed_parcel_id ?? "");
       setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
       setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
@@ -236,15 +250,16 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   }, [calcArea]);
 
   // ── ТӨСӨӨЛЛИЙН ҮНЭЛГЭЭ ────────────────────────────────────────────────
-  // Мэргэжилтэн/админ ГААРАС оруулна; мэргэжлийн байгууллагад зөвхөн харагдана
+  // Итгэлцүүрийг өөрчилж тооцно; мэргэжлийн байгууллагад зөвхөн харагдана
   // (backend-ийн PATCH маршрут нь land:update шаарддаг).
   const [estOpen, setEstOpen] = useState(false);
-  const [estValue, setEstValue] = useState("");
 
   const estimatedMutation = useMutation({
-    mutationFn: (value: number | null) => landApi.setParcelEstimatedValue(acqId, parcelId, value),
-    onSuccess: (_r, value) => {
-      toast.success(value === null ? "Төсөөллийн үнэлгээ арилгагдлаа" : "Төсөөллийн үнэлгээ хадгалагдлаа");
+    mutationFn: ({ confidencePercent, baseFeePerM2 }: { confidencePercent: number | null; baseFeePerM2?: number }) => confidencePercent == null
+      ? landApi.setParcelEstimatedValue(acqId, parcelId, null)
+      : landApi.calculateParcelEstimatedValue(acqId, parcelId, confidencePercent, baseFeePerM2),
+    onSuccess: (_r, { confidencePercent }) => {
+      toast.success(confidencePercent === null ? "Төсөөллийн үнэлгээ арилгагдлаа" : "Төсөөллийн үнэлгээ хадгалагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
       setEstOpen(false);
     },
@@ -453,22 +468,6 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const monitorings = data.monitorings ?? [];
   const overlaps = data.overlaps ?? [];
 
-  // ── ТӨСӨӨЛЛИЙН ҮНЭЛГЭЭНИЙ САНАЛ ─────────────────────────────────────────
-  //
-  // Газрын СУУРЬ ҮНЭ нь ГУС-аас ₮/ГА-гаар ирдэг (parcel_detail.base_price_per_ha)
-  // тул 10 000-д хувааж ₮/м² болгоно.
-  //
-  // Талбай нь ЧӨЛӨӨЛӨГДӨХ талбай (acquisition_area_m2): нөхөх олговор нь
-  // зөвхөн нөлөөлөлд өртсөн хэсэгт тооцогддог. Тэр нь бөглөгдөөгүй бол нийт
-  // талбай руу шилжинэ (аль нь ашиглагдсаныг дэлгэц дээр хэлнэ).
-  const basePricePerHa = data.detail?.base_price_per_ha ?? null;
-  const basePricePerM2 = basePricePerHa != null && basePricePerHa > 0 ? basePricePerHa / 10000 : null;
-  const suggestArea = (data.acquisition_area_m2 || 0) > 0 ? data.acquisition_area_m2 : data.area_m2;
-  const suggestAreaLabel = (data.acquisition_area_m2 || 0) > 0 ? "чөлөөлөгдөх талбай" : "нийт талбай";
-  const suggestedValue =
-    basePricePerM2 != null && (suggestArea || 0) > 0
-      ? Math.round(basePricePerM2 * suggestArea)
-      : null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -533,7 +532,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   <button
                     onClick={() => {
                       setEditingMeta(false);
-                      setDbChanged(data.db_changed ?? false);
+                      setDbChanged(data.db_changed ?? "");
                       setChangedParcelId(data.changed_parcel_id ?? "");
                       setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
                       setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
@@ -584,7 +583,17 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
           {row("Үл хөдлөх хөрөнгийн дугаар", data.property_no)}
           {row("Эрх эхэлсэн", data.valid_from ? formatDate(data.valid_from) : undefined)}
           {row("Эрх дуусах", data.valid_till ? formatDate(data.valid_till) : undefined)}
-          {row("Нийт талбай", formatArea(data.area_m2))}
+          {row("Нийт талбай", (
+            <span className="flex flex-wrap items-center gap-3">
+              {formatArea(data.area_m2)}
+              {!isExternal && !isProfOrg && !isLocked && !editingMeta && (
+                <button type="button" onClick={() => setEstOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20">
+                  <Calculator className="h-3.5 w-3.5" />
+                  {data.estimated_value != null ? "Үнэлгээ тохируулах" : "Үнэлгээ оруулах"}
+                </button>
+              )}
+            </span>
+          ))}
           {/* Чөлөөлөгдөх талбай */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбай</span>
@@ -618,63 +627,42 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               </span>
             )}
           </div>
+          {row("Төсөөллийн үнэлгээ", (
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold tabular-nums text-[#02c0ce]">
+                {data.estimated_value != null ? `${data.estimated_value.toLocaleString("mn-MN")}₮` : "—"}
+              </span>
+              {data.estimated_value != null && data.estimated_value_at && (
+                <span className="text-[11px] text-slate-400" title={data.estimated_value_by || undefined}>{formatDate(data.estimated_value_at)}</span>
+              )}
+            </span>
+          ))}
           {row("Үлдэх газрын хэмжээ",
             data.remaining_area_m2 != null
               ? formatArea(data.remaining_area_m2)
               : formatArea((data.area_m2 || 0) - (data.acquisition_area_m2 || 0))
           )}
-          {/* ТӨСӨӨЛЛИЙН ҮНЭЛГЭЭ — гараас оруулна. Мэргэжлийн байгууллага,
-              гадаад ролиуд ЗӨВХӨН харна (товч харагдахгүй). */}
+          {/* Өмчлөх эрхийн гэрчилгээ — нөхөх олговрын үнэлгээнээс (уншихад зориулав) */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
-              Төсөөллийн үнэлгээ
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өмчлөх эрхийн гэрчилгээ</span>
+            <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+              {landValuation?.ownership_cert_no || data.detail?.certificate_no || "—"}
             </span>
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              {data.estimated_value != null ? (
-                <span className="text-[13px] font-semibold tabular-nums text-slate-800 dark:text-slate-100">
-                  {data.estimated_value.toLocaleString("mn-MN")}₮
-                </span>
-              ) : (
-                <span className="text-[13px] text-slate-400 dark:text-slate-500">—</span>
-              )}
-              {data.estimated_value != null && data.estimated_value_at && (
-                <span className="text-[11px] text-slate-400" title={data.estimated_value_by || undefined}>
-                  {formatDate(data.estimated_value_at)}
-                </span>
-              )}
-              {!isExternal && !isLocked && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Байгаа утгыг засах; байхгүй бол САНАЛ болгосон дүнгээр эхэлнэ.
-                    setEstValue(
-                      data.estimated_value != null
-                        ? String(data.estimated_value)
-                        : suggestedValue != null
-                          ? String(suggestedValue)
-                          : "",
-                    );
-                    setEstOpen(true);
-                  }}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] transition-colors hover:bg-[#02c0ce]/20"
-                >
-                  <Calculator className="h-3.5 w-3.5" />
-                  {data.estimated_value != null ? "Засах" : "Оруулах"}
-                </button>
-              )}
-            </div>
           </div>
-          {/* Мэдээллийн санд өөрчлөлт орсон эсэх */}
-          <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">МС-д өөрчлөлт орсон эсэх</span>
+          {/* Мэдээллийн санд орсон өөрчлөлтийн тайлбар (чөлөөт текст) */}
+          <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44 pt-1.5">МС-д орсон өөрчлөлт</span>
             {editingMeta ? (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={dbChanged} onChange={(e) => setDbChanged(e.target.checked)} className="w-4 h-4 accent-[#02c0ce]" />
-                <span className="text-[13px] text-slate-700 dark:text-slate-200">{dbChanged ? "Тийм" : "Үгүй"}</span>
-              </label>
+              <textarea
+                value={dbChanged}
+                onChange={(e) => setDbChanged(e.target.value)}
+                rows={2}
+                placeholder="Ж: устгагдсан, нэгж талбарын дугаар өөрчлөгдсөн..."
+                className="flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-y"
+              />
             ) : (
-              <span className={`text-[13px] font-medium ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}>
-                {data.db_changed ? "Тийм" : "Үгүй"}
+              <span className={`text-[13px] font-medium whitespace-pre-wrap ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}>
+                {data.db_changed || "—"}
               </span>
             )}
           </div>
@@ -1102,122 +1090,8 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         </div>
       )}
 
-      {/* ── ТӨСӨӨЛЛИЙН ҮНЭЛГЭЭ ОРУУЛАХ ЦОНХ ──────────────────────────────── */}
-      {estOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !estimatedMutation.isPending) setEstOpen(false);
-          }}
-        >
-          <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
-              <div className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-[#02c0ce]" />
-                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
-                  Төсөөллийн үнэлгээ
-                </p>
-              </div>
-              <button
-                onClick={() => setEstOpen(false)}
-                disabled={estimatedMutation.isPending}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-[#252630]"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="px-5 py-4">
-              {/* САНАЛ — газрын суурь үнийг м²-ээр тооцно */}
-              {suggestedValue != null ? (
-                <div className="mb-3 rounded-lg border border-[#02c0ce]/25 bg-[#02c0ce]/[0.07] px-3 py-2.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#02c0ce]">
-                    Санал болгох дүн
-                  </p>
-                  <p className="mt-1 text-[15px] font-bold tabular-nums text-slate-800 dark:text-slate-100">
-                    {suggestedValue.toLocaleString("mn-MN")}₮
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                    Газрын суурь үнэ{" "}
-                    <strong>{Math.round(basePricePerM2 ?? 0).toLocaleString("mn-MN")}₮/м²</strong>{" "}
-                    ({(basePricePerHa ?? 0).toLocaleString("mn-MN")}₮/га) ×{" "}
-                    <strong>{formatArea(suggestArea)}</strong> ({suggestAreaLabel})
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setEstValue(String(suggestedValue))}
-                    className="mt-2 inline-flex h-7 items-center rounded-lg bg-[#02c0ce] px-3 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90"
-                  >
-                    Энэ дүнг ашиглах
-                  </button>
-                </div>
-              ) : (
-                <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    Газрын суурь үнэ татагдаагүй тул дүнг санал болгох боломжгүй.
-                    &quot;Мэдээлэл дуудах&quot; товчоор суурь үнийг татна уу.
-                  </span>
-                </div>
-              )}
-
-              <label className="mb-1 block text-[11px] font-semibold text-slate-500">
-                Төсөөллийн үнэлгээ (₮)
-              </label>
-              <input
-                type="number"
-                min={0}
-                value={estValue}
-                autoFocus
-                onChange={(e) => setEstValue(e.target.value)}
-                placeholder="Дүн оруулах…"
-                className="h-9 w-full rounded-lg border border-slate-200 px-3 text-[13px] tabular-nums text-slate-800 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
-              />
-              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                Энэ нь урьдчилсан тооцоо — албан ёсны үнэлгээг Үл хөдлөх хөрөнгө,
-                Нөхөх олговрын хэсэгт оруулна.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
-              {/* Арилгах — зөвхөн утга байгаа үед */}
-              {data.estimated_value != null ? (
-                <button
-                  onClick={() => estimatedMutation.mutate(null)}
-                  disabled={estimatedMutation.isPending}
-                  className="h-9 rounded-lg px-3 text-[13px] font-semibold text-[#f1556c] hover:bg-[#f1556c]/10 disabled:opacity-50"
-                >
-                  Арилгах
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setEstOpen(false)}
-                  disabled={estimatedMutation.isPending}
-                  className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
-                >
-                  Болих
-                </button>
-                <button
-                  onClick={() => {
-                    const v = parseFloat(estValue);
-                    if (isNaN(v) || v < 0) {
-                      toast.error("Дүнг зөв оруулна уу");
-                      return;
-                    }
-                    estimatedMutation.mutate(v);
-                  }}
-                  disabled={estimatedMutation.isPending || estValue.trim() === ""}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
-                >
-                  {estimatedMutation.isPending ? "Хадгалж байна…" : "Хадгалах"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {estOpen && !isExternal && !isProfOrg && !isLocked && (
+        <EstimatedValueDialog data={data} pending={estimatedMutation.isPending} onClose={() => setEstOpen(false)} onSave={(confidencePercent, baseFeePerM2) => estimatedMutation.mutate({ confidencePercent, baseFeePerM2 })} />
       )}
     </div>
   );

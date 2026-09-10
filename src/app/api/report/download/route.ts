@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
           r.property_comp > 0 ? r.property_comp : null,
           r.total_comp > 0 ? r.total_comp : null,
           r.remaining_area_m2 > 0 ? r.remaining_area_m2 : null,
-          r.db_changed ? "Тийм" : "Үгүй",
+          r.db_changed || "",
           r.changed_parcel_id || "",
           r.remaining_area_m2 > 0 ? r.remaining_area_m2 : null,
         ];

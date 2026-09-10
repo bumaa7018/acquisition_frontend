@@ -522,7 +522,7 @@ export interface Parcel {
   land_grant_count?: number;
   remaining_area_m2?: number;
   compensation_paid: boolean;
-  db_changed: boolean;
+  db_changed: string;
   changed_parcel_id: string;
   geometry_wkt?: string;
   independent_org_id?: string;
@@ -1014,6 +1014,8 @@ export interface ParcelFull extends Parcel {
    * ХАРАГДАНА.
    */
   estimated_value?: number | null;
+  estimated_confidence_percent?: number | null;
+  estimated_base_fee_per_m2?: number | null;
   estimated_value_at?: string;
   estimated_value_by?: string;
   geometry_wkt: string;
@@ -1026,7 +1028,7 @@ export interface ParcelFull extends Parcel {
   detail?: ParcelDetail;
   // computed parcel meta
   remaining_area_m2?: number;
-  db_changed: boolean;
+  db_changed: string;
   changed_parcel_id: string;
   // Independent org assigned to this parcel for independent valuation (Хөндлөнгийн үнэлгээ)
   independent_org_id?: string;
@@ -1144,7 +1146,7 @@ export interface ReportParcelRow {
   acquisition_area_m2: number;
   remaining_area_m2: number;
   right_type: number;
-  db_changed: boolean;
+  db_changed: string;
   changed_parcel_id: string;
   status: number;
   status_name: string;

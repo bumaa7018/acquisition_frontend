@@ -187,7 +187,7 @@ export async function GET(
           propComp > 0 ? propComp : null, // N
           totalComp > 0 ? totalComp : null, // O
           remaining > 0 ? remaining : null, // P
-          p.db_changed ? "Тийм" : "Үгүй", // Q
+          p.db_changed || "", // Q
           p.changed_parcel_id || "", // R
           remaining > 0 ? remaining : null, // S
         ];
