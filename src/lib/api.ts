@@ -913,10 +913,15 @@ export const landApi = {
   // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв
   // ТӨСӨӨЛЛИЙН үнэлгээ — value=null бол арилгана (талбарыг үргэлж илгээнэ:
   // "огт өгөөгүй" ба "арилга" хоёрыг backend ялгадаг).
-  calculateParcelEstimatedValue: (acqId: string, parcelId: string, confidencePercent: number, baseFeePerM2?: number) =>
-    api.patch<ApiResponse<{ estimated_value: number; estimated_confidence_percent: number }>>(
+  // confidencePercent undefined = ИТГЭЛЦҮҮРГҮЙ (өмчлөх эрхийн газар) — талбарыг
+  // огт илгээхгүй. `value` талбар байхгүй тул backend тооцоолох салаа руу орно.
+  calculateParcelEstimatedValue: (acqId: string, parcelId: string, confidencePercent?: number, baseFeePerM2?: number) =>
+    api.patch<ApiResponse<{ estimated_value: number; estimated_confidence_percent: number | null }>>(
       `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
-      { confidence_percent: confidencePercent, ...(baseFeePerM2 != null ? { base_fee_per_m2: baseFeePerM2 } : {}) },
+      {
+        ...(confidencePercent != null ? { confidence_percent: confidencePercent } : {}),
+        ...(baseFeePerM2 != null ? { base_fee_per_m2: baseFeePerM2 } : {}),
+      },
     ).then(r => r.data.data),
   setParcelEstimatedValue: (acqId: string, parcelId: string, value: number | null) =>
     api.patch<ApiResponse<{ estimated_value: number | null }>>(

@@ -13,14 +13,25 @@ export {
   MAP_LAYER_STYLES,
   GUS_REFERENCE_LAYERS,
   isGusReferenceLayer,
-  LAYER_TYPE_LEGEND,
-  legendFor,
   shouldFitOnEnable,
   layerDef,
+  // ГУС-ийн давхаргууд — `code`-оор задарсан дэд давхаргууд
+  AGREED_GROUP,
+  AGREED_GROUP_ID,
+  AGREED_CODE_LAYERS,
+  AGREED_CODE_LAYER_IDS,
+  SEC_GROUP,
+  SEC_GROUP_ID,
+  SEC_CODE_LAYERS,
+  SEC_CODE_LAYER_IDS,
+  geoServerName,
+  combineCql,
   type MapLayerDef,
-  type LayerLegendItem,
   type MapLayerId,
+  type AgreedCodeLayerId,
+  type SecCodeLayerId,
   type GeoServerLayerId,
+  type LayerHatch,
 } from './layer-config'
 
 type FitLayerOptions = {

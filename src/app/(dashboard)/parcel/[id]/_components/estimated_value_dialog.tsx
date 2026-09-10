@@ -7,22 +7,35 @@ import type { ParcelFull } from "@/types";
 import { formatArea } from "@/lib/utils";
 import { calculateEstimatedValuation, feeArea, initialConfidencePercent } from "@/lib/estimated-valuation";
 
+/**
+ * ӨМЧЛӨХ эрхийн газарт (right_type=3) итгэлцүүр ХЭРЭГЛЭХГҮЙ: суурь үнэ нь
+ * газрын зах зээлийн жишиг үнэ (₮/м²) бөгөөс өртсөн талбайгаар шууд
+ * үржигдэнэ. Бусад эрхийн төрөл нь ЯГ ижил бодолттой боловч дуудлага
+ * худалдааны анхны үнийн итгэлцүүрээр хувиргагдана.
+ *
+ * Backend ч эрхийн төрлөөр ижил дүрэм барьдаг (land_estimated_value.go) —
+ * иймд цонхон дээрх урьдчилсан дүн хадгалагдсан дүнтэй таарна.
+ */
+const RIGHT_TYPE_OWNERSHIP = 3;
+
 export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
   data: ParcelFull;
   pending: boolean;
   onClose: () => void;
-  onSave: (confidencePercent: number | null, baseFeePerM2?: number) => void;
+  /** confidencePercent: тоо = итгэлцүүртэй, undefined = итгэлцүүргүй (өмчлөл), null = арилгах */
+  onSave: (confidencePercent: number | null | undefined, baseFeePerM2?: number) => void;
 }) {
   const fees = data.fees ?? [];
+  const ownership = data.right_type === RIGHT_TYPE_OWNERSHIP;
   const [confidence, setConfidence] = useState(() => initialConfidencePercent(fees, data.estimated_confidence_percent));
   const [baseFee, setBaseFee] = useState(() => data.estimated_base_fee_per_m2?.toString() ?? "");
   const manual = fees.length === 0;
-  const percent = Number(confidence);
+  const percent = ownership ? null : Number(confidence);
   const baseFeePerM2 = Number(baseFee);
   const value = calculateEstimatedValuation(fees, data.acquisition_area_m2, percent, manual ? baseFeePerM2 : undefined);
   const invalidBaseFee = baseFee.trim() !== "" && (!Number.isFinite(baseFeePerM2) || baseFeePerM2 <= 0);
   const totalArea = fees.reduce((sum, fee) => sum + feeArea(fee), 0);
-  const invalidConfidence = confidence.trim() !== "" && (!Number.isFinite(percent) || percent <= 0);
+  const invalidConfidence = !ownership && confidence.trim() !== "" && !(Number(confidence) > 0);
   const number = (v: number) => v.toLocaleString("mn-MN", { maximumFractionDigits: 8 });
 
   return (
@@ -38,12 +51,14 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
-          <form onSubmit={(event) => { event.preventDefault(); if (value != null && !pending) onSave(percent, manual ? baseFeePerM2 : undefined); }}>
+          <form onSubmit={(event) => { event.preventDefault(); if (value != null && !pending) onSave(percent ?? undefined, manual ? baseFeePerM2 : undefined); }}>
             <div className="space-y-4 px-5 py-4">
               <Dialog.Description className="text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
-                {manual
-                  ? "Суурь төлбөр болон дуудлага худалдааны анхны үнийн итгэлцүүрийг оруулж урьдчилсан үнэлгээг тооцно."
-                  : "Дуудлага худалдааны анхны үнийн итгэлцүүрийг өөрчилж урьдчилсан үнэлгээг тохируулна. Ижил итгэлцүүрийг бүх төлбөрийн бүсэд хэрэглэнэ."}
+                {ownership
+                  ? "Өмчлөх эрхийн газарт итгэлцүүр хэрэглэхгүй — газрын зах зээлийн жишиг үнийг нөлөөлөлд өртсөн талбайгаар үржүүлж тооцно."
+                  : manual
+                    ? "Суурь төлбөр болон дуудлага худалдааны анхны үнийн итгэлцүүрийг оруулж урьдчилсан үнэлгээг тооцно."
+                    : "Дуудлага худалдааны анхны үнийн итгэлцүүрийг өөрчилж урьдчилсан үнэлгээг тохируулна. Ижил итгэлцүүрийг бүх төлбөрийн бүсэд хэрэглэнэ."}
               </Dialog.Description>
               <div className="flex flex-wrap justify-between gap-2 text-[13px] text-slate-600 dark:text-slate-300">
                 <span>Нөлөөлөлд өртсөн талбай</span>
@@ -53,7 +68,7 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
                 <div key={index} className="space-y-1 rounded-lg bg-slate-50 p-3 text-[12px] text-slate-600 dark:bg-[#252630] dark:text-slate-300">
                   <p className="font-semibold">{fee.zone_name || fee.zone_no || `Бүс ${index + 1}`}</p>
                   <p className="flex justify-between gap-3"><span>Суурь төлбөр /м²/</span><span>{number(fee.base_fee_per_m2)}₮</span></p>
-                  <p className="flex justify-between gap-3"><span>Дуудлага худалдааны анхны үнийн итгэлцүүр</span><span className="shrink-0">{number(fee.confidence_percent)}%</span></p>
+                  {!ownership && <p className="flex justify-between gap-3"><span>Дуудлага худалдааны анхны үнийн итгэлцүүр</span><span className="shrink-0">{number(fee.confidence_percent)}%</span></p>}
                   <p className="flex justify-between gap-3"><span>Бүсийн талбай</span><span>{formatArea(feeArea(fee))}</span></p>
                   {fees.length > 1 && totalArea > 0 && (
                     <p className="flex justify-between gap-3"><span>Тооцоонд хуваарилсан талбай</span><span>{formatArea(data.acquisition_area_m2 * feeArea(fee) / totalArea)}</span></p>
@@ -62,8 +77,8 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
               ))}
               {manual && (
                 <div>
-                  <label htmlFor="estimated-base-fee" className="mb-1 block text-[12px] font-semibold text-slate-600 dark:text-slate-300">Суурь төлбөр (₮/м²)</label>
-                  <input id="estimated-base-fee" type="number" step="any" required value={baseFee} disabled={pending} aria-invalid={invalidBaseFee} aria-describedby="base-fee-help" onChange={(e) => setBaseFee(e.target.value)} placeholder="Суурь төлбөр оруулах…" className="h-9 w-full rounded-lg border border-slate-200 bg-transparent px-3 text-[13px] text-slate-800 outline-none focus:border-[#02c0ce] disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-200" />
+                  <label htmlFor="estimated-base-fee" className="mb-1 block text-[12px] font-semibold text-slate-600 dark:text-slate-300">{ownership ? "Газрын зах зээлийн жишиг үнэ (₮/м²)" : "Суурь төлбөр (₮/м²)"}</label>
+                  <input id="estimated-base-fee" type="number" step="any" required value={baseFee} disabled={pending} aria-invalid={invalidBaseFee} aria-describedby="base-fee-help" onChange={(e) => setBaseFee(e.target.value)} placeholder={ownership ? "Жишиг үнэ оруулах…" : "Суурь төлбөр оруулах…"} className="h-9 w-full rounded-lg border border-slate-200 bg-transparent px-3 text-[13px] text-slate-800 outline-none focus:border-[#02c0ce] disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-200" />
                   <p id="base-fee-help" className={`mt-1 text-[11px] ${invalidBaseFee ? "text-red-500" : "text-slate-400"}`}>Тэгээс их утга оруулна уу.</p>
                 </div>
               )}
@@ -72,15 +87,19 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
               ) : fees.some((fee) => !(feeArea(fee) > 0) || !(fee.base_fee_per_m2 > 0)) ? (
                 <p role="status" className="text-[12px] text-amber-700 dark:text-amber-400">Бүсийн суурь төлбөр эсвэл талбай дутуу байна. Газрын төлбөрийн бодолтыг шинэчилнэ үү.</p>
               ) : null}
-              <div>
-                <label htmlFor="estimated-confidence" className="mb-1 block text-[12px] font-semibold text-slate-600 dark:text-slate-300">Дуудлага худалдааны анхны үнийн итгэлцүүр (%)</label>
-                <input id="estimated-confidence" type="number" step="any" required value={confidence} disabled={pending} aria-invalid={invalidConfidence} aria-describedby="confidence-help" onChange={(e) => setConfidence(e.target.value)} placeholder="Итгэлцүүр оруулах…" className="h-9 w-full rounded-lg border border-slate-200 bg-transparent px-3 text-[13px] text-slate-800 outline-none focus:border-[#02c0ce] disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-200" />
-                <p id="confidence-help" className={`mt-1 text-[11px] ${invalidConfidence ? "text-red-500" : "text-slate-400"}`}>Тэгээс их утга оруулна уу.</p>
-              </div>
+              {/* Итгэлцүүр — ӨМЧЛӨХ эрхийн газарт ОГТ харагдахгүй (тэнд
+                  хэрэглэгддэггүй тул хоосон талбар нь төөрөгдөл өгнө). */}
+              {!ownership && (
+                <div>
+                  <label htmlFor="estimated-confidence" className="mb-1 block text-[12px] font-semibold text-slate-600 dark:text-slate-300">Дуудлага худалдааны анхны үнийн итгэлцүүр (%)</label>
+                  <input id="estimated-confidence" type="number" step="any" required value={confidence} disabled={pending} aria-invalid={invalidConfidence} aria-describedby="confidence-help" onChange={(e) => setConfidence(e.target.value)} placeholder="Итгэлцүүр оруулах…" className="h-9 w-full rounded-lg border border-slate-200 bg-transparent px-3 text-[13px] text-slate-800 outline-none focus:border-[#02c0ce] disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-200" />
+                  <p id="confidence-help" className={`mt-1 text-[11px] ${invalidConfidence ? "text-red-500" : "text-slate-400"}`}>Тэгээс их утга оруулна уу.</p>
+                </div>
+              )}
               <div className="rounded-lg border border-[#02c0ce]/25 bg-[#02c0ce]/[0.07] p-3">
                 <p className="text-[12px] text-slate-500 dark:text-slate-400">Төсөөллийн үнэлгээ</p>
                 <p aria-live="polite" className="mt-1 text-lg font-bold tabular-nums text-[#02c0ce]">{value != null ? `${number(value)}₮` : "—"}</p>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Суурь төлбөр × 100 ÷ итгэлцүүрийг бүхэл төгрөгөөр тоймлож, нөлөөлөлд өртсөн талбайгаар үржүүлнэ.</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{ownership ? "Газрын зах зээлийн жишиг үнийг бүхэл төгрөгөөр тоймлож, нөлөөлөлд өртсөн талбайгаар үржүүлнэ (итгэлцүүр хэрэглэхгүй)." : "Суурь төлбөр × 100 ÷ итгэлцүүрийг бүхэл төгрөгөөр тоймлож, нөлөөлөлд өртсөн талбайгаар үржүүлнэ."}</p>
                 {fees.length > 1 && <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Өртсөн талбайг бүсүүдийн бүртгэлтэй талбайн харьцаагаар хуваарилж, дүнг нэгтгэнэ.</p>}
               </div>
             </div>

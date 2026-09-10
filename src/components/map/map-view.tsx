@@ -18,13 +18,26 @@ import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import { createBasemapLayer, watchBasemap } from './basemap'
 import FeaturePopup from './feature-popup'
 import ParcelInfoModal from './parcel-info-modal'
+import GusInfoModal, { type GusFeatureProps } from './gus-info-modal'
 import AcquisitionInfoModal, {
   toAcquisitionFeatureProps,
   type AcquisitionFeatureProps,
 } from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
 import { useFullscreen } from './use-fullscreen'
-import { fitLayerToMap, legendFor, shouldFitOnEnable, layerDef, type MapLayerDef, type MapLayerId } from './layers'
+import {
+  fitLayerToMap,
+  shouldFitOnEnable,
+  layerDef,
+  geoServerName,
+  combineCql,
+  AGREED_GROUP,
+  AGREED_CODE_LAYER_IDS,
+  SEC_GROUP,
+  SEC_CODE_LAYER_IDS,
+  type MapLayerDef,
+  type MapLayerId,
+} from './layers'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
@@ -41,13 +54,19 @@ const LAYER_DEFS: MapLayerDef[] = [
   layerDef('v_parcel_s4'),
   layerDef('v_parcel_s5'),
   // ГУС-ийн лавлах давхаргууд — жагсаалтын ЭЦЭСТ, анхнаасаа УНТРААЛТТАЙ.
-  layerDef('ca_agreed_parcel'),
-  layerDef('ca_sec_parcel'),
+  // "Шинэ зөвшилцсөн зураг" нь ӨӨРӨӨ биш, `code`-оор задарсан ДЭД
+  // давхаргуудаараа орно (нэг хэсэг дор, тус тусад нь асаах боломжтой).
+  ...AGREED_CODE_LAYER_IDS.map(layerDef),
+  // "Хамгаалалтын зурвас" мөн адил `code`-оор задарсан дэд давхаргуудаараа орно.
+  ...SEC_CODE_LAYER_IDS.map(layerDef),
 ]
 
 const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
 const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_LAYERS, 'v_parcel_acquisition'])
+// ГУС-ийн дэд давхаргууд (зөвшилцсөн зураг, хамгаалалтын зурвас) — мөн
+// ДЭЛГЭРЭНГҮЙ цонхтой (жижиг popup биш).
+const GUS_INFO_LAYERS = new Set<string>([...AGREED_CODE_LAYER_IDS, ...SEC_CODE_LAYER_IDS])
 
 // Хилийн давхаргууд — дарвал ЧӨЛӨӨЛӨЛТИЙН мэдээллийн цонх нээнэ.
 const BOUNDARY_INFO_LAYERS: Record<string, string> = {
@@ -100,7 +119,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
 
   const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group, legend: legendFor(d.id) }))
+    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group, hatch: d.hatch }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
   // Нэгж талбарын дэлгэрэнгүй цонх — GeoServer-ийн `id` (parcel UUID) ба
@@ -112,6 +131,11 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     layerColor: string
     fallback?: AcquisitionFeatureProps
   } | null>(null)
+  // ГУС-ийн давхаргын дэлгэрэнгүй — GeoServer-ийн шинжүүдээр л бүрдэнэ.
+  const [gusInfo, setGusInfo] = useState<{
+    layerId: string
+    properties: GusFeatureProps
+  } | null>(null)
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
 
@@ -120,6 +144,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     // SLD-ийн fill-opacity нь зурган дээр яг тэр хэмжээгээрээ гарна). Заагаагүй
     // давхаргууд өмнөх шигээ 0.75.
     const def = LAYER_DEFS.find(l => l.id === id)
+    // Виртуал дэд давхарга (зөвшилцсөн зургийн кодууд) нь GeoServer дээр
+    // байхгүй — тэдгээрийг ЭХ давхаргын нэрээр дуудаж, өөрсдийн тогтмол
+    // шүүлтийг (code=NN) дуудагчийн шүүлттэй AND-ээр нэгтгэнэ.
+    const cql = combineCql(def?.cql, cqlFilter)
     return new ImageLayer({
       visible,
       opacity: def?.opacity ?? 0.75,
@@ -127,10 +155,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       source: new ImageWMS({
         url: GS_WMS,
         params: {
-          LAYERS: `land:${id}`,
+          LAYERS: `land:${geoServerName(id as MapLayerId)}`,
           FORMAT: 'image/png',
           TRANSPARENT: true,
-          ...(cqlFilter ? { CQL_FILTER: cqlFilter } : {}),
+          ...(cql ? { CQL_FILTER: cql } : {}),
         },
         ratio: 1,
         serverType: 'geoserver',
@@ -205,6 +233,12 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
                 setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid })
                 break
               }
+            }
+            // ГУС-ийн давхарга — ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх (шинжүүд
+            // аль хэдийн ирсэн тул нэмэлт хүсэлт шаардахгүй).
+            if (GUS_INFO_LAYERS.has(id)) {
+              setGusInfo({ layerId: id, properties: props })
+              break
             }
             if (BOUNDARY_INFO_LAYERS[id] && acqId) {
               // GeoServer-ийн шинжүүдийг ХАМТ дамжуулна: дэлгэрэнгүйг татах
@@ -367,7 +401,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         void fitLayerToMap({
           map: olMap.current,
           wfsUrl: GS_WFS,
-          layerId: def.id,
+          layerId: geoServerName(def.id),
+          cqlFilter: def.cql,
           padding: [64, 64, 64, 64],
         })
       }
@@ -378,7 +413,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
 
   const standaloneL = layers.filter(l => !l.group)
   const groupedL    = layers.filter(l => l.group === PARCEL_GROUP.id)
-  const panelLayers = [...standaloneL, ...groupedL]
+  const agreedL     = layers.filter(l => l.group === AGREED_GROUP.id)
+  const secL        = layers.filter(l => l.group === SEC_GROUP.id)
+  const panelLayers = [...standaloneL, ...groupedL, ...agreedL, ...secL]
 
   return (
     <div
@@ -388,7 +425,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       <div ref={mapRef} className="h-full w-full" />
       <LayerPanel
         layers={panelLayers}
-        groups={[PARCEL_GROUP]}
+        groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]}
         onToggle={handleToggle}
       />
       <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
@@ -441,6 +478,13 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           layerColor={acqInfo.layerColor}
           fallback={acqInfo.fallback}
           onClose={() => setAcqInfo(null)}
+        />
+      )}
+      {gusInfo && (
+        <GusInfoModal
+          layerId={gusInfo.layerId}
+          properties={gusInfo.properties}
+          onClose={() => setGusInfo(null)}
         />
       )}
     </div>

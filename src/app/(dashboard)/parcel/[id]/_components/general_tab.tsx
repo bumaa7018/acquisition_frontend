@@ -254,8 +254,11 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   // (backend-ийн PATCH маршрут нь land:update шаарддаг).
   const [estOpen, setEstOpen] = useState(false);
 
+  // confidencePercent: тоо = итгэлцүүртэй, undefined = итгэлцүүргүй (өмчлөх
+  // эрхийн газар), null = үнэлгээг АРИЛГАХ. "Итгэлцүүргүй" ба "арилгах" хоёрыг
+  // хольж болохгүй — тиймээс null-ыг тусад нь шалгана (== биш ===).
   const estimatedMutation = useMutation({
-    mutationFn: ({ confidencePercent, baseFeePerM2 }: { confidencePercent: number | null; baseFeePerM2?: number }) => confidencePercent == null
+    mutationFn: ({ confidencePercent, baseFeePerM2 }: { confidencePercent: number | null | undefined; baseFeePerM2?: number }) => confidencePercent === null
       ? landApi.setParcelEstimatedValue(acqId, parcelId, null)
       : landApi.calculateParcelEstimatedValue(acqId, parcelId, confidencePercent, baseFeePerM2),
     onSuccess: (_r, { confidencePercent }) => {
@@ -583,17 +586,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
           {row("Үл хөдлөх хөрөнгийн дугаар", data.property_no)}
           {row("Эрх эхэлсэн", data.valid_from ? formatDate(data.valid_from) : undefined)}
           {row("Эрх дуусах", data.valid_till ? formatDate(data.valid_till) : undefined)}
-          {row("Нийт талбай", (
-            <span className="flex flex-wrap items-center gap-3">
-              {formatArea(data.area_m2)}
-              {!isExternal && !isProfOrg && !isLocked && !editingMeta && (
-                <button type="button" onClick={() => setEstOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20">
-                  <Calculator className="h-3.5 w-3.5" />
-                  {data.estimated_value != null ? "Үнэлгээ тохируулах" : "Үнэлгээ оруулах"}
-                </button>
-              )}
-            </span>
-          ))}
+          {row("Нийт талбай", formatArea(data.area_m2))}
           {/* Чөлөөлөгдөх талбай */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
             <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбай</span>
@@ -634,6 +627,14 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               </span>
               {data.estimated_value != null && data.estimated_value_at && (
                 <span className="text-[11px] text-slate-400" title={data.estimated_value_by || undefined}>{formatDate(data.estimated_value_at)}</span>
+              )}
+              {/* Тооцоолох товч нь ҮНЭЛГЭЭНИЙ мөрөнд — өмнө нь "Нийт талбай"-н
+                  ард байсан тул талбайн тохиргоо шиг уншигдаж байв. */}
+              {!isExternal && !isProfOrg && !isLocked && !editingMeta && (
+                <button type="button" onClick={() => setEstOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20">
+                  <Calculator className="h-3.5 w-3.5" />
+                  {data.estimated_value != null ? "Үнэлгээ тохируулах" : "Үнэлгээ оруулах"}
+                </button>
               )}
             </span>
           ))}

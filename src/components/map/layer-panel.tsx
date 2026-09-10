@@ -1,10 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useTheme } from "next-themes";
 import { Eye, EyeOff, Layers, ChevronDown, Settings2 } from "lucide-react";
 import { hasPermission } from "@/lib/role-utils";
 import BasemapSettingsDialog from "./basemap-settings-dialog";
 import { getBasemapSetting, subscribeBasemap, type BasemapSetting } from "./basemap-config";
+import type { LayerHatch } from "./layer-config";
 
 export interface LayerConfig {
   id: string;
@@ -13,11 +14,10 @@ export interface LayerConfig {
   color: string;
   group?: string;
   /**
-   * Давхарга нь ДОТООД төрлөөрөө өнгө ялган зурагддаг бол төрөл тус бүрийн
-   * өнгөний тайлбар (layer-config → LAYER_TYPE_LEGEND). Давхарга АСААЛТТАЙ
-   * үед л харагдана — унтраалттай давхаргын тайлбар зай эзлэх нь утгагүй.
+   * Давхарга зурган дээр ТОРЛОСОН/ЦЭГЭН будагддаг бол тэр хэлбэр (SLD-тэй
+   * ижил). Байвал өнгөт дөрвөлжин нь дүүрэн бус, ижил хэлбэрээр зурагдана.
    */
-  legend?: { label: string; color: string }[];
+  hatch?: LayerHatch;
 }
 
 export interface LayerGroupConfig {
@@ -30,6 +30,42 @@ interface LayerPanelProps {
   layers: LayerConfig[];
   groups?: LayerGroupConfig[];
   onToggle: (id: string) => void;
+}
+
+/**
+ * ӨНГӨТ ДӨРВӨЛЖИНГИЙН ДҮҮРГЭЛТ.
+ *
+ * Торлосон/цэгэн давхаргад (ГУС-ийн кодуудаар задарсан дэд давхаргууд)
+ * дөрвөлжин нь ЗУРГАН ДЭЭРХТЭЙ ижил харагдана: бүдэг дүүргэлт + тор/цэг +
+ * өнгөт хүрээ (гадна хилийн зураас). Дүүрэн өнгөөр үзүүлбэл самбар зурагтай
+ * зөрж, хэрэглэгч "тайлбар нь дүүрэн, зураг нь торлосон" гэж төөрөгддөг.
+ *
+ * Хэлбэр нь SLD-ийн `shape://<нэр>`-тэй тохирно. Зураасны/цэгийн үе 3.5px —
+ * дөрвөлжин 12px тул үүнээс сийрэг бол 1-2 зураас таарч, хэлбэр уншигдахгүй.
+ */
+function swatchStyle(color: string, hatch: LayerConfig["hatch"], visible: boolean): CSSProperties {
+  const glow = visible ? `0 0 0 1.5px ${color}50` : "";
+  if (!hatch) {
+    return { background: color, boxShadow: glow || "none" };
+  }
+  const line = (angle: number) =>
+    `repeating-linear-gradient(${angle}deg, ${color} 0 1px, transparent 1px 3.5px)`;
+  const pattern: Record<NonNullable<LayerConfig["hatch"]>, string[]> = {
+    slash: [line(45)],
+    backslash: [line(-45)],
+    times: [line(45), line(-45)],
+    plus: [line(0), line(90)],
+    vertline: [line(90)],
+    horline: [line(0)],
+    // ЦЭГЭН: 3.5px тор дээр 1px радиустай цэг (SLD-ийн shape://dot-ын эквивалент)
+    dot: [`radial-gradient(${color} 0.9px, transparent 1px)`],
+  };
+  return {
+    backgroundColor: `${color}26`,
+    backgroundImage: pattern[hatch].join(","),
+    backgroundSize: hatch === "dot" ? "3.5px 3.5px" : undefined,
+    boxShadow: [`inset 0 0 0 1px ${color}`, glow].filter(Boolean).join(", "),
+  };
 }
 
 export default function LayerPanel({
@@ -49,8 +85,16 @@ export default function LayerPanel({
     setBasemap(getBasemapSetting());
     return subscribeBasemap(setBasemap);
   }, []);
+  // Анхнаасаа ЗӨВХӨН асаалттай хүүтэй хэсэг нээлттэй. Шалтгаан: "Шинэ
+  // зөвшилцсөн зураг" нь 9 дэд төрөлтэй ба бүгд унтраалттай — бүх хэсгийг
+  // нээлттэй байлгавал самбар хэрэглэгчийн харах давхаргуудыг доош түлхэнэ.
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(groups.map((g) => g.id)),
+    () =>
+      new Set(
+        groups
+          .filter((g) => layers.some((l) => l.group === g.id && l.visible))
+          .map((g) => g.id),
+      ),
   );
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === "dark";
@@ -160,12 +204,7 @@ export default function LayerPanel({
                   <button
                     onClick={() => onToggle(layer.id)}
                     className="shrink-0 h-3 w-3 rounded-sm"
-                    style={{
-                      background: layer.color,
-                      boxShadow: layer.visible
-                        ? `0 0 0 1.5px ${layer.color}50`
-                        : "none",
-                    }}
+                    style={swatchStyle(layer.color, layer.hatch, layer.visible)}
                   />
                   <button
                     className="flex-1 text-left text-[11.5px] font-medium truncate leading-tight"
@@ -185,22 +224,6 @@ export default function LayerPanel({
                     )}
                   </button>
                   </div>
-                  {/* Доторх төрлийн өнгөний тайлбар */}
-                  {layer.visible && layer.legend && layer.legend.length > 0 && (
-                    <div className="pb-2 pl-7 pr-3">
-                      {layer.legend.map((item) => (
-                        <div key={item.label} className="flex items-center gap-1.5 py-[1px]">
-                          <span
-                            className="shrink-0 rounded-sm"
-                            style={{ background: item.color, width: 8, height: 8 }}
-                          />
-                          <span className="truncate text-[10px]" style={{ color: subClr }}>
-                            {item.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -296,16 +319,15 @@ export default function LayerPanel({
                           }}
                         >
                           <span
-                            className="shrink-0 h-2.5 w-2.5 rounded-sm"
+                            className="shrink-0 h-3 w-3 rounded-sm"
                             style={{
-                              background: child.color,
-                              boxShadow: child.visible
-                                ? `0 0 0 1.5px ${child.color}50`
-                                : "none",
+                              ...swatchStyle(child.color, child.hatch, child.visible),
                               opacity: child.visible ? 1 : 0.4,
                             }}
                           />
                           <span
+                            // Нэр урт бол таслагдана — бүтнээр нь hover-оор харуулна.
+                            title={child.label}
                             className="flex-1 text-left text-[11px] font-medium truncate"
                             style={{
                               color: child.visible

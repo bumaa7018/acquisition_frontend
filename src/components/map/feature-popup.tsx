@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatArea, formatDate } from "@/lib/utils";
+import { MAP_LAYER_STYLES, type MapLayerId } from "./layer-config";
 
 interface FeaturePopupProps {
   layer: string;
@@ -76,6 +77,8 @@ const FIELDS: Record<string, [key: string, label: string][]> = {
     ["parcel_id", "Нэгж талбарын дугаар"],
     ["area_m2", "Талбай"],
   ],
+  // ШИНЭ ЗӨВШИЛЦСӨН ЗУРАГ энд БАЙХГҮЙ: тэр давхаргууд дарахад ЖИЖИГ popup
+  // биш, дэлгэрэнгүй цонх (agreed-info-modal) нээгддэг.
 };
 
 // Хэзээ ч харуулахгүй техник талбарууд (жагсаалтгүй давхаргад)
@@ -90,7 +93,7 @@ const SKIP_KEYS = new Set([
 ]);
 
 const AREA_KEYS = new Set(["area_m2", "acquisition_area_m2", "plan_area_m2", "remaining_area_m2"]);
-const DATE_KEYS = new Set(["start_date", "end_date", "valid_from", "valid_till", "approved_date"]);
+const DATE_KEYS = new Set(["start_date", "end_date", "valid_from", "valid_till", "approved_date", "agreed_date"]);
 
 const ACQ_STATUS_LABELS: Record<string, string> = {
   "1": "Шинэ",
@@ -135,7 +138,12 @@ export default function FeaturePopup({
     >
       <Card className="shadow-xl border-border/80">
         <CardHeader className="py-2.5 px-4 border-b flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-sm">{LAYER_LABELS[layer] ?? layer}</CardTitle>
+          {/* Гарчиг: тусгай нэр → давхаргын тохиргооны нэр → (хамгийн сүүлд) id.
+              MAP_LAYER_STYLES-ээс авдаг тул ГУС-ийн давхаргууд (зөвшилцсөн
+              зургийн кодууд, хамгаалалтын зурвас) дээр техник id гарахгүй. */}
+          <CardTitle className="text-sm">
+            {LAYER_LABELS[layer] ?? MAP_LAYER_STYLES[layer as MapLayerId]?.label ?? layer}
+          </CardTitle>
           <Button size="icon" variant="ghost" className="h-6 w-6 -mr-1" onClick={onClose}>
             <X className="h-3.5 w-3.5" />
           </Button>

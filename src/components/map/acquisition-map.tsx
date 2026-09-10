@@ -32,14 +32,20 @@ import AcquisitionInfoModal, {
   type AcquisitionFeatureProps,
 } from "./acquisition-info-modal";
 import PrintMapDialog from "./print-map-dialog";
+import GusInfoModal, { type GusFeatureProps } from "./gus-info-modal";
 import { useFullscreen } from "./use-fullscreen";
 import {
   BASE_Z_INDEX,
   DRONE_Z_INDEX,
   fitLayerToMap,
-  legendFor,
   shouldFitOnEnable,
   layerDef,
+  geoServerName,
+  combineCql,
+  AGREED_GROUP,
+  AGREED_CODE_LAYER_IDS,
+  SEC_GROUP,
+  SEC_CODE_LAYER_IDS,
   type MapLayerDef,
   type MapLayerId,
 } from "./layers";
@@ -55,6 +61,9 @@ const PARCEL_GROUP: LayerGroupConfig = { id: "parcel_status", label: "Нэгж �
 
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
 const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_IDS, "v_parcel_acquisition"]);
+// ГУС-ийн дэд давхаргууд (зөвшилцсөн зураг, хамгаалалтын зурвас) — мөн
+// ДЭЛГЭРЭНГҮЙ цонхтой (жижиг popup биш).
+const GUS_INFO_LAYERS = new Set<string>([...AGREED_CODE_LAYER_IDS, ...SEC_CODE_LAYER_IDS]);
 
 
 // Хилийн давхаргууд — дарвал ЧӨЛӨӨЛӨЛТИЙН мэдээллийн цонх нээнэ.
@@ -132,8 +141,13 @@ const LAYER_DEFS: (MapLayerDef & {
   //
   // Анхнаасаа УНТРААЛТТАЙ: улс даяарын бүртгэл тул зөвхөн хэрэгтэй үед
   // (зөвшилцсөн хүрээ / хамгаалалтын зурвастай харьцуулах) асаана.
-  { ...layerDef("ca_agreed_parcel"), defaultVisible: false },
-  { ...layerDef("ca_sec_parcel"), defaultVisible: false },
+  //
+  // "Шинэ зөвшилцсөн зураг" нь ӨӨРӨӨ биш, `code` баганаар задарсан ДЭД
+  // давхаргуудаараа (AGREED_CODE_LAYERS) орно — самбарт нэг хэсэг дор,
+  // нэрээрээ (кодоор биш) харагдаж, тус тусад нь асаагдана.
+  ...AGREED_CODE_LAYER_IDS.map((id) => ({ ...layerDef(id), defaultVisible: false })),
+  // "Хамгаалалтын зурвас" мөн адил дэд давхаргуудаараа (SEC_CODE_LAYERS) орно.
+  ...SEC_CODE_LAYER_IDS.map((id) => ({ ...layerDef(id), defaultVisible: false })),
 ];
 
 /**
@@ -228,6 +242,11 @@ export function AcquisitionMap({
     layerColor: string;
     fallback?: AcquisitionFeatureProps;
   } | null>(null);
+  // ГУС-ийн давхаргын дэлгэрэнгүй — GeoServer-ийн шинжүүдээр л бүрдэнэ.
+  const [gusInfo, setGusInfo] = useState<{
+    layerId: string;
+    properties: GusFeatureProps;
+  } | null>(null);
   // 3D (cesium-3d.ts): OL давхаргуудыг globe дээр давхарлана, зөвхөн хэрэглэгч сонгоход л ачаална
   const cesium3D    = useRef<Cesium3DHandle | null>(null);
   const cesium3DParcels = useRef<Cesium3DParcel[]>([]);
@@ -263,7 +282,7 @@ export function AcquisitionMap({
       color: d.color,
       visible: d.defaultVisible,
       group: d.group,
-      legend: legendFor(d.id),
+      hatch: d.hatch,
     })),
   );
   const [visibleHistoryIds, setVisibleHistoryIds] = useState<Set<string>>(() => new Set());
@@ -398,8 +417,8 @@ export function AcquisitionMap({
             void fitLayerToMap({
               map: olMap.current,
               wfsUrl: GS_WFS,
-              layerId: def.id,
-              cqlFilter: def.cqlKey ? cqlByKey[def.cqlKey] : undefined,
+              layerId: geoServerName(def.id),
+              cqlFilter: combineCql(def.cql, def.cqlKey ? cqlByKey[def.cqlKey] : undefined) || undefined,
               padding: [56, 56, 56, 56],
             });
           }
@@ -456,7 +475,9 @@ export function AcquisitionMap({
 
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {};
     LAYER_DEFS.forEach((d) => {
-      const cql = d.cqlKey ? cqlByKey[d.cqlKey] : undefined;
+      // Дэд давхаргын тогтмол шүүлт (code=NN) нь дуудагчийн динамик шүүлттэй
+      // AND-ээр нэгдэнэ; LAYERS нь ҮРГЭЛЖ GeoServer дээрх ЭХ давхарга.
+      const cql = combineCql(d.cql, d.cqlKey ? cqlByKey[d.cqlKey] : undefined);
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
         opacity: d.opacity ?? 0.9,
@@ -464,7 +485,7 @@ export function AcquisitionMap({
         source: new ImageWMS({
           url: GS_WMS,
           params: {
-            LAYERS: `land:${d.id}`,
+            LAYERS: `land:${geoServerName(d.id)}`,
             FORMAT: "image/png",
             TRANSPARENT: true,
             ...(cql ? { CQL_FILTER: cql } : {}),
@@ -539,6 +560,12 @@ export function AcquisitionMap({
               setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid });
               return;
             }
+          }
+          // ГУС-ийн давхарга — ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх (шинжүүд аль
+          // хэдийн ирсэн тул нэмэлт хүсэлт шаардахгүй).
+          if (GUS_INFO_LAYERS.has(id)) {
+            setGusInfo({ layerId: id, properties: props });
+            return;
           }
           if (BOUNDARY_INFO_LAYERS[id] && acqId) {
             // GeoServer-ийн шинжүүдийг ХАМТ дамжуулна: дэлгэрэнгүйг татах эрхгүй
@@ -840,7 +867,7 @@ export function AcquisitionMap({
             style={isFullscreen ? undefined : { height: 480 }}
           >
             <div ref={mapRef} className="h-full w-full" />
-            <LayerPanel layers={layers} groups={[PARCEL_GROUP]} onToggle={handleToggle} />
+            <LayerPanel layers={layers} groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]} onToggle={handleToggle} />
             <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
             {mapMode === "2d" && <PrintButton onClick={() => setPrintOpen(true)} />}
             {popup && (
@@ -865,6 +892,13 @@ export function AcquisitionMap({
                 layerColor={acqInfo.layerColor}
                 fallback={acqInfo.fallback}
                 onClose={() => setAcqInfo(null)}
+              />
+            )}
+            {gusInfo && (
+              <GusInfoModal
+                layerId={gusInfo.layerId}
+                properties={gusInfo.properties}
+                onClose={() => setGusInfo(null)}
               />
             )}
             <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">

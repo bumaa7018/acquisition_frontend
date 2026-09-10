@@ -18,7 +18,18 @@ import LayerPanel, { type LayerConfig } from "./layer-panel";
 import { createBasemapLayer, watchBasemap } from "./basemap";
 import FullscreenButton from "./fullscreen-button";
 import { useFullscreen } from "./use-fullscreen";
-import { fitLayerToMap, legendFor, shouldFitOnEnable, layerDef, type MapLayerDef } from "./layers";
+import {
+  fitLayerToMap,
+  shouldFitOnEnable,
+  layerDef,
+  geoServerName,
+  combineCql,
+  AGREED_GROUP,
+  AGREED_CODE_LAYER_IDS,
+  SEC_GROUP,
+  SEC_CODE_LAYER_IDS,
+  type MapLayerDef,
+} from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { PARCEL_STATUS_STYLES } from "@/types";
 import { logger } from "@/lib/logger";
@@ -38,8 +49,12 @@ const WMS_LAYER_DEFS: (MapLayerDef & {
   //
   // Анхнаасаа УНТРААЛТТАЙ: тухайн нэгж талбар хамгаалалтын зурваст орсон эсэх,
   // шинэ зөвшилцсөн хүрээтэй хэрхэн харьцаж байгааг ХАРАХ ҮЕДЭЭ асаана.
-  { ...layerDef("ca_agreed_parcel"),       defaultVisible: false },
-  { ...layerDef("ca_sec_parcel"),          defaultVisible: false },
+  //
+  // "Шинэ зөвшилцсөн зураг" нь `code` баганаар задарсан ДЭД давхаргуудаараа
+  // (AGREED_CODE_LAYERS) орно — самбарт нэг хэсэг дор нэрээрээ харагдана.
+  ...AGREED_CODE_LAYER_IDS.map((id) => ({ ...layerDef(id), defaultVisible: false })),
+  // "Хамгаалалтын зурвас" мөн адил дэд давхаргуудаараа (SEC_CODE_LAYERS) орно.
+  ...SEC_CODE_LAYER_IDS.map((id) => ({ ...layerDef(id), defaultVisible: false })),
 ];
 
 const VECTOR_LAYER_DEFS: MapLayerDef[] = [
@@ -91,7 +106,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       label: d.label,
       color: d.color,
       visible: ("defaultVisible" in d ? d.defaultVisible : true) as boolean,
-      legend: legendFor(d.id),
+      group: d.group,
+      hatch: d.hatch,
     })),
   );
 
@@ -112,8 +128,12 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
             void fitLayerToMap({
               map: olMap.current,
               wfsUrl: GS_WFS,
-              layerId: def.id,
-              cqlFilter: def.cqlType === "acquisition" ? acqCql : def.cqlType === "parcel" ? parcelCql : undefined,
+              layerId: geoServerName(def.id),
+              cqlFilter:
+                combineCql(
+                  def.cql,
+                  def.cqlType === "acquisition" ? acqCql : def.cqlType === "parcel" ? parcelCql : undefined,
+                ) || undefined,
               padding: [60, 60, 60, 60],
             });
           }
@@ -129,7 +149,11 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
 
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {};
     WMS_LAYER_DEFS.forEach((d) => {
-      const cql = d.cqlType === "acquisition" ? acqCql : d.cqlType === "parcel" ? parcelCql : undefined;
+      // Дэд давхаргын тогтмол шүүлт (code=NN) + дуудагчийн шүүлт (AND).
+      const cql = combineCql(
+        d.cql,
+        d.cqlType === "acquisition" ? acqCql : d.cqlType === "parcel" ? parcelCql : undefined,
+      );
       wmsRecord[d.id] = new ImageLayer({
         visible: d.defaultVisible,
         opacity: d.opacity ?? 0.9,
@@ -137,7 +161,7 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
         source: new ImageWMS({
           url: GS_WMS,
           params: {
-            LAYERS: `land:${d.id}`,
+            LAYERS: `land:${geoServerName(d.id)}`,
             FORMAT: "image/png",
             TRANSPARENT: true,
             ...(cql ? { CQL_FILTER: cql } : {}),
@@ -254,7 +278,7 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       style={isFullscreen ? undefined : { height: 480 }}
     >
       <div ref={mapRef} className="h-full w-full" />
-      <LayerPanel layers={layers} onToggle={handleToggle} />
+      <LayerPanel layers={layers} groups={[AGREED_GROUP, SEC_GROUP]} onToggle={handleToggle} />
       <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
     </div>
   );
