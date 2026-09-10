@@ -334,6 +334,11 @@ export interface LandAcquisition {
   parcel_count: number;
   /** Эцсийн төлөвт (Нөлөөлөгдсөн гарсан/Татгалзсан/Чөлөөлсөн) шилжсэн талбар */
   final_parcel_count?: number;
+  /**
+   * БАЙРШЛААР давхардсан нэгж талбарын тоо. 0-ээс их бол чөлөөлөлт "Хээрийн
+   * судалгаа" төлөв рүү шилжихгүй — жагсаалт дээр улаанаар анхааруулна.
+   */
+  overlapping_parcel_count?: number;
   /** Чөлөөлөлтийн явц 0-100 (backend бодно — жагсаалт/дашбоард нэг тоо). */
   progress_percent?: number;
   aus: AU[];
@@ -522,9 +527,37 @@ export interface Parcel {
   geometry_wkt?: string;
   independent_org_id?: string;
   independent_org_name?: string;
+  /**
+   * Газар өмчлөгч/эзэмшигчийн бүтэн нэр — ҮНДСЭН хүсэлт гаргагч
+   * (parcel_holder.main_applicant). Нэг нэгж талбар дээр олон эзэмшигч байж
+   * болох тул нийт тоо нь holder_count.
+   */
+  holder_name?: string;
+  holder_count?: number;
+  /**
+   * Өөр нэгж талбартай БАЙРШЛААР давхцаж байгаа эсэх (parcel_overlap).
+   * Давхардал нь нэг газрын нөхөх олговрыг хоёр удаа бодох эрсдэл тул
+   * жагсаалт/дэлгэрэнгүй дээр УЛААНААР анхааруулна. Давхардалтай хэвээр бол
+   * чөлөөлөлт "Хээрийн судалгаа" төлөв рүү шилжихгүй.
+   */
+  has_overlap?: boolean;
+  overlap_count?: number;
   // Урсгал бүрийн нөхөх олговрын илгээх төлөв (valuation_type → status).
   // Санхүүгийн мэргэжилтэнд зөвхөн илгээсэн/баталгаажсан урсгалтай нэгж талбар харагдана.
   valuation_statuses?: Partial<Record<ValuationType, ValuationStatus>>;
+}
+
+/** Нэгж талбарын БАЙРШЛЫН давхардал (нэг мөр = нэг давхцаж буй талбар). */
+export interface ParcelOverlap {
+  /** Давхцаж байгаа нэгж талбарын UUID (дэлгэц түүн рүү холбоно) */
+  other_parcel_uuid: string;
+  /** Давхцаж байгаа нэгж талбарын ДУГААР */
+  other_parcel_id: string;
+  /** Давхцах хэсгийн талбай, м² */
+  overlap_area_m2: number;
+  other_status_id: number;
+  other_status_name: string;
+  detected_at: string;
 }
 
 export interface StatusOption {
@@ -862,6 +895,12 @@ export interface ValuationSubmission {
   reviewed_by: string;
   reviewed_at: string | null;
   last_note: string;
+  /**
+   * СҮҮЛИЙН үйлдлийн хавсралт (`/api/files` харьцангуй зам). Хоосон =
+   * хавсралтгүй. Хавсралт нь ЗААВАЛ БИШ ба зөвхөн буцаалтад хамаарна.
+   */
+  attachment_url: string;
+  attachment_name: string;
   created_at: string;
   updated_at: string;
 }
@@ -874,6 +913,9 @@ export interface ValuationSubmissionHistory {
   from_status: string;
   to_status: string;
   note: string;
+  /** Тухайн үйлдлийн хавсралт. Хоосон = хавсралтгүй. */
+  attachment_url: string;
+  attachment_name: string;
   created_by: string;
   created_at: string;
 }
@@ -959,6 +1001,21 @@ export interface ParcelFull extends Parcel {
   monitorings?: ParcelMonitoring[];
   /** УБЕГ-ийн газар өмчлөлийн бүртгэл (ХУР/XYP гарцаас татагдсан) */
   ownerships?: ParcelOwnership[];
+  /**
+   * БАЙРШЛААР давхцаж байгаа бусад нэгж талбарууд. Хоосон биш бол дэлгэрэнгүй
+   * дээр УЛААНААР анхааруулна — давхардал арилтал чөлөөлөлт "Хээрийн судалгаа"
+   * төлөв рүү шилжихгүй.
+   */
+  overlaps?: ParcelOverlap[];
+  /**
+   * ТӨСӨӨЛЛИЙН үнэлгээ (₮) — мэргэжилтэн/админ ГААРАС оруулна. Албан ёсны
+   * үнэлгээ (land_valuation, assets) хийгдэхээс өмнөх урьдчилсан тооцоо.
+   * null = оруулаагүй (0-ээс ЯЛГААТАЙ). Мэргэжлийн байгууллагад зөвхөн
+   * ХАРАГДАНА.
+   */
+  estimated_value?: number | null;
+  estimated_value_at?: string;
+  estimated_value_by?: string;
   geometry_wkt: string;
   acquisition_geom_wkt: string;
   status_id: number;

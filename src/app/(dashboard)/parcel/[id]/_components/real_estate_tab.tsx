@@ -327,8 +327,8 @@ export function RealEstateTab({
         listDocuments: (p: string) => profApi.profListParcelDocuments(p),
         deleteDocument: (p: string, docId: string) => profApi.profDeleteParcelDocument(p, docId),
         getValuationSubmission: (a: string, p: string, vt?: string) => profApi.profGetValuationSubmission(a, p, vt),
-        transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string) =>
-          profApi.profTransitionValuationSubmission(a, p, action, note, vt),
+        transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string, file?: File | null) =>
+          profApi.profTransitionValuationSubmission(a, p, action, note, vt, file),
         listValuationSubmissionHistory: (a: string, p: string, vt?: string) => profApi.profListValuationSubmissionHistory(a, p, vt),
         setParcelIndependentOrg: (a: string, p: string, u: string | null) =>
           profApi.profSetParcelIndependentOrg(a, p, u),
@@ -363,8 +363,8 @@ export function RealEstateTab({
         listDocuments: (p: string) => parcelApi.listDocuments(p),
         deleteDocument: (p: string, docId: string) => parcelApi.deleteDocument(p, docId),
         getValuationSubmission: (a: string, p: string, vt?: string) => landApi.getValuationSubmission(a, p, vt),
-        transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string) =>
-          landApi.transitionValuationSubmission(a, p, action, note, vt),
+        transitionValuationSubmission: (a: string, p: string, action: "submit" | "approve" | "return", note: string, vt?: string, file?: File | null) =>
+          landApi.transitionValuationSubmission(a, p, action, note, vt, file),
         listValuationSubmissionHistory: (a: string, p: string, vt?: string) => landApi.listValuationSubmissionHistory(a, p, vt),
         setParcelIndependentOrg: (a: string, p: string, u: string | null) =>
           landApi.setParcelIndependentOrg(a, p, u),
@@ -394,7 +394,12 @@ export function RealEstateTab({
   const [independentSelect, setIndependentSelect] = useState("");
   const [assignedIndependentOrg, setAssignedIndependentOrg] = useState<{ id: string; name?: string } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const [subModal, setSubModal] = useState<{ action: "submit" | "approve" | "return"; note: string } | null>(null);
+  // file — ЗААВАЛ БИШ хавсралт (зөвхөн буцаах үед асуугдана).
+  const [subModal, setSubModal] = useState<{
+    action: "submit" | "approve" | "return";
+    note: string;
+    file?: File | null;
+  } | null>(null);
   const [subHistoryOpen, setSubHistoryOpen] = useState(false);
   const reportFileRef = useRef<HTMLInputElement | null>(null);
 
@@ -516,8 +521,9 @@ export function RealEstateTab({
   const valStatusEditable = valStatus === "draft" || valStatus === "returned";
 
   const transitionMutation = useMutation({
-    mutationFn: ({ action, note }: { action: "submit" | "approve" | "return"; note: string }) =>
-      svc.transitionValuationSubmission(acqId, parcelId, action, note, activeType),
+    // file — ЗААВАЛ БИШ хавсралт, зөвхөн буцаалтад (backend бусад үйлдэлд хаядаг).
+    mutationFn: ({ action, note, file }: { action: "submit" | "approve" | "return"; note: string; file?: File | null }) =>
+      svc.transitionValuationSubmission(acqId, parcelId, action, note, activeType, file),
     onSuccess: (_data, vars) => {
       toast.success(
         vars.action === "submit"
@@ -1142,7 +1148,7 @@ export function RealEstateTab({
               return;
             }
           }
-          setSubModal({ action, note: "" });
+          setSubModal({ action, note: "", file: null });
         }}
         onHistory={() => setSubHistoryOpen(true)}
       />
@@ -2105,9 +2111,17 @@ export function RealEstateTab({
         <ValuationTransitionModal
           action={subModal.action}
           note={subModal.note}
+          file={subModal.file}
           pending={transitionMutation.isPending}
           onNote={(v) => setSubModal((m) => (m ? { ...m, note: v } : m))}
-          onConfirm={() => transitionMutation.mutate({ action: subModal.action, note: subModal.note })}
+          onFile={(f) => setSubModal((m) => (m ? { ...m, file: f } : m))}
+          onConfirm={() =>
+            transitionMutation.mutate({
+              action: subModal.action,
+              note: subModal.note,
+              file: subModal.file,
+            })
+          }
           onClose={() => setSubModal(null)}
         />
       )}

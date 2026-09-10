@@ -5,7 +5,7 @@
 // тайлбар шаардлагатай ба төлөвийн түүх хадгалагдана.
 
 import { useEffect, useRef, useState } from "react";
-import { Send, CheckCircle2, Undo2, Clock, X, History, ShieldCheck, Loader2, AlertTriangle, Ban } from "lucide-react";
+import { Send, CheckCircle2, Undo2, Clock, X, History, ShieldCheck, Loader2, AlertTriangle, Ban, Paperclip } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import {
   type ValuationStatus,
@@ -105,6 +105,20 @@ export function ValuationSubmissionBar({
             Буцаасан шалтгаан: {submission.last_note}
           </span>
         )}
+        {/* Буцаалтын ХАВСРАЛТ — шалтгааны хажууд шууд татаж харна.
+            Хоосон бол огт харагдахгүй (хавсралт ЗААВАЛ БИШ). */}
+        {!inactive && status === "returned" && submission?.attachment_url && (
+          <a
+            href={submission.attachment_url}
+            target="_blank"
+            rel="noreferrer"
+            title={submission.attachment_name || "Хавсралт"}
+            className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-rose-50 px-2 text-[11px] font-semibold text-rose-600 hover:bg-rose-100 dark:bg-rose-500/15 dark:text-rose-400 dark:hover:bg-rose-500/25"
+          >
+            <Paperclip className="h-3 w-3" />
+            Хавсралт
+          </a>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
@@ -175,19 +189,27 @@ const ACTION_META: Record<Action, { title: string; desc: string; label: string; 
 export function ValuationTransitionModal({
   action,
   note,
+  file,
   pending,
   onNote,
+  onFile,
   onConfirm,
   onClose,
 }: {
   action: Action;
   note: string;
+  /** ЗААВАЛ БИШ хавсралт — зөвхөн буцаах үед харагдана */
+  file?: File | null;
   pending: boolean;
   onNote: (v: string) => void;
+  onFile?: (f: File | null) => void;
   onConfirm: () => void;
   onClose: () => void;
 }) {
   const meta = ACTION_META[action];
+  // Хавсралт нь ЗӨВХӨН буцаалтад хамаарна: илгээх/зөвшөөрөх дээр файл асуувал
+  // тэр файл хаана хадгалагдахыг хэрэглэгч андуурна (backend ч хаядаг).
+  const allowAttachment = action === "return" && !!onFile;
   const noteEmpty = note.trim().length === 0;
   return (
     <div
@@ -226,6 +248,56 @@ export function ValuationTransitionModal({
             placeholder="Шилжилтийн тайлбар бичнэ үү…"
             className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
           />
+
+          {allowAttachment && (
+            <div className="mt-3">
+              <label className="mb-1 block text-[11px] font-semibold text-slate-500">
+                Хавсралт{" "}
+                <span className="font-normal text-slate-400">(заавал биш, PDF)</span>
+              </label>
+              {file ? (
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-white/[0.08] dark:bg-[#252630]">
+                  <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-slate-700 dark:text-slate-200" title={file.name}>
+                    {file.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                    {(file.size / 1024).toFixed(0)} KB
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onFile?.(null)}
+                    disabled={pending}
+                    title="Хавсралтыг хасах"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-200 disabled:opacity-50 dark:hover:bg-[#37394d]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[12px] text-slate-500 transition-colors hover:border-[#02c0ce] hover:text-[#02c0ce] dark:border-white/[0.12] dark:text-slate-400">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Файл сонгох
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    disabled={pending}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      // Ижил файлыг дахин сонгож болохын тулд input-ыг цэвэрлэнэ.
+                      e.target.value = "";
+                      onFile?.(f);
+                    }}
+                  />
+                </label>
+              )}
+              <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                Залруулга шаардсан хуудас, дүнгийн зөрүүний хүснэгт зэргийг
+                хавсаргаж болно.
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
           <button
@@ -334,6 +406,19 @@ export function ValuationHistoryModal({
                         )}
                       </div>
                       {h.note && <p className="mt-1.5 text-[12px] text-slate-600 dark:text-slate-300">{h.note}</p>}
+                      {/* Тухайн үйлдлийн ХАВСРАЛТ. Түүх нь эх сурвалж: дараагийн
+                          буцаалт картны хавсралтыг дарж бичсэн ч энд үлдэнэ. */}
+                      {h.attachment_url && (
+                        <a
+                          href={h.attachment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#02c0ce] ring-1 ring-slate-200 hover:bg-[#02c0ce]/5 dark:bg-[#1e1f27] dark:ring-white/[0.08]"
+                        >
+                          <Paperclip className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{h.attachment_name || "Хавсралт"}</span>
+                        </a>
+                      )}
                       <div className="mt-1.5 flex items-center gap-3 text-[10.5px] text-slate-400">
                         <span className="inline-flex items-center gap-1">
                           <Clock className="h-3 w-3" />

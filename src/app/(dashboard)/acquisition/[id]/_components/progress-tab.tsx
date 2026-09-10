@@ -57,6 +57,32 @@ function AdvanceModal({
   });
 
   const needsDecree = selectedStatus === ACQ_STATUS.CONFIRMED;
+
+  // ── "ХЭЭРИЙН СУДАЛГАА" руу шилжихийн ӨМНӨХ ШАЛГАЛТ ─────────────────────
+  //
+  // Нэгж талбартай ажиллах (үнэлгээ, олговор, төлөв) энэ төлөвөөс эхэлдэг тул
+  // бүрдэл нь тэр мөчид ЗӨВ байх ёстой. Backend мөн 422-оор хаадаг; энд
+  // хэрэглэгчид ШАЛТГААНЫГ товч дарахаас ӨМНӨ харуулна.
+  const goingToField = selectedStatus === ACQ_STATUS.FIELD_SURVEY;
+  const { data: fieldCheck, isLoading: fieldCheckLoading } = useQuery({
+    queryKey: ["land-parcels-field-check", id],
+    // has_overlap=1 → зөвхөн давхардалтай. total нь давхардалтай талбарын тоо.
+    queryFn: async () => {
+      const [all, overlapping] = await Promise.all([
+        landApi.getParcels(id, { page: 1, page_size: 1 }),
+        landApi.getParcels(id, { page: 1, page_size: 5, has_overlap: "1" }),
+      ]);
+      return {
+        total: all.total,
+        overlapTotal: overlapping.total,
+        overlapSample: overlapping.data.map((p) => p.parcel_id),
+      };
+    },
+    enabled: goingToField,
+  });
+  const blocksNoParcels = goingToField && !fieldCheckLoading && fieldCheck?.total === 0;
+  const blocksOverlap =
+    goingToField && !fieldCheckLoading && (fieldCheck?.overlapTotal ?? 0) > 0;
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
     queryKey: ["land-parcels-final-status-check", id],
     queryFn: () => landApi.getParcels(id, { page: 1, page_size: 10000 }),
@@ -75,6 +101,14 @@ function AdvanceModal({
   const blocksForUnfinalizedParcels = needsDecree && !parcelsLoading && invalidParcels.length > 0;
 
   function handleAdvance() {
+    if (blocksNoParcels) {
+      toast.error("Нэгж талбар татагдаагүй байна. Чөлөөлөх хилээр нэгж талбаруудыг бүрэн татсан байх шаардлагатай.");
+      return;
+    }
+    if (blocksOverlap) {
+      toast.error("Нэгж талбарууд хоорондоо байршлаар давхцаж байна. Давхардлыг арилгах хэрэгтэй.");
+      return;
+    }
     if (blocksForIncompleteParcelCheck) {
       toast.error("Бүх нэгж талбарын төлөвийг шалгаж чадсангүй. Дахин оролдоно уу.");
       return;
@@ -156,6 +190,47 @@ function AdvanceModal({
           {needsDecree && parcelsLoading && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/15 px-4 py-3 text-[12px] text-amber-700 dark:text-amber-300">
               Нэгж талбаруудын төлөвийг шалгаж байна...
+            </div>
+          )}
+          {/* "Хээрийн судалгаа" руу шилжихийн өмнөх шаардлага */}
+          {blocksNoParcels && (
+            <div className="rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                <p>
+                  <strong>Нэгж талбар татагдаагүй байна.</strong> &quot;Хээрийн
+                  судалгаа&quot; төлөвт шилжихийн тулд чөлөөлөх хилээр нэгж
+                  талбаруудыг <strong>бүрэн татсан</strong> байх шаардлагатай.
+                </p>
+                <p className="mt-1">
+                  Нэгж талбарын хэсэгт &quot;Нэгж талбар татах&quot; товчийг дарна уу.
+                </p>
+              </div>
+            </div>
+          )}
+          {blocksOverlap && (
+            <div className="rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
+                <p>
+                  <strong>
+                    {fieldCheck?.overlapTotal} нэгж талбар байршлаар давхцаж байна.
+                  </strong>{" "}
+                  Давхардлыг арилгах хүртэл &quot;Хээрийн судалгаа&quot; төлөвт
+                  шилжих боломжгүй — нэг газрын нөхөх олговор хоёр удаа бодогдох
+                  эрсдэлтэй.
+                </p>
+                {!!fieldCheck?.overlapSample?.length && (
+                  <p className="mt-1 font-mono">
+                    {fieldCheck.overlapSample.join(", ")}
+                    {(fieldCheck.overlapTotal ?? 0) > fieldCheck.overlapSample.length ? " …" : ""}
+                  </p>
+                )}
+                <p className="mt-1">
+                  Нэгж талбарын жагсаалт дээр &quot;Зөвхөн давхардалтай&quot;
+                  шүүлтүүрээр бүгдийг харна.
+                </p>
+              </div>
             </div>
           )}
           {blocksForIncompleteParcelCheck && (

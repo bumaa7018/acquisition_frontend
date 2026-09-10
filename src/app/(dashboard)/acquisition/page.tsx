@@ -18,6 +18,7 @@ import {
   X,
   CheckCircle,
   ArrowLeft,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -764,9 +765,24 @@ export default function LandPage() {
                         {formatDate(land.start_date)}
                       </td>
                       <td className="px-5 py-3.5">
-                        <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {land.parcel_count ?? 0}
+                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {land.parcel_count ?? 0}
+                          </span>
+                          {/* БАЙРШЛААР давхардсан талбарын тоо — ЗӨВХӨН тоо,
+                              улаанаар. Давхардал арилтал чөлөөлөлт "Хээрийн
+                              судалгаа" төлөв рүү шилжихгүй тул жагсаалтаас
+                              шууд харагдана. */}
+                          {(land.overlapping_parcel_count ?? 0) > 0 && (
+                            <span
+                              title={`${land.overlapping_parcel_count} нэгж талбар байршлаар давхцаж байна. Давхардлыг арилгах хүртэл "Хээрийн судалгаа" төлөвт шилжих боломжгүй.`}
+                              className="inline-flex items-center gap-0.5 text-[12px] font-bold tabular-nums text-red-600 dark:text-red-400"
+                            >
+                              <AlertCircle className="h-3 w-3" />
+                              {land.overlapping_parcel_count}
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="px-5 py-3.5">
