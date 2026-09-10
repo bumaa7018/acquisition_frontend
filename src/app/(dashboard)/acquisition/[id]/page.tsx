@@ -145,6 +145,12 @@ export default function AcquisitionDetailPage() {
 
   const sc = STATUS_CFG[acq.status] ?? STATUS_CFG[1];
   const isAcqLocked = acq?.status === ACQ_STATUS.CONFIRMED;
+  // Нэгж талбартай АЖИЛЛАХ (үнэлгээ, олговор, төлөв) нь "Хээрийн судалгаа"
+  // төлөвөөс эхэлнэ. "Шинэ" төлөв нь нэгж талбарын БҮРДЭЛ (татах, хилээс
+  // гарсныг хасах, давхардлыг арилгах) хийгддэг шат — backend мөн 423-аар
+  // хаадаг тул дэлгэц дээр УРЬДЧИЛАН тайлбарлана.
+  const isBeforeFieldStage =
+    acq != null && acq.status < ACQ_STATUS.FIELD_SURVEY;
 
   // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгуулгуудын хандалтыг хаана
   if (isExternal && isAcqLocked)
@@ -311,6 +317,7 @@ export default function AcquisitionDetailPage() {
           id={id}
           acquisitionProfOrgId={acq.professional_org_id}
           isAcqLocked={isAcqLocked}
+          isBeforeFieldStage={isBeforeFieldStage}
         />
       )}
       {activeTab === "assignees" && <AssigneesTab id={id} canEdit={canEdit} />}

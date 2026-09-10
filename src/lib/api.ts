@@ -851,7 +851,9 @@ export const landApi = {
     }).then(r => r.data.data);
   },
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
-  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number }) =>
+  // has_overlap — БАЙРШЛААР давхардсан эсэхээр шүүнэ: "1" зөвхөн давхардалтай,
+  // "0" зөвхөн давхардалгүй, заахгүй бол бүгд.
+  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number; has_overlap?: string }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
   getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; valuation_type?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),
@@ -909,10 +911,31 @@ export const landApi = {
   listCompensationHistory: (acqId: string, compId: string) =>
     api.get<ApiResponse<CompensationHistory[]>>(`/land-acquisitions/${acqId}/compensations/${compId}/history`).then(r => r.data.data ?? []),
   // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв
+  // ТӨСӨӨЛЛИЙН үнэлгээ — value=null бол арилгана (талбарыг үргэлж илгээнэ:
+  // "огт өгөөгүй" ба "арилга" хоёрыг backend ялгадаг).
+  setParcelEstimatedValue: (acqId: string, parcelId: string, value: number | null) =>
+    api.patch<ApiResponse<{ estimated_value: number | null }>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
+      { value },
+    ).then(r => r.data.data),
   getValuationSubmission: (acqId: string, parcelId: string, valuationType?: string) =>
     api.get<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { params: { valuation_type: valuationType } }).then(r => r.data.data),
-  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return", note: string, valuationType?: string) =>
-    api.post<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { action, note, valuation_type: valuationType }).then(r => r.data.data),
+  // file — ЗААВАЛ БИШ хавсралт, ЗӨВХӨН буцаалтад (action="return") хамаарна.
+  // Файлтай үед multipart-аар явна; үгүй бол өмнөх шигээ JSON.
+  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return", note: string, valuationType?: string, file?: File | null) => {
+    const url = `/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`
+    if (file) {
+      const fd = new FormData()
+      fd.append('action', action)
+      fd.append('note', note)
+      if (valuationType) fd.append('valuation_type', valuationType)
+      fd.append('file', file)
+      return api.post<ApiResponse<ValuationSubmission>>(url, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then(r => r.data.data)
+    }
+    return api.post<ApiResponse<ValuationSubmission>>(url, { action, note, valuation_type: valuationType }).then(r => r.data.data)
+  },
   listValuationSubmissionHistory: (acqId: string, parcelId: string, valuationType?: string) =>
     api.get<ApiResponse<ValuationSubmissionHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`, { params: { valuation_type: valuationType } }).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>

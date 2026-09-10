@@ -54,6 +54,8 @@ export type ProfParcelListParams = {
   right_type?: number
   landuse?: string
   status_id?: number
+  /** БАЙРШЛЫН давхардал: "1" зөвхөн давхардалтай, "0" зөвхөн давхардалгүй */
+  has_overlap?: string
 }
 
 export type ProfAssetListParams = {
@@ -182,12 +184,25 @@ class ProfApiService {
     action: "submit" | "approve" | "return",
     note: string,
     valuationType?: string,
+    // ЗААВАЛ БИШ хавсралт — зөвхөн буцаалтад. Мэргэжлийн байгууллага
+    // буцаадаггүй ч интерфейсийг ижил байлгав (нэг компонент дуудна).
+    file?: File | null,
   ): Promise<ValuationSubmission | undefined> {
+    const url = `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`
+    if (file) {
+      const fd = new FormData()
+      fd.append('action', action)
+      fd.append('note', note)
+      if (valuationType) fd.append('valuation_type', valuationType)
+      fd.append('file', file)
+      return apiClient
+        .post<ApiResponse<ValuationSubmission>>(url, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        .then(r => r.data.data)
+    }
     return apiClient
-      .post<ApiResponse<ValuationSubmission>>(
-        `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`,
-        { action, note, valuation_type: valuationType },
-      )
+      .post<ApiResponse<ValuationSubmission>>(url, { action, note, valuation_type: valuationType })
       .then(r => r.data.data)
   }
 

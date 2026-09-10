@@ -27,6 +27,8 @@ type ParcelFilter = {
   right_type: number;
   landuse: string;
   status_id: number;
+  /** "" = бүгд, "1" = зөвхөн давхардалтай, "0" = зөвхөн давхардалгүй */
+  has_overlap: string;
 };
 
 const PAGE_SIZE = 20;
@@ -91,6 +93,7 @@ const EMPTY_FILTER: ParcelFilter = {
   right_type: 0,
   landuse: "",
   status_id: 0,
+  has_overlap: "",
 };
 
 function parcelListParams(filter: ParcelFilter, page: number) {
@@ -104,6 +107,7 @@ function parcelListParams(filter: ParcelFilter, page: number) {
     ...(filter.right_type ? { right_type: filter.right_type } : {}),
     ...(filter.landuse.trim() ? { landuse: filter.landuse.trim() } : {}),
     ...(filter.status_id ? { status_id: filter.status_id } : {}),
+    ...(filter.has_overlap ? { has_overlap: filter.has_overlap } : {}),
   };
 }
 
@@ -111,10 +115,19 @@ export function ParcelsTab({
   id,
   acquisitionProfOrgId,
   isAcqLocked = false,
+  isBeforeFieldStage = false,
 }: {
   id: string;
   acquisitionProfOrgId?: string | null;
   isAcqLocked?: boolean;
+  /**
+   * Чөлөөлөлт "Хээрийн судалгаа"-аас ӨМНӨХ ("Шинэ") төлөвт байна.
+   *
+   * Тэр төлөвт нэгж талбартай АЖИЛЛАХ (үнэлгээ, олговор, төлөв) боломжгүй —
+   * backend 423 буцаана. Нэгж талбар ТАТАХ нь харин яг энэ төлөвийн ажил тул
+   * хаагдахгүй.
+   */
+  isBeforeFieldStage?: boolean;
 }) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
@@ -303,7 +316,8 @@ export function ParcelsTab({
     filter.au3_code ||
     filter.right_type !== 0 ||
     filter.landuse ||
-    filter.status_id !== 0
+    filter.status_id !== 0 ||
+    filter.has_overlap !== ""
   );
   const visibleParcels = (parcels?.data ?? []).filter((parcel) => {
     if (
@@ -338,6 +352,19 @@ export function ParcelsTab({
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                 {parcels?.total ?? 0} нэгж талбар
               </p>
+              {/* "Шинэ" төлөв = БҮРДЭЛийн шат. Нэгж талбартай ажиллах
+                  (үнэлгээ, олговор, төлөв) нь "Хээрийн судалгаа"-аас эхэлнэ. */}
+              {isBeforeFieldStage && (
+                <p className="mt-1.5 inline-flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] leading-relaxed text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                  <Info className="mt-[1px] h-3 w-3 shrink-0" />
+                  <span>
+                    Одоо <strong>&quot;Шинэ&quot;</strong> төлөвт байна — нэгж
+                    талбарыг <strong>татах, давхардлыг арилгах</strong> шат.
+                    Үнэлгээ, нөхөх олговор, төлөв оруулах нь{" "}
+                    <strong>&quot;Хээрийн судалгаа&quot;</strong> төлөвөөс эхэлнэ.
+                  </span>
+                </p>
+              )}
             </div>
             {/* Гадаад ролиуд болон хаалттай чөлөөлөлт дээр дуудалт хийгдэхгүй
                 (backend нь land:create + хаалттай биш байхыг шаардана) */}
@@ -431,6 +458,20 @@ export function ParcelsTab({
               }
               className={`${inp} flex-[1.4] min-w-0`}
             />
+            {/* БАЙРШЛЫН давхардал — давхардалтай талбаруудыг шүүж олно.
+                Давхардал арилтал чөлөөлөлт "Хээрийн судалгаа" төлөв рүү
+                шилжихгүй тул эдгээрийг эрт олох нь чухал. */}
+            <select
+              value={filterForm.has_overlap}
+              onChange={(e) =>
+                setFilterForm((f) => ({ ...f, has_overlap: e.target.value }))
+              }
+              className={`${inp} flex-[1.2] min-w-0`}
+            >
+              <option value="">Давхардал (бүгд)</option>
+              <option value="1">Зөвхөн давхардалтай</option>
+              <option value="0">Зөвхөн давхардалгүй</option>
+            </select>
             <select
               value={filterForm.status_id}
               onChange={(e) =>
@@ -489,6 +530,7 @@ export function ParcelsTab({
                   {[
                     "",
                     "Дугаар",
+                    "Өмчлөгч, эзэмшигч",
                     "Баг",
                     "Эрхийн төрөл",
                     "Газрын зориулалт",
@@ -511,7 +553,7 @@ export function ParcelsTab({
                 {visibleParcels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                     >
                       Нэгж талбар олдсонгүй
@@ -526,11 +568,59 @@ export function ParcelsTab({
                   return (
                     <React.Fragment key={p.id}>
                       <tr
-                        className={`border-b border-slate-100 dark:border-[#37394d] transition-colors ${isOpen ? "bg-slate-50/80 dark:bg-[#1a1d20]" : "hover:bg-slate-50/60 dark:hover:bg-[#252630]"}`}
+                        className={`border-b transition-colors ${
+                          p.has_overlap
+                            // БАЙРШЛЫН ДАВХАРДАЛ — мөр бүхэлдээ улаанаар
+                            // тодрох ёстой: давхардалтай хэвээр "Хээрийн
+                            // судалгаа" төлөв рүү шилжихгүй тул хэрэглэгч
+                            // үүнийг АНЗААРАХ шаардлагатай.
+                            ? "border-red-200 bg-red-50/70 hover:bg-red-50 dark:border-red-500/25 dark:bg-red-500/[0.07] dark:hover:bg-red-500/[0.12]"
+                            : isOpen
+                              ? "border-slate-100 bg-slate-50/80 dark:border-[#37394d] dark:bg-[#1a1d20]"
+                              : "border-slate-100 hover:bg-slate-50/60 dark:border-[#37394d] dark:hover:bg-[#252630]"
+                        }`}
                       >
                         <td className="pl-3 pr-1 py-2.5 w-8" />
                         <td className="px-4 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
-                          {p.parcel_id}
+                          <span className="flex items-center gap-1.5">
+                            {p.parcel_id}
+                            {p.has_overlap && (
+                              <span
+                                title={`Байршлаар ${p.overlap_count ?? 1} нэгж талбартай давхцаж байна. Давхардлыг арилгах хүртэл "Хээрийн судалгаа" төлөвт шилжих боломжгүй.`}
+                                className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[9.5px] font-bold text-red-600 dark:bg-red-500/20 dark:text-red-400"
+                              >
+                                <AlertCircle className="h-2.5 w-2.5" />
+                                Давхардал{(p.overlap_count ?? 0) > 1 ? ` ${p.overlap_count}` : ""}
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        {/* Өмчлөгч/эзэмшигч — ҮНДСЭН хүсэлт гаргагч. Нэг нэгж
+                            талбар дээр олон эзэмшигч байж болох тул үлдсэнийг
+                            "+N" гэж заана (жагсаалт нэг мөрөнд багтана). */}
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
+                          {p.holder_name ? (
+                            <span className="flex items-center gap-1.5">
+                              <span className="max-w-[180px] truncate" title={p.holder_name}>
+                                {p.holder_name}
+                              </span>
+                              {(p.holder_count ?? 0) > 1 && (
+                                <span
+                                  title={`Нийт ${p.holder_count} эзэмшигч`}
+                                  className="shrink-0 rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-500 dark:bg-[#37394d] dark:text-slate-300"
+                                >
+                                  +{(p.holder_count ?? 1) - 1}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-slate-300 dark:text-slate-600"
+                              title="Эзэмшигчийн мэдээлэл ГУС-аас татагдаагүй"
+                            >
+                              —
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
                           {p.au3_code}
