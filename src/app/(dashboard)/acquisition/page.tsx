@@ -75,6 +75,10 @@ function CreateModal({ onClose }: CreateModalProps) {
   const [implementingOrg, setImplementingOrg] = useState("");
   const [reason, setReason] = useState("");
   const [responsibleOrg, setResponsibleOrg] = useState("");
+  // НИТХ тогтоол ба түүний хавсралтын бүлэг жагсаалтын дугаар — үүсгэх үед
+  // бөглөөгүй бол дараа дэлгэрэнгүй хэсгээс засварлаж нэмж болно.
+  const [nithDecreeNumber, setNithDecreeNumber] = useState("");
+  const [groupListNumber, setGroupListNumber] = useState("");
   const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
 
@@ -142,6 +146,10 @@ function CreateModal({ onClose }: CreateModalProps) {
     fd.append("implementing_org", implementingOrg);
     fd.append("reason", reason);
     fd.append("responsible_org", responsibleOrg);
+    if (nithDecreeNumber.trim())
+      fd.append("nith_decree_number", nithDecreeNumber.trim());
+    if (groupListNumber.trim())
+      fd.append("group_list_number", groupListNumber.trim());
     if (generalCategoryId)
       fd.append("general_category_id", String(generalCategoryId));
     if (subCategoryId)
@@ -358,6 +366,29 @@ function CreateModal({ onClose }: CreateModalProps) {
                   placeholder="Байгууллагын нэр"
                   className={inputCls}
                 />
+              </div>
+
+              {/* НИТХ тогтоол ба түүний хавсралтын бүлэг жагсаалтын дугаар —
+                  заавал биш: дараа дэлгэрэнгүйгээс нэмж бүртгэж болно. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>НИТХ тогтоолын дугаар</label>
+                  <input
+                    value={nithDecreeNumber}
+                    onChange={(e) => setNithDecreeNumber(e.target.value)}
+                    placeholder="Ж: 15/12"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Бүлэг жагсаалтын дугаар</label>
+                  <input
+                    value={groupListNumber}
+                    onChange={(e) => setGroupListNumber(e.target.value)}
+                    placeholder="Ж: 3"
+                    className={inputCls}
+                  />
+                </div>
               </div>
 
               {/* Санхүүжилтийн эх үүсвэрийг ЭНД асуухгүй: захирамжийн төсөлд

@@ -329,6 +329,13 @@ export interface LandAcquisition {
   sub_category_name: string;
   decree_number: string;
   decree_date?: string;
+  /**
+   * НИТХ (Нийслэлийн иргэдийн Төлөөлөгчдийн Хурал) тогтоолын дугаар ба тогтоолын
+   * хавсралтын бүлэг жагсаалтын дугаар. decree_number нь НЗД-ын ЗАХИРАМЖ —
+   * өөр баримт, хоёулаа зэрэгцэн хадгалагдана. "" = бүртгээгүй.
+   */
+  nith_decree_number?: string;
+  group_list_number?: string;
   created_at: string;
   created_by: string;
   parcel_count: number;

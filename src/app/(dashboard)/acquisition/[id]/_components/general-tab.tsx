@@ -51,6 +51,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     responsible_org: "",
     start_date: "",
     end_date: "",
+    // НИТХ тогтоол ба түүний хавсралтын бүлэг жагсаалтын дугаар — НЗД-ын
+    // захирамжаас (decree_number) ӨӨР баримт, гараас бүртгэнэ.
+    nith_decree_number: "",
+    group_list_number: "",
   });
   const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
@@ -102,6 +106,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         responsible_org: acq.responsible_org ?? "",
         start_date: acq.start_date ?? "",
         end_date: acq.end_date ?? "",
+        nith_decree_number: acq.nith_decree_number ?? "",
+        group_list_number: acq.group_list_number ?? "",
       });
       setGeneralCategoryId(acq.general_category_id ?? null);
       setSubCategoryId(acq.sub_category_id ?? null);
@@ -123,6 +129,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       fd.append("implementing_org", form.implementing_org);
       fd.append("reason", form.reason);
       fd.append("responsible_org", form.responsible_org);
+      // Хоосон ч илгээнэ — хэрэглэгч утгыг УСТГАХ боломжтой байх ёстой
+      // (backend бусад текст талбартай ижил байдлаар орлуулдаг).
+      fd.append("nith_decree_number", form.nith_decree_number.trim());
+      fd.append("group_list_number", form.group_list_number.trim());
       if (generalCategoryId)
         fd.append("general_category_id", String(generalCategoryId));
       if (subCategoryId)
@@ -235,6 +245,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       responsible_org: acq.responsible_org ?? "",
       start_date: acq.start_date ?? "",
       end_date: acq.end_date ?? "",
+      nith_decree_number: acq.nith_decree_number ?? "",
+      group_list_number: acq.group_list_number ?? "",
     });
     setGeneralCategoryId(acq.general_category_id ?? null);
     setSubCategoryId(acq.sub_category_id ?? null);
@@ -653,6 +665,38 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               </span>
             )}
           </div>
+          {/* НИТХ тогтоол ба түүний хавсралтын бүлэг жагсаалтын дугаар —
+              гараас бүртгэнэ. Доорх НЗД-ын ЗАХИРАМЖ нь өөр баримт тул
+              хоёулаа зэрэгцэж харагдана. */}
+          {(
+            [
+              ["НИТХ тогтоолын дугаар", "nith_decree_number", "Ж: 15/12"],
+              ["Бүлэг жагсаалтын дугаар", "group_list_number", "Ж: 3"],
+            ] as [string, "nith_decree_number" | "group_list_number", string][]
+          ).map(([label, key, ph]) => (
+            <div
+              key={key}
+              className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]"
+            >
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+                {label}
+              </span>
+              {editing ? (
+                <input
+                  value={form[key]}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, [key]: e.target.value }))
+                  }
+                  placeholder={ph}
+                  className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                />
+              ) : (
+                <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                  {form[key] || "—"}
+                </span>
+              )}
+            </div>
+          ))}
           {acq.decree_number && (
             <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
               <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
