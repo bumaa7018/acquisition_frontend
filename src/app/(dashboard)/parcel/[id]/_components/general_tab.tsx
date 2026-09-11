@@ -7,12 +7,13 @@ import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { RIGHT_TYPE_LABELS, type AU, type LandValuation, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelFeeSyncResult, type ParcelSyncCountResult } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
-import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin } from "lucide-react";
+import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin, History } from "lucide-react";
 import { toast } from "sonner";
 import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import { layerTextToWkt } from "@/lib/geometry-utils";
 import { logger } from "@/lib/logger";
 import { EstimatedValueDialog } from "./estimated_value_dialog";
+import { EstimatedValueHistoryDialog } from "./estimated_value_history_dialog";
 
 const ParcelMap = dynamic(
   () => import("@/components/map/parcel-map").then((m) => m.ParcelMap),
@@ -253,17 +254,20 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   // Итгэлцүүрийг өөрчилж тооцно; мэргэжлийн байгууллагад зөвхөн харагдана
   // (backend-ийн PATCH маршрут нь land:update шаарддаг).
   const [estOpen, setEstOpen] = useState(false);
+  // Өөрчлөлтийн түүх — "Дэлгэрэнгүй" товчоор нээгдэнэ (дуудлага зөвхөн тэр үед).
+  const [estHistoryOpen, setEstHistoryOpen] = useState(false);
 
   // confidencePercent: тоо = итгэлцүүртэй, undefined = итгэлцүүргүй (өмчлөх
   // эрхийн газар), null = үнэлгээг АРИЛГАХ. "Итгэлцүүргүй" ба "арилгах" хоёрыг
   // хольж болохгүй — тиймээс null-ыг тусад нь шалгана (== биш ===).
   const estimatedMutation = useMutation({
-    mutationFn: ({ confidencePercent, baseFeePerM2 }: { confidencePercent: number | null | undefined; baseFeePerM2?: number }) => confidencePercent === null
+    mutationFn: ({ confidencePercent, baseFeePerM2, file }: { confidencePercent: number | null | undefined; baseFeePerM2?: number; file?: File | null }) => confidencePercent === null
       ? landApi.setParcelEstimatedValue(acqId, parcelId, null)
-      : landApi.calculateParcelEstimatedValue(acqId, parcelId, confidencePercent, baseFeePerM2),
+      : landApi.calculateParcelEstimatedValue(acqId, parcelId, confidencePercent, baseFeePerM2, file),
     onSuccess: (_r, { confidencePercent }) => {
       toast.success(confidencePercent === null ? "Төсөөллийн үнэлгээ арилгагдлаа" : "Төсөөллийн үнэлгээ хадгалагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+      queryClient.invalidateQueries({ queryKey: ["parcel-estimated-value-history", acqId, parcelId] });
       setEstOpen(false);
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
@@ -636,6 +640,13 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   {data.estimated_value != null ? "Үнэлгээ тохируулах" : "Үнэлгээ оруулах"}
                 </button>
               )}
+              {/* ДЭЛГЭРЭНГҮЙ — өөрчлөлтийн БҮХ түүхийг хавсралттайгаа. Засах
+                  эрхгүй хэрэглэгч (санхүү, мэрг. байгууллага) ч хянах
+                  шаардлагатай тул харах эрхтэй бүгдэд харагдана. */}
+              <button type="button" onClick={() => setEstHistoryOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]">
+                <History className="h-3.5 w-3.5" />
+                Дэлгэрэнгүй
+              </button>
             </span>
           ))}
           {row("Үлдэх газрын хэмжээ",
@@ -1092,7 +1103,10 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       )}
 
       {estOpen && !isExternal && !isProfOrg && !isLocked && (
-        <EstimatedValueDialog data={data} pending={estimatedMutation.isPending} onClose={() => setEstOpen(false)} onSave={(confidencePercent, baseFeePerM2) => estimatedMutation.mutate({ confidencePercent, baseFeePerM2 })} />
+        <EstimatedValueDialog data={data} pending={estimatedMutation.isPending} onClose={() => setEstOpen(false)} onSave={(confidencePercent, baseFeePerM2, file) => estimatedMutation.mutate({ confidencePercent, baseFeePerM2, file })} />
+      )}
+      {estHistoryOpen && (
+        <EstimatedValueHistoryDialog acquisitionId={acqId} parcelUuid={parcelId} onClose={() => setEstHistoryOpen(false)} />
       )}
     </div>
   );

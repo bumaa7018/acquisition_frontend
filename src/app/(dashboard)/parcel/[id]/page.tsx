@@ -60,6 +60,9 @@ export default function ParcelDetailPage() {
   // энэ төлвийг явцын (status) хаалтаас чөлөөлнө — бусад таб хаалттай хэвээр.
   const PROGRESS_FINAL_STATUSES = ["Чөлөөлсөн", "Нөлөөллөөс гарсан"];
   const isAcqConfirmed = acquisition?.status === ACQ_STATUS.CONFIRMED;
+ 
+  const isBeforeFieldStage =
+    acquisition != null && acquisition.status < ACQ_STATUS.FIELD_SURVEY;
   const isParcelLocked = isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
   const isProgressLocked = isAcqConfirmed || PROGRESS_FINAL_STATUSES.includes(parcel?.status_name ?? "");
 
@@ -184,12 +187,6 @@ export default function ParcelDetailPage() {
     <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link
-          href="/parcel"
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" /> Буцах
-        </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-xl font-bold text-slate-800 dark:text-white font-mono">
@@ -235,7 +232,7 @@ export default function ParcelDetailPage() {
 
       {activeTab === "general" && <GeneralTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "holder" && <HolderTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isProgressLocked} />}
+      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isProgressLocked} beforeFieldStage={isBeforeFieldStage} />}
       {activeTab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
       {activeTab === "documents" && <DocumentsTab parcelId={id} isLocked={isParcelLocked} />}
       {activeTab === "finance" && <FinanceTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}

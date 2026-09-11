@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Calculator, X } from "lucide-react";
+import { Calculator, Paperclip, X } from "lucide-react";
 import type { ParcelFull } from "@/types";
 import { formatArea } from "@/lib/utils";
 import { calculateEstimatedValuation, feeArea, initialConfidencePercent } from "@/lib/estimated-valuation";
@@ -23,12 +23,16 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
   pending: boolean;
   onClose: () => void;
   /** confidencePercent: тоо = итгэлцүүртэй, undefined = итгэлцүүргүй (өмчлөл), null = арилгах */
-  onSave: (confidencePercent: number | null | undefined, baseFeePerM2?: number) => void;
+  onSave: (confidencePercent: number | null | undefined, baseFeePerM2?: number, file?: File | null) => void;
 }) {
   const fees = data.fees ?? [];
   const ownership = data.right_type === RIGHT_TYPE_OWNERSHIP;
   const [confidence, setConfidence] = useState(() => initialConfidencePercent(fees, data.estimated_confidence_percent));
   const [baseFee, setBaseFee] = useState(() => data.estimated_base_fee_per_m2?.toString() ?? "");
+  // ХАВСРАЛТ — тооцооллыг гэрчлэх баримт (ЗААВАЛ БИШ). Хадгалах бүрд шинээр
+  // сонгоно: өмнөх хавсралт нь ӨӨРЧЛӨЛТИЙН ТҮҮХЭН дээрээ үлдэнэ.
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState("");
   const manual = fees.length === 0;
   const percent = ownership ? null : Number(confidence);
   const baseFeePerM2 = Number(baseFee);
@@ -51,7 +55,7 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
               <X className="h-4 w-4" />
             </Dialog.Close>
           </div>
-          <form onSubmit={(event) => { event.preventDefault(); if (value != null && !pending) onSave(percent ?? undefined, manual ? baseFeePerM2 : undefined); }}>
+          <form onSubmit={(event) => { event.preventDefault(); if (value != null && !pending && !fileError) onSave(percent ?? undefined, manual ? baseFeePerM2 : undefined, file); }}>
             <div className="space-y-4 px-5 py-4">
               <Dialog.Description className="text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
                 {ownership
@@ -96,18 +100,52 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
                   <p id="confidence-help" className={`mt-1 text-[11px] ${invalidConfidence ? "text-red-500" : "text-slate-400"}`}>Тэгээс их утга оруулна уу.</p>
                 </div>
               )}
+              <div>
+                <label htmlFor="estimated-file" className="mb-1 block text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+                  Хавсралт (заавал биш)
+                </label>
+                <input
+                  id="estimated-file"
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png"
+                  disabled={pending}
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0] ?? null;
+                    // 50MB — backend-ийн хязгаартай ижил (илүүг сервер хаяна).
+                    if (picked && picked.size > 50 * 1024 * 1024) {
+                      setFile(null);
+                      setFileError("Файл 50MB-аас их байна.");
+                      e.target.value = "";
+                      return;
+                    }
+                    setFileError("");
+                    setFile(picked);
+                  }}
+                  className="block w-full text-[12px] text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#02c0ce]/10 file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-[#02c0ce] hover:file:bg-[#02c0ce]/20 disabled:opacity-50 dark:text-slate-300"
+                />
+                <p className={`mt-1 text-[11px] ${fileError ? "text-red-500" : "text-slate-400"}`}>
+                  {fileError || "PDF эсвэл зураг (JPEG/PNG). Жишиг үнийн лавлагаа, судалгаа хавсаргана."}
+                </p>
+                {file && (
+                  <p className="mt-1 inline-flex max-w-full items-center gap-1 text-[11px] font-semibold text-[#02c0ce]">
+                    <Paperclip className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{file.name}</span>
+                  </p>
+                )}
+              </div>
               <div className="rounded-lg border border-[#02c0ce]/25 bg-[#02c0ce]/[0.07] p-3">
                 <p className="text-[12px] text-slate-500 dark:text-slate-400">Төсөөллийн үнэлгээ</p>
                 <p aria-live="polite" className="mt-1 text-lg font-bold tabular-nums text-[#02c0ce]">{value != null ? `${number(value)}₮` : "—"}</p>
                 <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{ownership ? "Газрын зах зээлийн жишиг үнийг бүхэл төгрөгөөр тоймлож, нөлөөлөлд өртсөн талбайгаар үржүүлнэ (итгэлцүүр хэрэглэхгүй)." : "Суурь төлбөр × 100 ÷ итгэлцүүрийг бүхэл төгрөгөөр тоймлож, нөлөөлөлд өртсөн талбайгаар үржүүлнэ."}</p>
                 {fees.length > 1 && <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Өртсөн талбайг бүсүүдийн бүртгэлтэй талбайн харьцаагаар хуваарилж, дүнг нэгтгэнэ.</p>}
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">Хадгалсан өөрчлөлт бүр хавсралттайгаа түүхэнд бүртгэгдэнэ — “Дэлгэрэнгүй” товчоор харна.</p>
               </div>
             </div>
             <div className="flex justify-between gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
               {data.estimated_value != null ? <button type="button" disabled={pending} onClick={() => onSave(null)} className="rounded-lg px-3 text-[13px] font-semibold text-[#f1556c] disabled:opacity-50">Арилгах</button> : <span />}
               <div className="flex gap-2">
                 <Dialog.Close asChild><button type="button" disabled={pending} className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] text-slate-600 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300">Болих</button></Dialog.Close>
-                <button type="submit" disabled={pending || value == null} className="h-9 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white disabled:opacity-50">{pending ? "Хадгалж байна…" : "Хадгалах"}</button>
+                <button type="submit" disabled={pending || value == null || !!fileError} className="h-9 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white disabled:opacity-50">{pending ? "Хадгалж байна…" : "Хадгалах"}</button>
               </div>
             </div>
           </form>

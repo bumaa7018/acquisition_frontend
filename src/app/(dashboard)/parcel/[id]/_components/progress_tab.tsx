@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelApi, landApi, documentTypeApi } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
 import { getParcelStatusStyle } from "@/types";
-import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle } from "lucide-react";
+import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
 
@@ -12,7 +12,13 @@ type ModalState = "closed" | "picking" | "confirming";
 const EVALUATION_STATUS_NAME = "Үнэлгээ хийх";
 const RELEASED_STATUS_NAME = "Чөлөөлсөн";
 
-export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
+export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStage = false }: {
+  acqId: string;
+  parcelId: string;
+  isLocked?: boolean;
+  /** Чөлөөлөлт "Шинэ" төлөвт — явц солих боломжгүй (backend ч хаана). */
+  beforeFieldStage?: boolean;
+}) {
   const queryClient = useQueryClient();
   const [modal, setModal] = useState<ModalState>("closed");
   const [selected, setSelected] = useState<ParcelStatus | null>(null);
@@ -78,13 +84,24 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   // (backend ч мөн 400 буцаана), бусад төлөвт хоосон байж болно. Газрын
   // зургийн нэгж талбарын цонхонд энэ шалтгаан харагдана.
   const [statusReason, setStatusReason] = useState("");
+  // ХАВСРАЛТ — "Татгалзсан" төлөвт ЗААВАЛ (backend ч 422 буцаана). Файл нь
+  // нэгж талбарын БАРИМТ болж бүртгэгдээд "Хавсралт" хэсэгт харагдана, мөн
+  // явцын түүхэн дээр холбоосоороо гарна.
+  const [statusFile, setStatusFile] = useState<File | null>(null);
+  // Хавсралтын ХАРАГДАХ нэр — файл сонгоход файлын нэрээр САНАЛ БОЛГОНО,
+  // хэрэглэгч засаж болно ("2024-05-12 иргэний өргөдөл" г.м.). Физик файл нь
+  // анхны нэрээрээ хадгалагдана — зөвхөн жагсаалт/түүхэнд харагдах нэр өөрчлөгдөнө.
+  const [statusFileName, setStatusFileName] = useState("");
+  const [fileError, setFileError] = useState("");
   const updateStatusMutation = useMutation({
-    mutationFn: (statusId: number) => parcelApi.updateStatus(acqId, parcelId, statusId, statusReason.trim()),
+    mutationFn: (statusId: number) => parcelApi.updateStatus(acqId, parcelId, statusId, statusReason.trim(), statusFile, statusFileName),
     onSuccess: () => {
       toast.success("Статус амжилттай шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
       queryClient.invalidateQueries({ queryKey: ["parcel-available-statuses", acqId, parcelId] });
       queryClient.invalidateQueries({ queryKey: ["parcel-status-history", acqId, parcelId] });
+      // Хавсралт нь баримт болж нэмэгдсэн тул "Хавсралт" хэсгийг ч шинэчилнэ.
+      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
       closeModal();
     },
     onError: (err) => toast.error(getApiError(err, "Статус солиход алдаа гарлаа")),
@@ -99,6 +116,9 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
     setModal("closed");
     setSelected(null);
     setStatusReason("");
+    setStatusFile(null);
+    setStatusFileName("");
+    setFileError("");
   }
 
   function handleSelectStatus(s: ParcelStatus) {
@@ -125,6 +145,10 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
   const reasonRequired =
     selected?.name === "Нөлөөлөгдсөн гарсан" || selected?.name === "Татгалзсан";
   const reasonMissing = reasonRequired && !statusReason.trim();
+  // "Татгалзсан" нь нэгж талбарыг чөлөөлөлтөөс ГАРГАДАГ эцсийн шийдвэр тул
+  // гэрчлэх баримт (өргөдөл, шийдвэр, тэмдэглэл) заавал.
+  const fileRequired = selected?.name === "Татгалзсан";
+  const fileMissing = fileRequired && !statusFile;
 
   return (
     <>
@@ -135,7 +159,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Одоогийн статус
             </p>
-            {!isLocked && availableStatuses.length > 0 && (
+            {!isLocked && !beforeFieldStage && availableStatuses.length > 0 && (
               <button
                 onClick={openPicker}
                 className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
@@ -157,11 +181,17 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
             ) : (
               <span className="text-[13px] text-slate-400">Уншиж байна...</span>
             )}
-            {availableStatuses.length === 0 && currentStatusName && (
+            {beforeFieldStage ? (
+              <p className="mt-2 flex items-start gap-1.5 text-[11.5px] text-amber-700 dark:text-amber-400">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                Чөлөөлөлт &ldquo;Шинэ&rdquo; төлөвт байна. Нэгж талбарын бүрдэл дуусч
+                &ldquo;Хээрийн судалгаа&rdquo; болсны дараа явц солино.
+              </p>
+            ) : availableStatuses.length === 0 && currentStatusName ? (
               <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
                 Боломжтой шилжилт байхгүй
               </p>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -229,6 +259,24 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                             </span>
                           </div>
                         </div>
+                        {/* ШАЛТГААН ба ХАВСРАЛТ — татгалзсан/нөлөөлөгдсөн гарсан
+                            шилжилтийг дараа нь тайлбарлах цорын ганц мөр. */}
+                        {h.reason && (
+                          <p className="mt-2 whitespace-pre-wrap break-words text-[12px] text-slate-600 dark:text-slate-300">
+                            {h.reason}
+                          </p>
+                        )}
+                        {h.attachment_url && (
+                          <a
+                            href={h.attachment_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-2 inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#02c0ce] ring-1 ring-slate-200 hover:bg-[#02c0ce]/5 dark:bg-[#1e1f27] dark:ring-white/[0.08]"
+                          >
+                            <Paperclip className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{h.attachment_name || "Хавсралт"}</span>
+                          </a>
+                        )}
                       </div>
                     </li>
                   );
@@ -379,6 +427,57 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                 )}
               </div>
 
+              {/* ХАВСРАЛТ — Татгалзсан үед заавал, бусад төлөвт заавал бус */}
+              <div className="px-5 pb-4">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  Хавсралт {fileRequired && <span className="text-red-400">*</span>}
+                </label>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={(e) => {
+                    const picked = e.target.files?.[0] ?? null;
+                    // 50MB — backend-ийн хязгаартай ижил.
+                    if (picked && picked.size > 50 * 1024 * 1024) {
+                      setStatusFile(null);
+                      setStatusFileName("");
+                      setFileError("Файл 50MB-аас их байна.");
+                      e.target.value = "";
+                      return;
+                    }
+                    setFileError("");
+                    setStatusFile(picked);
+                    // Нэрийг САНАЛ БОЛГОНО — хэрэглэгч гараас засна.
+                    setStatusFileName(picked?.name ?? "");
+                  }}
+                  className="block w-full text-[12px] text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#02c0ce]/10 file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-[#02c0ce] hover:file:bg-[#02c0ce]/20 dark:text-slate-300"
+                />
+                {statusFile && (
+                  <div className="mt-2">
+                    <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      Хавсралтын нэр
+                    </label>
+                    <input
+                      type="text"
+                      value={statusFileName}
+                      onChange={(e) => setStatusFileName(e.target.value)}
+                      placeholder={statusFile.name}
+                      className="h-9 w-full rounded-xl border border-slate-200 dark:border-[#37394d] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                    />
+                    <p className="mt-1 inline-flex max-w-full items-center gap-1 text-[11px] text-slate-400">
+                      <Paperclip className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{statusFile.name}</span>
+                    </p>
+                  </div>
+                )}
+                <p className={`mt-1 text-[11px] ${fileError || fileMissing ? "text-red-400" : "text-slate-400"}`}>
+                  {fileError
+                    || (fileMissing
+                      ? "Татгалзсан төлөвт шилжихэд баримт заавал хавсаргана"
+                      : "PDF. Хавсралт нь нэгж талбарын баримт болж бүртгэгдэнэ.")}
+                </p>
+              </div>
+
               {blocksForUnapprovedCompensation && (
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
@@ -412,6 +511,8 @@ export function ProgressTab({ acqId, parcelId, isLocked = false }: { acqId: stri
                   disabled={
                     updateStatusMutation.isPending ||
                     reasonMissing ||
+                    fileMissing ||
+                    !!fileError ||
                     blocksForUnapprovedCompensation ||
                     (selected.name === RELEASED_STATUS_NAME && !hasApprovedReport)
                   }

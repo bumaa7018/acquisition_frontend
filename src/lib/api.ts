@@ -67,6 +67,7 @@ import type {
   AuditLog,
   Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, AcquisitionSocioSurvey, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
+  ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, BoundaryPreview, FundingSource,
@@ -915,14 +916,29 @@ export const landApi = {
   // "огт өгөөгүй" ба "арилга" хоёрыг backend ялгадаг).
   // confidencePercent undefined = ИТГЭЛЦҮҮРГҮЙ (өмчлөх эрхийн газар) — талбарыг
   // огт илгээхгүй. `value` талбар байхгүй тул backend тооцоолох салаа руу орно.
-  calculateParcelEstimatedValue: (acqId: string, parcelId: string, confidencePercent?: number, baseFeePerM2?: number) =>
-    api.patch<ApiResponse<{ estimated_value: number; estimated_confidence_percent: number | null }>>(
-      `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
-      {
-        ...(confidencePercent != null ? { confidence_percent: confidencePercent } : {}),
-        ...(baseFeePerM2 != null ? { base_fee_per_m2: baseFeePerM2 } : {}),
-      },
-    ).then(r => r.data.data),
+  //
+  // file — тооцооллыг гэрчлэх ЗААВАЛ БИШ хавсралт (PDF эсвэл зураг). Файлтай
+  // үед multipart-аар явна: үнэлгээ ба хавсралт НЭГ хүсэлтэд хадгалагдана.
+  calculateParcelEstimatedValue: (acqId: string, parcelId: string, confidencePercent?: number, baseFeePerM2?: number, file?: File | null) => {
+    const url = `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`
+    type Result = ApiResponse<{ estimated_value: number; estimated_confidence_percent: number | null }>
+    if (file) {
+      const fd = new FormData()
+      if (confidencePercent != null) fd.append('confidence_percent', String(confidencePercent))
+      if (baseFeePerM2 != null) fd.append('base_fee_per_m2', String(baseFeePerM2))
+      fd.append('file', file)
+      return api.patch<Result>(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data.data)
+    }
+    return api.patch<Result>(url, {
+      ...(confidencePercent != null ? { confidence_percent: confidencePercent } : {}),
+      ...(baseFeePerM2 != null ? { base_fee_per_m2: baseFeePerM2 } : {}),
+    }).then(r => r.data.data)
+  },
+  // ТӨСӨӨЛЛИЙН үнэлгээний өөрчлөлтийн түүх (шинэ → хуучин), хавсралттай.
+  listParcelEstimatedValueHistory: (acqId: string, parcelId: string) =>
+    api.get<ApiResponse<ParcelEstimatedValueHistory[]>>(
+      `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value/history`,
+    ).then(r => r.data.data ?? []),
   setParcelEstimatedValue: (acqId: string, parcelId: string, value: number | null) =>
     api.patch<ApiResponse<{ estimated_value: number | null }>>(
       `/land-acquisitions/${acqId}/parcels/${parcelId}/estimated-value`,
@@ -1305,8 +1321,23 @@ export const parcelApi = {
       .then(r => r.data.data ?? []),
   // reason — төлөв солих ШАЛТГААН. "Нөлөөлөгдсөн гарсан"/"Татгалзсан" үед
   // backend ЗААВАЛ шаардана (хоосон бол 400); бусад төлөвт хоосон байж болно.
-  updateStatus: (acqId: string, parcelId: string, statusId: number, reason?: string) =>
-    api.patch(`/land-acquisitions/${acqId}/parcels/${parcelId}/status`, { status_id: statusId, reason: reason ?? "" }),
+  // file — "Татгалзсан" төлөвт ЗААВАЛ (backend 422 буцаана), бусад төлөвт
+  // заавал биш. Файлтай үед multipart-аар явна: файл нь нэгж талбарын БАРИМТ
+  // болж бүртгэгдээд явцын түүхэнд холбоосоороо гарна.
+  // fileName — хавсралтын ХАРАГДАХ нэр (хэрэглэгч засна). Хоосон бол backend
+  // файлын нэрийг хэрэглэнэ.
+  updateStatus: (acqId: string, parcelId: string, statusId: number, reason?: string, file?: File | null, fileName?: string) => {
+    const url = `/land-acquisitions/${acqId}/parcels/${parcelId}/status`
+    if (file) {
+      const fd = new FormData()
+      fd.append('status_id', String(statusId))
+      fd.append('reason', reason ?? "")
+      fd.append('file', file)
+      if (fileName?.trim()) fd.append('file_name', fileName.trim())
+      return api.patch(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    }
+    return api.patch(url, { status_id: statusId, reason: reason ?? "" })
+  },
   listStatusHistory: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatusHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`)
       .then(r => r.data.data ?? []),

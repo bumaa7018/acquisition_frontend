@@ -878,6 +878,11 @@ export interface ParcelStatusHistory {
   /** Төлөв солих ШАЛТГААН. Нөлөөлөгдсөн гарсан / Татгалзсан үед заавал,
    *  бусад төлөвт хоосон байж болно. */
   reason?: string;
+  /** Тухайн шилжилтийн ХАВСРАЛТ. "Татгалзсан" үед заавал; хоосон = байхгүй.
+   *  Файл нь нэгж талбарын баримт болж мөн бүртгэгддэг тул "Хавсралт"
+   *  хэсэгт ч харагдана. */
+  attachment_url?: string;
+  attachment_name?: string;
 }
 
 // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв (нэгж талбар бүрт).
@@ -903,6 +908,31 @@ export interface ValuationSubmission {
   attachment_name: string;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * ТӨСӨӨЛЛИЙН үнэлгээний өөрчлөлтийн түүх (нэг мөр = нэг өөрчлөлт).
+ *
+ * `parcel` дээр зөвхөн ХАМГИЙН СҮҮЛИЙН утга хадгалагддаг тул үнэлгээ хэрхэн
+ * бүрдсэнийг ЗӨВХӨН эндээс уншина.
+ */
+export interface ParcelEstimatedValueHistory {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  /** null = тэр үйлдлээр үнэлгээ АРИЛГАГДСАН. */
+  value: number | null;
+  /** null = итгэлцүүр хэрэглээгүй (өмчлөх эрхийн газар). */
+  confidence_percent: number | null;
+  /** Гараар оруулсан суурь/жишиг үнэ (₮/м²). null = ГУС-ийн бүсийн төлбөрөөр. */
+  base_fee_per_m2: number | null;
+  /** Тооцоололд хэрэглэсэн нөлөөлөлд өртсөн талбай (м²). */
+  area_m2: number;
+  /** Хавсралт. Хоосон = хавсралтгүй. */
+  attachment_url: string;
+  attachment_name: string;
+  created_by: string;
+  created_at: string;
 }
 
 export interface ValuationSubmissionHistory {
@@ -1039,6 +1069,7 @@ export interface ParcelFull extends Parcel {
 // Role тогтмолуудыг lib/access-policy.ts (ACCESS_ROLE_CODES / ACCESS_ROLE_NAMES)-д
 // төвлөрүүлсэн тул энд давхардуулахгүй — тэндээс import хийж ашиглана.
 export const ACQ_STATUS = {
+  NEW: 1, // Шинэ — нэгж талбарын БҮРДЭЛ хийгдэж буй шат (явц/үнэлгээ бичихгүй)
   FIELD_SURVEY: 2, // Хээрийн судалгаа — санхүүгийн мэргэжилтэнд зөвхөн энэ төлөвтэй чөлөөлөлт харагдана
   CONFIRMED: 3, // Баталгаажсан — цаашид засвар/устгал хийх боломжгүй (locked)
 } as const;
