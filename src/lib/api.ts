@@ -74,7 +74,7 @@ import type {
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
-  ValuationSubmission, ValuationSubmissionHistory,
+  ValuationSubmission, ValuationSubmissionHistory, ValuationSnapshot,
   AssetSpecType, AssetCalcType,
   DecisionDraft, DecisionDraftParcel, DecisionDraftFundingLink, DecisionDraftProgressHistory, DecisionOption, FundingSourceOption,
 } from '@/types'
@@ -485,8 +485,17 @@ function normalizeUser(raw: any): User {
 
 export const authApi = {
   // login нь нэвтрэх нэр ЭСВЭЛ имэйл — backend хоёуланг нь хүлээж авна.
+  //
+  // ДОТООД хэрэглэгч: backend үүнийг ЗӨВХӨН authdb (sdplatform.sd_user)-ээс
+  // шалгана. Мэргэжлийн байгууллага энд нэвтрэхгүй — loginProf-ыг үз.
   login: (login: string, password: string) =>
     api.post<ApiResponse<LoginResponse>>('/auth/login', { username: login, password }).then(r => r.data.data),
+  // МЭРГЭЖЛИЙН БАЙГУУЛЛАГА: бүртгэл нь өөр санд (appdb) амьдардаг тул
+  // эндпойнт нь ч ТУСДАА. Хоёр сангийн хэрэглэгчийн дугаар мөргөлддөг учраас
+  // backend дээр урсгалыг зориуд салгасан — нэг эндпойнтоос хоёуланг нь
+  // хайвал нэг сангийн нэр нөгөөгийнхийг халхална.
+  loginProf: (login: string, password: string) =>
+    api.post<ApiResponse<LoginResponse>>('/auth/prof/login', { username: login, password }).then(r => r.data.data),
   // Refresh токеноо хамт илгээж хоёуланг нь хүчингүй болгоно
   logout: () => api.post('/auth/logout', { refresh_token: authStorage.getRefreshToken() }).then(r => r.data),
   me: () => api.get<ApiResponse<User>>('/users/me').then(r => normalizeUser(r.data.data)),
@@ -948,7 +957,7 @@ export const landApi = {
     api.get<ApiResponse<ValuationSubmission>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`, { params: { valuation_type: valuationType } }).then(r => r.data.data),
   // file — ЗААВАЛ БИШ хавсралт, ЗӨВХӨН буцаалтад (action="return") хамаарна.
   // Файлтай үед multipart-аар явна; үгүй бол өмнөх шигээ JSON.
-  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return", note: string, valuationType?: string, file?: File | null) => {
+  transitionValuationSubmission: (acqId: string, parcelId: string, action: "submit" | "approve" | "return" | "cancel", note: string, valuationType?: string, file?: File | null) => {
     const url = `/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status`
     if (file) {
       const fd = new FormData()
@@ -964,6 +973,8 @@ export const landApi = {
   },
   listValuationSubmissionHistory: (acqId: string, parcelId: string, valuationType?: string) =>
     api.get<ApiResponse<ValuationSubmissionHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`, { params: { valuation_type: valuationType } }).then(r => r.data.data ?? []),
+  listValuationSnapshots: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSnapshot[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-snapshots`, { params: { valuation_type: valuationType } }).then(r => r.data.data ?? []),
   createCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>
     api.post<ApiResponse<CompensationGrant>>(`/land-acquisitions/${acqId}/compensations/${compId}/grant`, body).then(r => r.data.data),
   updateCompensationGrant: (acqId: string, compId: string, body: Partial<CompensationGrant>) =>

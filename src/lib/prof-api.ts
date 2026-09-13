@@ -1,19 +1,21 @@
 // ── Professional Org API ──────────────────────────────────────────────────────
 // Мэргэжлийн байгууллагын хэрэглэгчид ашиглах бүх API дуудлага.
 // Backend-д /prof prefix-тэй тусдаа route group байна —
-// RequireOnlyRole("professional_org") middleware-аар хамгаалагдсан.
+// JWT-ийн `valuation_org` claim + org_id-оор хамгаалагдана.
 
 import apiClient from '@/lib/api'
 import type {
   ApiResponse,
   PaginatedResponse,
   LandAcquisition,
+  AcquisitionSocioSurvey,
   Parcel,
   ParcelFull,
   ParcelStatus,
   ParcelStatusHistory,
   ValuationSubmission,
   ValuationSubmissionHistory,
+  ValuationSnapshot,
   Asset,
   AssetSpec,
   AssetCalculation,
@@ -106,6 +108,12 @@ class ProfApiService {
       .then(r => r.data.data ?? [])
   }
 
+  profGetSocioSurvey(acqId: string): Promise<AcquisitionSocioSurvey | null> {
+    return apiClient
+      .get<ApiResponse<AcquisitionSocioSurvey | null>>(`/prof/land-acquisitions/${acqId}/socio-survey`)
+      .then(r => r.data.data ?? null)
+  }
+
   profUploadAcquisitionDocument(acqId: string, file: File, documentTypeId?: number, name?: string): Promise<Document | undefined> {
     const fd = new FormData()
     fd.append('file', file)
@@ -181,7 +189,7 @@ class ProfApiService {
   profTransitionValuationSubmission(
     acqId: string,
     parcelId: string,
-    action: "submit" | "approve" | "return",
+    action: "submit" | "approve" | "return" | "cancel",
     note: string,
     valuationType?: string,
     // ЗААВАЛ БИШ хавсралт — зөвхөн буцаалтад. Мэргэжлийн байгууллага
@@ -210,6 +218,15 @@ class ProfApiService {
     return apiClient
       .get<ApiResponse<ValuationSubmissionHistory[]>>(
         `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-status-history`,
+        { params: { valuation_type: valuationType } },
+      )
+      .then(r => r.data.data ?? [])
+  }
+
+  profListValuationSnapshots(acqId: string, parcelId: string, valuationType?: string): Promise<ValuationSnapshot[]> {
+    return apiClient
+      .get<ApiResponse<ValuationSnapshot[]>>(
+        `/prof/land-acquisitions/${acqId}/parcels/${parcelId}/valuation-snapshots`,
         { params: { valuation_type: valuationType } },
       )
       .then(r => r.data.data ?? [])

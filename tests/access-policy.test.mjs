@@ -4,6 +4,7 @@ import {
   EVALUATION_STATUS_NAME,
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
+  canCancelValuationForActor,
   canCreateDecisionDraftForActor,
   canDeleteDecisionDraftForActor,
   canUpdateDecisionDraftForActor,
@@ -48,10 +49,7 @@ import {
   parcelValuations,
   valuationTotals,
 } from "../src/lib/valuation-summary.ts";
-import {
-  geoJsonToWkt,
-  layerTextToWkt,
-} from "../src/lib/geometry-utils.ts";
+import { geoJsonToWkt, layerTextToWkt } from "../src/lib/geometry-utils.ts";
 
 // Мэргэжлийн байгууллагын хандалт нь ХЭРЭГЛЭГЧИЙН биш БАЙГУУЛЛАГЫН
 // харьяалалаар (orgId) шийдэгддэг. Тиймээс userId нь org-оос ЗОРИУД өөр —
@@ -60,6 +58,14 @@ const primaryProfessional = {
   userId: "primary-employee-1",
   orgId: "org-primary",
   roles: ["professional_org"],
+};
+// 000024-өөс хойш appdb-ийн valuation_org_employee хэрэглэгч системийн role
+// авахгүй; backend JWT дээр `valuation_org` claim тавина.
+const primaryProfessionalByClaim = {
+  userId: "primary-employee-claim",
+  orgId: "org-primary",
+  valuationOrg: true,
+  roles: [],
 };
 // Нэг байгууллагын ӨӨР ажилтан — ижил эрхтэй байх ёстой.
 const primaryProfessionalColleague = {
@@ -81,11 +87,22 @@ const senior = {
   userId: "senior-user",
   roles: ["senior_specialist"],
 };
+const adminWithExternalRole = {
+  userId: "admin-user",
+  orgId: "org-other",
+  valuationOrg: true,
+  roles: ["admin", "professional_org"],
+};
 // Захирамжийн төсөлтэй ажиллах мэргэжилтэн — decision:* эрхтэй
 const decisionSpecialist = {
   userId: "decision-user",
   roles: ["senior_specialist"],
-  permissions: ["land:read", "decision:read", "decision:create", "decision:update"],
+  permissions: [
+    "land:read",
+    "decision:read",
+    "decision:create",
+    "decision:update",
+  ],
 };
 
 const acquisition = { professional_org_id: "org-primary" };
@@ -97,6 +114,75 @@ const waitingParcel = {
   status_name: "Хүлээгдэж буй",
   independent_org_id: "org-independent",
 };
+
+test("баталгаажсан үнэлгээг зөвхөн админ, ахлах, санхүү, хуваарилагдсан ажилтан цуцална", () => {
+  const assignedAcquisition = {
+    ...acquisition,
+    assigned_users: [{ user_id: "assigned-user" }],
+  };
+  const assigned = { userId: "assigned-user", roles: ["specialist"] };
+  const allowed = [
+    assigned,
+    senior,
+    finance,
+    { roles: ["admin"] },
+    { roles: ["Админ"] },
+  ];
+  for (const actor of allowed) {
+    assert.equal(
+      canCancelValuationForActor(actor, assignedAcquisition, "approved", false),
+      true,
+    );
+    assert.equal(
+      canCancelValuationForActor(actor, assignedAcquisition, "approved", true),
+      false,
+    );
+    for (const status of ["draft", "submitted", "returned", "rejected"]) {
+      assert.equal(
+        canCancelValuationForActor(actor, assignedAcquisition, status, false),
+        false,
+      );
+    }
+    assert.equal(
+      canCancelValuationForActor(actor, undefined, "approved", false),
+      false,
+    );
+  }
+  for (const actor of [
+    { userId: "unassigned-user", roles: ["specialist"] },
+    { roles: ["specialist"] },
+    { ...mika, userId: "assigned-user" },
+    { ...primaryProfessional, userId: "assigned-user" },
+    { ...primaryProfessionalByClaim, userId: "assigned-user" },
+  ]) {
+    assert.equal(
+      canCancelValuationForActor(actor, assignedAcquisition, "approved", false),
+      false,
+    );
+  }
+});
+
+test("санхүү баталгаажсан үнэлгээг цуцлахын тулд бүх явцын нэгж талбарыг нээнэ", () => {
+  for (const status_name of [
+    "Үнэлгээ хийх",
+    "Хүлээгдэж буй",
+    "Чөлөөлсөн",
+    "Татгалзсан",
+  ]) {
+    assert.equal(
+      canAccessParcelForActor(finance, { status_name }, acquisition),
+      true,
+    );
+  }
+  assert.equal(
+    canAccessParcelForActor(mika, waitingParcel, acquisition),
+    false,
+  );
+  assert.equal(
+    canAccessParcelForActor(primaryProfessional, waitingParcel, acquisition),
+    false,
+  );
+});
 
 test("мэргэжлийн байгууллага зөвхөн өөрт холбогдсон чөлөөлөлтийг харна", () => {
   assert.equal(
@@ -111,7 +197,11 @@ test("мэргэжлийн байгууллага зөвхөн өөрт холб
   );
   assert.equal(
     canAccessAcquisitionForActor(
-      { userId: "other-employee", orgId: "org-other", roles: ["professional_org"] },
+      {
+        userId: "other-employee",
+        orgId: "org-other",
+        roles: ["professional_org"],
+      },
       acquisition,
       [evaluationParcel],
     ),
@@ -121,6 +211,10 @@ test("мэргэжлийн байгууллага зөвхөн өөрт холб
   // бүртгэгддэг болсны гол үр дүн.
   assert.equal(
     canAccessAcquisitionForActor(primaryProfessionalColleague, acquisition),
+    true,
+  );
+  assert.equal(
+    canAccessAcquisitionForActor(primaryProfessionalByClaim, acquisition),
     true,
   );
   // Байгууллагын харьяалалгүй (ажилтны бүртгэлгүй) хэрэглэгч нэвтэрч чадахгүй.
@@ -152,12 +246,39 @@ test("external role-ууд зөвхөн зөвшөөрөгдсөн үнэлгэ�
     true,
   );
   assert.equal(
-    canAccessParcelForActor(independentProfessional, waitingParcel, acquisition),
+    canAccessParcelForActor(
+      independentProfessional,
+      waitingParcel,
+      acquisition,
+    ),
     false,
   );
-  assert.equal(canAccessParcelForActor(mika, evaluationParcel, acquisition), true);
+  assert.equal(
+    canAccessParcelForActor(mika, evaluationParcel, acquisition),
+    true,
+  );
   assert.equal(
     canAccessParcelForActor(finance, evaluationParcel, acquisition),
+    true,
+  );
+});
+
+test("админ давхар external role-той байсан ч дотоод эрхээр ажиллана", () => {
+  assert.equal(
+    canAccessParcelForActor(adminWithExternalRole, waitingParcel, acquisition),
+    true,
+  );
+  assert.equal(
+    canViewParcelTabForActor(adminWithExternalRole, "documents"),
+    true,
+  );
+  assert.equal(
+    canViewValuationSubTabForActor(
+      adminWithExternalRole,
+      "mika",
+      waitingParcel,
+      acquisition,
+    ),
     true,
   );
 });
@@ -174,7 +295,14 @@ test("external role-ууд зөвхөн зөвшөөрөгдсөн tab-ууды�
   assert.equal(canViewParcelTabForActor(mika, "holder"), false);
   // Мэргэжлийн байгууллага эзэмшигчийн табыг нэмж харна
   assert.equal(canViewParcelTabForActor(primaryProfessional, "holder"), true);
-  assert.equal(canViewParcelTabForActor(primaryProfessional, "documents"), false);
+  assert.equal(
+    canViewParcelTabForActor(primaryProfessionalByClaim, "holder"),
+    true,
+  );
+  assert.equal(
+    canViewParcelTabForActor(primaryProfessional, "documents"),
+    false,
+  );
   assert.equal(canViewParcelTabForActor(senior, "print"), true);
   assert.equal(canViewParcelTabForActor(senior, "holder"), true);
   // "Захирамж" таб — зөвхөн decision:read эрхтэй ДОТООД ажилтан харна
@@ -209,7 +337,12 @@ test("захирамжийн төсөл зөвхөн decision:* эрхээр у�
   const admin = {
     userId: "admin-user",
     roles: ["admin"],
-    permissions: ["decision:read", "decision:create", "decision:update", "decision:delete"],
+    permissions: [
+      "decision:read",
+      "decision:create",
+      "decision:update",
+      "decision:delete",
+    ],
   };
   assert.equal(canViewDecisionDraftsForActor(admin), true);
   assert.equal(canDeleteDecisionDraftForActor(admin), true);
@@ -218,29 +351,69 @@ test("захирамжийн төсөл зөвхөн decision:* эрхээр у�
   for (const actor of [mika, finance, primaryProfessional]) {
     const withDecision = {
       ...actor,
-      permissions: ["decision:read", "decision:create", "decision:update", "decision:delete"],
+      permissions: [
+        "decision:read",
+        "decision:create",
+        "decision:update",
+        "decision:delete",
+      ],
     };
-    assert.equal(canViewDecisionDraftsForActor(withDecision), false, actor.roles[0]);
-    assert.equal(canCreateDecisionDraftForActor(withDecision), false, actor.roles[0]);
-    assert.equal(canUpdateDecisionDraftForActor(withDecision), false, actor.roles[0]);
-    assert.equal(canDeleteDecisionDraftForActor(withDecision), false, actor.roles[0]);
+    assert.equal(
+      canViewDecisionDraftsForActor(withDecision),
+      false,
+      actor.roles[0],
+    );
+    assert.equal(
+      canCreateDecisionDraftForActor(withDecision),
+      false,
+      actor.roles[0],
+    );
+    assert.equal(
+      canUpdateDecisionDraftForActor(withDecision),
+      false,
+      actor.roles[0],
+    );
+    assert.equal(
+      canDeleteDecisionDraftForActor(withDecision),
+      false,
+      actor.roles[0],
+    );
   }
 
   // Эрхгүй хэрэглэгч
-  assert.equal(canViewDecisionDraftsForActor({ userId: "x", roles: [] }), false);
+  assert.equal(
+    canViewDecisionDraftsForActor({ userId: "x", roles: [] }),
+    false,
+  );
 });
 
 test("нөхөх олговорын дэд tab харах эрхүүд зөв байна", () => {
   // "asset" — acquisition ирээгүй үед graceful fallback (үндсэн мэргэжлийн байгуулга)
-  assert.equal(canViewValuationSubTabForActor(primaryProfessional, "asset"), true);
+  assert.equal(
+    canViewValuationSubTabForActor(primaryProfessional, "asset"),
+    true,
+  );
+  assert.equal(
+    canViewValuationSubTabForActor(primaryProfessionalByClaim, "asset"),
+    true,
+  );
   // "asset" — acquisition тулгавал зөвхөн үндсэн мэргэжлийн байгуулга харна
   assert.equal(
-    canViewValuationSubTabForActor(primaryProfessional, "asset", null, acquisition),
+    canViewValuationSubTabForActor(
+      primaryProfessional,
+      "asset",
+      null,
+      acquisition,
+    ),
     true,
   );
   assert.equal(
     canViewValuationSubTabForActor(
-      { userId: "other-employee", orgId: "org-other", roles: ["professional_org"] },
+      {
+        userId: "other-employee",
+        orgId: "org-other",
+        roles: ["professional_org"],
+      },
       "asset",
       null,
       acquisition,
@@ -265,15 +438,51 @@ test("нөхөх олговорын дэд tab харах эрхүүд зөв б
     ),
     false,
   );
-  assert.equal(canViewValuationSubTabForActor(primaryProfessional, "mika"), false);
+  assert.equal(
+    canViewValuationSubTabForActor(primaryProfessional, "mika"),
+    false,
+  );
   assert.equal(canViewValuationSubTabForActor(mika, "mika"), true);
   assert.equal(canViewValuationSubTabForActor(finance, "mika"), true);
+  assert.equal(canViewValuationSubTabForActor(senior, "asset"), true);
+  assert.equal(canViewValuationSubTabForActor(senior, "independent"), true);
+  assert.equal(canViewValuationSubTabForActor(senior, "mika"), true);
+  assert.equal(
+    canViewValuationSubTabForActor(
+      { userId: "admin-user", roles: ["admin"] },
+      "asset",
+    ),
+    true,
+  );
+  assert.equal(
+    canViewValuationSubTabForActor(
+      { userId: "admin-user", roles: ["admin"] },
+      "independent",
+    ),
+    true,
+  );
+  assert.equal(
+    canViewValuationSubTabForActor(
+      { userId: "admin-user", roles: ["admin"] },
+      "mika",
+    ),
+    true,
+  );
 });
 
 test("нөхөх олговорын дэд tab засах эрхүүд role, төлөв, холболтоос хамаарна", () => {
   assert.equal(
     canEditValuationSubTabForActor(
       primaryProfessional,
+      "asset",
+      evaluationParcel,
+      acquisition,
+    ),
+    true,
+  );
+  assert.equal(
+    canEditValuationSubTabForActor(
+      primaryProfessionalByClaim,
       "asset",
       evaluationParcel,
       acquisition,
@@ -294,7 +503,12 @@ test("нөхөх олговорын дэд tab засах эрхүүд role, т�
     true,
   );
   assert.equal(
-    canEditValuationSubTabForActor(finance, "mika", evaluationParcel, acquisition),
+    canEditValuationSubTabForActor(
+      finance,
+      "mika",
+      evaluationParcel,
+      acquisition,
+    ),
     false,
   );
   assert.equal(
@@ -312,12 +526,19 @@ test("seeder нь шинээр нэмэгдсэн эрх тус бүрийн х�
   const roleCodes = new Set(externalAccessRoles.map((role) => role.code));
   assert.deepEqual(
     [...roleCodes].sort(),
-    ["finance_specialist", "mika", "professional_org", "senior_specialist"].sort(),
+    [
+      "finance_specialist",
+      "mika",
+      "professional_org",
+      "senior_specialist",
+    ].sort(),
   );
 
   for (const roleCode of roleCodes) {
     assert.ok(
-      externalAccessSeedUsers.some((user) => user.role_codes.includes(roleCode)),
+      externalAccessSeedUsers.some((user) =>
+        user.role_codes.includes(roleCode),
+      ),
       `${roleCode} эрхтэй seed хэрэглэгч алга`,
     );
   }
@@ -340,6 +561,19 @@ test("report API route external token-ийг 403 болгох боломжтой
 
   assert.equal(isExternalAuthorization(token), true);
 
+  const valuationOrgPayload = Buffer.from(
+    JSON.stringify({
+      user_id: "prof-user",
+      org_id: "org-primary",
+      valuation_org: true,
+      roles: [],
+    }),
+  ).toString("base64url");
+  assert.equal(
+    isExternalAuthorization(`Bearer header.${valuationOrgPayload}.signature`),
+    true,
+  );
+
   const internalPayload = Buffer.from(
     JSON.stringify({ user_id: "internal-user", roles: ["admin"] }),
   ).toString("base64url");
@@ -360,7 +594,11 @@ test("хүний нөөцийн бүртгэл зөвхөн admin роль бо�
   assert.equal(canUpdateHrRecord(admin), true);
   assert.equal(canDeleteHrRecord(admin), true);
 
-  const employee = { userId: "employee-user", roles: ["employee"], permissions: ["hr:read"] };
+  const employee = {
+    userId: "employee-user",
+    roles: ["employee"],
+    permissions: ["hr:read"],
+  };
   assert.equal(canViewHrRegistry(employee), false);
   assert.equal(canCreateHrRecord(employee), false);
 
@@ -543,14 +781,19 @@ test("давхардсан хилийн давхаргаас WKT уншиж ча
     type: "Feature",
     geometry: {
       type: "Polygon",
-      coordinates: [[[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]]],
+      coordinates: [
+        [
+          [0, 0],
+          [5, 0],
+          [5, 5],
+          [0, 5],
+          [0, 0],
+        ],
+      ],
     },
   };
 
-  assert.equal(
-    geoJsonToWkt(geoJson),
-    "POLYGON((0 0,5 0,5 5,0 5,0 0))",
-  );
+  assert.equal(geoJsonToWkt(geoJson), "POLYGON((0 0,5 0,5 5,0 5,0 0))");
   assert.equal(layerTextToWkt(JSON.stringify(geoJson)), geoJsonToWkt(geoJson));
 });
 
@@ -641,10 +884,16 @@ test("өөрийгөө устгах / идэвхгүй болгох / роль �
 
 test("эрх нэмэгдүүлэлт: өөрт байхгүй эрхийг олгохгүй", () => {
   assert.equal(canGrantPermissionForActor(admin, "users:delete"), true);
-  assert.equal(canGrantPermissionForActor(readOnlyAdmin, "users:delete"), false);
+  assert.equal(
+    canGrantPermissionForActor(readOnlyAdmin, "users:delete"),
+    false,
+  );
 
   // Ролийн эрх БҮГД дуудагчид байх ёстой
-  assert.equal(canGrantRoleForActor(admin, ["users:read", "users:delete"]), true);
+  assert.equal(
+    canGrantRoleForActor(admin, ["users:read", "users:delete"]),
+    true,
+  );
   assert.equal(
     canGrantRoleForActor(readOnlyAdmin, ["users:read", "users:delete"]),
     false,
@@ -664,17 +913,37 @@ test("10-р системийн admin зөвхөн land/compensation/decision э�
   const system10Admin = {
     userId: "system10-admin",
     roles: ["admin"],
-    permissions: ["users:read", "users:create", "roles:read", "permissions:read", "hr:read", "hr:create"],
+    permissions: [
+      "users:read",
+      "users:create",
+      "roles:read",
+      "permissions:read",
+      "hr:read",
+      "hr:create",
+    ],
   };
 
   assert.equal(canViewSystemSettings(system10Admin), true);
   assert.equal(canManageRolePermissions(system10Admin), true);
   assert.equal(canGrantPermissionForActor(system10Admin, "land:read"), true);
-  assert.equal(canGrantPermissionForActor(system10Admin, "compensation:update"), true);
-  assert.equal(canGrantPermissionForActor(system10Admin, "decision:create"), true);
-  assert.equal(canGrantPermissionForActor(system10Admin, "users:delete"), false);
   assert.equal(
-    canGrantRoleForActor(system10Admin, ["land:read", "compensation:update", "decision:create"]),
+    canGrantPermissionForActor(system10Admin, "compensation:update"),
+    true,
+  );
+  assert.equal(
+    canGrantPermissionForActor(system10Admin, "decision:create"),
+    true,
+  );
+  assert.equal(
+    canGrantPermissionForActor(system10Admin, "users:delete"),
+    false,
+  );
+  assert.equal(
+    canGrantRoleForActor(system10Admin, [
+      "land:read",
+      "compensation:update",
+      "decision:create",
+    ]),
     true,
   );
   assert.equal(

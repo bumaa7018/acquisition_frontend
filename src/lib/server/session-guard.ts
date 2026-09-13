@@ -85,6 +85,19 @@ export function tokenFromRequest(req: NextRequest): string {
   return req.cookies.get(SESSION_COOKIE)?.value ?? "";
 }
 
+function decodeTokenPayload(token: string): Record<string, unknown> | null {
+  try {
+    const rawPayload = token.split(".")[1];
+    const normalizedPayload = rawPayload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+      .padEnd(Math.ceil(rawPayload.length / 4) * 4, "=");
+    return JSON.parse(Buffer.from(normalizedPayload, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
 const sessionCache = makeCache<boolean>();
 
 export async function isSessionValid(token: string): Promise<boolean> {
@@ -135,8 +148,9 @@ const rolesCache = makeCache<string[] | null>();
  * Токены БОДИТ ролиуд (backend-ийн `/users/me`-ээс — гарын үсэг шалгагдсаны
  * дараах өгөгдлийн сангийн утга). Токен хүчингүй бол null.
  *
- * ЖИЧ: JWT-г frontend дээр өөрөө задалж роль уншиж БОЛОХГҮЙ — гарын үсгийн
- * түлхүүр энд байхгүй тул хуурамч роль илрэхгүй.
+ * ЖИЧ: `/users/me` амжилттай хариулсны дараа token-ий `valuation_org` claim-ийг
+ * уншиж synthetic professional_org marker нэмнэ. Энэ claim нь role биш, харин
+ * appdb.valuation_org_employee эх сурвалжийн тэмдэг.
  */
 export async function sessionRoles(token: string): Promise<string[] | null> {
   if (!token) return null;
@@ -153,7 +167,12 @@ export async function sessionRoles(token: string): Promise<string[] | null> {
         roles?: { name?: string }[];
       };
       const roles = body.data?.roles ?? body.roles ?? [];
-      return roles.map((r) => r?.name ?? "").filter(Boolean);
+      const names = roles.map((r) => r?.name ?? "").filter(Boolean);
+      const payload = decodeTokenPayload(token);
+      if (payload?.valuation_org === true && !names.includes("professional_org")) {
+        names.push("professional_org");
+      }
+      return names;
     } catch {
       return null;
     }

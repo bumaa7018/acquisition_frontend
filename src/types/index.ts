@@ -551,7 +551,8 @@ export interface Parcel {
   overlap_count?: number;
   // Урсгал бүрийн нөхөх олговрын илгээх төлөв (valuation_type → status).
   // Санхүүгийн мэргэжилтэнд зөвхөн илгээсэн/баталгаажсан урсгалтай нэгж талбар харагдана.
-  valuation_statuses?: Partial<Record<ValuationType, ValuationStatus>>;
+  valuation_statuses?:
+    Partial<Record<ValuationType, ValuationStatus>> | ParcelValuationStatus[];
 }
 
 /** Нэгж талбарын БАЙРШЛЫН давхардал (нэг мөр = нэг давхцаж буй талбар). */
@@ -894,7 +895,14 @@ export interface ParcelStatusHistory {
 
 // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв (нэгж талбар бүрт).
 // "rejected" — өөр урсгал баталгаажихад автоматаар татгалзагдсан (эцсийн).
-export type ValuationStatus = "draft" | "submitted" | "approved" | "returned" | "rejected";
+export type ValuationStatus =
+  "draft" | "submitted" | "approved" | "returned" | "rejected";
+
+export interface ParcelValuationStatus {
+  valuation_type: ValuationType;
+  status: ValuationStatus;
+  count?: number;
+}
 
 export interface ValuationSubmission {
   id: string;
@@ -946,7 +954,7 @@ export interface ValuationSubmissionHistory {
   id: number;
   acquisition_id: string;
   parcel_id: string;
-  action: "submit" | "approve" | "return" | "reject";
+  action: "submit" | "approve" | "return" | "reject" | "cancel";
   from_status: string;
   to_status: string;
   note: string;
@@ -955,6 +963,37 @@ export interface ValuationSubmissionHistory {
   attachment_name: string;
   created_by: string;
   created_at: string;
+}
+
+export interface ValuationSnapshot {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  valuation_type: ValuationType;
+  submission_id?: string;
+  note: string;
+  cancelled_by: string;
+  cancelled_at: string;
+  submitted_by: string;
+  submitted_at: string | null;
+  reviewed_by: string;
+  reviewed_at: string | null;
+  land_valuation: Partial<LandValuation> | Record<string, never>;
+  assets: Array<
+    Partial<Asset> & {
+      specs?: Array<Partial<AssetSpec>>;
+      calculations?: Array<Partial<AssetCalculation>>;
+    }
+  >;
+  compensations: Array<Partial<Compensation>>;
+  total_amount: number;
+  /**
+   * Цуцлах үед хүчинтэй байсан ҮНЭЛГЭЭНИЙ ТАЙЛАН. Цуцлалтын дараа тайлан нь
+   * нэгж талбарын хавсралтаас хасагддаг тул зөвхөн эндээс татагдана
+   * (файл нь хадгалалтад хэвээр үлдэнэ). Хуучин snapshot-д хоосон байж болно.
+   */
+  report_url?: string;
+  report_name?: string;
 }
 
 export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
@@ -1288,7 +1327,13 @@ export interface ValuationImportAssetPayload {
   compensation_amount?: number; // >0 бол cash нөхөн олговор үүснэ
   specs?: { spec_type_id: number; value: string }[];
   // calc_type_id байвал шууд, байхгүй бол name-ээр backend төрлийг олж/үүсгэнэ. group — бүлгийн нэр.
-  calculations?: { calc_type_id?: number; name?: string; group?: string; unit: string; value: number }[];
+  calculations?: {
+    calc_type_id?: number;
+    name?: string;
+    group?: string;
+    unit: string;
+    value: number;
+  }[];
 }
 
 export interface ValuationImportPayload {
@@ -1352,6 +1397,7 @@ export interface AssetCalcType {
   name: string;
   default_unit: string;
   sort_order: number;
+  grp?: string;
 }
 
 export interface LandValuation {
@@ -1537,7 +1583,10 @@ export const DECISION_DRAFT_STATUS_LABELS: Record<number, string> = {
 
 // Жагсаалт/дэлгэрэнгүй дээрх төлөвийн badge — parcel-ийн STATUS_CFG-тэй адил
 // өнгөний схем (улбар шар = хүлээгдэж буй, ногоон = дууссан).
-export const DECISION_DRAFT_STATUS_STYLES: Record<number, { color: string; bg: string }> = {
+export const DECISION_DRAFT_STATUS_STYLES: Record<
+  number,
+  { color: string; bg: string }
+> = {
   [DECISION_DRAFT_STATUS_DRAFT]: { color: "#f59e0b", bg: "#f59e0b18" },
   [DECISION_DRAFT_STATUS_CONFIRMED]: { color: "#0acf97", bg: "#0acf9718" },
 };

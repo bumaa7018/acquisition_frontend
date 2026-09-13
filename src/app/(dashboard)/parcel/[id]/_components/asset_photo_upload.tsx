@@ -1,18 +1,18 @@
 "use client";
 
 // Хөрөнгийн зураг оруулах: олон зургийг browser дээр НЭГ PDF болгож нэгтгээд
-// (pdf-lib, dynamic import) серверт хадгална. PDF нь тухайн хөрөнгийн мэдээлэлд хавсрагдаж,
+// (pdf-lib) серверт хадгална. PDF нь тухайн хөрөнгийн мэдээлэлд хавсрагдаж,
 // "Зураг харах" холбоосоор нээгдэнэ. RBAC нь эцэг компонентоос (canEdit) удирдагдана.
 
 import { useRef, useState } from "react";
 import { Camera, ImagePlus, X, Loader2, FileText } from "lucide-react";
+import { PDFDocument } from "pdf-lib";
 import { toast } from "sonner";
 import { getApiError } from "@/lib/utils";
 
 // Олон зургийг нэг PDF болгох. Формат жигдрүүлэхийн тулд бүх зургийг canvas-аар
 // JPEG болгож (том зургийг 1600px хүртэл багасгаж), pdf-lib-ээр хуудас болгон нэмнэ.
 async function imagesToPdf(files: File[]): Promise<Uint8Array> {
-  const { PDFDocument } = await import("pdf-lib");
   const doc = await PDFDocument.create();
   const MAX = 1600;
   for (const file of files) {

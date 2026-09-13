@@ -5,13 +5,23 @@ import { toast } from "sonner";
 import { Pencil, Save, X, Calculator, AlertTriangle } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { isProfessionalOrg } from "@/lib/role-utils";
+import {
+  isFinanceSpecialist,
+  isMika,
+  shouldUseProfessionalOrgApi,
+} from "@/lib/role-utils";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { STATUS_LABELS } from "@/types";
 import type { Plan } from "@/types";
-import { PlanCodeSearch, planHasBoundary } from "@/components/ui/plan-code-search";
+import {
+  PlanCodeSearch,
+  planHasBoundary,
+} from "@/components/ui/plan-code-search";
 import { STATUS_CFG } from "./shared";
-import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import {
+  ConfirmDialog,
+  type PendingConfirm,
+} from "@/components/ui/confirm-dialog";
 import {
   BoundaryShapefileInput,
   type BoundaryFileSelection,
@@ -21,10 +31,12 @@ import { SocioSurveySection } from "./socio-survey-section";
 export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
+  const canViewSocioSurvey = !isFinanceSpecialist() && !isMika();
   const { data: acq } = useQuery({
     queryKey: ["land", id],
-    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
+    queryFn: () =>
+      useProfApi ? profApi.profGetAcquisition(id) : landApi.getById(id),
   });
   // Санхүүжилтийн эх үүсвэр дэлгэрэнгүй API-тай хамт ирдэг — тусдаа дуудлага хийхгүй
   const fundingSources = acq?.funding_sources ?? [];
@@ -56,7 +68,9 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     nith_decree_number: "",
     group_list_number: "",
   });
-  const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(null);
+  const [generalCategoryId, setGeneralCategoryId] = useState<number | null>(
+    null,
+  );
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
   const [professionalOrgId, setProfessionalOrgId] = useState<string>("");
   const { data: subCategories = [] } = useQuery({
@@ -95,7 +109,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   //  2. Гараас .shp файл — хээрийн хэмжилтээр төлөвлөгөөний хил засагдсан үед.
   //     Талбайн зөрүү 30%-иас бага байх ёстой (серверт шалгагдана).
   const [boundaryPlan, setBoundaryPlan] = useState<Plan | null>(null);
-  const [boundaryFile, setBoundaryFile] = useState<BoundaryFileSelection | null>(null);
+  const [boundaryFile, setBoundaryFile] =
+    useState<BoundaryFileSelection | null>(null);
 
   useEffect(() => {
     if (acq) {
@@ -135,15 +150,19 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       fd.append("group_list_number", form.group_list_number.trim());
       if (generalCategoryId)
         fd.append("general_category_id", String(generalCategoryId));
-      if (subCategoryId)
-        fd.append("sub_category_id", String(subCategoryId));
+      if (subCategoryId) fd.append("sub_category_id", String(subCategoryId));
       const areaVal = parseFloat(areaM2);
-      if (!isNaN(areaVal) && areaVal > 0)
-        fd.append("area_m2", String(areaVal));
+      if (!isNaN(areaVal) && areaVal > 0) fd.append("area_m2", String(areaVal));
       // Дугаар илгээвэл backend тэр төлөвлөгөөг ДАХИН хайж, түүний хилээр
       // чөлөөлөлтийн хилийг солино (Create-тэй ижил урсгал).
       if (boundaryPlan) {
-        fd.append("plan_parcel_id", boundaryPlan.parcel_id || boundaryPlan.plan_code || boundaryPlan.code || "");
+        fd.append(
+          "plan_parcel_id",
+          boundaryPlan.parcel_id ||
+            boundaryPlan.plan_code ||
+            boundaryPlan.code ||
+            "",
+        );
       }
       // Гараас оруулсан хилийн файл. Хоёуланг зэрэг илгээхгүй (сервер 400
       // буцаана) — UI дээр нэг нь сонгогдвол нөгөө нь хаагдана.
@@ -174,10 +193,18 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       setBoundaryPlan(null);
       setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
-      queryClient.invalidateQueries({ queryKey: ["land-parcels", id], refetchType: "all" });
+      queryClient.invalidateQueries({
+        queryKey: ["land-parcels", id],
+        refetchType: "all",
+      });
       // Хил солиход нэгж талбарын НИЙТ тоо ба хилийн түүх хоёулаа хуучирна.
-      queryClient.invalidateQueries({ queryKey: ["land-parcels-total", id], refetchType: "all" });
-      queryClient.invalidateQueries({ queryKey: ["land-boundary-history", id] });
+      queryClient.invalidateQueries({
+        queryKey: ["land-parcels-total", id],
+        refetchType: "all",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["land-boundary-history", id],
+      });
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
@@ -204,8 +231,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       }
       setPendingConfirm({
         title: "Чөлөөлөх хилийг файлаар солих уу?",
-        description:
-          `«${boundaryFile.file.name}» файлын хилээр чөлөөлөлтийн хил солигдож (талбайн зөрүү ${boundaryFile.preview.deviation_percent.toFixed(1)}%), нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
+        description: `«${boundaryFile.file.name}» файлын хилээр чөлөөлөлтийн хил солигдож (талбайн зөрүү ${boundaryFile.preview.deviation_percent.toFixed(1)}%), нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
         confirmLabel: "Зөвшөөрөх",
         confirmColor: "#f59e0b",
         onConfirm: () => saveMutation.mutate(),
@@ -220,11 +246,14 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       toast.error("Төлөвлөгөөнд хил бүртгэгдээгүй тул хил солих боломжгүй");
       return;
     }
-    const planLabel = boundaryPlan.parcel_id || boundaryPlan.plan_code || boundaryPlan.code || "";
+    const planLabel =
+      boundaryPlan.parcel_id ||
+      boundaryPlan.plan_code ||
+      boundaryPlan.code ||
+      "";
     setPendingConfirm({
       title: "Чөлөөлөх хилийг солих уу?",
-      description:
-        `«${planLabel}» төлөвлөгөөний хилээр чөлөөлөлтийн хил солигдож, нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
+      description: `«${planLabel}» төлөвлөгөөний хилээр чөлөөлөлтийн хил солигдож, нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
       confirmLabel: "Зөвшөөрөх",
       confirmColor: "#f59e0b",
       onConfirm: () => saveMutation.mutate(),
@@ -342,7 +371,9 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               хадгалагдсан — дэлгэц ГУС руу дахин хандахгүй. */}
           {row(
             "Төлөвлөгөөний нэгж талбар",
-            acq.plan_parcel_id ? <span className="font-mono">{acq.plan_parcel_id}</span> : undefined,
+            acq.plan_parcel_id ? (
+              <span className="font-mono">{acq.plan_parcel_id}</span>
+            ) : undefined,
           )}
           {row("Төлөвлөгөөний дугаар", acq.plan_code)}
           {row("Төлөвлөгөөний нэр", acq.plan_name)}
@@ -350,9 +381,16 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           {row("Бүтээн байгуулалт", acq.plan_gazner)}
           {row(
             "Төлөвлөгөөний талбай",
-            (acq.plan_area_m2 ?? 0) > 0 ? formatArea(acq.plan_area_m2) : undefined,
+            (acq.plan_area_m2 ?? 0) > 0
+              ? formatArea(acq.plan_area_m2)
+              : undefined,
           )}
-          {row("Төлөвлөгөө батлагдсан", acq.plan_approved_date ? formatDate(acq.plan_approved_date) : undefined)}
+          {row(
+            "Төлөвлөгөө батлагдсан",
+            acq.plan_approved_date
+              ? formatDate(acq.plan_approved_date)
+              : undefined,
+          )}
           {row(
             "Төлөвлөгөөний хугацаа",
             acq.plan_start_date || acq.plan_end_date
@@ -418,19 +456,20 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
             </div>
           )}
           {/* Хил солих нь нэгж талбарыг УСТГАЖ болох тул анхааруулна */}
-          {editing && (boundaryFile?.preview.accepted ||
-            (boundaryPlan && planHasBoundary(boundaryPlan))) && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-              <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
-                Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд{" "}
-                <span className="font-semibold">ороогүй</span> нэгж талбарууд
-                үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт бүрмөсөн
-                устана. &laquo;Чөлөөлсөн&raquo; төлөвтэй нэгж талбар шинэ
-                хилээс гарч байвал хил хүлээгдэхгүй.
-              </p>
-            </div>
-          )}
+          {editing &&
+            (boundaryFile?.preview.accepted ||
+              (boundaryPlan && planHasBoundary(boundaryPlan))) && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
+                  Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд{" "}
+                  <span className="font-semibold">ороогүй</span> нэгж талбарууд
+                  үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт бүрмөсөн
+                  устана. &laquo;Чөлөөлсөн&raquo; төлөвтэй нэгж талбар шинэ
+                  хилээс гарч байвал хил хүлээгдэхгүй.
+                </p>
+              </div>
+            )}
           {row(
             "Статус",
             <span
@@ -442,13 +481,18 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           )}
           {/* Талбай — засах горимд input + хилээс тооцоолох товч */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Талбай</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+              Талбай
+            </span>
             {editing ? (
               <div className="flex items-center gap-2 flex-1">
                 <input
                   type="number"
                   value={areaM2}
-                  onChange={(e) => { setAreaM2(e.target.value); setAreaAutoCalc(false); }}
+                  onChange={(e) => {
+                    setAreaM2(e.target.value);
+                    setAreaAutoCalc(false);
+                  }}
                   placeholder="м² оруулах..."
                   className="h-7 w-36 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-2.5 text-[12px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
                 />
@@ -464,7 +508,9 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                   </button>
                 )}
                 {areaAutoCalc && (
-                  <span className="text-[11px] text-[#0acf97] font-medium whitespace-nowrap">Автоматаар тооцоологдсон</span>
+                  <span className="text-[11px] text-[#0acf97] font-medium whitespace-nowrap">
+                    Автоматаар тооцоологдсон
+                  </span>
                 )}
               </div>
             ) : (
@@ -516,12 +562,16 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
           {/* Нэгж талбарын тоо ба нийт чөлөөлөгдөх талбай */}
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-[#37394d] flex flex-col gap-0">
             <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Нэгж талбарын тоо</span>
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+                Нэгж талбарын тоо
+              </span>
               <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
                 {parcelCount > 0 ? (
                   <span className="inline-flex items-center gap-1">
                     {parcelCount}
-                    <span className="text-[11px] font-normal text-slate-400">нэгж талбар</span>
+                    <span className="text-[11px] font-normal text-slate-400">
+                      нэгж талбар
+                    </span>
                   </span>
                 ) : (
                   "0 нэгж талбар"
@@ -529,13 +579,17 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               </span>
             </div>
             <div className="flex items-center gap-3 py-2.5">
-              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">Нийт нөлөөлөлд өртсөн талбай</span>
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-40">
+                Нийт нөлөөлөлд өртсөн талбай
+              </span>
               <span className="text-[13px] font-semibold">
                 {totalAcqAreaM2 > 0 ? (
                   <span className="inline-flex rounded-md bg-amber-100 px-2 py-0.5 font-semibold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
                     {formatArea(totalAcqAreaM2)}
                   </span>
-                ) : "—"}
+                ) : (
+                  "—"
+                )}
               </span>
             </div>
           </div>
@@ -587,9 +641,13 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
             </span>
             <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200 leading-relaxed">
               {fundingSources.length > 0
-                ? fundingSources.map((s) =>
-                    [s.organization_name, s.source_type].filter(Boolean).join(" — ")
-                  ).join(", ")
+                ? fundingSources
+                    .map((s) =>
+                      [s.organization_name, s.source_type]
+                        .filter(Boolean)
+                        .join(" — "),
+                    )
+                    .join(", ")
                 : "—"}
             </span>
           </div>
@@ -601,14 +659,18 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               <select
                 value={generalCategoryId ?? ""}
                 onChange={(e) => {
-                  setGeneralCategoryId(e.target.value ? Number(e.target.value) : null);
+                  setGeneralCategoryId(
+                    e.target.value ? Number(e.target.value) : null,
+                  );
                   setSubCategoryId(null);
                 }}
                 className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
               >
                 <option value="">— Сонгоно уу —</option>
                 {generalCategories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             ) : (
@@ -625,14 +687,18 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               <select
                 value={subCategoryId ?? ""}
                 onChange={(e) =>
-                  setSubCategoryId(e.target.value ? Number(e.target.value) : null)
+                  setSubCategoryId(
+                    e.target.value ? Number(e.target.value) : null,
+                  )
                 }
                 disabled={!generalCategoryId}
                 className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all disabled:opacity-50"
               >
                 <option value="">— Сонгоно уу —</option>
                 {subCategories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </select>
             ) : (
@@ -742,7 +808,13 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
 
           {/* Нийгэм эдийн засгийн судалгаа — өөрийн цонх, өөрийн хадгалалттай
               тул "Засах" режимээс ХАМААРАХГҮЙ (тусдаа endpoint). */}
-          <SocioSurveySection id={id} canEdit={canEdit} />
+          {canViewSocioSurvey && (
+            <SocioSurveySection
+              id={id}
+              canEdit={canEdit && !useProfApi}
+              useProfApi={useProfApi}
+            />
+          )}
         </div>
       </div>
 

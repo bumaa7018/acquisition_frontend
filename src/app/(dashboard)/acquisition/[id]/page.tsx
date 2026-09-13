@@ -15,7 +15,7 @@ import {
   canViewAcquisitionTab,
   hasRole,
   isExternalSpecialRole,
-  isProfessionalOrg,
+  shouldUseProfessionalOrgApi,
 } from "@/lib/role-utils";
 import type { AcquisitionTabKey } from "@/lib/access-policy";
 import {
@@ -82,19 +82,27 @@ export default function AcquisitionDetailPage() {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [reportLoading, setReportLoading] = useState(false);
   const isExternal = isExternalSpecialRole();
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
 
   function handleTabClick(key: Tab) {
     setTab(key);
   }
   // Backend PUT нь admin эсвэл ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
-  const canEditBase = hasRole("admin", "senior_specialist", "Ахлах мэргэжилтэн") && hasPermission("land:update");
+  const canEditBase =
+    hasRole("admin", "senior_specialist", "Ахлах мэргэжилтэн") &&
+    hasPermission("land:update");
 
-  const { data: acq, isLoading, error } = useQuery({
+  const {
+    data: acq,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["land", id],
-    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(id) : landApi.getById(id)),
+    queryFn: () =>
+      useProfApi ? profApi.profGetAcquisition(id) : landApi.getById(id),
     retry: (failCount, err) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
       if (status === 403 || status === 404) return false;
       return failCount < 2;
     },
@@ -109,7 +117,8 @@ export default function AcquisitionDetailPage() {
       </div>
     );
 
-  const errStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  const errStatus = (error as { response?: { status?: number } } | null)
+    ?.response?.status;
   if (errStatus === 403)
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
@@ -157,8 +166,18 @@ export default function AcquisitionDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">
-          <svg className="h-8 w-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          <svg
+            className="h-8 w-8 text-amber-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+            />
           </svg>
         </div>
         <div className="text-center">
@@ -166,7 +185,11 @@ export default function AcquisitionDetailPage() {
             Дэлгэрэнгүй мэдээлэл хаалттай
           </p>
           <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
-            Энэ чөлөөлөлт <strong className="text-slate-600 dark:text-slate-300">Баталгаажсан</strong> төлөвтэй тул зөвхөн систем администратор харах боломжтой.
+            Энэ чөлөөлөлт{" "}
+            <strong className="text-slate-600 dark:text-slate-300">
+              Баталгаажсан
+            </strong>{" "}
+            төлөвтэй тул зөвхөн систем администратор харах боломжтой.
           </p>
         </div>
         <Link
@@ -305,12 +328,17 @@ export default function AcquisitionDetailPage() {
         <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 px-4 py-3">
           <span className="text-amber-500 shrink-0">🔒</span>
           <p className="text-[13px] text-amber-700 dark:text-amber-400 font-medium">
-            Энэ чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй байгаа тул ямар нэгэн засвар хийх боломжгүй.
+            Энэ чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй байгаа тул ямар
+            нэгэн засвар хийх боломжгүй.
           </p>
         </div>
       )}
-      {activeTab === "general" && <GeneralTab id={id} canEdit={canEdit && !isExternal} />}
-      {activeTab === "attachments" && <AttachmentsTab id={id} canEdit={canEdit} />}
+      {activeTab === "general" && (
+        <GeneralTab id={id} canEdit={canEdit && !isExternal} />
+      )}
+      {activeTab === "attachments" && (
+        <AttachmentsTab id={id} canEdit={canEdit} />
+      )}
       {activeTab === "progress" && <ProgressTab id={id} canEdit={canEdit} />}
       {activeTab === "parcels" && (
         <ParcelsTab

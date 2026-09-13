@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ClipboardList, FilePlus2, FileText, Loader2, X } from "lucide-react";
 import { landApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
 import { formatDate, getApiError } from "@/lib/utils";
 
 /** Файл PDF эсэх — MIME хоосон ирэх тохиолдол байдаг тул өргөтгөлөөр ч шалгана. */
@@ -54,11 +55,19 @@ function formatSize(bytes: number) {
 
 const EMPTY_FORM = { agreed: "", rejected: "", note: "" };
 
-export function SocioSurveySection({ id, canEdit }: { id: string; canEdit: boolean }) {
+export function SocioSurveySection({
+  id,
+  canEdit,
+  useProfApi = false,
+}: {
+  id: string;
+  canEdit: boolean;
+  useProfApi?: boolean;
+}) {
   const queryClient = useQueryClient();
   const { data: survey, isLoading } = useQuery({
-    queryKey: ["acq-socio-survey", id],
-    queryFn: () => landApi.getSocioSurvey(id),
+    queryKey: ["acq-socio-survey", useProfApi ? "prof" : "internal", id],
+    queryFn: () => (useProfApi ? profApi.profGetSocioSurvey(id) : landApi.getSocioSurvey(id)),
     enabled: !!id,
   });
 
@@ -93,6 +102,9 @@ export function SocioSurveySection({ id, canEdit }: { id: string; canEdit: boole
           setMerging(false);
         }
       }
+      if (useProfApi) {
+        throw new Error("Мэргэжлийн байгууллага судалгааны мэдээлэл засах эрхгүй.");
+      }
       return landApi.saveSocioSurvey(id, {
         agreed_count: Number(form.agreed),
         rejected_count: Number(form.rejected),
@@ -104,7 +116,7 @@ export function SocioSurveySection({ id, canEdit }: { id: string; canEdit: boole
       toast.success("Судалгааны мэдээлэл хадгалагдлаа");
       setOpen(false);
       setFiles([]);
-      void queryClient.invalidateQueries({ queryKey: ["acq-socio-survey", id] });
+      void queryClient.invalidateQueries({ queryKey: ["acq-socio-survey"] });
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });

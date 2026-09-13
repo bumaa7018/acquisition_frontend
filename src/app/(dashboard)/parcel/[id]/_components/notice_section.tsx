@@ -98,17 +98,17 @@ export function NoticeSection({
       {
         queryKey: ["land", parcel.acquisition_id],
         queryFn: () => landApi.getById(parcel.acquisition_id),
-        enabled: !!parcel.acquisition_id,
+        enabled: canSend && !!parcel.acquisition_id,
       },
       {
         queryKey: ["parcel-notice-emails", parcelId],
         queryFn: () => parcelApi.listNoticeEmails(parcelId),
-        enabled: !!parcelId,
+        enabled: canSend && !!parcelId,
       },
       {
         queryKey: ["parcel-emongolia-notices", parcelId],
         queryFn: () => parcelApi.listEMongoliaNotices(parcelId),
-        enabled: !!parcelId,
+        enabled: canSend && !!parcelId,
       },
     ],
   });
@@ -200,9 +200,9 @@ export function NoticeSection({
   }, [parcel, acquisition]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !canSend) return;
     void buildPreview();
-  }, [open, buildPreview]);
+  }, [open, canSend, buildPreview]);
 
   // Blob URL-ийг цонх хаагдахад чөлөөлнө (санах ой үлдэхгүй).
   useEffect(() => {
@@ -216,6 +216,7 @@ export function NoticeSection({
   }, [open]);
 
   const openModal = () => {
+    if (!canSend) return;
     setChannel("email");
     setEmail(emailSuggestions[0] ?? "");
     setRegisterNo(registerSuggestions[0]?.register ?? "");
@@ -226,6 +227,7 @@ export function NoticeSection({
 
   const sendMutation = useMutation({
     mutationFn: async () => {
+      if (!canSend) throw new Error("Мэдэгдэх хуудас илгээх эрхгүй.");
       if (!pdfFile) throw new Error("Мэдэгдэх хуудас бэлэн болоогүй байна");
       if (channel === "email") {
         return parcelApi.sendNoticeEmail(parcelId, email.trim(), pdfFile);
@@ -259,6 +261,7 @@ export function NoticeSection({
   });
 
   const handleSubmit = () => {
+    if (!canSend) return;
     if (channel === "email") {
       if (!EMAIL_RE.test(email.trim())) {
         setFieldError(true);

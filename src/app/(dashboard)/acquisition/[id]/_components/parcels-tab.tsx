@@ -328,12 +328,10 @@ export function ParcelsTab({
       )
     )
       return false;
-    // Санхүүгийн мэргэжилтэнд ЗӨВХӨН хянуулахаар илгээсэн (submitted) төлөвтэй
-    // үнэлгээтэй нэгж талбар харагдана — баталгаажсан болон хүлээгдэж буй
-    // (draft/returned) үнэлгээтэй талбарууд жагсаалтад орохгүй.
+    // Санхүү илгээсэн үнэлгээг хянана, баталгаажсан үнэлгээг цуцалж болно.
     if (isFinance) {
       return Object.values(parcel.valuation_statuses ?? {}).some(
-        (status) => status === "submitted",
+        (status) => status === "submitted" || status === "approved",
       );
     }
     return true;

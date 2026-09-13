@@ -2,11 +2,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import {
+  isExternalSpecialRole,
+  shouldUseProfessionalOrgApi,
+} from "@/lib/role-utils";
 import { formatArea, formatDate, getApiError } from "@/lib/utils";
 import { Banknote, Calculator, Gavel, Landmark, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import type { ParcelBasePriceFactor, ParcelCourtDecision, ParcelFeeItem, ParcelInvoice, ParcelMortgage } from "@/types";
+import type {
+  ParcelBasePriceFactor,
+  ParcelCourtDecision,
+  ParcelFeeItem,
+  ParcelInvoice,
+  ParcelMortgage,
+} from "@/types";
 
 /**
  * Нэхэмжлэлийн ТӨЛӨВИЙН шошгоны өнгө — ГУС-ийн `status_id`-аар ХАТУУ шалгана
@@ -35,16 +44,28 @@ const num = (v: number) => (v || 0).toLocaleString();
 
 function EmptyRow({ text }: { text: string }) {
   return (
-    <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">{text}</p>
+    <p className="py-6 text-center text-[13px] text-slate-400 dark:text-slate-500">
+      {text}
+    </p>
   );
 }
 
 /** Хүснэгтгүй "нэр — утга" мөр (суурь үнийн карт). */
-function InfoRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function InfoRow({
+  label,
+  value,
+  strong,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
-      <span className={`tabular-nums ${strong ? "text-[13px] font-bold text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}>
+      <span
+        className={`tabular-nums ${strong ? "text-[13px] font-bold text-[#02c0ce]" : "text-slate-700 dark:text-slate-200"}`}
+      >
         {value}
       </span>
     </div>
@@ -52,9 +73,17 @@ function InfoRow({ label, value, strong }: { label: string; value: string; stron
 }
 
 function SectionCard({
-  title, icon, count, action, children,
+  title,
+  icon,
+  count,
+  action,
+  children,
 }: {
-  title: string; icon: React.ReactNode; count?: number; action?: React.ReactNode; children: React.ReactNode;
+  title: string;
+  icon: React.ReactNode;
+  count?: number;
+  action?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div className="ap-card p-5">
@@ -98,10 +127,17 @@ function RefreshButton({
 }
 
 /** Нэг барьцааны мөр. Давхар барьцаа нь эцгийнхээ дор доголтой харагдана. */
-function MortgageRow({ item, nested }: { item: ParcelMortgage; nested?: boolean }) {
-  const period = item.start_mortgage_period || item.end_mortgage_period
-    ? `${item.start_mortgage_period ? formatDate(item.start_mortgage_period) : "—"} — ${item.end_mortgage_period ? formatDate(item.end_mortgage_period) : "—"}`
-    : "";
+function MortgageRow({
+  item,
+  nested,
+}: {
+  item: ParcelMortgage;
+  nested?: boolean;
+}) {
+  const period =
+    item.start_mortgage_period || item.end_mortgage_period
+      ? `${item.start_mortgage_period ? formatDate(item.start_mortgage_period) : "—"} — ${item.end_mortgage_period ? formatDate(item.end_mortgage_period) : "—"}`
+      : "";
   const isActiveStatus = String(item.status_id).trim() === "20";
   return (
     <div
@@ -124,11 +160,13 @@ function MortgageRow({ item, nested }: { item: ParcelMortgage; nested?: boolean 
           </span>
         )}
         {item.status_name && (
-          <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-            isActiveStatus
-              ? "bg-[#02c0ce]/10 text-[#02c0ce]"
-              : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
-          }`}>
+          <span
+            className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              isActiveStatus
+                ? "bg-[#02c0ce]/10 text-[#02c0ce]"
+                : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+            }`}
+          >
             {item.status_name}
           </span>
         )}
@@ -140,7 +178,9 @@ function MortgageRow({ item, nested }: { item: ParcelMortgage; nested?: boolean 
           </span>
         )}
         {item.monetary_unit_value > 0 && (
-          <span className="tabular-nums">Ханш: {num(item.monetary_unit_value)}</span>
+          <span className="tabular-nums">
+            Ханш: {num(item.monetary_unit_value)}
+          </span>
         )}
         {period && <span>{period}</span>}
         {item.loan_contract_no && item.mortgage_contract_no && (
@@ -151,21 +191,34 @@ function MortgageRow({ item, nested }: { item: ParcelMortgage; nested?: boolean 
   );
 }
 
-export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
+export function FinanceTab({
+  acqId,
+  parcelId,
+  isLocked = false,
+}: {
+  acqId: string;
+  parcelId: string;
+  isLocked?: boolean;
+}) {
   const queryClient = useQueryClient();
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
   const isExternal = isExternalSpecialRole();
   const { data, isLoading } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
-    queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, parcelId) : landApi.getParcel(acqId, parcelId)),
+    queryFn: () =>
+      useProfApi
+        ? profApi.profGetParcel(acqId, parcelId)
+        : landApi.getParcel(acqId, parcelId),
     enabled: !!acqId,
   });
 
   const invalidateParcel = () => {
-    queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+    queryClient.invalidateQueries({
+      queryKey: ["parcel-full", acqId, parcelId],
+    });
   };
   const parcelCode = data?.parcel_id ?? "";
-  const canSync = !isExternal && !isProfOrg && !isLocked && !!parcelCode;
+  const canSync = !isExternal && !useProfApi && !isLocked && !!parcelCode;
 
   const invoiceSyncMutation = useMutation({
     mutationFn: () => landApi.syncParcelInvoices(acqId, parcelCode),
@@ -173,7 +226,10 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       toast.success("Газрын төлбөрийн нэхэмжлэл шинэчлэгдлээ");
       invalidateParcel();
     },
-    onError: (err) => toast.error(getApiError(err, "Газрын төлбөрийн нэхэмжлэл шинэчлэхэд алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(
+        getApiError(err, "Газрын төлбөрийн нэхэмжлэл шинэчлэхэд алдаа гарлаа"),
+      ),
   });
   const mortgageSyncMutation = useMutation({
     mutationFn: () => landApi.syncParcelMortgages(acqId, parcelCode),
@@ -181,7 +237,10 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       toast.success("Барьцааны мэдээлэл шинэчлэгдлээ");
       invalidateParcel();
     },
-    onError: (err) => toast.error(getApiError(err, "Барьцааны мэдээлэл шинэчлэхэд алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(
+        getApiError(err, "Барьцааны мэдээлэл шинэчлэхэд алдаа гарлаа"),
+      ),
   });
   const courtSyncMutation = useMutation({
     mutationFn: () => landApi.syncParcelCourtDecisions(acqId, parcelCode),
@@ -189,7 +248,10 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       toast.success("Шүүхийн шийдвэрийн мэдээлэл шинэчлэгдлээ");
       invalidateParcel();
     },
-    onError: (err) => toast.error(getApiError(err, "Шүүхийн шийдвэрийн мэдээлэл шинэчлэхэд алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(
+        getApiError(err, "Шүүхийн шийдвэрийн мэдээлэл шинэчлэхэд алдаа гарлаа"),
+      ),
   });
   const feeSyncMutation = useMutation({
     mutationFn: () => landApi.syncParcelFee(acqId, parcelCode),
@@ -202,7 +264,8 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       }
       invalidateParcel();
     },
-    onError: (err) => toast.error(getApiError(err, "Газрын төлбөр бодоход алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(getApiError(err, "Газрын төлбөр бодоход алдаа гарлаа")),
   });
   const basePriceSyncMutation = useMutation({
     mutationFn: () => landApi.syncParcelBasePrice(acqId, parcelCode),
@@ -210,17 +273,27 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       toast.success("Газрын суурь үнэ шинэчлэгдлээ");
       invalidateParcel();
     },
-    onError: (err) => toast.error(getApiError(err, "Газрын суурь үнэ шинэчлэхэд алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(getApiError(err, "Газрын суурь үнэ шинэчлэхэд алдаа гарлаа")),
   });
 
   if (isLoading)
     return (
       <div className="ap-card p-5 animate-pulse space-y-3">
-        {[...Array(5)].map((_, i) => <div key={i} className="h-10 rounded bg-slate-100 dark:bg-[#252630]" />)}
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className="h-10 rounded bg-slate-100 dark:bg-[#252630]"
+          />
+        ))}
       </div>
     );
   if (!data)
-    return <div className="ap-card p-10 text-center text-[13px] text-slate-400">Мэдээлэл олдсонгүй</div>;
+    return (
+      <div className="ap-card p-10 text-center text-[13px] text-slate-400">
+        Мэдээлэл олдсонгүй
+      </div>
+    );
 
   const invoices: ParcelInvoice[] = data.invoices ?? [];
   const mortgages: ParcelMortgage[] = data.mortgages ?? [];
@@ -243,8 +316,11 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   // "өнчин" давхар барьцааг ч алдалгүй үндсэн түвшинд харуулна.
   const parents = mortgages.filter((m) => !m.source_parent_id);
   const parentIds = new Set(parents.map((m) => m.source_id));
-  const orphans = mortgages.filter((m) => m.source_parent_id && !parentIds.has(m.source_parent_id));
-  const childrenOf = (id: string) => mortgages.filter((m) => m.source_parent_id === id);
+  const orphans = mortgages.filter(
+    (m) => m.source_parent_id && !parentIds.has(m.source_parent_id),
+  );
+  const childrenOf = (id: string) =>
+    mortgages.filter((m) => m.source_parent_id === id);
 
   const totalAmount = invoices.reduce((sum, v) => sum + (v.amount || 0), 0);
   const totalPaid = invoices.reduce((sum, v) => sum + (v.paid_amount || 0), 0);
@@ -253,7 +329,9 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     <div className="flex flex-col gap-5">
       {/* Зүүн: суурь үнэ (хүснэгтгүй) | Баруун: төлбөрийн бодолт.
           Өмчлөлийн газарт төлбөр байдаггүй тул суурь үнэ БҮТЭН өргөнөө эзэлнэ. */}
-      <div className={`grid gap-5 ${isOwnership ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}>
+      <div
+        className={`grid gap-5 ${isOwnership ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}
+      >
         <SectionCard
           title="Газрын суурь үнэ"
           icon={<Calculator className="h-4 w-4" />}
@@ -275,17 +353,37 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               value={hasBasePrice ? `${num(basePricePerHa)}₮` : "—"}
               strong
             />
-            {fees.length > 0 ? fees.map((fee, index) => (
+            {fees.length > 0 ? (
+              fees.map((fee, index) => (
+                <InfoRow
+                  key={`confidence-${index}`}
+                  label={
+                    fees.length === 1
+                      ? "Дуудлага худалдааны анхны үнийн итгэлцүүр (%)"
+                      : `Дуудлага худалдааны анхны үнийн итгэлцүүр — ${fee.zone_name || fee.zone_no || `Бүс ${index + 1}`} (%)`
+                  }
+                  value={
+                    Number.isFinite(fee.confidence_percent)
+                      ? fee.confidence_percent.toLocaleString("mn-MN", {
+                          maximumFractionDigits: 8,
+                        })
+                      : "—"
+                  }
+                />
+              ))
+            ) : (
               <InfoRow
-                key={`confidence-${index}`}
-                label={fees.length === 1 ? "Дуудлага худалдааны анхны үнийн итгэлцүүр (%)" : `Дуудлага худалдааны анхны үнийн итгэлцүүр — ${fee.zone_name || fee.zone_no || `Бүс ${index + 1}`} (%)`}
-                value={Number.isFinite(fee.confidence_percent) ? fee.confidence_percent.toLocaleString("mn-MN", { maximumFractionDigits: 8 }) : "—"}
+                label="Дуудлага худалдааны анхны үнийн итгэлцүүр (%)"
+                value="—"
               />
-            )) : <InfoRow label="Дуудлага худалдааны анхны үнийн итгэлцүүр (%)" value="—" />}
+            )}
             <InfoRow label="Газрын зориулалт" value={landusePurpose} />
             <InfoRow label="Нийт талбай" value={formatArea(data.area_m2)} />
             {data.detail?.valuation_zone ? (
-              <InfoRow label="Үнэлгээний бүс" value={data.detail.valuation_zone} />
+              <InfoRow
+                label="Үнэлгээний бүс"
+                value={data.detail.valuation_zone}
+              />
             ) : null}
           </div>
 
@@ -295,7 +393,9 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             <div className="mt-3 border-t border-slate-100 pt-2.5 dark:border-[#37394d]">
               <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                 Үнэлгээний хүчин зүйл
-                <span className="ml-1 font-normal normal-case tracking-normal">({factors.length})</span>
+                <span className="ml-1 font-normal normal-case tracking-normal">
+                  ({factors.length})
+                </span>
               </p>
               <div className="grid grid-cols-1 gap-x-5 sm:grid-cols-2">
                 {factors.map((f) => (
@@ -306,9 +406,13 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                     }`}
                     title={f.factor_code}
                   >
-                    <span className="truncate text-slate-500 dark:text-slate-400">{f.factor_name}</span>
+                    <span className="truncate text-slate-500 dark:text-slate-400">
+                      {f.factor_name}
+                    </span>
                     <span className="shrink-0 tabular-nums font-medium text-slate-700 dark:text-slate-200">
-                      {f.factor_value != null ? f.factor_value.toLocaleString() : "—"}
+                      {f.factor_value != null
+                        ? f.factor_value.toLocaleString()
+                        : "—"}
                     </span>
                   </div>
                 ))}
@@ -339,7 +443,13 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                      {["Бүсийн төрөл", "Ашиглаж буй талбай (м²)", "Бүсийн талбай (м²)", "1м² төлбөр (₮)", "Төлбөр (₮)"].map((h, i) => (
+                      {[
+                        "Бүсийн төрөл",
+                        "Ашиглаж буй талбай (м²)",
+                        "Бүсийн талбай (м²)",
+                        "1м² төлбөр (₮)",
+                        "Төлбөр (₮)",
+                      ].map((h, i) => (
                         <th
                           key={h}
                           className={`px-2 py-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}
@@ -351,17 +461,30 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   </thead>
                   <tbody>
                     {fees.map((v, i) => (
-                      <tr key={`${v.zone_id}-${i}`} className="border-b border-slate-50 dark:border-[#37394d] last:border-0">
+                      <tr
+                        key={`${v.zone_id}-${i}`}
+                        className="border-b border-slate-50 dark:border-[#37394d] last:border-0"
+                      >
                         <td className="px-2 py-1.5 text-slate-700 dark:text-slate-200">
                           {v.zone_type || "—"}
                           {v.zone_name && (
-                            <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">{v.zone_name}</span>
+                            <span className="ml-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                              {v.zone_name}
+                            </span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.landuse_area)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.zone_area)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{num(v.base_fee_per_m2)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">{num(v.payment)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                          {num(v.landuse_area)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                          {num(v.zone_area)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">
+                          {num(v.base_fee_per_m2)}
+                        </td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-800 dark:text-white">
+                          {num(v.payment)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -371,13 +494,17 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                         Нийт
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-600 dark:text-slate-300">
-                        {num(fees.reduce((s, v) => s + (v.landuse_area || 0), 0))}
+                        {num(
+                          fees.reduce((s, v) => s + (v.landuse_area || 0), 0),
+                        )}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-600 dark:text-slate-300">
                         {num(fees.reduce((s, v) => s + (v.zone_area || 0), 0))}
                       </td>
                       <td />
-                      <td className="px-2 py-1.5 text-right tabular-nums font-bold text-[#02c0ce]">{num(feeTotal)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-bold text-[#02c0ce]">
+                        {num(feeTotal)}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>
@@ -392,7 +519,14 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         title="Газрын төлбөрийн нэхэмжлэл"
         icon={<Banknote className="h-4 w-4" />}
         count={invoices.length}
-        action={canSync ? <RefreshButton pending={invoiceSyncMutation.isPending} onClick={() => invoiceSyncMutation.mutate()} /> : undefined}
+        action={
+          canSync ? (
+            <RefreshButton
+              pending={invoiceSyncMutation.isPending}
+              onClick={() => invoiceSyncMutation.mutate()}
+            />
+          ) : undefined
+        }
       >
         {invoices.length === 0 ? (
           <EmptyRow text="Байхгүй" />
@@ -402,8 +536,18 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                    {["Нэхэмжлэл", "Утга", "Дүн", "Төлсөн", "Үлдэгдэл", "Төлөв"].map((h) => (
-                      <th key={h} className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                    {[
+                      "Нэхэмжлэл",
+                      "Утга",
+                      "Дүн",
+                      "Төлсөн",
+                      "Үлдэгдэл",
+                      "Төлөв",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="px-2 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
+                      >
                         {h}
                       </th>
                     ))}
@@ -413,18 +557,34 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   {invoices.map((v) => {
                     const rest = (v.amount || 0) - (v.paid_amount || 0);
                     return (
-                      <tr key={v.invoice_no} className="border-b border-slate-50 dark:border-[#37394d] last:border-0">
-                        <td className="px-2 py-2.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">{v.invoice_no}</td>
-                        <td className="px-2 py-2.5 text-slate-600 dark:text-slate-300">{v.description || "—"}</td>
-                        <td className="px-2 py-2.5 tabular-nums text-slate-600 dark:text-slate-300">{num(v.amount)}</td>
-                        <td className="px-2 py-2.5 tabular-nums text-slate-600 dark:text-slate-300">{num(v.paid_amount)}</td>
-                        <td className={`px-2 py-2.5 tabular-nums font-semibold ${rest > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+                      <tr
+                        key={v.invoice_no}
+                        className="border-b border-slate-50 dark:border-[#37394d] last:border-0"
+                      >
+                        <td className="px-2 py-2.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">
+                          {v.invoice_no}
+                        </td>
+                        <td className="px-2 py-2.5 text-slate-600 dark:text-slate-300">
+                          {v.description || "—"}
+                        </td>
+                        <td className="px-2 py-2.5 tabular-nums text-slate-600 dark:text-slate-300">
+                          {num(v.amount)}
+                        </td>
+                        <td className="px-2 py-2.5 tabular-nums text-slate-600 dark:text-slate-300">
+                          {num(v.paid_amount)}
+                        </td>
+                        <td
+                          className={`px-2 py-2.5 tabular-nums font-semibold ${rest > 0 ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                        >
                           {num(rest)}
                         </td>
                         <td className="px-2 py-2.5">
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            INVOICE_STATUS_BADGE[v.status_id] ?? INVOICE_STATUS_BADGE_OTHER
-                          }`}>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              INVOICE_STATUS_BADGE[v.status_id] ??
+                              INVOICE_STATUS_BADGE_OTHER
+                            }`}
+                          >
                             {v.status_name || v.status_id}
                           </span>
                         </td>
@@ -435,9 +595,24 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               </table>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-slate-100 pt-3 text-[12px] dark:border-[#37394d]">
-              <span className="text-slate-500 dark:text-slate-400">Нийт дүн: <b className="tabular-nums text-slate-700 dark:text-slate-200">{num(totalAmount)}₮</b></span>
-              <span className="text-slate-500 dark:text-slate-400">Төлсөн: <b className="tabular-nums text-emerald-600 dark:text-emerald-400">{num(totalPaid)}₮</b></span>
-              <span className="text-slate-500 dark:text-slate-400">Үлдэгдэл: <b className="tabular-nums text-rose-600 dark:text-rose-400">{num(totalAmount - totalPaid)}₮</b></span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Нийт дүн:{" "}
+                <b className="tabular-nums text-slate-700 dark:text-slate-200">
+                  {num(totalAmount)}₮
+                </b>
+              </span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Төлсөн:{" "}
+                <b className="tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {num(totalPaid)}₮
+                </b>
+              </span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Үлдэгдэл:{" "}
+                <b className="tabular-nums text-rose-600 dark:text-rose-400">
+                  {num(totalAmount - totalPaid)}₮
+                </b>
+              </span>
             </div>
           </>
         )}
@@ -448,7 +623,14 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         title="Барьцааны мэдээлэл"
         icon={<Landmark className="h-4 w-4" />}
         count={mortgages.length}
-        action={canSync ? <RefreshButton pending={mortgageSyncMutation.isPending} onClick={() => mortgageSyncMutation.mutate()} /> : undefined}
+        action={
+          canSync ? (
+            <RefreshButton
+              pending={mortgageSyncMutation.isPending}
+              onClick={() => mortgageSyncMutation.mutate()}
+            />
+          ) : undefined
+        }
       >
         {mortgages.length === 0 ? (
           <EmptyRow text="Байхгүй" />
@@ -474,14 +656,24 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         title="Шүүхийн шийдвэрийн мэдээлэл"
         icon={<Gavel className="h-4 w-4" />}
         count={courtDecisions.length}
-        action={canSync ? <RefreshButton pending={courtSyncMutation.isPending} onClick={() => courtSyncMutation.mutate()} /> : undefined}
+        action={
+          canSync ? (
+            <RefreshButton
+              pending={courtSyncMutation.isPending}
+              onClick={() => courtSyncMutation.mutate()}
+            />
+          ) : undefined
+        }
       >
         {courtDecisions.length === 0 ? (
           <EmptyRow text="Байхгүй" />
         ) : (
           <div className="space-y-2">
             {courtDecisions.map((d) => (
-              <div key={d.id} className="rounded-xl border border-slate-100 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#191b22] px-4 py-3">
+              <div
+                key={d.id}
+                className="rounded-xl border border-slate-100 dark:border-white/[0.06] bg-slate-50/60 dark:bg-[#191b22] px-4 py-3"
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[13px] font-semibold text-slate-800 dark:text-white">
                     {d.court_decision_no || "—"}
@@ -494,7 +686,8 @@ export function FinanceTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 </div>
                 {(d.start_period || d.end_period) && (
                   <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-                    {d.start_period ? formatDate(d.start_period) : "—"} — {d.end_period ? formatDate(d.end_period) : "—"}
+                    {d.start_period ? formatDate(d.start_period) : "—"} —{" "}
+                    {d.end_period ? formatDate(d.end_period) : "—"}
                   </p>
                 )}
               </div>

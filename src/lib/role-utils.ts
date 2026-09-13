@@ -29,6 +29,7 @@ import {
   canViewValuationSubTabForActor,
   actorHasPermission,
   hasAccessRole,
+  isAdminActor,
   isExternalSpecialActor,
   isFinanceSpecialistActor,
   isMikaActor,
@@ -63,6 +64,7 @@ export function getCurrentActor(): AccessActor {
   return {
     userId: idClaim(payload?.user_id),
     orgId: idClaim(payload?.org_id),
+    valuationOrg: payload?.valuation_org === true,
     roles: Array.isArray(payload?.roles) ? (payload.roles as string[]) : [],
     permissions: Array.isArray(payload?.permissions)
       ? (payload.permissions as string[])
@@ -92,6 +94,11 @@ export function isProfessionalOrg(): boolean {
   return isProfessionalOrgActor(getCurrentActor());
 }
 
+export function shouldUseProfessionalOrgApi(): boolean {
+  const actor = getCurrentActor();
+  return isProfessionalOrgActor(actor) && isExternalSpecialActor(actor);
+}
+
 // МИКА role
 export function isMika(): boolean {
   return isMikaActor(getCurrentActor());
@@ -105,6 +112,11 @@ export function isFinanceSpecialist(): boolean {
 // Ахлах мэргэжилтэн role
 export function isSeniorSpecialist(): boolean {
   return isSeniorSpecialistActor(getCurrentActor());
+}
+
+// Админ role
+export function isAdmin(): boolean {
+  return isAdminActor(getCurrentActor());
 }
 
 // Any of the special external roles that can only access acquisition menu
@@ -127,7 +139,7 @@ export function canViewMikaValuation(): boolean {
 // - they are the assigned professional org for the acquisition
 export function canEditAssetValuation(
   parcelStatusName: string | undefined,
-  acquisitionProfOrgId: string | null | undefined
+  acquisitionProfOrgId: string | null | undefined,
 ): boolean {
   return canEditValuationSubTabForActor(
     getCurrentActor(),
@@ -142,24 +154,21 @@ export function canEditAssetValuation(
 // - they are the assigned independent org for this specific parcel
 export function canEditIndependentValuation(
   parcelStatusName: string | undefined,
-  parcelIndependentOrgId: string | null | undefined
+  parcelIndependentOrgId: string | null | undefined,
 ): boolean {
-  return canEditValuationSubTabForActor(
-    getCurrentActor(),
-    "independent",
-    { status_name: parcelStatusName, independent_org_id: parcelIndependentOrgId },
-  );
+  return canEditValuationSubTabForActor(getCurrentActor(), "independent", {
+    status_name: parcelStatusName,
+    independent_org_id: parcelIndependentOrgId,
+  });
 }
 
 // МИКА can edit МИКА sub-tab when parcel status = "Үнэлгээ хийх"
 export function canEditMikaValuation(
-  parcelStatusName: string | undefined
+  parcelStatusName: string | undefined,
 ): boolean {
-  return canEditValuationSubTabForActor(
-    getCurrentActor(),
-    "mika",
-    { status_name: parcelStatusName },
-  );
+  return canEditValuationSubTabForActor(getCurrentActor(), "mika", {
+    status_name: parcelStatusName,
+  });
 }
 
 // Чөлөөлөлтийн дэлгэрэнгүйн таб хандах эрхээр харагдана
@@ -172,8 +181,17 @@ export function canViewParcelTab(tab: ParcelTabKey): boolean {
   return canViewParcelTabForActor(getCurrentActor(), tab);
 }
 
-export function canViewValuationSubTab(subTab: ValuationSubTabKey, parcel?: AccessParcel | null, acquisition?: AccessAcquisition | null): boolean {
-  return canViewValuationSubTabForActor(getCurrentActor(), subTab, parcel, acquisition);
+export function canViewValuationSubTab(
+  subTab: ValuationSubTabKey,
+  parcel?: AccessParcel | null,
+  acquisition?: AccessAcquisition | null,
+): boolean {
+  return canViewValuationSubTabForActor(
+    getCurrentActor(),
+    subTab,
+    parcel,
+    acquisition,
+  );
 }
 
 export function canEditValuationSubTab(
@@ -252,7 +270,9 @@ export function canEditUser(): boolean {
 }
 
 /** Устгах товч — өөрийгөө устгахыг хориглоно. */
-export function canRemoveUser(targetUserId: string | null | undefined): boolean {
+export function canRemoveUser(
+  targetUserId: string | null | undefined,
+): boolean {
   return canDeleteUserRow(getCurrentActor(), targetUserId);
 }
 
@@ -306,7 +326,7 @@ export function canGrantPermission(permissionName: string): boolean {
 export function canAccessParcel(
   parcelStatusName: string | undefined,
   acquisitionProfOrgId?: string | null,
-  parcelIndependentOrgId?: string | null
+  parcelIndependentOrgId?: string | null,
 ): boolean {
   return canAccessParcelForActor(
     getCurrentActor(),

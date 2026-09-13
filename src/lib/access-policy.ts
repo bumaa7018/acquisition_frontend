@@ -31,6 +31,8 @@ export type AccessActor = {
    * хэрэглэгч байж чаддаг байв.
    */
   orgId?: string | null;
+  /** JWT-ийн `valuation_org` claim. Appdb ажилтан системийн role ашиглахгүй. */
+  valuationOrg?: boolean | null;
   roles?: AccessRole[] | null;
   /** JWT-ийн `permissions` claim. Байхгүй бол эрх шалгалт бүр false. */
   permissions?: string[] | null;
@@ -38,6 +40,7 @@ export type AccessActor = {
 
 export type AccessAcquisition = {
   professional_org_id?: string | null;
+  assigned_users?: { user_id: string }[] | null;
 };
 
 export type AccessParcel = {
@@ -80,6 +83,7 @@ export function hasAccessRole(
 }
 
 export function isProfessionalOrgActor(actor: AccessActor): boolean {
+  if (actor.valuationOrg) return true;
   return hasAccessRole(
     actor,
     ACCESS_ROLE_CODES.PROFESSIONAL_ORG,
@@ -111,10 +115,32 @@ export function isSeniorSpecialistActor(actor: AccessActor): boolean {
 }
 
 export function isAdminActor(actor: AccessActor): boolean {
-  return hasAccessRole(actor, ACCESS_ROLE_CODES.ADMIN);
+  return hasAccessRole(actor, ACCESS_ROLE_CODES.ADMIN, "Админ");
+}
+
+export function canCancelValuationForActor(
+  actor: AccessActor,
+  acquisition: AccessAcquisition | null | undefined,
+  valuationStatus: string,
+  acquisitionLocked: boolean,
+): boolean {
+  if (!acquisition || acquisitionLocked || valuationStatus !== "approved") {
+    return false;
+  }
+  if (isSeniorSpecialistActor(actor) || isFinanceSpecialistActor(actor)) {
+    return true;
+  }
+  if (isProfessionalOrgActor(actor) || isMikaActor(actor)) return false;
+  return (
+    !!actor.userId &&
+    (acquisition.assigned_users ?? []).some(
+      (assignee) => assignee.user_id === actor.userId,
+    )
+  );
 }
 
 export function isExternalSpecialActor(actor: AccessActor): boolean {
+  if (isAdminActor(actor) || isSeniorSpecialistActor(actor)) return false;
   return (
     isProfessionalOrgActor(actor) ||
     isMikaActor(actor) ||
@@ -143,6 +169,7 @@ export function canAccessParcelForActor(
   acquisition?: AccessAcquisition | null,
 ): boolean {
   if (!isExternalSpecialActor(actor)) return true;
+  if (isFinanceSpecialistActor(actor)) return true;
   if (parcel?.status_name !== EVALUATION_STATUS_NAME) return false;
 
   if (isProfessionalOrgActor(actor)) {
@@ -183,6 +210,8 @@ export function canViewValuationSubTabForActor(
   parcel?: AccessParcel | null,
   acquisition?: AccessAcquisition | null,
 ): boolean {
+  if (!isExternalSpecialActor(actor)) return true;
+
   if (subTab === "mika") {
     return isMikaActor(actor) || isFinanceSpecialistActor(actor);
   }
@@ -192,8 +221,11 @@ export function canViewValuationSubTabForActor(
     if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
     // Мэргэжлийн байгуулл... — зөвхөн тухайн парцелийн independent_org-оор томилогдсон бол
     if (isProfessionalOrgActor(actor)) {
-      return !!actor.orgId && !!parcel?.independent_org_id &&
-        parcel.independent_org_id === actor.orgId;
+      return (
+        !!actor.orgId &&
+        !!parcel?.independent_org_id &&
+        parcel.independent_org_id === actor.orgId
+      );
     }
     return false;
   }
@@ -295,7 +327,9 @@ export function actorHasPermission(actor: AccessActor, name: string): boolean {
  * захирамжийн төсөлд хүрэхгүй.
  */
 function canDoDecision(actor: AccessActor, permission: string): boolean {
-  return !isExternalSpecialActor(actor) && actorHasPermission(actor, permission);
+  return (
+    !isExternalSpecialActor(actor) && actorHasPermission(actor, permission)
+  );
 }
 
 export function canViewDecisionDraftsForActor(actor: AccessActor): boolean {
@@ -327,7 +361,11 @@ function canDo(actor: AccessActor, permission: string): boolean {
 }
 
 function canDoHr(actor: AccessActor, permission: string): boolean {
-  return canEnterAdminConsole(actor) && isAdminActor(actor) && actorHasPermission(actor, permission);
+  return (
+    canEnterAdminConsole(actor) &&
+    isAdminActor(actor) &&
+    actorHasPermission(actor, permission)
+  );
 }
 
 export function canViewUsersPage(actor: AccessActor): boolean {
@@ -380,8 +418,10 @@ export function canDeleteRole(actor: AccessActor): boolean {
 
 /** Роль-д эрх нэмэх/хасах — roles:update эсвэл 10-р системийн admin. */
 export function canManageRolePermissions(actor: AccessActor): boolean {
-  return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE) ||
-    (canEnterAdminConsole(actor) && isAdminActor(actor));
+  return (
+    canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE) ||
+    (canEnterAdminConsole(actor) && isAdminActor(actor))
+  );
 }
 
 export function canViewPermissions(actor: AccessActor): boolean {
@@ -439,9 +479,7 @@ export function canGrantRoleForActor(
   ) {
     return true;
   }
-  return names.every((name) =>
-    actorHasPermission(actor, name),
-  );
+  return names.every((name) => actorHasPermission(actor, name));
 }
 
 /**

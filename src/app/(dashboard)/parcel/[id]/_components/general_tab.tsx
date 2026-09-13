@@ -5,11 +5,36 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { RIGHT_TYPE_LABELS, type AU, type LandValuation, type ParcelDocumentSyncResult, type ParcelHolderSyncResult, type ParcelBasePrice, type ParcelInvoiceSyncResult, type ParcelFeeSyncResult, type ParcelSyncCountResult } from "@/types";
+import {
+  RIGHT_TYPE_LABELS,
+  type AU,
+  type LandValuation,
+  type ParcelDocumentSyncResult,
+  type ParcelHolderSyncResult,
+  type ParcelBasePrice,
+  type ParcelInvoiceSyncResult,
+  type ParcelFeeSyncResult,
+  type ParcelSyncCountResult,
+} from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
-import { RefreshCw, Calculator, Database, BarChart2, Activity, Paperclip, Check, X, AlertCircle, MapPin, History } from "lucide-react";
+import {
+  RefreshCw,
+  Calculator,
+  Database,
+  BarChart2,
+  Activity,
+  Paperclip,
+  Check,
+  X,
+  AlertCircle,
+  MapPin,
+  History,
+} from "lucide-react";
 import { toast } from "sonner";
-import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import {
+  isExternalSpecialRole,
+  shouldUseProfessionalOrgApi,
+} from "@/lib/role-utils";
 import { layerTextToWkt } from "@/lib/geometry-utils";
 import { logger } from "@/lib/logger";
 import { EstimatedValueDialog } from "./estimated_value_dialog";
@@ -19,7 +44,9 @@ const ParcelMap = dynamic(
   () => import("@/components/map/parcel-map").then((m) => m.ParcelMap),
   {
     ssr: false,
-    loading: () => <div className="h-[420px] rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />,
+    loading: () => (
+      <div className="h-[420px] rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />
+    ),
   },
 );
 
@@ -47,13 +74,25 @@ const SYNC_STEPS = [
     Icon: Database,
     color: "#3b82f6",
     subSteps: [
-      { label: "Нэгж талбарын дэлгэрэнгүй", detail: "Кадастрын системээс нэгж талбарын мэдээлэл татаж байна..." },
-      { label: "Иргэн, хуулийн этгээдийн мэдээлэл", detail: "Эзэмшигчийн мэдээлэл татаж байна..." },
+      {
+        label: "Нэгж талбарын дэлгэрэнгүй",
+        detail: "Кадастрын системээс нэгж талбарын мэдээлэл татаж байна...",
+      },
+      {
+        label: "Иргэн, хуулийн этгээдийн мэдээлэл",
+        detail: "Эзэмшигчийн мэдээлэл татаж байна...",
+      },
       { label: "Өргөдөл", detail: "Өргөдлийн хавсралт татаж байна..." },
-      { label: "Иргэний үнэмлэх, ААН-ийн гэрчилгээ", detail: "Иргэний үнэмлэх, гэрчилгээ татаж байна..." },
+      {
+        label: "Иргэний үнэмлэх, ААН-ийн гэрчилгээ",
+        detail: "Иргэний үнэмлэх, гэрчилгээ татаж байна...",
+      },
       { label: "Кадастрын зураг", detail: "Кадастрын зураг татаж байна..." },
       { label: "Гэрээ", detail: "Гэрээ татаж байна..." },
-      { label: "Газар эзэмших эрхийн гэрчилгээ", detail: "Эрхийн гэрчилгээ татаж байна..." },
+      {
+        label: "Газар эзэмших эрхийн гэрчилгээ",
+        detail: "Эрхийн гэрчилгээ татаж байна...",
+      },
     ],
   },
   {
@@ -62,13 +101,34 @@ const SYNC_STEPS = [
     Icon: BarChart2,
     color: "#f59e0b",
     subSteps: [
-      { label: "Газрын суурь үнийн мэдээлэл", detail: "Газрын суурь үнэ татаж байна..." },
-      { label: "Төлбөрийн мэдээлэл", detail: "Газрын төлбөрийн мэдээлэл татаж байна..." },
-      { label: "Газрын төлбөрийн бодолт", detail: "Газрын төлбөрийн бодолт татаж байна..." },
-      { label: "Барьцааны мэдээлэл", detail: "Барьцааны бүртгэл татаж байна..." },
-      { label: "Шүүхийн шийдвэрийн мэдээлэл", detail: "Шүүхийн шийдвэр татаж байна..." },
-      { label: "Барьцааны гэрээний хавсралт", detail: "Барьцааны гэрээ татаж байна..." },
-      { label: "Тооцоо нийлсэн акт", detail: "Тооцоо нийлсэн акт татаж байна..." },
+      {
+        label: "Газрын суурь үнийн мэдээлэл",
+        detail: "Газрын суурь үнэ татаж байна...",
+      },
+      {
+        label: "Төлбөрийн мэдээлэл",
+        detail: "Газрын төлбөрийн мэдээлэл татаж байна...",
+      },
+      {
+        label: "Газрын төлбөрийн бодолт",
+        detail: "Газрын төлбөрийн бодолт татаж байна...",
+      },
+      {
+        label: "Барьцааны мэдээлэл",
+        detail: "Барьцааны бүртгэл татаж байна...",
+      },
+      {
+        label: "Шүүхийн шийдвэрийн мэдээлэл",
+        detail: "Шүүхийн шийдвэр татаж байна...",
+      },
+      {
+        label: "Барьцааны гэрээний хавсралт",
+        detail: "Барьцааны гэрээ татаж байна...",
+      },
+      {
+        label: "Тооцоо нийлсэн акт",
+        detail: "Тооцоо нийлсэн акт татаж байна...",
+      },
     ],
   },
   {
@@ -77,10 +137,22 @@ const SYNC_STEPS = [
     Icon: Activity,
     color: "#10b981",
     subSteps: [
-      { label: "Хянан баталгааны мэдээлэл", detail: "Хянан баталгааны мэдээлэл татаж байна..." },
-      { label: "Хянан баталгааны дүгнэлт хавсралт", detail: "Хянан баталгааны дүгнэлт хавсралт татаж байна..." },
-      { label: "Газрын төлөв байдал, чанарын хянан баталгааны дүгнэлт хавсралт", detail: "Чанарын хянан баталгааны дүгнэлт хавсралт татаж байна..." },
-      { label: "Захиалгат хянан баталгааны дүгнэлт хавсралт", detail: "Захиалгат хянан баталгааны дүгнэлт хавсралт татаж байна..." },
+      {
+        label: "Хянан баталгааны мэдээлэл",
+        detail: "Хянан баталгааны мэдээлэл татаж байна...",
+      },
+      {
+        label: "Хянан баталгааны дүгнэлт хавсралт",
+        detail: "Хянан баталгааны дүгнэлт хавсралт татаж байна...",
+      },
+      {
+        label: "Газрын төлөв байдал, чанарын хянан баталгааны дүгнэлт хавсралт",
+        detail: "Чанарын хянан баталгааны дүгнэлт хавсралт татаж байна...",
+      },
+      {
+        label: "Захиалгат хянан баталгааны дүгнэлт хавсралт",
+        detail: "Захиалгат хянан баталгааны дүгнэлт хавсралт татаж байна...",
+      },
     ],
   },
   {
@@ -90,10 +162,16 @@ const SYNC_STEPS = [
     color: "#8b5cf6",
     subSteps: [
       // УБЕГ-ийн өмчлөлийн бүртгэл нь ГУС-аас БИШ, ХУР (XYP) гарцаас татагдана.
-      { label: "УБЕГ-ийн өмчлөлийн бүртгэл", detail: "УБЕГ-аас газар өмчлөлийн мэдээлэл татаж байна..." },
+      {
+        label: "УБЕГ-ийн өмчлөлийн бүртгэл",
+        detail: "УБЕГ-аас газар өмчлөлийн мэдээлэл татаж байна...",
+      },
       // Кодгүй дуудна — үлдсэн БҮХ хавсралтыг хамарна. Дээрх алхмуудад
       // татагдсан нь source_doc_id-аар алгасагдах тул ЗААВАЛ хамгийн сүүлд.
-      { label: "Үлдсэн хавсралтууд", detail: "Бусад хавсралтыг татаж байна..." },
+      {
+        label: "Үлдсэн хавсралтууд",
+        detail: "Бусад хавсралтыг татаж байна...",
+      },
     ],
   },
 ] as const;
@@ -111,7 +189,15 @@ const RIGHT_TYPE_OWNERSHIP = 3;
  */
 function describeSyncResult(result: unknown): string {
   const r = result as
-    | Partial<ParcelDocumentSyncResult & ParcelHolderSyncResult & ParcelBasePrice & ParcelInvoiceSyncResult & ParcelFeeSyncResult & ParcelSyncCountResult & typeof OWNED_NO_PAYMENT>
+    | Partial<
+        ParcelDocumentSyncResult &
+          ParcelHolderSyncResult &
+          ParcelBasePrice &
+          ParcelInvoiceSyncResult &
+          ParcelFeeSyncResult &
+          ParcelSyncCountResult &
+          typeof OWNED_NO_PAYMENT
+      >
     | undefined;
   if (!r) return "";
   if (r.owned_no_payment) return "Өмчлөлийн газар — төлбөр байхгүй";
@@ -139,10 +225,23 @@ function describeSyncResult(result: unknown): string {
 
 const SUB_STEP_MIN_MS = 400;
 
-const TOTAL_SUB_STEPS = SYNC_STEPS.reduce((s, step) => s + step.subSteps.length, 0);
+const TOTAL_SUB_STEPS = SYNC_STEPS.reduce(
+  (s, step) => s + step.subSteps.length,
+  0,
+);
 
-function findAdminUnit(aus: AU[] | null | undefined, au1Code: string, au2Code: string, au3Code: string) {
-  return aus?.find((au) => au.au1_code === au1Code && au.au2_code === au2Code && au.au3_code === au3Code);
+function findAdminUnit(
+  aus: AU[] | null | undefined,
+  au1Code: string,
+  au2Code: string,
+  au3Code: string,
+) {
+  return aus?.find(
+    (au) =>
+      au.au1_code === au1Code &&
+      au.au2_code === au2Code &&
+      au.au3_code === au3Code,
+  );
 }
 
 function formatAdminUnit(name: string | undefined, code: string) {
@@ -157,19 +256,31 @@ function highlightArea(value: string) {
   );
 }
 
-export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: string; parcelId: string; isLocked?: boolean }) {
+export function GeneralTab({
+  acqId,
+  parcelId,
+  isLocked = false,
+}: {
+  acqId: string;
+  parcelId: string;
+  isLocked?: boolean;
+}) {
   const queryClient = useQueryClient();
   const isExternal = isExternalSpecialRole();
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
   // Мэргэжлийн байгууллага бол /prof маршрутаар уншина
   const { data, isLoading } = useQuery({
     queryKey: ["parcel-full", acqId, parcelId],
-    queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, parcelId) : landApi.getParcel(acqId, parcelId)),
+    queryFn: () =>
+      useProfApi
+        ? profApi.profGetParcel(acqId, parcelId)
+        : landApi.getParcel(acqId, parcelId),
     enabled: !!acqId,
   });
   const { data: acquisition } = useQuery({
     queryKey: ["land", acqId],
-    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
+    queryFn: () =>
+      useProfApi ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId),
     enabled: !!acqId,
   });
   // Өмчлөх эрхийн гэрчилгээ — нөхөх олговрын хэсэгт (real_estate_tab) харуулдаг
@@ -180,7 +291,7 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const { data: landValuation } = useQuery<LandValuation | null>({
     queryKey: ["land-valuation", acqId, parcelCode, valuationType],
     queryFn: () =>
-      isProfOrg
+      useProfApi
         ? profApi.profGetLandValuation(acqId, parcelCode, valuationType)
         : landApi.getLandValuation(acqId, parcelCode, valuationType),
     enabled: !!acqId && !!parcelCode,
@@ -230,25 +341,28 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     }
   }, [acquisitionGeomWkt, areaCalcBusy, calcArea]);
 
-  const handleBoundaryLayerFile = useCallback(async (file: File) => {
-    const text = await file.text();
-    const wkt = layerTextToWkt(text);
-    if (!wkt) {
-      toast.error("WKT эсвэл GeoJSON polygon файл оруулна уу");
-      return;
-    }
+  const handleBoundaryLayerFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      const wkt = layerTextToWkt(text);
+      if (!wkt) {
+        toast.error("WKT эсвэл GeoJSON polygon файл оруулна уу");
+        return;
+      }
 
-    setAcquisitionGeomWkt(wkt);
-    const calc = await calcArea(wkt);
-    if (calc != null) {
-      setAcquisitionAreaM2(String(calc));
-      setAreaAutoCalc(true);
-      toast.success("Давхардсан хил оруулж, талбай тооцоологдлоо");
-    } else {
-      setAreaAutoCalc(false);
-      toast.success("Давхардсан хил орууллаа");
-    }
-  }, [calcArea]);
+      setAcquisitionGeomWkt(wkt);
+      const calc = await calcArea(wkt);
+      if (calc != null) {
+        setAcquisitionAreaM2(String(calc));
+        setAreaAutoCalc(true);
+        toast.success("Давхардсан хил оруулж, талбай тооцоологдлоо");
+      } else {
+        setAreaAutoCalc(false);
+        toast.success("Давхардсан хил орууллаа");
+      }
+    },
+    [calcArea],
+  );
 
   // ── ТӨСӨӨЛЛИЙН ҮНЭЛГЭЭ ────────────────────────────────────────────────
   // Итгэлцүүрийг өөрчилж тооцно; мэргэжлийн байгууллагад зөвхөн харагдана
@@ -261,13 +375,36 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   // эрхийн газар), null = үнэлгээг АРИЛГАХ. "Итгэлцүүргүй" ба "арилгах" хоёрыг
   // хольж болохгүй — тиймээс null-ыг тусад нь шалгана (== биш ===).
   const estimatedMutation = useMutation({
-    mutationFn: ({ confidencePercent, baseFeePerM2, file }: { confidencePercent: number | null | undefined; baseFeePerM2?: number; file?: File | null }) => confidencePercent === null
-      ? landApi.setParcelEstimatedValue(acqId, parcelId, null)
-      : landApi.calculateParcelEstimatedValue(acqId, parcelId, confidencePercent, baseFeePerM2, file),
+    mutationFn: ({
+      confidencePercent,
+      baseFeePerM2,
+      file,
+    }: {
+      confidencePercent: number | null | undefined;
+      baseFeePerM2?: number;
+      file?: File | null;
+    }) =>
+      confidencePercent === null
+        ? landApi.setParcelEstimatedValue(acqId, parcelId, null)
+        : landApi.calculateParcelEstimatedValue(
+            acqId,
+            parcelId,
+            confidencePercent,
+            baseFeePerM2,
+            file,
+          ),
     onSuccess: (_r, { confidencePercent }) => {
-      toast.success(confidencePercent === null ? "Төсөөллийн үнэлгээ арилгагдлаа" : "Төсөөллийн үнэлгээ хадгалагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
-      queryClient.invalidateQueries({ queryKey: ["parcel-estimated-value-history", acqId, parcelId] });
+      toast.success(
+        confidencePercent === null
+          ? "Төсөөллийн үнэлгээ арилгагдлаа"
+          : "Төсөөллийн үнэлгээ хадгалагдлаа",
+      );
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-full", acqId, parcelId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-estimated-value-history", acqId, parcelId],
+      });
       setEstOpen(false);
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
@@ -277,14 +414,19 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     mutationFn: () => {
       const areaVal = parseFloat(acquisitionAreaM2);
       return landApi.updateParcelMeta(
-        acqId, parcelId, dbChanged, changedParcelId,
+        acqId,
+        parcelId,
+        dbChanged,
+        changedParcelId,
         isNaN(areaVal) ? undefined : areaVal,
         acquisitionGeomWkt.trim() || undefined,
       );
     },
     onSuccess: () => {
       toast.success("Мэдээлэл хадгалагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-full", acqId, parcelId],
+      });
       setEditingMeta(false);
       setAreaAutoCalc(false);
     },
@@ -298,9 +440,14 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     },
     onSuccess: () => {
       toast.success("Хянан баталгааны мэдээлэл шинэчлэгдлээ");
-      queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-full", acqId, parcelId],
+      });
     },
-    onError: (err) => toast.error(getApiError(err, "Хянан баталгааны мэдээлэл шинэчлэхэд алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(
+        getApiError(err, "Хянан баталгааны мэдээлэл шинэчлэхэд алдаа гарлаа"),
+      ),
   });
 
   const [syncOpen, setSyncOpen] = useState(false);
@@ -310,7 +457,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   const [syncDoneSubSteps, setSyncDoneSubSteps] = useState<string[]>([]);
   const [syncFailedSubSteps, setSyncFailedSubSteps] = useState<string[]>([]);
   // Алхам бүрийн серверийн алдааны мессеж (монголоор ирнэ) — subKey → текст
-  const [syncFailMessages, setSyncFailMessages] = useState<Record<string, string>>({});
+  const [syncFailMessages, setSyncFailMessages] = useState<
+    Record<string, string>
+  >({});
   // Амжилттай алхмын үр дүн (subKey → текст). Өмнө нь API-ийн хариуг хаядаг байсан.
   const [syncResults, setSyncResults] = useState<Record<string, string>>({});
   const [syncDoneSteps, setSyncDoneSteps] = useState<number[]>([]);
@@ -336,14 +485,17 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
     setSyncError(null);
 
     // Дэд алхам 6-аас 15 болсон тул 1500ms үед хамгийн багадаа ~22 сек болно.
-    const minDelay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    const minDelay = (ms: number) =>
+      new Promise<void>((r) => setTimeout(r, ms));
 
     // API function for each sub-step [stepIdx][subStepIdx]
     // Бүх дуудалт silent — явцыг ЭНЭ цонх өөрөө харуулна. Дэлгэц блоклогч
     // "Уншиж байна..." loader асвал 15 хүсэлт дээр анивчиж, унших боломжгүй болно.
     const SILENT = { silent: true };
-    const docs = (...roles: string[]) => () =>
-      landApi.syncParcelDocuments(acqId, parcelCode, roles, SILENT);
+    const docs =
+      (...roles: string[]) =>
+      () =>
+        landApi.syncParcelDocuments(acqId, parcelCode, roles, SILENT);
     const apiFns: (() => Promise<unknown>)[][] = [
       [
         () => landApi.syncParcel(acqId, parcelCode, SILENT),
@@ -391,19 +543,28 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         setSyncDetail(step.subSteps[ssi].detail);
         const subKey = `${si}-${ssi}`;
         try {
-          const [result] = await Promise.all([apiFns[si][ssi](), minDelay(SUB_STEP_MIN_MS)]);
+          const [result] = await Promise.all([
+            apiFns[si][ssi](),
+            minDelay(SUB_STEP_MIN_MS),
+          ]);
           setSyncDoneSubSteps((prev) => [...prev, subKey]);
           const text = describeSyncResult(result);
           if (text) setSyncResults((prev) => ({ ...prev, [subKey]: text }));
         } catch (err) {
           // Дуудсан axios хүсэлт interceptor-оороо аль хэдийн логлогдсон —
           // энд синхрончлолын алхмын context-ыг (аль алхам амжилтгүй болсон) нэмж логлоно.
-          logger.error("parcel sync sub-step failed", { step: si, subStep: ssi, key: subKey, error: String(err) });
+          logger.error("parcel sync sub-step failed", {
+            step: si,
+            subStep: ssi,
+            key: subKey,
+            error: String(err),
+          });
           failCount++;
           setSyncFailedSubSteps((prev) => [...prev, subKey]);
           // Серверийн мессеж монголоор ирдэг тул шууд харуулна. 422 = нэгж
           // талбарт app_no байхгүй — эхлээд ерөнхий мэдээллийг татах хэрэгтэй.
-          const status = (err as { response?: { status?: number } })?.response?.status;
+          const status = (err as { response?: { status?: number } })?.response
+            ?.status;
           const message = getApiError(err, "Татаж чадсангүй");
           setSyncFailMessages((prev) => ({
             ...prev,
@@ -424,7 +585,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         ? `${failCount} мэдээлэл татаж авах амжилтгүй боллоо`
         : "Бүх мэдээлэл амжилттай татагдлаа!",
     );
-    queryClient.invalidateQueries({ queryKey: ["parcel-full", acqId, parcelId] });
+    queryClient.invalidateQueries({
+      queryKey: ["parcel-full", acqId, parcelId],
+    });
     queryClient.invalidateQueries({ queryKey: ["land", acqId] });
     // Хавсралт татагдсан байж болзошгүй тул "Хавсралт" табын жагсаалтыг ч шинэчилнэ
     queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
@@ -456,25 +619,42 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
   }, [confirmOpen]);
 
   const row = (label: string, value?: React.ReactNode) => (
-    <div key={label} className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d] last:border-0">
-      <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">{label}</span>
-      <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{value || "—"}</span>
+    <div
+      key={label}
+      className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d] last:border-0"
+    >
+      <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
+        {label}
+      </span>
+      <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+        {value || "—"}
+      </span>
     </div>
   );
 
   if (isLoading)
     return (
       <div className="ap-card p-5 animate-pulse space-y-3">
-        {[...Array(8)].map((_, i) => <div key={i} className="h-8 rounded bg-slate-100 dark:bg-[#252630]" />)}
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-8 rounded bg-slate-100 dark:bg-[#252630]" />
+        ))}
       </div>
     );
   if (!data)
-    return <div className="ap-card p-10 text-center text-[13px] text-slate-400">Мэдээлэл олдсонгүй</div>;
+    return (
+      <div className="ap-card p-10 text-center text-[13px] text-slate-400">
+        Мэдээлэл олдсонгүй
+      </div>
+    );
 
-  const adminUnit = findAdminUnit(acquisition?.aus, data.au1_code, data.au2_code, data.au3_code);
+  const adminUnit = findAdminUnit(
+    acquisition?.aus,
+    data.au1_code,
+    data.au2_code,
+    data.au3_code,
+  );
   const monitorings = data.monitorings ?? [];
   const overlaps = data.overlaps ?? [];
-
 
   return (
     <div className="flex flex-col gap-5">
@@ -534,30 +714,41 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               Талбарын мэдээлэл
             </p>
             <div className="flex items-center gap-2">
-              {!isExternal && !isLocked && (editingMeta ? (
-                <>
+              {!isExternal &&
+                !isLocked &&
+                (editingMeta ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        setEditingMeta(false);
+                        setDbChanged(data.db_changed ?? "");
+                        setChangedParcelId(data.changed_parcel_id ?? "");
+                        setAcquisitionAreaM2(
+                          String(data.acquisition_area_m2 ?? ""),
+                        );
+                        setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
+                        setAreaAutoCalc(false);
+                      }}
+                      className="h-7 px-3 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
+                    >
+                      Болих
+                    </button>
+                    <button
+                      onClick={() => metaMutation.mutate()}
+                      disabled={metaMutation.isPending}
+                      className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
+                    >
+                      Хадгалах
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={() => {
-                      setEditingMeta(false);
-                      setDbChanged(data.db_changed ?? "");
-                      setChangedParcelId(data.changed_parcel_id ?? "");
-                      setAcquisitionAreaM2(String(data.acquisition_area_m2 ?? ""));
-                      setAcquisitionGeomWkt(data.acquisition_geom_wkt ?? "");
-                      setAreaAutoCalc(false);
-                    }}
-                    className="h-7 px-3 rounded-lg text-[12px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-[#252630] transition-colors"
-                  >Болих</button>
-                  <button
-                    onClick={() => metaMutation.mutate()}
-                    disabled={metaMutation.isPending}
-                    className="h-7 px-3 rounded-lg text-[12px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 disabled:opacity-50 transition-colors"
-                  >Хадгалах</button>
-                </>
-              ) : (
-                <button onClick={() => setEditingMeta(true)} className="h-7 px-3 rounded-lg text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors">
-                  Засах
-                </button>
-              ))}
+                    onClick={() => setEditingMeta(true)}
+                    className="h-7 px-3 rounded-lg text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10 transition-colors"
+                  >
+                    Засах
+                  </button>
+                ))}
               {!isExternal && !isLocked && !editingMeta && (
                 <button
                   onClick={() => setConfirmOpen(true)}
@@ -573,11 +764,23 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
           {row("Дугаар", <span className="font-mono">{data.parcel_id}</span>)}
           {/* Хуучин дугаар нь зөвхөн нэгж талбар өөрчлөгдсөн үед ирнэ */}
           {data.old_parcel_id
-            ? row("Хуучин дугаар", <span className="font-mono">{data.old_parcel_id}</span>)
+            ? row(
+                "Хуучин дугаар",
+                <span className="font-mono">{data.old_parcel_id}</span>,
+              )
             : null}
-          {row("Аймаг/Нийслэл", formatAdminUnit(adminUnit?.au1_name, data.au1_code))}
-          {row("Сум/Дүүрэг", formatAdminUnit(adminUnit?.au2_name, data.au2_code))}
-          {row("Баг/Хороо", formatAdminUnit(adminUnit?.au3_name, data.au3_code))}
+          {row(
+            "Аймаг/Нийслэл",
+            formatAdminUnit(adminUnit?.au1_name, data.au1_code),
+          )}
+          {row(
+            "Сум/Дүүрэг",
+            formatAdminUnit(adminUnit?.au2_name, data.au2_code),
+          )}
+          {row(
+            "Баг/Хороо",
+            formatAdminUnit(adminUnit?.au3_name, data.au3_code),
+          )}
           {row("Эрхийн төрөл", RIGHT_TYPE_LABELS[data.right_type])}
           {row(
             "Газрын зориулалт",
@@ -588,18 +791,29 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
           {row("Хашааны хаяг", data.address_khashaa)}
           {row("Гудамжны нэр", data.address_streetname)}
           {row("Үл хөдлөх хөрөнгийн дугаар", data.property_no)}
-          {row("Эрх эхэлсэн", data.valid_from ? formatDate(data.valid_from) : undefined)}
-          {row("Эрх дуусах", data.valid_till ? formatDate(data.valid_till) : undefined)}
+          {row(
+            "Эрх эхэлсэн",
+            data.valid_from ? formatDate(data.valid_from) : undefined,
+          )}
+          {row(
+            "Эрх дуусах",
+            data.valid_till ? formatDate(data.valid_till) : undefined,
+          )}
           {row("Нийт талбай", formatArea(data.area_m2))}
           {/* Чөлөөлөгдөх талбай */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбай</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
+              Чөлөөлөгдөх талбай
+            </span>
             {editingMeta ? (
               <div className="flex flex-1 items-center gap-2">
                 <input
                   type="number"
                   value={acquisitionAreaM2}
-                  onChange={(e) => { setAcquisitionAreaM2(e.target.value); setAreaAutoCalc(false); }}
+                  onChange={(e) => {
+                    setAcquisitionAreaM2(e.target.value);
+                    setAreaAutoCalc(false);
+                  }}
                   placeholder="Талбай оруулах (м²)..."
                   className="h-8 w-44 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
                 />
@@ -615,7 +829,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   </button>
                 )}
                 {areaAutoCalc && (
-                  <span className="text-[11px] text-[#0acf97] font-medium">Автоматаар тооцоологдсон</span>
+                  <span className="text-[11px] text-[#0acf97] font-medium">
+                    Автоматаар тооцоологдсон
+                  </span>
                 )}
               </div>
             ) : (
@@ -624,46 +840,73 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               </span>
             )}
           </div>
-          {row("Төсөөллийн үнэлгээ", (
+          {row(
+            "Төсөөллийн үнэлгээ",
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-semibold tabular-nums text-[#02c0ce]">
-                {data.estimated_value != null ? `${data.estimated_value.toLocaleString("mn-MN")}₮` : "—"}
+                {data.estimated_value != null
+                  ? `${data.estimated_value.toLocaleString("mn-MN")}₮`
+                  : "—"}
               </span>
               {data.estimated_value != null && data.estimated_value_at && (
-                <span className="text-[11px] text-slate-400" title={data.estimated_value_by || undefined}>{formatDate(data.estimated_value_at)}</span>
+                <span
+                  className="text-[11px] text-slate-400"
+                  title={data.estimated_value_by || undefined}
+                >
+                  {formatDate(data.estimated_value_at)}
+                </span>
               )}
               {/* Тооцоолох товч нь ҮНЭЛГЭЭНИЙ мөрөнд — өмнө нь "Нийт талбай"-н
                   ард байсан тул талбайн тохиргоо шиг уншигдаж байв. */}
-              {!isExternal && !isProfOrg && !isLocked && !editingMeta && (
-                <button type="button" onClick={() => setEstOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20">
+              {!isExternal && !useProfApi && !isLocked && !editingMeta && (
+                <button
+                  type="button"
+                  onClick={() => setEstOpen(true)}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20"
+                >
                   <Calculator className="h-3.5 w-3.5" />
-                  {data.estimated_value != null ? "Үнэлгээ тохируулах" : "Үнэлгээ оруулах"}
+                  {data.estimated_value != null
+                    ? "Үнэлгээ тохируулах"
+                    : "Үнэлгээ оруулах"}
                 </button>
               )}
               {/* ДЭЛГЭРЭНГҮЙ — өөрчлөлтийн БҮХ түүхийг хавсралттайгаа. Засах
                   эрхгүй хэрэглэгч (санхүү, мэрг. байгууллага) ч хянах
                   шаардлагатай тул харах эрхтэй бүгдэд харагдана. */}
-              <button type="button" onClick={() => setEstHistoryOpen(true)} className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]">
+              <button
+                type="button"
+                onClick={() => setEstHistoryOpen(true)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+              >
                 <History className="h-3.5 w-3.5" />
                 Дэлгэрэнгүй
               </button>
-            </span>
-          ))}
-          {row("Үлдэх газрын хэмжээ",
+            </span>,
+          )}
+          {row(
+            "Үлдэх газрын хэмжээ",
             data.remaining_area_m2 != null
               ? formatArea(data.remaining_area_m2)
-              : formatArea((data.area_m2 || 0) - (data.acquisition_area_m2 || 0))
+              : formatArea(
+                  (data.area_m2 || 0) - (data.acquisition_area_m2 || 0),
+                ),
           )}
           {/* Өмчлөх эрхийн гэрчилгээ — нөхөх олговрын үнэлгээнээс (уншихад зориулав) */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өмчлөх эрхийн гэрчилгээ</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
+              Өмчлөх эрхийн гэрчилгээ
+            </span>
             <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-              {landValuation?.ownership_cert_no || data.detail?.certificate_no || "—"}
+              {landValuation?.ownership_cert_no ||
+                data.detail?.certificate_no ||
+                "—"}
             </span>
           </div>
           {/* Мэдээллийн санд орсон өөрчлөлтийн тайлбар (чөлөөт текст) */}
           <div className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44 pt-1.5">МС-д орсон өөрчлөлт</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44 pt-1.5">
+              МС-д орсон өөрчлөлт
+            </span>
             {editingMeta ? (
               <textarea
                 value={dbChanged}
@@ -673,28 +916,37 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 className="flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-1.5 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all resize-y"
               />
             ) : (
-              <span className={`text-[13px] font-medium whitespace-pre-wrap ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}>
+              <span
+                className={`text-[13px] font-medium whitespace-pre-wrap ${data.db_changed ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-200"}`}
+              >
                 {data.db_changed || "—"}
               </span>
             )}
           </div>
           {/* Өөрчлөгдсөн нэгж талбарын дугаар */}
           <div className="flex items-center gap-3 py-2.5 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Өөрчлөгдсөн НТ дугаар</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
+              Өөрчлөгдсөн НТ дугаар
+            </span>
             {editingMeta ? (
               <input
-                type="text" value={changedParcelId}
+                type="text"
+                value={changedParcelId}
                 onChange={(e) => setChangedParcelId(e.target.value)}
                 placeholder="Нэгж талбарын дугаар..."
                 className="h-8 flex-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
               />
             ) : (
-              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">{data.changed_parcel_id || "—"}</span>
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                {data.changed_parcel_id || "—"}
+              </span>
             )}
           </div>
           {/* Давхардсан хилийн зураг */}
           <div className="flex items-start gap-3 py-2.5 last:border-0 border-b border-slate-100 dark:border-[#37394d]">
-            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">Чөлөөлөгдөх талбайн хил</span>
+            <span className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0 w-44">
+              Чөлөөлөгдөх талбайн хил
+            </span>
             {editingMeta ? (
               <div className="flex-1 space-y-2">
                 <input
@@ -730,7 +982,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         <div className="ap-card overflow-hidden">
           <div className="px-5 pt-4 pb-3 flex items-center gap-2 border-b border-slate-100 dark:border-[#37394d]">
             <MapPin className="h-3.5 w-3.5 text-[#02c0ce]" />
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Байршил</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Байршил
+            </p>
           </div>
           <ParcelMap
             parcelId={data.parcel_id}
@@ -748,10 +1002,14 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 <button
                   type="button"
                   onClick={() => monitoringSyncMutation.mutate()}
-                  disabled={monitoringSyncMutation.isPending || !data?.parcel_id}
+                  disabled={
+                    monitoringSyncMutation.isPending || !data?.parcel_id
+                  }
                   className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#10b981]/30 bg-[#10b981]/10 px-3 text-[12px] font-semibold text-[#10b981] transition-colors hover:bg-[#10b981]/20 disabled:opacity-50"
                 >
-                  <RefreshCw className={`h-3.5 w-3.5 ${monitoringSyncMutation.isPending ? "animate-spin" : ""}`} />
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${monitoringSyncMutation.isPending ? "animate-spin" : ""}`}
+                  />
                   Шинэчлэх
                 </button>
               )}
@@ -773,21 +1031,33 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
                     {monitorings.map((item) => {
-                      const isVerified = item.status_name?.trim() === "Баталгаажуулсан";
+                      const isVerified =
+                        item.status_name?.trim() === "Баталгаажуулсан";
                       return (
-                        <tr key={item.monitoring_id} className="text-slate-700 dark:text-slate-200">
+                        <tr
+                          key={item.monitoring_id}
+                          className="text-slate-700 dark:text-slate-200"
+                        >
                           <td className="px-3 py-2">{item.page_no || "—"}</td>
                           <td className="px-3 py-2">
-                            <span className={`inline-flex rounded-md px-2 py-0.5 text-[12px] font-semibold ${
-                              isVerified
-                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
-                                : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
-                            }`}>
+                            <span
+                              className={`inline-flex rounded-md px-2 py-0.5 text-[12px] font-semibold ${
+                                isVerified
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+                                  : "bg-red-50 text-red-700 dark:bg-red-400/10 dark:text-red-300"
+                              }`}
+                            >
                               {item.status_name || "—"}
                             </span>
                           </td>
-                          <td className="px-3 py-2">{item.company_name || "—"}</td>
-                          <td className="px-3 py-2">{item.created_at ? formatDate(item.created_at) : "—"}</td>
+                          <td className="px-3 py-2">
+                            {item.company_name || "—"}
+                          </td>
+                          <td className="px-3 py-2">
+                            {item.created_at
+                              ? formatDate(item.created_at)
+                              : "—"}
+                          </td>
                         </tr>
                       );
                     })}
@@ -803,15 +1073,27 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
       {confirmOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-
             {/* Icon + title */}
             <div className="flex flex-col items-center px-6 pt-7 pb-5 text-center">
               <div className="relative mb-4">
                 {/* Countdown ring */}
                 <svg className="h-16 w-16 -rotate-90" viewBox="0 0 44 44">
-                  <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" strokeWidth="2.5"
-                    className="text-slate-100 dark:text-[#2d2f3a]" />
-                  <circle cx="22" cy="22" r="19" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="19"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    className="text-slate-100 dark:text-[#2d2f3a]"
+                  />
+                  <circle
+                    cx="22"
+                    cy="22"
+                    r="19"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
                     strokeLinecap="round"
                     className="text-[#0acf97] transition-all duration-1000 ease-linear"
                     strokeDasharray={`${2 * Math.PI * 19}`}
@@ -829,8 +1111,8 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 Нэгж талбарын мэдээлэл дуудах уу?
               </p>
               <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                Кадастрын системээс нэгж талбарын мэдээлэл шинэчлэн татаж авах болно.
-                Одоогийн мэдээлэл шинэчлэгдэнэ.
+                Кадастрын системээс нэгж талбарын мэдээлэл шинэчлэн татаж авах
+                болно. Одоогийн мэдээлэл шинэчлэгдэнэ.
               </p>
               <p className="mt-2 text-[11px] font-medium text-slate-400 dark:text-slate-500">
                 {confirmCountdown} секундын дараа автоматаар цуцлагдана
@@ -849,7 +1131,10 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 Болих
               </button>
               <button
-                onClick={() => { setConfirmOpen(false); startSync(); }}
+                onClick={() => {
+                  setConfirmOpen(false);
+                  startSync();
+                }}
                 className="flex-1 py-3.5 text-[13px] font-semibold text-[#0acf97] hover:bg-[#0acf97]/5 transition-colors"
               >
                 Тийм, дуудах
@@ -865,11 +1150,12 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
           {/* Толгой ба хөл нь тогтмол, зөвхөн алхмуудын хэсэг гүйнэ —
               14 дэд алхамтай болсон тул цонх дэлгэцээс гарахгүй байх ёстой. */}
           <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06] animate-in fade-in zoom-in-95 duration-200">
-
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
               <div className="flex items-center gap-2.5">
-                <div className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${syncFinished ? "bg-emerald-500/15" : syncError ? "bg-red-500/10" : "bg-blue-500/10"}`}>
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl transition-all duration-300 ${syncFinished ? "bg-emerald-500/15" : syncError ? "bg-red-500/10" : "bg-blue-500/10"}`}
+                >
                   {syncFinished ? (
                     <Check className="h-4 w-4 text-emerald-500" />
                   ) : syncError ? (
@@ -879,9 +1165,15 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   )}
                 </div>
                 <div>
-                  <p className="text-[13px] font-semibold text-slate-800 dark:text-white leading-tight">Нэгж талбарын мэдээлэл дуудах</p>
+                  <p className="text-[13px] font-semibold text-slate-800 dark:text-white leading-tight">
+                    Нэгж талбарын мэдээлэл дуудах
+                  </p>
                   <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
-                    {syncFinished ? "Амжилттай дууслаа" : syncError ? "Алдаа гарлаа" : "Боловсруулж байна..."}
+                    {syncFinished
+                      ? "Амжилттай дууслаа"
+                      : syncError
+                        ? "Алдаа гарлаа"
+                        : "Боловсруулж байна..."}
                   </p>
                 </div>
               </div>
@@ -897,7 +1189,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
             {/* Progress bar */}
             <div className="px-5 py-3 bg-slate-50/60 dark:bg-[#191b22] border-b border-slate-100 dark:border-[#37394d]">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">Нийт явц</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Нийт явц
+                </span>
                 <span className="text-[11px] font-semibold tabular-nums text-slate-600 dark:text-slate-300">
                   {syncDoneSubSteps.length} / {TOTAL_SUB_STEPS}
                 </span>
@@ -905,7 +1199,9 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
               <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-[#2d2f3a] overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-700 ease-out ${syncError ? "bg-red-500" : syncFinished ? "bg-emerald-500" : "bg-blue-500"}`}
-                  style={{ width: `${(syncDoneSubSteps.length / TOTAL_SUB_STEPS) * 100}%` }}
+                  style={{
+                    width: `${(syncDoneSubSteps.length / TOTAL_SUB_STEPS) * 100}%`,
+                  }}
                 />
               </div>
             </div>
@@ -927,36 +1223,49 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                           isDone
                             ? "shadow-sm"
                             : isRunning
-                            ? "shadow-md ring-2"
-                            : "border-2 border-dashed border-slate-200 dark:border-[#37394d]"
+                              ? "shadow-md ring-2"
+                              : "border-2 border-dashed border-slate-200 dark:border-[#37394d]"
                         }`}
                         style={
                           isDone
                             ? { background: step.color }
                             : isRunning
-                            ? { background: step.color + "20", boxShadow: `0 0 0 2px ${step.color}50` }
-                            : {}
+                              ? {
+                                  background: step.color + "20",
+                                  boxShadow: `0 0 0 2px ${step.color}50`,
+                                }
+                              : {}
                         }
                       >
                         {isDone ? (
-                          <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                          <Check
+                            className="h-3.5 w-3.5 text-white"
+                            strokeWidth={3}
+                          />
                         ) : isRunning ? (
                           <>
-                            <StepIcon className="h-3.5 w-3.5" style={{ color: step.color }} />
+                            <StepIcon
+                              className="h-3.5 w-3.5"
+                              style={{ color: step.color }}
+                            />
                             <span
                               className="absolute inset-0 rounded-xl animate-ping opacity-30"
                               style={{ background: step.color }}
                             />
                           </>
                         ) : (
-                          <span className="text-[12px] font-bold text-slate-300 dark:text-slate-600">{si + 1}</span>
+                          <span className="text-[12px] font-bold text-slate-300 dark:text-slate-600">
+                            {si + 1}
+                          </span>
                         )}
                       </div>
 
                       <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                         <span
                           className={`text-[13px] font-semibold transition-colors duration-300 truncate ${
-                            isPending ? "text-slate-300 dark:text-slate-600" : "text-slate-700 dark:text-slate-200"
+                            isPending
+                              ? "text-slate-300 dark:text-slate-600"
+                              : "text-slate-700 dark:text-slate-200"
                           }`}
                           style={isRunning ? { color: step.color } : {}}
                         >
@@ -965,13 +1274,19 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                         {isDone && (
                           <span
                             className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                            style={{ background: step.color + "18", color: step.color }}
+                            style={{
+                              background: step.color + "18",
+                              color: step.color,
+                            }}
                           >
                             Дууссан
                           </span>
                         )}
                         {isRunning && (
-                          <span className="shrink-0 text-[10px] font-medium animate-pulse" style={{ color: step.color }}>
+                          <span
+                            className="shrink-0 text-[10px] font-medium animate-pulse"
+                            style={{ color: step.color }}
+                          >
                             Боловсруулж байна
                           </span>
                         )}
@@ -984,25 +1299,43 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                         const subKey = `${si}-${ssi}`;
                         const subDone = syncDoneSubSteps.includes(subKey);
                         const subFailed = syncFailedSubSteps.includes(subKey);
-                        const subRunning = !subDone && !subFailed && syncCurrentStepIdx === si && syncCurrentSubStepIdx === ssi;
+                        const subRunning =
+                          !subDone &&
+                          !subFailed &&
+                          syncCurrentStepIdx === si &&
+                          syncCurrentSubStepIdx === ssi;
 
                         return (
                           <div key={ssi} className="flex items-center gap-2.5">
-                            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all duration-300"
+                            <div
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-all duration-300"
                               style={
                                 subDone
                                   ? { background: step.color }
                                   : subFailed
-                                  ? { background: "#ef4444" }
-                                  : subRunning
-                                  ? { border: `2px solid ${step.color}60` }
-                                  : { border: "1.5px dashed #cbd5e1" }
+                                    ? { background: "#ef4444" }
+                                    : subRunning
+                                      ? { border: `2px solid ${step.color}60` }
+                                      : { border: "1.5px dashed #cbd5e1" }
                               }
                             >
-                              {subDone && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-                              {subFailed && <X className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                              {subDone && (
+                                <Check
+                                  className="h-2.5 w-2.5 text-white"
+                                  strokeWidth={3}
+                                />
+                              )}
+                              {subFailed && (
+                                <X
+                                  className="h-2.5 w-2.5 text-white"
+                                  strokeWidth={3}
+                                />
+                              )}
                               {subRunning && (
-                                <span className="h-2 w-2 rounded-full animate-ping" style={{ background: step.color }} />
+                                <span
+                                  className="h-2 w-2 rounded-full animate-ping"
+                                  style={{ background: step.color }}
+                                />
                               )}
                             </div>
                             <span
@@ -1010,10 +1343,10 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                                 subDone
                                   ? "text-slate-600 dark:text-slate-300"
                                   : subFailed
-                                  ? "text-red-400 dark:text-red-400"
-                                  : subRunning
-                                  ? "font-medium"
-                                  : "text-slate-300 dark:text-slate-600"
+                                    ? "text-red-400 dark:text-red-400"
+                                    : subRunning
+                                      ? "font-medium"
+                                      : "text-slate-300 dark:text-slate-600"
                               }`}
                               style={subRunning ? { color: step.color } : {}}
                             >
@@ -1067,11 +1400,17 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                 </div>
               ) : syncFinished ? (
                 <div className="flex items-center justify-between gap-3">
-                  <div className={`flex items-center gap-2 min-w-0 ${syncFailedSubSteps.length > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-                    {syncFailedSubSteps.length > 0
-                      ? <AlertCircle className="h-4 w-4 shrink-0" />
-                      : <Check className="h-4 w-4 shrink-0" />}
-                    <p className="text-[12px] font-medium truncate">{syncDetail}</p>
+                  <div
+                    className={`flex items-center gap-2 min-w-0 ${syncFailedSubSteps.length > 0 ? "text-amber-500 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`}
+                  >
+                    {syncFailedSubSteps.length > 0 ? (
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <Check className="h-4 w-4 shrink-0" />
+                    )}
+                    <p className="text-[12px] font-medium truncate">
+                      {syncDetail}
+                    </p>
                   </div>
                   <button
                     onClick={handleSyncClose}
@@ -1085,11 +1424,21 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
                   <span className="relative flex h-3 w-3 shrink-0">
                     <span
                       className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-50"
-                      style={{ background: syncCurrentStepIdx >= 0 ? SYNC_STEPS[syncCurrentStepIdx].color : "#3b82f6" }}
+                      style={{
+                        background:
+                          syncCurrentStepIdx >= 0
+                            ? SYNC_STEPS[syncCurrentStepIdx].color
+                            : "#3b82f6",
+                      }}
                     />
                     <span
                       className="relative inline-flex h-3 w-3 rounded-full"
-                      style={{ background: syncCurrentStepIdx >= 0 ? SYNC_STEPS[syncCurrentStepIdx].color : "#3b82f6" }}
+                      style={{
+                        background:
+                          syncCurrentStepIdx >= 0
+                            ? SYNC_STEPS[syncCurrentStepIdx].color
+                            : "#3b82f6",
+                      }}
                     />
                   </span>
                   <p className="text-[12px] text-slate-600 dark:text-slate-300 truncate">
@@ -1102,11 +1451,22 @@ export function GeneralTab({ acqId, parcelId, isLocked = false }: { acqId: strin
         </div>
       )}
 
-      {estOpen && !isExternal && !isProfOrg && !isLocked && (
-        <EstimatedValueDialog data={data} pending={estimatedMutation.isPending} onClose={() => setEstOpen(false)} onSave={(confidencePercent, baseFeePerM2, file) => estimatedMutation.mutate({ confidencePercent, baseFeePerM2, file })} />
+      {estOpen && !isExternal && !useProfApi && !isLocked && (
+        <EstimatedValueDialog
+          data={data}
+          pending={estimatedMutation.isPending}
+          onClose={() => setEstOpen(false)}
+          onSave={(confidencePercent, baseFeePerM2, file) =>
+            estimatedMutation.mutate({ confidencePercent, baseFeePerM2, file })
+          }
+        />
       )}
       {estHistoryOpen && (
-        <EstimatedValueHistoryDialog acquisitionId={acqId} parcelUuid={parcelId} onClose={() => setEstHistoryOpen(false)} />
+        <EstimatedValueHistoryDialog
+          acquisitionId={acqId}
+          parcelUuid={parcelId}
+          onClose={() => setEstHistoryOpen(false)}
+        />
       )}
     </div>
   );

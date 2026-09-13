@@ -3,20 +3,34 @@ import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelApi, documentTypeApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { isProfessionalOrg } from "@/lib/role-utils";
+import { shouldUseProfessionalOrgApi } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
-import { Upload, Trash2, Download, FileText, Paperclip, Eye, X } from "lucide-react";
+import {
+  Upload,
+  Trash2,
+  Download,
+  FileText,
+  Paperclip,
+  Eye,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
-import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import {
+  ConfirmDialog,
+  type PendingConfirm,
+} from "@/components/ui/confirm-dialog";
 import type { Document } from "@/types";
 import { DOCUMENT_GROUPS, groupKeyForDocCode } from "@/lib/document-groups";
 import { documentLink } from "@/lib/document-url";
 
 function formatSize(b: number) {
-  return b < 1024 * 1024 ? `${(b / 1024).toFixed(1)} KB` : `${(b / (1024 * 1024)).toFixed(1)} MB`;
+  return b < 1024 * 1024
+    ? `${(b / 1024).toFixed(1)} KB`
+    : `${(b / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOCX_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // "Хурлын тэмдэглэл" төрлийн хавсралт Гэрээтэй нэгтгэж хэвлэдэг тул
 // цорын ганцаараа DOCX-ээр хавсаргах боломжтой байх ёстой (бусад бүх төрөл зөвхөн PDF).
@@ -25,13 +39,21 @@ function isDocxAllowed(docType?: { type: string }) {
 }
 
 function isDocxFile(file: File) {
-  return file.type === DOCX_CONTENT_TYPE || file.name.toLowerCase().endsWith(".docx");
+  return (
+    file.type === DOCX_CONTENT_TYPE || file.name.toLowerCase().endsWith(".docx")
+  );
 }
 
-export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string; isLocked?: boolean }) {
+export function DocumentsTab({
+  parcelId,
+  isLocked = false,
+}: {
+  parcelId: string;
+  isLocked?: boolean;
+}) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -41,7 +63,10 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["parcel-documents", parcelId],
-    queryFn: () => (isProfOrg ? profApi.profListParcelDocuments(parcelId) : parcelApi.listDocuments(parcelId)),
+    queryFn: () =>
+      useProfApi
+        ? profApi.profListParcelDocuments(parcelId)
+        : parcelApi.listDocuments(parcelId),
   });
 
   const { data: docTypes = [] } = useQuery({
@@ -51,26 +76,39 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   });
 
   const uploadMutation = useMutation({
-    mutationFn: ({ file, typeId, name }: { file: File; typeId: number; name: string }) =>
-      isProfOrg
+    mutationFn: ({
+      file,
+      typeId,
+      name,
+    }: {
+      file: File;
+      typeId: number;
+      name: string;
+    }) =>
+      useProfApi
         ? profApi.profUploadParcelDocument(parcelId, file, typeId, name)
         : parcelApi.uploadDocument(parcelId, file, typeId, name),
     onSuccess: () => {
       toast.success("Баримт бичиг хавсаргагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-documents", parcelId],
+      });
       closeModal();
     },
-    onError: (err) => toast.error(getApiError(err, "Файл хавсаргахад алдаа гарлаа")),
+    onError: (err) =>
+      toast.error(getApiError(err, "Файл хавсаргахад алдаа гарлаа")),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (docId: string) =>
-      isProfOrg
+      useProfApi
         ? profApi.profDeleteParcelDocument(parcelId, docId)
         : parcelApi.deleteDocument(parcelId, docId).then(() => undefined),
     onSuccess: () => {
       toast.success("Баримт бичиг устгагдлаа");
-      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-documents", parcelId],
+      });
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
@@ -93,24 +131,43 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    const docType = docTypes.find(x => x.id === documentTypeId);
+    const docType = docTypes.find((x) => x.id === documentTypeId);
     const docxAllowed = isDocxAllowed(docType);
     const isPdf = f.type === "application/pdf";
     if (!isPdf && !(docxAllowed && isDocxFile(f))) {
-      toast.error(docxAllowed ? "PDF эсвэл DOCX файл оруулна уу" : "PDF файл оруулна уу");
+      toast.error(
+        docxAllowed ? "PDF эсвэл DOCX файл оруулна уу" : "PDF файл оруулна уу",
+      );
       e.target.value = "";
       return;
     }
-    if (f.size > 50 * 1024 * 1024) { toast.error("50MB хэтэрлээ"); e.target.value = ""; return; }
+    if (f.size > 50 * 1024 * 1024) {
+      toast.error("50MB хэтэрлээ");
+      e.target.value = "";
+      return;
+    }
     setSelectedFile(f);
     setFileName(docType ? docType.name : f.name.replace(/\.(pdf|docx)$/i, ""));
   }
 
   function handleSubmit() {
-    if (!selectedFile) { toast.error("Файл сонгоно уу"); return; }
-    if (!documentTypeId) { toast.error("Файлын төрөл сонгоно уу"); return; }
-    if (!fileName.trim()) { toast.error("Файлын нэр оруулна уу"); return; }
-    uploadMutation.mutate({ file: selectedFile, typeId: documentTypeId as number, name: fileName });
+    if (!selectedFile) {
+      toast.error("Файл сонгоно уу");
+      return;
+    }
+    if (!documentTypeId) {
+      toast.error("Файлын төрөл сонгоно уу");
+      return;
+    }
+    if (!fileName.trim()) {
+      toast.error("Файлын нэр оруулна уу");
+      return;
+    }
+    uploadMutation.mutate({
+      file: selectedFile,
+      typeId: documentTypeId as number,
+      name: fileName,
+    });
   }
 
   // source_doc_id-тай бол эх системээс (ГУС) ТАТАГДСАН, эсрэгээр ГАРААР оруулсан.
@@ -123,7 +180,9 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
   // кодтой (Бусад холбоотой хавсралт) нь кадастр бүлэгт багтана.
   const groupedDocs = DOCUMENT_GROUPS.map((group) => ({
     ...group,
-    docs: syncedDocs.filter((d) => groupKeyForDocCode(d.source_doc_code) === group.key),
+    docs: syncedDocs.filter(
+      (d) => groupKeyForDocCode(d.source_doc_code) === group.key,
+    ),
   }));
 
   return (
@@ -136,8 +195,12 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
         <div className="ap-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
             <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+                Баримт бичгүүд
+              </p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Зөвхөн PDF · Дээд хэмжээ 50MB
+              </p>
             </div>
             {!isLocked && (
               <button
@@ -152,7 +215,12 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
           {isLoading ? (
             <div className="p-5 space-y-3 animate-pulse">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]"
+                />
+              ))}
             </div>
           ) : !manualDocs.length ? (
             <div className="flex flex-col items-center justify-center py-14 text-slate-400 dark:text-slate-500">
@@ -162,35 +230,58 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
               {manualDocs.map((doc) => {
-                const typeName = docTypes.find(t => t.id === doc.document_type_id)?.name;
+                const typeName = docTypes.find(
+                  (t) => t.id === doc.document_type_id,
+                )?.name;
                 // PDF → браузерт шууд харна, бусад → татна (documentLink).
-                const link = documentLink(doc, parcelId, { prof: isProfOrg });
+                const link = documentLink(doc, parcelId, { prof: useProfApi });
                 return (
-                  <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                  >
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10">
                       <FileText className="h-4 w-4 text-red-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
+                        {doc.name}
+                      </p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
-                        {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}
+                        {typeName && (
+                          <span className="text-[#02c0ce] mr-1.5">
+                            {typeName} ·
+                          </span>
+                        )}
+                        {formatSize(doc.size_bytes)} ·{" "}
+                        {formatDate(doc.uploaded_at)}
                       </p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <a
-                        href={link.href} download={link.download}
-                        target="_blank" rel="noopener noreferrer"
+                        href={link.href}
+                        download={link.download}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         title={link.view ? "Харах" : "Татах"}
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
                       >
-                        {link.view
-                          ? <Eye className="h-3.5 w-3.5" />
-                          : <Download className="h-3.5 w-3.5" />}
+                        {link.view ? (
+                          <Eye className="h-3.5 w-3.5" />
+                        ) : (
+                          <Download className="h-3.5 w-3.5" />
+                        )}
                       </a>
                       {!isLocked && (
                         <button
-                          onClick={() => setPendingConfirm({ title: "Баримт бичиг устгах уу?", confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(doc.id) })}
+                          onClick={() =>
+                            setPendingConfirm({
+                              title: "Баримт бичиг устгах уу?",
+                              confirmLabel: "Устгах",
+                              confirmColor: "#f1556c",
+                              onConfirm: () => deleteMutation.mutate(doc.id),
+                            })
+                          }
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -208,9 +299,12 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
         <div className="ap-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
             <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Нэгж талбарын хавсралт</p>
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+                Нэгж талбарын хавсралт
+              </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Эх системээс татагдсан · &quot;Мэдээлэл дуудах&quot;-аар шинэчилнэ
+                Эх системээс татагдсан · &quot;Мэдээлэл дуудах&quot;-аар
+                шинэчилнэ
               </p>
             </div>
             {syncedDocs.length > 0 && (
@@ -222,7 +316,12 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
           {isLoading ? (
             <div className="p-5 space-y-3 animate-pulse">
-              {[...Array(2)].map((_, i) => <div key={i} className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]" />)}
+              {[...Array(2)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-12 rounded-lg bg-slate-100 dark:bg-[#252630]"
+                />
+              ))}
             </div>
           ) : (
             <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
@@ -230,7 +329,10 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                 <div key={group.key}>
                   {/* Бүлгийн толгой — татах цонхны бүлгүүдтэй ижил нэр/өнгө */}
                   <div className="flex items-center gap-2 bg-slate-50/70 dark:bg-[#191b22] px-5 py-2">
-                    <span className="h-2 w-2 rounded-full" style={{ background: group.color }} />
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: group.color }}
+                    />
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                       {group.label}
                     </p>
@@ -239,49 +341,66 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                     </span>
                   </div>
                   {group.docs.length === 0 ? (
-                    <p className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500">Олдоогүй</p>
-                  ) : (
-                  <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                    {group.docs.map((doc) => {
-                    // PDF → браузерт шууд харна, бусад → татна (documentLink).
-                    const link = documentLink(doc, parcelId, { prof: isProfOrg });
-                    return (
-                <div key={doc.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
-                    <FileText className="h-4 w-4 text-[#02c0ce]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
-                      {doc.file_type && (
-                        <span className="rounded-md bg-slate-200/70 dark:bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">
-                          {doc.file_type}
-                        </span>
-                      )}
-                      <span className="rounded-full bg-[#02c0ce]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02c0ce]">
-                        Эх сурвалж
-                      </span>
-                    </div>
-                    {/* Файл эх системийн сервер дээр байдаг тул хэмжээ 0 ирнэ — харуулахгүй */}
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      {typeNameOf(doc) && <span className="text-[#02c0ce] mr-1.5">{typeNameOf(doc)} ·</span>}
-                      {formatDate(doc.uploaded_at)}
+                    <p className="px-5 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                      Олдоогүй
                     </p>
-                  </div>
-                  <a
-                    href={link.href} download={link.download}
-                    target="_blank" rel="noopener noreferrer"
-                    title={link.view ? "Харах" : "Татах"}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
-                  >
-                    {link.view
-                      ? <Eye className="h-3.5 w-3.5" />
-                      : <Download className="h-3.5 w-3.5" />}
-                  </a>
-                </div>
-                    );
-                    })}
-                  </div>
+                  ) : (
+                    <div className="divide-y divide-slate-50 dark:divide-[#37394d]">
+                      {group.docs.map((doc) => {
+                        // PDF → браузерт шууд харна, бусад → татна (documentLink).
+                        const link = documentLink(doc, parcelId, {
+                          prof: useProfApi,
+                        });
+                        return (
+                          <div
+                            key={doc.id}
+                            className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
+                              <FileText className="h-4 w-4 text-[#02c0ce]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
+                                  {doc.name}
+                                </p>
+                                {doc.file_type && (
+                                  <span className="rounded-md bg-slate-200/70 dark:bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500 dark:text-slate-400">
+                                    {doc.file_type}
+                                  </span>
+                                )}
+                                <span className="rounded-full bg-[#02c0ce]/10 px-2 py-0.5 text-[10px] font-semibold text-[#02c0ce]">
+                                  Эх сурвалж
+                                </span>
+                              </div>
+                              {/* Файл эх системийн сервер дээр байдаг тул хэмжээ 0 ирнэ — харуулахгүй */}
+                              <p className="text-[11px] text-slate-400 mt-0.5">
+                                {typeNameOf(doc) && (
+                                  <span className="text-[#02c0ce] mr-1.5">
+                                    {typeNameOf(doc)} ·
+                                  </span>
+                                )}
+                                {formatDate(doc.uploaded_at)}
+                              </p>
+                            </div>
+                            <a
+                              href={link.href}
+                              download={link.download}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={link.view ? "Харах" : "Татах"}
+                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
+                            >
+                              {link.view ? (
+                                <Eye className="h-3.5 w-3.5" />
+                              ) : (
+                                <Download className="h-3.5 w-3.5" />
+                              )}
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               ))}
@@ -295,8 +414,13 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl border border-slate-100 dark:border-white/[0.06]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-[#37394d]">
-              <p className="text-[14px] font-semibold text-slate-800 dark:text-white">Баримт бичиг нэмэх</p>
-              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
+                Баримт бичиг нэмэх
+              </p>
+              <button
+                onClick={closeModal}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -304,17 +428,23 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
             <div className="p-6 space-y-4">
               {/* Document type */}
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын төрөл</label>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                  Файлын төрөл
+                </label>
                 <select
                   value={documentTypeId}
-                  onChange={e => {
+                  onChange={(e) => {
                     const v = e.target.value ? Number(e.target.value) : "";
                     setDocumentTypeId(v);
                     // Файлын нэрийг хавсралтын төрлийн нэрээр санал болгоно
-                    const t = docTypes.find(x => x.id === v);
+                    const t = docTypes.find((x) => x.id === v);
                     if (t) setFileName(t.name);
                     // Шинэ төрөл DOCX зөвшөөрдөггүй бол өмнө сонгосон DOCX файлыг цэвэрлэнэ
-                    if (selectedFile && isDocxFile(selectedFile) && !isDocxAllowed(t)) {
+                    if (
+                      selectedFile &&
+                      isDocxFile(selectedFile) &&
+                      !isDocxAllowed(t)
+                    ) {
                       setSelectedFile(null);
                       if (inputRef.current) inputRef.current.value = "";
                     }
@@ -322,19 +452,27 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
                   <option value="">— Сонгох —</option>
-                  {docTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
+                  {docTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               {/* File picker */}
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файл</label>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                  Файл
+                </label>
                 <input
                   ref={inputRef}
                   type="file"
-                  accept={isDocxAllowed(docTypes.find(x => x.id === documentTypeId)) ? ".pdf,application/pdf,.docx" : ".pdf,application/pdf"}
+                  accept={
+                    isDocxAllowed(docTypes.find((x) => x.id === documentTypeId))
+                      ? ".pdf,application/pdf,.docx"
+                      : ".pdf,application/pdf"
+                  }
                   className="hidden"
                   onChange={handleFileChange}
                 />
@@ -349,11 +487,13 @@ export function DocumentsTab({ parcelId, isLocked = false }: { parcelId: string;
 
               {/* File name */}
               <div className="space-y-1.5">
-                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Файлын нэр</label>
+                <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                  Файлын нэр
+                </label>
                 <input
                   type="text"
                   value={fileName}
-                  onChange={e => setFileName(e.target.value)}
+                  onChange={(e) => setFileName(e.target.value)}
                   placeholder="Жишээ: Гэрээ №1"
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-[#02c0ce] transition-colors"
                 />

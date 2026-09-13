@@ -5,7 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Briefcase, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { authApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
@@ -29,21 +30,60 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+// Нэвтрэх хоёр урсгал. Бүртгэл нь ӨӨР ӨӨР санд байрладаг тул backend дээр ч
+// эндпойнт нь тусдаа: дотоод хэрэглэгч authdb-ээс, мэргэжлийн байгууллага
+// appdb-ээс шалгагдана. Иймд хэрэглэгч аль талынхаа ялгааг ЭНД сонгоно —
+// автоматаар таах гэж оролдвол нэг сангийн нэр нөгөөгийнхийг халхлах эрсдэлтэй.
+const TABS = [
+  {
+    key: "internal" as const,
+    label: "Дотоод хэрэглэгч",
+    icon: Building2,
+    description: "Байгууллагын ажилтан, админ",
+    loginLabel: "Нэвтрэх нэр эсвэл имэйл",
+    placeholder: "admin эсвэл admin@example.com",
+  },
+  {
+    key: "prof" as const,
+    label: "Мэргэжлийн байгууллага",
+    icon: Briefcase,
+    description: "Үнэлгээний байгууллагын ажилтан",
+    loginLabel: "Нэвтрэх нэр",
+    placeholder: "Байгууллагаас олгосон нэр",
+  },
+];
+
+type TabKey = (typeof TABS)[number]["key"];
+
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<TabKey>("internal");
+  const active = TABS.find((t) => t.key === tab) ?? TABS[0];
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
+  // Таб солиход маягтыг цэвэрлэнэ: нэг талын нэр/нууц үг нөгөө тал руу
+  // санамсаргүй илгээгдэж, ойлгомжгүй "буруу нэр" алдаа гаргахаас сэргийлнэ.
+  const switchTab = (key: TabKey) => {
+    if (key === tab) return;
+    setTab(key);
+    reset();
+  };
+
   const onSubmit = async (data: FormData) => {
     setLoading(true);
     try {
-      const res = await authApi.login(data.login, data.password);
+      const res =
+        tab === "prof"
+          ? await authApi.loginProf(data.login, data.password)
+          : await authApi.login(data.login, data.password);
       authStorage.setTokens(res.access_token, res.refresh_token);
       // Cookie тохирсоныг навигацаас ӨМНӨ баталгаажуулна — эхний map/файл
       // хүсэлт cookie-гүй явж 401 болох race-аас сэргийлнэ.
@@ -77,17 +117,49 @@ export default function LoginPage() {
         </div>
 
         <Card className="border-slate-700 bg-slate-800/50 backdrop-blur shadow-2xl">
-          <CardHeader>
-            <CardTitle className="text-white">Нэвтрэх</CardTitle>
-            <CardDescription className="text-slate-400">
-              Имэйл болон нууц үгээ оруулна уу
-            </CardDescription>
+          <CardHeader className="space-y-4">
+            {/* Таб — role="tablist" нь дэлгэц уншигчид хоёр сонголт болохыг
+                хэлнэ. Гар (сумтай товчлуур) шаардлагагүй: зөвхөн хоёр товч. */}
+            <div
+              role="tablist"
+              aria-label="Нэвтрэх төрөл"
+              className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/60 p-1"
+            >
+              {TABS.map((t) => {
+                const Icon = t.icon;
+                const selected = t.key === tab;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => switchTab(t.key)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      selected
+                        ? "bg-primary text-primary-foreground shadow"
+                        : "text-slate-400 hover:text-slate-200",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div>
+              <CardTitle className="text-white">{active.label}</CardTitle>
+              <CardDescription className="text-slate-400">
+                {active.description}
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="login" className="text-slate-300">
-                  Нэвтрэх нэр эсвэл имэйл
+                  {active.loginLabel}
                 </Label>
                 <Input
                   id="login"
@@ -96,7 +168,7 @@ export default function LoginPage() {
                   autoCorrect="off"
                   spellCheck={false}
                   autoComplete="username"
-                  placeholder="admin эсвэл admin@example.com"
+                  placeholder={active.placeholder}
                   className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
                   {...register("login")}
                 />

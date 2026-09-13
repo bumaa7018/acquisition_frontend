@@ -26,6 +26,7 @@ export function actorFromAuthorization(authorization: string | null): AccessActo
     return {
       userId: idClaim(payload.user_id),
       orgId: idClaim(payload.org_id),
+      valuationOrg: payload.valuation_org === true,
       roles: Array.isArray(payload.roles) ? payload.roles : [],
     };
   } catch (err) {
@@ -39,7 +40,9 @@ export function actorFromAuthorization(authorization: string | null): AccessActo
 }
 
 export function isExternalAuthorization(authorization: string | null): boolean {
-  const roles = actorFromAuthorization(authorization).roles ?? [];
+  const actor = actorFromAuthorization(authorization);
+  if (actor.valuationOrg) return true;
+  const roles = actor.roles ?? [];
   return roles.some((role) =>
     [
       "professional_org",

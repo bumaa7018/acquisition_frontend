@@ -18,6 +18,7 @@ import {
   Cell,
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
+import { profApi } from "@/lib/prof-api";
 import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ function AcquisitionSelect({
   const [debounced, setDebounced] = useState("");
   const [displayLabel, setDisplayLabel] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
+  const isProfOrg = isProfessionalOrg();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 300);
@@ -100,8 +102,22 @@ function AcquisitionSelect({
   }, [query]);
 
   const { data, isFetching } = useQuery({
-    queryKey: ["acq-suggest", debounced],
-    queryFn: () => landApi.suggest(debounced),
+    queryKey: ["acq-suggest", isProfOrg ? "prof" : "internal", debounced],
+    queryFn: async () => {
+      if (isProfOrg) {
+        const res = await profApi.profListMyAcquisitions({
+          acquisition_name: debounced,
+          page: 1,
+          page_size: 10,
+        });
+        return (res.data ?? []).map((a) => ({
+          id: a.id,
+          acquisition_name: a.acquisition_name,
+          plan_code: a.plan_code,
+        }));
+      }
+      return landApi.suggest(debounced);
+    },
     enabled: debounced.trim().length > 0,
     staleTime: 30_000,
   });
@@ -367,6 +383,7 @@ function PlanSelect({
   const [debounced, setDebounced] = useState(value);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const isProfOrg = isProfessionalOrg();
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 300);
@@ -374,8 +391,22 @@ function PlanSelect({
   }, [query]);
 
   const { data, isFetching } = useQuery({
-    queryKey: ["plan-suggest", debounced],
-    queryFn: () => landApi.suggest(debounced),
+    queryKey: ["plan-suggest", isProfOrg ? "prof" : "internal", debounced],
+    queryFn: async () => {
+      if (isProfOrg) {
+        const res = await profApi.profListMyAcquisitions({
+          plan_code: debounced,
+          page: 1,
+          page_size: 10,
+        });
+        return (res.data ?? []).map((a) => ({
+          id: a.id,
+          acquisition_name: a.acquisition_name,
+          plan_code: a.plan_code,
+        }));
+      }
+      return landApi.suggest(debounced);
+    },
     enabled: debounced.trim().length > 0,
     staleTime: 30_000,
   });
@@ -1553,7 +1584,13 @@ export default function DashboardPage() {
             Ганц чөлөөлөлт олдвол — pie нь ЯВЦЫН хувь (дууссан/үлдсэн).
             Олон бол — pie нь чөлөөлөлтийн ТОО: бүрэн / дутуу / шинэ (0%).
             Хажуугийн том тоо нь хоёр тохиолдолд ч НИЙТ гүйцэтгэлийн хувь. */}
-        <div className="ap-card flex items-center justify-between gap-3 px-4 py-2">
+        <div
+          className="ap-card flex items-center justify-between gap-3 px-4 py-2"
+          // Гүйцэтгэл нь ЭЦСИЙН 3 төлөвийг (Нөлөөлөгдсөн гарсан · Татгалзсан ·
+          // Чөлөөлсөн) тоолдог тул зэргэлдээх "чөлөөлөгдсөн" картуудаас
+          // (зөвхөн «Чөлөөлсөн») ӨНДӨР гарч болно — ялгааг эндээс тайлбарлана.
+          title="Эцсийн төлөвт (Нөлөөлөгдсөн гарсан · Татгалзсан · Чөлөөлсөн) шилжсэн нэгж талбарын хувь"
+        >
           <div className="min-w-0">
             <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
               Чөлөөлөлтийн гүйцэтгэл

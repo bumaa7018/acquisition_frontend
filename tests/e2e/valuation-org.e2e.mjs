@@ -42,21 +42,28 @@ async function request(path, { token, method = "GET", body } = {}) {
 }
 
 // /auth бүлэг минутад 30 хүсэлтийн хязгаартай тул нэг ажиллагааны дотор нэг
-// хэрэглэгчээр давтан нэвтрэхгүй — токеныг кэшлэнэ. ШИНЭ нэвтрэлт шаардсан
-// тестүүд (идэвхгүй болсны дараах шалгалт г.м.) /auth/login-г ШУУД дуудна.
+// хэрэглэгчээр давтан нэвтрэхгүй — токеныг кэшлэнэ. Нэвтрэлтийн эх сурвалжууд
+// ТУСДАА:
+//   * /auth/login      → зөвхөн authdb.sdplatform.sd_user
+//   * /auth/prof/login → зөвхөн appdb.valuation_org_employee
+// ШИНЭ нэвтрэлт шаардсан тестүүд (идэвхгүй болсны дараах шалгалт г.м.)
+// тохирох endpoint-оо ШУУД дуудна.
 const tokenCache = new Map();
 
-async function login(username, password) {
-  const key = `${username}:${password}`;
+async function loginAt(path, username, password) {
+  const key = `${path}:${username}:${password}`;
   if (tokenCache.has(key)) return tokenCache.get(key);
-  const { res, json } = await request("/auth/login", {
+  const { res, json } = await request(path, {
     method: "POST",
     body: { username, password },
   });
-  assert.equal(res.status, 200, `login failed for ${username}: ${res.status}`);
+  assert.equal(res.status, 200, `login failed at ${path} for ${username}: ${res.status}`);
   tokenCache.set(key, json.data.access_token);
   return json.data.access_token;
 }
+
+const loginAuth = (username, password) => loginAt("/auth/login", username, password);
+const loginProf = (username, password) => loginAt("/auth/prof/login", username, password);
 
 function claims(token) {
   const raw = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -72,7 +79,7 @@ const EMP1_USER = `e2e_emp1_${suffix}`.replace(/-/g, "_");
 const EMP2_USER = `e2e_emp2_${suffix}`.replace(/-/g, "_");
 
 test("бэлтгэл: админаар нэвтрэх", async () => {
-  admin = await login(ADMIN_USER, ADMIN_PASS);
+  admin = await loginAuth(ADMIN_USER, ADMIN_PASS);
   assert.ok(admin);
 });
 
@@ -87,16 +94,32 @@ test("дотоод хэрэглэгчид org_id ОГТ олгогдохгүй",
 });
 
 test("үнэлгээний байгууллагын хэрэглэгчид org_id олгогдоно", async () => {
-  const token = await login("valuation_org_1", "Testpass123!");
+  const token = await loginProf("valuation_org_1", "Testpass123!");
   const c = claims(token);
   assert.ok(Number.isInteger(c.org_id), `org_id алга: ${JSON.stringify(c.org_id)}`);
-  assert.deepEqual(c.roles, ["professional_org"]);
+  assert.equal(c.valuation_org, true, `valuation_org claim алга: ${JSON.stringify(c)}`);
 });
 
 test("өөр өөр байгууллагын хэрэглэгчид ӨӨР org_id авна", async () => {
-  const a = claims(await login("valuation_org_1", "Testpass123!"));
-  const b = claims(await login("valuation_org_2", "Testpass123!"));
+  const a = claims(await loginProf("valuation_org_1", "Testpass123!"));
+  const b = claims(await loginProf("valuation_org_2", "Testpass123!"));
   assert.notEqual(a.org_id, b.org_id, "хоёр байгууллага ижил org_id авчээ");
+});
+
+test("мэргэжлийн байгууллага /auth/login дээр нэвтрэхгүй", async () => {
+  const { res } = await request("/auth/login", {
+    method: "POST",
+    body: { username: "valuation_org_1", password: "Testpass123!" },
+  });
+  assert.equal(res.status, 401, `valuation org authdb endpoint-оор нэвтэрлээ: ${res.status}`);
+});
+
+test("дотоод хэрэглэгч /auth/prof/login дээр нэвтрэхгүй", async () => {
+  const { res } = await request("/auth/prof/login", {
+    method: "POST",
+    body: { username: ADMIN_USER, password: ADMIN_PASS },
+  });
+  assert.equal(res.status, 401, `admin appdb endpoint-оор нэвтэрлээ: ${res.status}`);
 });
 
 // ── 2. Бүртгэл ба эрхийн хаалт ──────────────────────────────────────────────
@@ -166,7 +189,7 @@ test("жагсаалт болон хайлт ажиллана", async () => {
 });
 
 test("мэргэжлийн байгууллага бүртгэл ҮҮСГЭХ/ЗАСАХ эрхгүй", async () => {
-  const token = await login("valuation_org_1", "Testpass123!");
+  const token = await loginProf("valuation_org_1", "Testpass123!");
   const c = await request("/valuation-orgs", {
     token,
     method: "POST",
@@ -198,10 +221,10 @@ test("НЭГ байгууллагын ХОЁР ажилтан тус тусда�
   const org = Number(created.orgId);
   const got = [];
   for (const uname of created.usernames) {
-    const t = await login(uname, "Testpass123!");
+    const t = await loginProf(uname, "Testpass123!");
     const c = claims(t);
     got.push(c.org_id);
-    assert.deepEqual(c.roles, ["professional_org"], `${uname}-д professional_org роль олгогдоогүй`);
+    assert.equal(c.valuation_org, true, `${uname}-д valuation_org claim олгогдоогүй`);
   }
   assert.equal(got.length, 2);
   for (const g of got) assert.equal(g, org, "ажилтны org_id байгууллагатайгаа таарахгүй байна");
@@ -209,8 +232,8 @@ test("НЭГ байгууллагын ХОЁР ажилтан тус тусда�
 
 test("байгууллагын ажилтнууд ИЖИЛ ажлын жагсаалт харна", async () => {
   const [u1, u2] = created.usernames;
-  const t1 = await login(u1, "Testpass123!");
-  const t2 = await login(u2, "Testpass123!");
+  const t1 = await loginProf(u1, "Testpass123!");
+  const t2 = await loginProf(u2, "Testpass123!");
   const a = await request("/prof/land-acquisitions?page=1&page_size=50", { token: t1 });
   const b = await request("/prof/land-acquisitions?page=1&page_size=50", { token: t2 });
   assert.equal(a.res.status, 200);
@@ -255,8 +278,8 @@ test("хяналтын самбар ажилтны шүүлттэйгээр аж
 });
 
 test("мэргэжлийн байгууллагын жагсаалт зөвхөн өөрийн ажлыг буцаана", async () => {
-  const t1 = await login("valuation_org_1", "Testpass123!");
-  const t2 = await login("valuation_org_2", "Testpass123!");
+  const t1 = await loginProf("valuation_org_1", "Testpass123!");
+  const t2 = await loginProf("valuation_org_2", "Testpass123!");
   const a = await request("/prof/land-acquisitions?page=1&page_size=50", { token: t1 });
   const b = await request("/prof/land-acquisitions?page=1&page_size=50", { token: t2 });
   assert.equal(a.res.status, 200, `org1 жагсаалт: ${a.res.status}`);
@@ -334,7 +357,7 @@ test("жагсаалт дээр ч байгууллагын нэр зөв хар
 
 test("байгууллагын ХОЁУЛАА ажилтан тэр чөлөөлөлтөд хандана", async () => {
   for (const uname of scoped.usernames) {
-    const t = await login(uname, "Testpass123!");
+    const t = await loginProf(uname, "Testpass123!");
     const one = await request(`/prof/land-acquisitions/${scoped.acqId}`, { token: t });
     assert.equal(one.res.status, 200, `${uname} хандаж чадсангүй: ${one.res.status}`);
     const parcels = await request(`/prof/land-acquisitions/${scoped.acqId}/parcels`, { token: t });
@@ -343,7 +366,7 @@ test("байгууллагын ХОЁУЛАА ажилтан тэр чөлөөл
 });
 
 test("ӨӨР байгууллагын ажилтан тэр чөлөөлөлтөд ХАНДАХГҮЙ", async () => {
-  const other = await login("valuation_org_1", "Testpass123!");
+  const other = await loginProf("valuation_org_1", "Testpass123!");
   const { res } = await request(`/prof/land-acquisitions/${scoped.acqId}`, { token: other });
   assert.equal(res.status, 403, `өөр байгууллага хандаж чадсан: ${res.status}`);
 });
@@ -378,7 +401,7 @@ test("байгууллага устахад ажилтан нь ӨӨР байг�
 
   // Байгууллага устахад ажилтан салгагдаад зогсохгүй нэвтрэх эрх нь ч хаагдана
   // (мөр устгагдахгүй — зөвхөн төлөв). Иймд нэвтрэлт татгалзагдана.
-  const { res } = await request("/auth/login", {
+  const { res } = await request("/auth/prof/login", {
     method: "POST",
     body: { username: tmpUser, password: "Testpass123!" },
   });
@@ -423,7 +446,7 @@ test("бэлтгэл: идэвхжилт шалгах байгууллага + �
 
 test("нэвтрэх нэр нь ИМЭЙЛ байх шаардлагагүй", async () => {
   // "e2e_act_…" нь имэйл биш — backend үүнийг хүлээж авах ёстой.
-  const t = await login(act.user, "Testpass123!");
+  const t = await loginProf(act.user, "Testpass123!");
   assert.ok(t, "энгийн нэвтрэх нэрээр нэвтэрч чадсангүй");
   assert.equal(claims(t).org_id, Number(act.orgId));
 });
@@ -448,7 +471,7 @@ test("ажилтныг байгууллагаас хасахад НЭВТРЭХ 
   assert.equal(upd.json.data.employee_count, 0);
 
   // Өмнө нь ажилтан хасагдсан ч sd_user идэвхтэй хэвээр үлдэж, нэвтэрсээр байв.
-  const { res, json } = await request("/auth/login", {
+  const { res, json } = await request("/auth/prof/login", {
     method: "POST",
     body: { username: act.user, password: "Testpass123!" },
   });
@@ -457,7 +480,7 @@ test("ажилтныг байгууллагаас хасахад НЭВТРЭХ 
 
 test("идэвхгүй хэрэглэгч 'олдсонгүй' (401) болно — 403 биш", async () => {
   // Бүртгэл байгаа эсэхийг гаднаас таамаглах боломжгүй байх ёстой.
-  const { res } = await request("/auth/login", {
+  const { res } = await request("/auth/prof/login", {
     method: "POST",
     body: { username: act.user, password: "buruu-nuuts-ug" },
   });

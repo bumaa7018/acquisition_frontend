@@ -5,7 +5,17 @@ import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { RIGHT_TYPE_LABELS, ACQ_STATUS } from "@/types";
-import { ArrowLeft, Info, Paperclip, Building2, Printer, Activity, UserCheck, Gavel, Landmark } from "lucide-react";
+import {
+  ArrowLeft,
+  Info,
+  Paperclip,
+  Building2,
+  Printer,
+  Activity,
+  UserCheck,
+  Gavel,
+  Landmark,
+} from "lucide-react";
 import Link from "next/link";
 import { type Tab } from "./_components/constants";
 import { GeneralTab } from "./_components/general_tab";
@@ -16,7 +26,12 @@ import { DocumentsTab } from "./_components/documents_tab";
 import { FinanceTab } from "./_components/finance_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
 import { DecreeTab } from "./_components/decree_tab";
-import { canAccessParcel, canViewParcelTab, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import {
+  canAccessParcel,
+  canViewParcelTab,
+  isExternalSpecialRole,
+  shouldUseProfessionalOrgApi,
+} from "@/lib/role-utils";
 import { Users } from "lucide-react";
 
 export default function ParcelDetailPage() {
@@ -26,7 +41,7 @@ export default function ParcelDetailPage() {
   const [tab, setTab] = useState<Tab>("general");
   const [mounted, setMounted] = useState(false);
   const isExternal = isExternalSpecialRole();
-  const isProfOrg = isProfessionalOrg();
+  const useProfApi = shouldUseProfessionalOrgApi();
 
   React.useEffect(() => setMounted(true), []);
 
@@ -34,44 +49,85 @@ export default function ParcelDetailPage() {
     setTab(key);
   }
 
-  const { data: parcel, isLoading: parcelLoading, error: parcelError } = useQuery({
+  const {
+    data: parcel,
+    isLoading: parcelLoading,
+    error: parcelError,
+  } = useQuery({
     queryKey: ["parcel-full", acqId, id],
-    queryFn: () => (isProfOrg ? profApi.profGetParcel(acqId, id) : landApi.getParcel(acqId, id)),
+    queryFn: () =>
+      useProfApi
+        ? profApi.profGetParcel(acqId, id)
+        : landApi.getParcel(acqId, id),
     enabled: !!acqId,
     retry: (failCount, err) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
       if (status === 403 || status === 404) return false;
       return failCount < 2;
     },
   });
-  const { data: acquisition, isLoading: acquisitionLoading, error: acquisitionError } = useQuery({
+  const {
+    data: acquisition,
+    isLoading: acquisitionLoading,
+    error: acquisitionError,
+  } = useQuery({
     queryKey: ["land", acqId],
-    queryFn: () => (isProfOrg ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId)),
+    queryFn: () =>
+      useProfApi ? profApi.profGetAcquisition(acqId) : landApi.getById(acqId),
     enabled: !!acqId,
     retry: (failCount, err) => {
-      const status = (err as { response?: { status?: number } })?.response?.status;
+      const status = (err as { response?: { status?: number } })?.response
+        ?.status;
       if (status === 403 || status === 404) return false;
       return failCount < 2;
     },
   });
 
-  const PARCEL_FINAL_STATUSES = ["Чөлөөлсөн", "Татгалзсан", "Нөлөөллөөс гарсан"];
+  const PARCEL_FINAL_STATUSES = [
+    "Чөлөөлсөн",
+    "Татгалзсан",
+    "Нөлөөллөөс гарсан",
+  ];
   // Татгалзсан төлөвтэй ч бусад төлөв рүү шилжих боломжтой байх ёстой тул
   // энэ төлвийг явцын (status) хаалтаас чөлөөлнө — бусад таб хаалттай хэвээр.
   const PROGRESS_FINAL_STATUSES = ["Чөлөөлсөн", "Нөлөөллөөс гарсан"];
   const isAcqConfirmed = acquisition?.status === ACQ_STATUS.CONFIRMED;
- 
+
   const isBeforeFieldStage =
     acquisition != null && acquisition.status < ACQ_STATUS.FIELD_SURVEY;
-  const isParcelLocked = isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
-  const isProgressLocked = isAcqConfirmed || PROGRESS_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+  const isParcelLocked =
+    isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+  const isProgressLocked =
+    isAcqConfirmed ||
+    PROGRESS_FINAL_STATUSES.includes(parcel?.status_name ?? "");
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "general", label: "Ерөнхий мэдээлэл", icon: <Info className="h-4 w-4" /> },
-    { key: "holder", label: "Эзэмшигч", icon: <UserCheck className="h-4 w-4" /> },
-    { key: "finance", label: "Барьцаа, төлбөр", icon: <Landmark className="h-4 w-4" /> },
-    { key: "realEstate", label: "Нөхөх олговор", icon: <Building2 className="h-4 w-4" /> },
-    { key: "documents", label: "Баримт бичиг", icon: <Paperclip className="h-4 w-4" /> },
+    {
+      key: "general",
+      label: "Ерөнхий мэдээлэл",
+      icon: <Info className="h-4 w-4" />,
+    },
+    {
+      key: "holder",
+      label: "Эзэмшигч",
+      icon: <UserCheck className="h-4 w-4" />,
+    },
+    {
+      key: "finance",
+      label: "Барьцаа, төлбөр",
+      icon: <Landmark className="h-4 w-4" />,
+    },
+    {
+      key: "realEstate",
+      label: "Нөхөх олговор",
+      icon: <Building2 className="h-4 w-4" />,
+    },
+    {
+      key: "documents",
+      label: "Баримт бичиг",
+      icon: <Paperclip className="h-4 w-4" />,
+    },
     { key: "decree", label: "Захирамж", icon: <Gavel className="h-4 w-4" /> },
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
@@ -85,8 +141,12 @@ export default function ParcelDetailPage() {
     ? tab
     : "general";
 
-  const parcelErrorStatus = (parcelError as { response?: { status?: number } } | null)?.response?.status;
-  const acquisitionErrorStatus = (acquisitionError as { response?: { status?: number } } | null)?.response?.status;
+  const parcelErrorStatus = (
+    parcelError as { response?: { status?: number } } | null
+  )?.response?.status;
+  const acquisitionErrorStatus = (
+    acquisitionError as { response?: { status?: number } } | null
+  )?.response?.status;
   const accessErrorStatus = parcelErrorStatus ?? acquisitionErrorStatus;
 
   if (parcelLoading || acquisitionLoading) {
@@ -161,8 +221,18 @@ export default function ParcelDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">
-          <svg className="h-8 w-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          <svg
+            className="h-8 w-8 text-amber-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+            />
           </svg>
         </div>
         <div className="text-center">
@@ -170,7 +240,11 @@ export default function ParcelDetailPage() {
             Дэлгэрэнгүй мэдээлэл хаалттай
           </p>
           <p className="text-[13px] text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
-            Чөлөөлөлт <strong className="text-slate-600 dark:text-slate-300">Баталгаажсан</strong> төлөвтэй тул нэгж талбарын дэлгэрэнгүй мэдээлэлд хандах боломжгүй.
+            Чөлөөлөлт{" "}
+            <strong className="text-slate-600 dark:text-slate-300">
+              Баталгаажсан
+            </strong>{" "}
+            төлөвтэй тул нэгж талбарын дэлгэрэнгүй мэдээлэлд хандах боломжгүй.
           </p>
         </div>
         <Link
@@ -212,9 +286,23 @@ export default function ParcelDetailPage() {
               className={`relative flex flex-col items-center justify-center gap-1.5 px-6 py-3.5 min-w-[110px] whitespace-nowrap transition-all select-none
                 ${active ? "text-[#02c0ce] bg-[#02c0ce]/5 dark:bg-[#02c0ce]/10" : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#252630]"}`}
             >
-              {active && <span className="absolute top-0 left-4 right-4 h-0.5 rounded-b-full bg-[#02c0ce]" />}
-              <span className={active ? "text-[#02c0ce]" : "text-slate-400 dark:text-slate-500"}>{t.icon}</span>
-              <span className={`text-[11.5px] font-semibold tracking-wide ${active ? "text-[#02c0ce]" : ""}`}>{t.label}</span>
+              {active && (
+                <span className="absolute top-0 left-4 right-4 h-0.5 rounded-b-full bg-[#02c0ce]" />
+              )}
+              <span
+                className={
+                  active
+                    ? "text-[#02c0ce]"
+                    : "text-slate-400 dark:text-slate-500"
+                }
+              >
+                {t.icon}
+              </span>
+              <span
+                className={`text-[11.5px] font-semibold tracking-wide ${active ? "text-[#02c0ce]" : ""}`}
+              >
+                {t.label}
+              </span>
             </button>
           );
         })}
@@ -225,17 +313,40 @@ export default function ParcelDetailPage() {
         <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10 px-4 py-3">
           <span className="text-amber-500 shrink-0">🔒</span>
           <p className="text-[13px] text-amber-700 dark:text-amber-400 font-medium">
-            Чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй тул нэгж талбар дээр ямар нэгэн засвар хийх боломжгүй.
+            Чөлөөлөлт <strong>Баталгаажсан</strong> төлөвтэй тул нэгж талбар
+            дээр ямар нэгэн засвар хийх боломжгүй.
           </p>
         </div>
       )}
 
-      {activeTab === "general" && <GeneralTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "holder" && <HolderTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "progress" && <ProgressTab acqId={acqId} parcelId={id} isLocked={isProgressLocked} beforeFieldStage={isBeforeFieldStage} />}
-      {activeTab === "realEstate" && <RealEstateTab acqId={acqId} parcelId={id} parcelCode={parcel?.parcel_id ?? ""} isLocked={isParcelLocked} />}
-      {activeTab === "documents" && <DocumentsTab parcelId={id} isLocked={isParcelLocked} />}
-      {activeTab === "finance" && <FinanceTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />}
+      {activeTab === "general" && (
+        <GeneralTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />
+      )}
+      {activeTab === "holder" && (
+        <HolderTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />
+      )}
+      {activeTab === "progress" && (
+        <ProgressTab
+          acqId={acqId}
+          parcelId={id}
+          isLocked={isProgressLocked}
+          beforeFieldStage={isBeforeFieldStage}
+        />
+      )}
+      {activeTab === "realEstate" && (
+        <RealEstateTab
+          acqId={acqId}
+          parcelId={id}
+          parcelCode={parcel?.parcel_id ?? ""}
+          isLocked={isAcqConfirmed}
+        />
+      )}
+      {activeTab === "documents" && (
+        <DocumentsTab parcelId={id} isLocked={isParcelLocked} />
+      )}
+      {activeTab === "finance" && (
+        <FinanceTab acqId={acqId} parcelId={id} isLocked={isParcelLocked} />
+      )}
       {activeTab === "decree" && <DecreeTab parcelId={id} />}
       {activeTab === "print" && <PrintTemplatesTab parcel={parcel} />}
     </div>

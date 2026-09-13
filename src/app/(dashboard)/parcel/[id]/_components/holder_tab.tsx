@@ -6,7 +6,7 @@ import { profApi } from "@/lib/prof-api";
 import { formatDate, getApiError } from "@/lib/utils";
 import { UserCheck, UserPlus, Trash2, Users, Wallet, X, Landmark, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
+import { isAdmin, isExternalSpecialRole, isProfessionalOrg } from "@/lib/role-utils";
 import type { ParcelHolder, ParcelOwnership, RepresentativeInput } from "@/types";
 import { NoticeSection } from "./notice_section";
 
@@ -300,6 +300,7 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
   // УБЕГ-аас дахин татах нь мэдээлэл БИЧИХ үйлдэл — гадны хэрэглэгч
   // (мэрг. байгууллага, МИКА, санхүү) болон хаалттай чөлөөлөлтөд байхгүй.
   const canSyncOwnership = !isExternal && !isLocked;
+  const canSendNotice = isAdmin() && !isLocked;
 
   const handleRepSubmit = () => {
     const errors = { last_name: !repForm.last_name.trim(), first_name: !repForm.first_name.trim() };
@@ -354,7 +355,7 @@ export function HolderTab({ acqId, parcelId, isLocked = false }: { acqId: string
             </div>
             {/* Мэдэгдэх хуудас илгээх — ЗӨВХӨН товч. Дарахад илгээсэн түүх ба
                 дээд талд шинээр илгээх (имэйл / Е-Монголиа) хэсэг гарна. */}
-            <NoticeSection parcelId={parcelId} parcel={data} canSend={canSyncOwnership} />
+            {canSendNotice && <NoticeSection parcelId={parcelId} parcel={data} canSend={canSendNotice} />}
           </div>
           {mainHolders.length > 0 ? (
             <>
