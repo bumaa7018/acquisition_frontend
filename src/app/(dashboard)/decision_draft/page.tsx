@@ -13,7 +13,7 @@ import {
   DECISION_DRAFT_STATUS_DRAFT,
 } from "@/types";
 import type { DecisionDraft } from "@/types";
-import { formatDate, getApiError } from "@/lib/utils";
+import { formatBillion, formatDate, formatMoneyExact, getApiError } from "@/lib/utils";
 import { canCreateDecisionDraft, canViewDecisionDrafts } from "@/lib/role-utils";
 import { Search, X, Plus, Gavel, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -88,11 +88,7 @@ function buildFundingSummary(rows: DecisionDraft[]): FundingSummary[] {
 }
 
 function formatMoney(value: number) {
-  return `${Math.round(value || 0).toLocaleString("mn-MN")}₮`;
-}
-
-function formatBillion(value: number) {
-  return `${(value / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 3 })} тэрбум`;
+  return formatMoneyExact(value);
 }
 
 function sourceColor(index: number) {
@@ -465,12 +461,19 @@ export default function DecisionDraftListPage() {
                             </p>
                           </div>
                           <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Нийт санхүүжилт</p>
-                          <p className="text-[13px] font-bold tabular-nums text-slate-800 dark:text-white">
-                            {formatMoney(item.budget)}
+                          <p
+                            title={formatMoneyExact(item.budget)}
+                            className="text-[13px] font-bold tabular-nums text-slate-800 dark:text-white"
+                          >
+                            {formatBillion(item.budget)}
                           </p>
                           <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Ашигласан</p>
-                          <p className="text-[13px] font-bold tabular-nums" style={{ color: accent }}>
-                            {formatMoney(item.used)}
+                          <p
+                            title={formatMoneyExact(item.used)}
+                            className="text-[13px] font-bold tabular-nums"
+                            style={{ color: accent }}
+                          >
+                            {formatBillion(item.used)}
                           </p>
                           <p className={`mt-1 text-[11px] font-semibold tabular-nums ${item.balance < 0 ? "text-rose-500" : "text-slate-400 dark:text-slate-500"}`}>
                             {item.budget > 0 ? `${usedPercent.toLocaleString("mn-MN")}% ашигласан` : "Төсөвгүй"}
@@ -563,16 +566,18 @@ export default function DecisionDraftListPage() {
                                   ? "font-bold text-slate-800 dark:text-white"
                                   : "text-slate-600 dark:text-slate-300"
                             }`}
+                            title={formatMoneyExact(value)}
                           >
-                            {formatMoney(value)}
+                            {formatBillion(value)}
                           </td>
                         ))}
                         <td
                           className={`px-3 py-2 text-right font-bold tabular-nums ${
                             row.label === "Зөрүү дүн" && row.total < 0 ? "text-rose-500" : "text-slate-800 dark:text-white"
                           }`}
+                          title={formatMoneyExact(row.total)}
                         >
-                          {formatMoney(row.total)}
+                          {formatBillion(row.total)}
                         </td>
                       </tr>
                     ))}

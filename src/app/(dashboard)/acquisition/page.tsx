@@ -21,6 +21,13 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  SortableHeaderRow,
+  nextSortState,
+  type SortColumn,
+  type SortState,
+} from "@/components/ui/sortable-table-head";
+
 import Link from "next/link";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { ProgressBadge } from "@/components/ui/progress-badge";
@@ -477,6 +484,7 @@ export default function LandPage() {
   const [draft, setDraft] = useState<AcqDraft>(EMPTY_DRAFT);
   const [filter, setFilter] = useState<AcqDraft>(EMPTY_DRAFT);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
@@ -540,16 +548,25 @@ export default function LandPage() {
     setPage(1);
   }
 
+  // Эрэмбэ СЕРВЕР дээр хийгддэг (жагсаалт хуудаслагддаг тул) — солигдоход
+  // эхний хуудас руу буцна.
+  function applySort(key: string) {
+    setSort((cur) => nextSortState(cur, key));
+    setPage(1);
+  }
+
   const hasFilter = !!(
     draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.year || draft.au2Code
   );
 
   const { data: rawData, isLoading } = useQuery({
-    queryKey: ["land", page, filter],
+    queryKey: ["land", page, filter, sort],
     queryFn: () =>
       landApi.list({
         page,
         page_size: PAGE_SIZE,
+        sort: sort?.by,
+        order: sort?.dir,
         plan_code: filter.planCode || undefined,
         acquisition_name: filter.acqName || undefined,
         status: onlyFieldSurvey ? ACQ_STATUS.FIELD_SURVEY : filter.status || undefined,
@@ -576,16 +593,18 @@ export default function LandPage() {
   const total = rawData?.total ?? 0;
   const displayData = filteredAcquisitions;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const HEADERS = [
-    "Төлөвлөгөө",
-    "Чөлөөлөлтийн нэр",
-    "Ерөнхий ангилал",
-    "Дэд ангилал",
-    "Статус",
-    "Талбай",
-    "Эхлэх",
-    "Нэгж талбар",
-    "",
+  // `key` нь backend-ийн зөвшөөрөгдсөн эрэмбийн түлхүүр; түлхүүргүй багана
+  // (үйлдэл) эрэмбэлэгдэхгүй.
+  const HEADERS: SortColumn[] = [
+    { label: "Төлөвлөгөө", key: "plan_code" },
+    { label: "Чөлөөлөлтийн нэр", key: "acquisition_name" },
+    { label: "Ерөнхий ангилал", key: "general_category" },
+    { label: "Дэд ангилал", key: "sub_category" },
+    { label: "Статус", key: "status" },
+    { label: "Талбай", key: "area_m2" },
+    { label: "Эхлэх", key: "start_date" },
+    { label: "Нэгж талбар", key: "parcel_count" },
+    { label: "" },
   ];
 
   if (isProfOrg) return null;
@@ -704,23 +723,20 @@ export default function LandPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]">
-                {HEADERS.map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
+              <SortableHeaderRow
+                columns={HEADERS}
+                sort={sort}
+                onSort={applySort}
+                thClassName="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20]"
+              />
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
               {isLoading ? (
                 [...Array(8)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
-                    {HEADERS.map((h) => (
-                      <td key={h} className="px-5 py-3.5">
+                    {HEADERS.map((h, ci) => (
+                      <td key={ci} className="px-5 py-3.5">
                         <div className="h-4 rounded bg-slate-100 dark:bg-[#252630]" />
                       </td>
                     ))}
@@ -744,30 +760,44 @@ export default function LandPage() {
                       key={land.id}
                       className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
-                      <td className="px-5 py-3.5 max-w-[200px]">
-                        <p className="font-semibold text-[#02c0ce] truncate">
-                          {land.plan_code}
-                        </p>
-                        {land.plan_name ? (
-                          <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">
-                            {land.plan_name}
+                      {/* Нэр, ангиллын баганууд ТАСРАХГҮЙ: өмнө нь truncate
+                          хийгдэж, урт нэрийг огт уншиж чаддаггүй байв. Одоо
+                          мөр дамжин бүтнээрээ харагдана.
+                          Өргөний хязгаарыг <td> дээр биш ДОТООД блок дээр
+                          тавина — `table-layout: auto` үед нүдний max-width-ыг
+                          браузер үл хэрэгсдэг. */}
+                      <td className="px-5 py-3.5 align-top">
+                        <div className="min-w-[150px] max-w-[260px]">
+                          <p className="font-semibold text-[#02c0ce] break-words">
+                            {land.plan_code}
                           </p>
-                        ) : (
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
-                            —
-                          </p>
-                        )}
+                          {land.plan_name ? (
+                            <p
+                              title={land.plan_name}
+                              className="text-[11px] text-slate-600 dark:text-slate-300 break-words leading-snug mt-0.5"
+                            >
+                              {land.plan_name}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              —
+                            </p>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-5 py-3.5 max-w-[240px]">
+                      <td className="px-5 py-3.5 align-top">
                         {/* Явцын хувь — нэрийн ӨМНӨ (дашбоардтай ижил тоо) */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex min-w-[230px] max-w-[380px] items-start gap-2">
                           <ProgressBadge
                             percent={land.progress_percent}
                             parcelCount={land.parcel_count}
                             finalCount={land.final_parcel_count}
                           />
                           {land.acquisition_name ? (
-                            <span className="truncate text-[13px] text-slate-700 dark:text-slate-200">
+                            <span
+                              title={land.acquisition_name}
+                              className="text-[13px] text-slate-700 dark:text-slate-200 break-words leading-snug"
+                            >
                               {land.acquisition_name}
                             </span>
                           ) : (
@@ -775,13 +805,23 @@ export default function LandPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
-                        <span className="truncate block">{land.general_category_name || "—"}</span>
+                      <td className="px-5 py-3.5 align-top text-[12px] text-slate-600 dark:text-slate-300">
+                        <span
+                          title={land.general_category_name || undefined}
+                          className="block min-w-[120px] max-w-[200px] break-words leading-snug"
+                        >
+                          {land.general_category_name || "—"}
+                        </span>
                       </td>
-                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
-                        <span className="truncate block">{land.sub_category_name || "—"}</span>
+                      <td className="px-5 py-3.5 align-top text-[12px] text-slate-600 dark:text-slate-300">
+                        <span
+                          title={land.sub_category_name || undefined}
+                          className="block min-w-[120px] max-w-[200px] break-words leading-snug"
+                        >
+                          {land.sub_category_name || "—"}
+                        </span>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         <span
                           className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
                           style={{ color: sc.color, background: sc.bg }}
@@ -789,13 +829,13 @@ export default function LandPage() {
                           {STATUS_LABELS[land.status] ?? "Тодорхойгүй"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
+                      <td className="px-5 py-3.5 align-top text-slate-600 dark:text-slate-400">
                         {formatArea(land.area_m2)}
                       </td>
-                      <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">
+                      <td className="px-5 py-3.5 align-top tabular-nums text-slate-600 dark:text-slate-400">
                         {formatDate(land.start_date)}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                             <MapPin className="h-3.5 w-3.5" />
@@ -816,7 +856,7 @@ export default function LandPage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         <div className="flex items-center gap-1">
                           {isExternal && land.status === ACQ_STATUS.CONFIRMED ? (
                             <span

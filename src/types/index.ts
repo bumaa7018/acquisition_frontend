@@ -1525,6 +1525,9 @@ export interface LandAcquisitionFilter {
   sub_category_id?: number;
   assigned_user_id?: string;
   years?: number[];
+  /** Эрэмбэлэх багана (backend-ийн зөвшөөрөгдсөн түлхүүр) ба чиглэл. */
+  sort?: string;
+  order?: "asc" | "desc";
   page?: number;
   page_size?: number;
 }

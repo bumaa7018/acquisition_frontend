@@ -9,6 +9,12 @@ import Link from "next/link";
 import { AcquisitionSelect } from "./_components/acquisition_select";
 import { PlanSelect } from "./_components/plan_select";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
+import {
+  SortableHeaderRow,
+  nextSortState,
+  type SortColumn,
+  type SortState,
+} from "@/components/ui/sortable-table-head";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -27,12 +33,35 @@ const EMPTY = {
   status: 0,
 };
 
+// Хүснэгтийн баганууд. `key` нь backend-ийн зөвшөөрөгдсөн эрэмбийн түлхүүр —
+// эрэмбэ СЕРВЕР дээр хийгддэг тул бүх хуудсыг хамарна.
+const COLUMNS: SortColumn[] = [
+  { label: "Дугаар", key: "parcel_id" },
+  { label: "Чөлөөлөлт", key: "acquisition_name" },
+  { label: "Огноо", key: "start_date" },
+  { label: "Чөлөөлөлтийн төлөв", key: "acquisition_status" },
+  { label: "Эрхийн төрөл", key: "right_type" },
+  { label: "Газрын зориулалт", key: "landuse" },
+  { label: "Талбай", key: "area_m2" },
+  { label: "Нөхөн төлбөр", key: "compensation" },
+  { label: "Төлөв", key: "status_id" },
+  { label: "" },
+];
+
 export default function ParcelListPage() {
   const [draft, setDraft] = useState(EMPTY);
   const [filter, setFilter] = useState(EMPTY);
   const [page, setPage] = useState(1);
   const [searchTick, setSearchTick] = useState(0);
+  const [sort, setSort] = useState<SortState | null>(null);
   const PAGE_SIZE = 20;
+
+  // Эрэмбэ солигдоход эхний хуудас руу буцна — эс бөгөөс хэрэглэгч 5-р
+  // хуудсан дээр эрэмбэлээд огт өөр мөрүүд харна.
+  function applySort(key: string) {
+    setSort((cur) => nextSortState(cur, key));
+    setPage(1);
+  }
 
   function applySearch() {
     setFilter({ ...draft });
@@ -48,11 +77,13 @@ export default function ParcelListPage() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ["global-parcels", filter, page, searchTick],
+    queryKey: ["global-parcels", filter, page, searchTick, sort],
     queryFn: () =>
       parcelApi.list({
         page,
         page_size: PAGE_SIZE,
+        sort: sort?.by,
+        order: sort?.dir,
         parcel_id: filter.parcel_id || undefined,
         acquisition_id: filter.acquisition_id || undefined,
         plan_code: filter.plan_code || undefined,
@@ -207,27 +238,12 @@ export default function ParcelListPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                  {[
-                    "Дугаар",
-                    "Чөлөөлөлт",
-                    "Огноо",
-                    "Чөлөөлөлтийн төлөв",
-                    "Эрхийн төрөл",
-                    "Газрын зориулалт",
-                    "Талбай",
-                    "Нөхөн төлбөр",
-                    "Төлөв",
-                    "",
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
+                <SortableHeaderRow
+                  columns={COLUMNS}
+                  sort={sort}
+                  onSort={applySort}
+                  className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]"
+                />
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
                 {data.data.map((p) => {
@@ -240,21 +256,31 @@ export default function ParcelListPage() {
                       key={p.id}
                       className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                     >
-                      <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
+                      <td className="px-4 py-3 align-top font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                         {p.parcel_id}
                       </td>
-                      <td className="px-4 py-3 max-w-[180px]">
-                        <p className="font-medium text-slate-700 dark:text-slate-200 truncate">
-                          {p.acquisition_name || "—"}
-                        </p>
-                        <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
-                          {p.plan_code}
-                        </p>
+                      {/* Чөлөөлөлтийн нэр ТАСРАХГҮЙ: өмнө нь truncate хийгдэж
+                          урт нэрийг уншиж чаддаггүй байв. Хүснэгт нь хэвтээ
+                          гүйлгэдэг тул мөр дамжуулан бүтнээр харуулна. */}
+                      <td className="px-4 py-3 align-top">
+                        {/* Өргөний хязгаар ДОТООД блок дээр — нүдний max-width
+                            `table-layout: auto` үед үл тоогдоно. */}
+                        <div className="min-w-[190px] max-w-[320px]">
+                          <p
+                            title={p.acquisition_name || undefined}
+                            className="font-medium text-slate-700 dark:text-slate-200 break-words leading-snug"
+                          >
+                            {p.acquisition_name || "—"}
+                          </p>
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 font-mono">
+                            {p.plan_code}
+                          </p>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                      <td className="px-4 py-3 align-top text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {p.start_date ? formatDate(p.start_date) : "—"}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <span
                           className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
                           style={{ color: sc.color, background: sc.bg }}
@@ -262,16 +288,16 @@ export default function ParcelListPage() {
                           {STATUS_LABELS[p.acquisition_status] ?? "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      <td className="px-4 py-3 align-top text-slate-600 dark:text-slate-300">
                         {RIGHT_TYPE_LABELS[p.right_type] || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      <td className="px-4 py-3 align-top text-slate-600 dark:text-slate-300">
                         {p.landuse || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                      <td className="px-4 py-3 align-top text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {formatArea(p.area_m2)}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="flex flex-col gap-1">
                           {cashAmt > 0 && (
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400 tabular-nums w-fit">
@@ -288,7 +314,7 @@ export default function ParcelListPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         {p.status_name ? (
                           <span
                             className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
@@ -300,7 +326,7 @@ export default function ParcelListPage() {
                           <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                         <Link
                           prefetch={false}

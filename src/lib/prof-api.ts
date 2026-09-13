@@ -58,6 +58,9 @@ export type ProfParcelListParams = {
   status_id?: number
   /** БАЙРШЛЫН давхардал: "1" зөвхөн давхардалтай, "0" зөвхөн давхардалгүй */
   has_overlap?: string
+  /** Эрэмбэлэх багана (backend-ийн зөвшөөрөгдсөн түлхүүр) ба чиглэл. */
+  sort?: string
+  order?: 'asc' | 'desc'
 }
 
 export type ProfAssetListParams = {

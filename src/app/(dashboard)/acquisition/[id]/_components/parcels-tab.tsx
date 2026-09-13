@@ -1,6 +1,12 @@
 "use client";
 import React, { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  SortableHeaderRow,
+  nextSortState,
+  type SortColumn,
+  type SortState,
+} from "@/components/ui/sortable-table-head";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AlertCircle, Check, Download, Info, RefreshCw, X } from "lucide-react";
@@ -96,7 +102,27 @@ const EMPTY_FILTER: ParcelFilter = {
   has_overlap: "",
 };
 
-function parcelListParams(filter: ParcelFilter, page: number) {
+// Хүснэгтийн баганууд. `key` нь backend-ийн зөвшөөрөгдсөн эрэмбийн түлхүүр —
+// жагсаалт хуудаслагддаг тул эрэмбэ СЕРВЕР дээр хийгдэж бүх хуудсыг хамарна.
+const COLUMNS: SortColumn[] = [
+  { label: "" },
+  { label: "Дугаар", key: "parcel_id" },
+  { label: "Өмчлөгч, эзэмшигч", key: "holder" },
+  { label: "Баг", key: "au3_code" },
+  { label: "Эрхийн төрөл", key: "right_type" },
+  { label: "Газрын зориулалт", key: "landuse" },
+  { label: "Талбай", key: "area_m2" },
+  { label: "Давхцал", key: "acquisition_area_m2" },
+  { label: "Нөхөн төлбөр", key: "compensation" },
+  { label: "Төлөв", key: "status_id" },
+  { label: "" },
+];
+
+function parcelListParams(
+  filter: ParcelFilter,
+  page: number,
+  sort: SortState | null,
+) {
   return {
     page,
     page_size: PAGE_SIZE,
@@ -108,6 +134,7 @@ function parcelListParams(filter: ParcelFilter, page: number) {
     ...(filter.landuse.trim() ? { landuse: filter.landuse.trim() } : {}),
     ...(filter.status_id ? { status_id: filter.status_id } : {}),
     ...(filter.has_overlap ? { has_overlap: filter.has_overlap } : {}),
+    ...(sort ? { sort: sort.by, order: sort.dir } : {}),
   };
 }
 
@@ -139,6 +166,7 @@ export function ParcelsTab({
   const isMainProfOrg = isExternal && !!currentOrgId && acquisitionProfOrgId === currentOrgId;
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState | null>(null);
   const [filterForm, setFilterForm] = useState<ParcelFilter>(EMPTY_FILTER);
   const [filter, setFilter] = useState<ParcelFilter>(EMPTY_FILTER);
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
@@ -168,12 +196,18 @@ export function ParcelsTab({
   });
 
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
-    queryKey: ["land-parcels", id, filter, page],
+    queryKey: ["land-parcels", id, filter, page, sort],
     queryFn: () =>
       isProfOrg
-        ? profApi.profListParcels(id, parcelListParams(filter, page))
-        : landApi.getParcels(id, parcelListParams(filter, page)),
+        ? profApi.profListParcels(id, parcelListParams(filter, page, sort))
+        : landApi.getParcels(id, parcelListParams(filter, page, sort)),
   });
+
+  // Эрэмбэ солигдоход эхний хуудас руу буцна.
+  function applySort(key: string) {
+    setSort((cur) => nextSortState(cur, key));
+    setPage(1);
+  }
 
   // Бөөн дуудалт ШҮҮЛТҮҮРЭЭС хамааралгүй бүх талбарыг хамардаг тул
   // баталгаажуулах цонхонд шүүгдээгүй нийт тоог (1 мөрийн хүсэлтээр) харуулна.
@@ -525,28 +559,12 @@ export function ParcelsTab({
           <div className="overflow-auto">
             <table className="w-full text-[13px]">
               <thead className="sticky top-0">
-                <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                  {[
-                    "",
-                    "Дугаар",
-                    "Өмчлөгч, эзэмшигч",
-                    "Баг",
-                    "Эрхийн төрөл",
-                    "Газрын зориулалт",
-                    "Талбай",
-                    "Давхцал",
-                    "Нөхөн төлбөр",
-                    "Төлөв",
-                    "",
-                  ].map((h, i) => (
-                    <th
-                      key={i}
-                      className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
+                <SortableHeaderRow
+                  columns={COLUMNS}
+                  sort={sort}
+                  onSort={applySort}
+                  className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]"
+                />
               </thead>
               <tbody>
                 {visibleParcels.length === 0 ? (

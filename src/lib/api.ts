@@ -120,6 +120,9 @@ type ParcelListParams = {
   status_id?: number
   unlinked_only?: boolean
   years?: number[]
+  /** Эрэмбэлэх багана (backend-ийн зөвшөөрөгдсөн түлхүүр) ба чиглэл. */
+  sort?: string
+  order?: 'asc' | 'desc'
 }
 
 type ReportListParams = {
@@ -173,6 +176,8 @@ function parcelListSearchParams(params?: ParcelListParams): URLSearchParams {
   if (params.status != null) q.set('status', String(params.status))
   if (params.status_id != null) q.set('status_id', String(params.status_id))
   if (params.unlinked_only) q.set('unlinked_only', 'true')
+  if (params.sort) q.set('sort', params.sort)
+  if (params.order) q.set('order', params.order)
   params.years?.forEach(year => q.append('year', String(year)))
 
   return q
@@ -798,6 +803,8 @@ export const landApi = {
     if (filter?.general_category_id) p.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     p.set('sub_category_id', String(filter.sub_category_id))
     if (filter?.assigned_user_id)    p.set('assigned_user_id', filter.assigned_user_id)
+    if (filter?.sort)                p.set('sort', filter.sort)
+    if (filter?.order)               p.set('order', filter.order)
     if (filter?.page)                p.set('page', String(filter.page))
     if (filter?.page_size)           p.set('page_size', String(filter.page_size))
     filter?.years?.forEach(y => p.append('year', String(y)))
@@ -863,7 +870,7 @@ export const landApi = {
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   // has_overlap — БАЙРШЛААР давхардсан эсэхээр шүүнэ: "1" зөвхөн давхардалтай,
   // "0" зөвхөн давхардалгүй, заахгүй бол бүгд.
-  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number; has_overlap?: string }) =>
+  getParcels: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; au1_code?: string; au2_code?: string; au3_code?: string; right_type?: number; landuse?: string; status_id?: number; has_overlap?: string; sort?: string; order?: 'asc' | 'desc' }) =>
     api.get<PaginatedResponse<Parcel>>(`/land-acquisitions/${id}/parcels`, { params }).then(r => r.data),
   getAssets: (id: string, params?: { page?: number; page_size?: number; parcel_id?: string; valuation_type?: string }) =>
     api.get<PaginatedResponse<Asset>>(`/land-acquisitions/${id}/assets`, { params }).then(r => r.data),

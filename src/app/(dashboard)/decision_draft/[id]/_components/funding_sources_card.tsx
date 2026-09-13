@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, ChevronDown, Plus, Search, X, Wallet } from "lucide-react";
 import { decisionDraftApi, fundingSourceOptionApi } from "@/lib/api";
-import { getApiError } from "@/lib/utils";
+import { formatBillion, formatMoneyExact, getApiError } from "@/lib/utils";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { DecisionDraftFundingLink, FundingSourceOption } from "@/types";
 
@@ -405,44 +405,54 @@ export function FundingSourcesCard({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-              {items.map((f) => (
-                <tr
-                  key={f.id}
-                  className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
-                >
-                  <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
-                    {f.organization_name}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                    {f.source_type || "—"}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300 whitespace-nowrap">
-                    {f.amount != null
-                      ? `${Number(f.amount).toLocaleString()} ${f.currency || "MNT"}`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3 max-w-[180px]">
-                    <p className="text-slate-500 dark:text-slate-400 truncate">
-                      {f.acquisition_name || "—"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 max-w-[160px]">
-                    <p className="text-slate-500 dark:text-slate-400 truncate">
-                      {f.note || "—"}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {editable && (
-                      <button
-                        onClick={() => setRemoveTarget(f)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-400/10 text-rose-500 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-400/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
-                      >
-                        <X className="h-3 w-3" /> Хасах
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {items.map((f) => {
+                // Дүнг ТЭРБУМААР харуулна (санхүүжилт тэрбумаар хэмжигддэг);
+                // төгрөгөөс өөр валют байвал хэвээр нь үлдээнэ.
+                const currency = (f.currency || "MNT").toUpperCase();
+                return (
+                  <tr
+                    key={f.id}
+                    className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                  >
+                    <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
+                      {f.organization_name}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      {f.source_type || "—"}
+                    </td>
+                    <td
+                      className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300 whitespace-nowrap"
+                      title={f.amount != null ? formatMoneyExact(f.amount) : undefined}
+                    >
+                      {f.amount == null
+                        ? "—"
+                        : currency === "MNT"
+                          ? formatBillion(f.amount)
+                          : `${Number(f.amount).toLocaleString()} ${currency}`}
+                    </td>
+                    <td className="px-4 py-3 max-w-[180px]">
+                      <p className="text-slate-500 dark:text-slate-400 truncate">
+                        {f.acquisition_name || "—"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 max-w-[160px]">
+                      <p className="text-slate-500 dark:text-slate-400 truncate">
+                        {f.note || "—"}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {editable && (
+                        <button
+                          onClick={() => setRemoveTarget(f)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-400/10 text-rose-500 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-400/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
+                        >
+                          <X className="h-3 w-3" /> Хасах
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

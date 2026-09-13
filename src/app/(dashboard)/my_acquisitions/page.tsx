@@ -141,25 +141,42 @@ export default function MyAcquisitionsPage() {
                       key={land.id}
                       className="border-b border-slate-50 dark:border-[#2a2c38] hover:bg-slate-50/60 dark:hover:bg-white/[0.03] transition-colors"
                     >
-                      <td className="px-5 py-3.5">
-                        <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
-                          {land.plan_code}
-                        </p>
-                        {land.plan_name && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                            {land.plan_name}
+                      {/* Нэр, ангиллын баганууд ТАСРАХГҮЙ — урт нэрийг
+                          жагсаалтаас шууд уншиж чадах ёстой. */}
+                      <td className="px-5 py-3.5 align-top">
+                        {/* Өргөний хязгаар ДОТООД блок дээр — нүдний max-width
+                            `table-layout: auto` үед үл тоогдоно. */}
+                        <div className="min-w-[150px] max-w-[260px]">
+                          <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 break-words">
+                            {land.plan_code}
                           </p>
-                        )}
+                          {land.plan_name && (
+                            <p
+                              title={land.plan_name}
+                              className="text-[11px] text-slate-500 dark:text-slate-400 break-words leading-snug mt-0.5"
+                            >
+                              {land.plan_name}
+                            </p>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-5 py-3.5 max-w-[200px]">
-                        <p className="text-[13px] text-slate-700 dark:text-slate-200 truncate">
+                      <td className="px-5 py-3.5 align-top">
+                        <p
+                          title={land.acquisition_name || undefined}
+                          className="min-w-[230px] max-w-[380px] text-[13px] text-slate-700 dark:text-slate-200 break-words leading-snug"
+                        >
                           {land.acquisition_name || "—"}
                         </p>
                       </td>
-                      <td className="px-5 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[160px]">
-                        <span className="truncate block">{land.general_category_name || "—"}</span>
+                      <td className="px-5 py-3.5 align-top text-[12px] text-slate-600 dark:text-slate-300">
+                        <span
+                          title={land.general_category_name || undefined}
+                          className="block min-w-[120px] max-w-[200px] break-words leading-snug"
+                        >
+                          {land.general_category_name || "—"}
+                        </span>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         <span
                           className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
                           style={{ color: sc.color, background: sc.bg }}
@@ -167,13 +184,13 @@ export default function MyAcquisitionsPage() {
                           {STATUS_LABELS[land.status] ?? "Тодорхойгүй"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-600 dark:text-slate-400">
+                      <td className="px-5 py-3.5 align-top text-slate-600 dark:text-slate-400">
                         {formatArea(land.area_m2)}
                       </td>
-                      <td className="px-5 py-3.5 tabular-nums text-slate-600 dark:text-slate-400">
+                      <td className="px-5 py-3.5 align-top tabular-nums text-slate-600 dark:text-slate-400">
                         {formatDate(land.start_date)}
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                             <MapPin className="h-3.5 w-3.5" />
@@ -194,7 +211,7 @@ export default function MyAcquisitionsPage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5">
+                      <td className="px-5 py-3.5 align-top">
                         {land.status === ACQ_STATUS.CONFIRMED ? (
                           <span
                             title="Баталгаажсан чөлөөлөлтийн дэлгэрэнгүй мэдээлэлд хандах боломжгүй"
