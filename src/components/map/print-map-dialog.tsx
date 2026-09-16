@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toLonLat, transformExtent } from "ol/proj";
-import { Download, Loader2, X } from "lucide-react";
+import { Download, ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
 import { landApi, departmentApi } from "@/lib/api";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
 import type { DroneImage } from "@/types";
@@ -91,10 +91,25 @@ export default function PrintMapDialog({
   const [paper, setPaper] = useState<PrintPaperSize>("A4");
   const [orientation, setOrientation] = useState<PrintOrientation>("landscape");
   const [title, setTitle] = useState(acquisitionName?.trim() || "Чөлөөлөлтийн байршил");
+  /* ── ДАВХАРГА/ДРОНЫ СОНГОЛТ: ноорог vs хэрэгжсэн ────────────────────
+     Давхарга чагтлах бүрд дахин зурвал WMS хүсэлтүүд дахин дахин явж, олон
+     давхарга унтраах гэхэд удаан болдог. Иймд чип дарахад зөвхөн НООРОГ
+     (hidden/selected) өөрчлөгдөж, зураг нь "Шинээр үүсгэх" дарж ХЭРЭГЖСЭН
+     (applied*) төлөв солигдсон үед л дахин зурагдана.
+     Цаас/чиглэл нь харин хуудасны хэлбэрийг өөрчилдөг тул ШУУД зурагдана. */
   const [selectedDrones, setSelectedDrones] = useState<Set<string>>(() => new Set());
+  /* ЧАГТЛААГҮЙ давхаргууд — газрын зураг дээр ч, таних тэмдэг дээр ч ГАРАХГҮЙ.
+     Өгөгдмөл нь бүгд асаалттай (хоосон Set). */
+  const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(() => new Set());
+  const [appliedDrones, setAppliedDrones] = useState<Set<string>>(() => new Set());
+  const [appliedLayers, setAppliedLayers] = useState<Set<string>>(() => new Set());
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [pageCanvas, setPageCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [busy, setBusy] = useState(true);
+  /* Цонх нээгдэнгүүт зураг үүсгэхГҮЙ. Хэрэглэгч эхлээд цаас/чиглэл/давхаргаа
+     сонгоод "Зураг үүсгэх" дарна — ингэснээр дэмий WMS/тайлын хүсэлт явахгүй,
+     буруу тохиргоотой зураг бэлдэх хүлээлт ч үүсэхгүй. */
+  const [started, setStarted] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const acqFilter = `acquisition_id='${acquisitionId}'`;
@@ -191,19 +206,68 @@ export default function PrintMapDialog({
   /* ── Зураг авч, хуудас бүрдүүлэх ─────────────────────────────── */
   const legend = useMemo<PrintLegendItem[]>(
     () => [
-      ...PARCEL_STATUS_IDS.map((_, status) => status)
-        .filter((status) => (statusCounts[status] ?? 0) > 0)
-        .map((status) => ({
+      ...PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
+        .filter(({ id, status }) => (statusCounts[status] ?? 0) > 0 && !appliedLayers.has(id))
+        .map(({ status }) => ({
           color: PARCEL_STATUS_STYLES[status].color,
           label: `${PARCEL_STATUS_NAMES[status]} (${statusCounts[status]})`,
         })),
-      ...BOUNDARY_IDS.map((id) => {
+      ...BOUNDARY_IDS.filter((id) => !appliedLayers.has(id)).map((id) => {
         const def = layerDef(id);
         return { color: def.color, label: def.label, line: true };
       }),
     ],
-    [statusCounts],
+    [statusCounts, appliedLayers],
   );
+
+  /* Чагтлах давхаргын жагсаалт — таних тэмдэгтэй ЯГ ижил өнгө/шошго/дараалалтай.
+     Нэг ч нэгж талбаргүй төлөв харагдахгүй (легенд дээр ч гардаггүй); тоолол
+     хараахан ирээгүй бол бүгдийг нь үзүүлнэ. */
+  const layerChips = useMemo(() => {
+    const counted = Object.keys(statusCounts).length > 0;
+    return [
+      ...PARCEL_STATUS_IDS.map((id, status) => ({ id: id as string, status }))
+        .filter(({ status }) => !counted || (statusCounts[status] ?? 0) > 0)
+        .map(({ id, status }) => ({
+          id,
+          color: PARCEL_STATUS_STYLES[status].color,
+          label: PARCEL_STATUS_NAMES[status],
+        })),
+      ...BOUNDARY_IDS.map((id) => {
+        const def = layerDef(id);
+        return { id: id as string, color: def.color, label: def.label };
+      }),
+    ];
+  }, [statusCounts]);
+
+  const toggleLayer = (id: string) =>
+    setHiddenLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // forEach — tsconfig-т `target` заагаагүй (ES5) тул Set-ийг spread/for-of хийж болохгүй.
+  const sameSet = (a: Set<string>, b: Set<string>) => {
+    if (a.size !== b.size) return false;
+    let same = true;
+    a.forEach((v) => {
+      if (!b.has(v)) same = false;
+    });
+    return same;
+  };
+  /* Ноорог нь зураг дээр хэрэгжсэнээсээ ЗӨРСӨН үү — товчийг онцолж,
+     урьдчилан харагдаж буй зураг ХУУЧИН гэдгийг мэдэгдэнэ. */
+  const dirty = !sameSet(hiddenLayers, appliedLayers) || !sameSet(selectedDrones, appliedDrones);
+  // Эхний үүсгэлтийн өмнө товч нь ҮНДСЭН үйлдэл тул үргэлж тодоор харагдана.
+  const highlight = dirty || !started;
+
+  const applySelection = () => {
+    setAppliedLayers(new Set(hiddenLayers));
+    setAppliedDrones(new Set(selectedDrones));
+    setStarted(true);
+  };
 
   const info = useMemo<PrintInfo>(() => {
     const cat = categories.find((c) => c.id === acq?.general_category_id);
@@ -268,7 +332,7 @@ export default function PrintMapDialog({
       },
     ];
     usableDrones
-      .filter((img) => selectedDrones.has(img.id))
+      .filter((img) => appliedDrones.has(img.id))
       .forEach((img) => {
         const b = droneBounds(img);
         if (!b) return;
@@ -280,6 +344,7 @@ export default function PrintMapDialog({
         });
       });
     ([...BOUNDARY_IDS, ...PARCEL_STATUS_IDS] as MapLayerId[])
+      .filter((id) => !appliedLayers.has(id))
       .map((id) => ({ id, def: layerDef(id) }))
       .sort((x, y) => x.def.zIndex - y.def.zIndex)
       .forEach(({ id, def }) => {
@@ -307,15 +372,20 @@ export default function PrintMapDialog({
       setBusy(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation, paper, title, legend, info, mapW, mapH, extent, selectedDrones, usableDrones, acquisitionId, acqFilter]);
+  }, [orientation, paper, title, legend, info, mapW, mapH, extent, appliedDrones, usableDrones, appliedLayers, acquisitionId, acqFilter]);
 
-  // Хүрээ/сонголт/цаас өөрчлөгдөх бүрд дахин зурна (гарчиг УДААН биш —
-  // доорх тусдаа effect нь зөвхөн хуудсыг дахин бүрдүүлнэ).
+  /* ЭХНИЙ зургийг зөвхөн "Зураг үүсгэх" товч эхлүүлнэ (started).
+     Түүнээс ХОЙШ автоматаар дахин зурах нөхцөл: цаас/чиглэл (хуудасны хэлбэр
+     өөрчлөгдөж зургийг заавал дахин авах шаардлагатай), хүрээ/өгөгдөл ирэх,
+     болон "Шинээр үүсгэх"-ээр хэрэгжүүлсэн давхарга/дроны сонголт.
+     Гарчиг энд БАЙХГҮЙ — доорх тусдаа effect нь хадгалсан зураг дээрээ
+     хуудсыг л дахин бүрдүүлнэ (WMS хүсэлт дахин явахгүй). */
   useEffect(() => {
+    if (!started) return; // эхний зургийг ЗӨВХӨН товч үүсгэнэ
     const t = setTimeout(() => void rebuild(), 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation, paper, selectedDrones, statusCounts, acq, mapW, mapH, extent]);
+  }, [started, orientation, paper, appliedDrones, appliedLayers, statusCounts, acq, mapW, mapH, extent]);
 
   // Гарчиг солиход зургийг ДАХИН АВАХГҮЙ — хадгалсан canvas дээрээ дахин зурна
   useEffect(() => {
@@ -341,7 +411,7 @@ export default function PrintMapDialog({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
 
-      <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1e1f27]">
+      <div className="relative flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-[#1e1f27]">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-[#37394d]">
           <p className="text-[14px] font-bold text-slate-800 dark:text-white">Ажлын зураг</p>
           <button
@@ -383,6 +453,38 @@ export default function PrintMapDialog({
             </div>
           </div>
 
+          {/* ДАВХАРГА — чагтлаагүй нь зураг дээр ч, таних тэмдэг дээр ч гарахгүй.
+              Гүйцэтгэлийн хувь/дугуй диаграм нь чөлөөлөлтийн БОДИТ үзүүлэлт
+              тул давхарга далдлахад өөрчлөгдөхгүй. */}
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Давхарга
+            </label>
+            <div className="flex max-h-20 flex-wrap gap-2 overflow-y-auto">
+              {layerChips.map((chip) => {
+                const on = !hiddenLayers.has(chip.id);
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => toggleLayer(chip.id)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      on
+                        ? "border-[#02c0ce] bg-[#02c0ce]/10 text-slate-700 dark:text-slate-200"
+                        : "border-slate-200 text-slate-400 line-through hover:bg-slate-50 dark:border-[#37394d] dark:text-slate-500 dark:hover:bg-[#252630]"
+                    }`}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                      style={{ backgroundColor: chip.color, opacity: on ? 1 : 0.3 }}
+                    />
+                    {chip.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {usableDrones.length > 0 && (
             <div>
               <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
@@ -417,17 +519,49 @@ export default function PrintMapDialog({
               </div>
             </div>
           )}
+
+          {/* ЗУРАГ ҮҮСГЭХ — цонх нээгдэхэд зураг бэлдэхгүй, эхний болон
+              дараачийн бүх үүсгэлтийг ЭНЭ товч эхлүүлнэ. Алдаа гарсан үед
+              ДАХИН ОРОЛДОХ гарц ч болно (өөрчлөлтгүй үед ч идэвхтэй). */}
+          <div className="flex items-center justify-end gap-2">
+            {started && dirty && (
+              <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                Сонголт өөрчлөгдсөн — зургийг шинэчилнэ үү
+              </span>
+            )}
+            {!extent && (
+              <span className="text-[11px] text-slate-400">Чөлөөлөлтийн хил ачаалж байна...</span>
+            )}
+            <button
+              type="button"
+              onClick={applySelection}
+              disabled={busy || !extent}
+              className={`flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-semibold transition-colors disabled:opacity-50 ${
+                highlight
+                  ? "border-[#02c0ce] bg-[#02c0ce] text-white hover:bg-[#02aab6]"
+                  : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-[#37394d] dark:text-slate-300 dark:hover:bg-[#252630]"
+              }`}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
+              {started ? "Шинээр үүсгэх" : "Зураг үүсгэх"}
+            </button>
+          </div>
         </div>
 
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-100 p-4 dark:bg-[#15161c]">
           {/* Урьдчилан харах нь ХЭВЛЭГДЭХ ЯГ ТЭР зураг — өөр газрын зураг
               байхгүй тул "дэлгэц дээр өөр, хэвлэхэд өөр" гэсэн зөрүү үүсэхгүй. */}
           {dataUrl && (
+            /* `max-h-full max-w-full` + өргөн/өндөр AUTO = "fit" (contain):
+               хуудас өндөр, өргөн ХОЁУЛАА багтаж, харьцаа нь хадгалагдана.
+               Өмнө нь `w-full` байсан тул БОСОО хуудас өргөнөөрөө тулж,
+               өндрөө `max-h-full` таслахад харьцаа гажиж (сунасан) харагддаг
+               байв — хэвлэгдэх PDF-тэй тохирохгүй. */
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={dataUrl}
               alt="Ажлын зураг"
-              className="max-h-full w-full rounded shadow"
+              className="max-h-full max-w-full rounded object-contain shadow"
               style={{ opacity: busy ? 0.35 : 1 }}
             />
           )}
@@ -435,6 +569,17 @@ export default function PrintMapDialog({
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin" />
               <span className="text-[12px]">Газрын зураг бэлдэж байна...</span>
+            </div>
+          )}
+          {!started && !busy && (
+            <div className="flex flex-col items-center justify-center gap-2 px-6 text-center text-slate-400 dark:text-slate-500">
+              <ImageIcon className="h-8 w-8" />
+              <p className="text-[12.5px] font-semibold text-slate-500 dark:text-slate-400">
+                Ажлын зураг бэлдээгүй байна
+              </p>
+              <p className="max-w-sm text-[11px]">
+                Цаас, чиглэл, давхаргаа сонгоод <strong>&laquo;Зураг үүсгэх&raquo;</strong> дарна уу.
+              </p>
             </div>
           )}
           {!busy && error && (
