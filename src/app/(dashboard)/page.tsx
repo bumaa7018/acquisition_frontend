@@ -1707,9 +1707,12 @@ export default function DashboardPage() {
                 .sort((a, b) => a.sort_order - b.sort_order)
                 .map((s) => (
                   <div key={s.id} className="flex items-center gap-2">
+                    {/* Өнгө нь БҮРТГЭЛЭЭС (`parcel_status.color`) — дашбоардын
+                        хариунд аль хэдийн ирдэг тул НЭМЭЛТ дуудлага үүсэхгүй.
+                        Тохируулаагүй хуучин төлөвт хатуу хүснэгт рүү унана. */}
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ background: PARCEL_STATUS_STYLES[s.id]?.color ?? "#64748b" }}
+                      style={{ background: s.color || PARCEL_STATUS_STYLES[s.id]?.color || "#94a3b8" }}
                     />
                     <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{s.name}</span>
                   </div>

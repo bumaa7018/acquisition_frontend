@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import OLMap from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
@@ -25,15 +25,21 @@ import AcquisitionInfoModal, {
 } from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
 import { useFullscreen } from './use-fullscreen'
+import { useParcelStatusLayers } from './use-parcel-status-layers'
 import {
   fitLayerToMap,
   shouldFitOnEnable,
   layerDef,
   geoServerName,
+  staticLayerStyle,
   combineCql,
+  parcelStatusIdFromLayer,
+  PARCEL_STATUS_DEFAULT_COLOR,
   AGREED_GROUP,
+  AGREED_GROUP_ID,
   AGREED_CODE_LAYER_IDS,
   SEC_GROUP,
+  SEC_GROUP_ID,
   SEC_CODE_LAYER_IDS,
   type MapLayerDef,
   type MapLayerId,
@@ -42,17 +48,14 @@ import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCo
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
 
-const LAYER_DEFS: MapLayerDef[] = [
+const STATIC_LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
   layerDef('au2'),
   layerDef('au3'),
   layerDef('v_acquisition_plan'),
-  layerDef('v_parcel_s0'),
-  layerDef('v_parcel_s1'),
-  layerDef('v_parcel_s2'),
-  layerDef('v_parcel_s3'),
-  layerDef('v_parcel_s4'),
-  layerDef('v_parcel_s5'),
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд ЭНД БАЙХГҮЙ — `parcel_status`
+  // бүртгэлээс асинхроноор ирж, доорх `layerDefs` мемод яг энэ байрлалд
+  // орно. Шинэ төлөв нэмэхэд энэ файлд гар хүрэхгүй.
   // ГУС-ийн лавлах давхаргууд — жагсаалтын ЭЦЭСТ, анхнаасаа УНТРААЛТТАЙ.
   // "Шинэ зөвшилцсөн зураг" нь ӨӨРӨӨ биш, `code`-оор задарсан ДЭД
   // давхаргуудаараа орно (нэг хэсэг дор, тус тусад нь асаах боломжтой).
@@ -61,9 +64,12 @@ const LAYER_DEFS: MapLayerDef[] = [
   ...SEC_CODE_LAYER_IDS.map(layerDef),
 ]
 
-const PARCEL_STATUS_LAYERS = ['v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2', 'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5'] as const
+// Төлөвийн давхаргууд нь ДИНАМИК тул тогтмол жагсаалт байхгүй — id-гаар нь
+// (`v_parcel_s<N>`) танина.
+const isParcelStatusLayer = (id: string) => parcelStatusIdFromLayer(id) !== null
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
-const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_LAYERS, 'v_parcel_acquisition'])
+const isParcelInfoLayer = (id: string) =>
+  isParcelStatusLayer(id) || id === 'v_parcel_acquisition'
 // ГУС-ийн дэд давхаргууд (зөвшилцсөн зураг, хамгаалалтын зурвас) — мөн
 // ДЭЛГЭРЭНГҮЙ цонхтой (жижиг popup биш).
 const GUS_INFO_LAYERS = new Set<string>([...AGREED_CODE_LAYER_IDS, ...SEC_CODE_LAYER_IDS])
@@ -74,15 +80,19 @@ const BOUNDARY_INFO_LAYERS: Record<string, string> = {
   v_plan_acquisition: "Үндсэн төлөвлөлтийн хил",
   v_acquisition_boundary: "Чөлөөлөх бүсийн хил",
 };
-const ACQUISITION_FILTERED_LAYERS = [...PARCEL_STATUS_LAYERS, 'v_acquisition_plan'] as const
-const ACQUISITION_FILTERED_SET = new Set<string>(ACQUISITION_FILTERED_LAYERS)
+// Чөлөөлөлт/он/ажилтнаар ШҮҮГДДЭГ давхаргууд.
+const isAcquisitionFiltered = (id: string) =>
+  isParcelStatusLayer(id) || id === 'v_acquisition_plan'
 
 // Чөлөөлөлтийн хил нь төлөвлөгөөний хилээс хуулагддаг тул давхаргын хэсэгт
 // зөвхөн ТӨЛӨВЛӨГӨӨНИЙ хил үлдсэн — тэр нь анхнаасаа асаалттай.
 // Засаг захиргааны хил (аймаг/сум/хороо) нь ШУУД харагдана — байршлаа
 // тогтооход хэрэгтэй лавлах давхарга тул хэрэглэгч бүрд гараар асаах
 // шаардлагагүй. Давхаргын самбараас унтраах боломжтой хэвээр.
-const DEFAULT_VISIBLE = new Set<string>(['au1', 'au2', 'au3', 'v_acquisition_plan', ...PARCEL_STATUS_LAYERS])
+// Анхнаасаа АСААЛТТАЙ давхаргууд. Төлөвийнх нь бүгд асаалттай (id-гаар танина).
+const isDefaultVisible = (id: string) =>
+  isParcelStatusLayer(id) ||
+  id === 'au1' || id === 'au2' || id === 'au3' || id === 'v_acquisition_plan'
 
 
 const PARCEL_GROUP: LayerGroupConfig = {
@@ -119,7 +129,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
 
   const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: DEFAULT_VISIBLE.has(d.id), group: d.group, hatch: d.hatch }))
+    STATIC_LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: isDefaultVisible(d.id), group: d.group, hatch: d.hatch }))
   )
   const [popup,   setPopup]   = useState<PopupState | null>(null)
   // Нэгж талбарын дэлгэрэнгүй цонх — GeoServer-ийн `id` (parcel UUID) ба
@@ -139,11 +149,30 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
 
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` бүртгэлээс (асинхрон).
+  const { defs: statusLayerDefs } = useParcelStatusLayers()
+
+  /** Тогтмол давхаргууд + бүртгэлээс ирсэн төлөвүүд (ГУС-ийн бүлгүүдийн ӨМНӨ). */
+  const layerDefs = useMemo(() => {
+    const cut = STATIC_LAYER_DEFS.findIndex(
+      d => d.group === AGREED_GROUP_ID || d.group === SEC_GROUP_ID,
+    )
+    const at = cut === -1 ? STATIC_LAYER_DEFS.length : cut
+    return [
+      ...STATIC_LAYER_DEFS.slice(0, at),
+      ...statusLayerDefs,
+      ...STATIC_LAYER_DEFS.slice(at),
+    ]
+  }, [statusLayerDefs])
+
+  const layerDefsRef = useRef(layerDefs)
+  layerDefsRef.current = layerDefs
+
   const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') => {
     // Давхаргын өөрийн opacity-г эрхэмлэнэ (нэгж талбарууд = 1, ингэснээр
     // SLD-ийн fill-opacity нь зурган дээр яг тэр хэмжээгээрээ гарна). Заагаагүй
     // давхаргууд өмнөх шигээ 0.75.
-    const def = LAYER_DEFS.find(l => l.id === id)
+    const def = layerDefsRef.current.find(l => l.id === id)
     // Виртуал дэд давхарга (зөвшилцсөн зургийн кодууд) нь GeoServer дээр
     // байхгүй — тэдгээрийг ЭХ давхаргын нэрээр дуудаж, өөрсдийн тогтмол
     // шүүлтийг (code=NN) дуудагчийн шүүлттэй AND-ээр нэгтгэнэ.
@@ -158,6 +187,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           LAYERS: `land:${geoServerName(id as MapLayerId)}`,
           FORMAT: 'image/png',
           TRANSPARENT: true,
+          // ӨНГӨ ЭНД ИЛГЭЭХГҮЙ: `v_parcel_status` харагдац нь `color` баганаа
+          // өөрөө өгдөг ба SLD түүнийг `<PropertyName>color</PropertyName>`-ээр
+          // шууд уншина. Хүсэлтээр дамжуулбал дуудагч тал бүр давтан илгээх
+          // үүрэгтэй болж, мартвал тэр газартаа саарал зурагдана.
           ...(cql ? { CQL_FILTER: cql } : {}),
         },
         ratio: 1,
@@ -198,7 +231,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       const projection = map.getView().getProjection()
       const pixel      = evt.pixel as [number, number]
 
-      const visibleIds = LAYER_DEFS
+      const visibleIds = layerDefsRef.current
         .filter(d => wmsLayers.current[d.id]?.getVisible())
         .sort((a, b) => b.zIndex - a.zIndex)
         .map(d => d.id)
@@ -227,7 +260,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           if (features.length > 0) {
             const props = features[0].properties ?? {}
             const acqId = String(props.acquisition_id ?? '')
-            if (PARCEL_INFO_LAYERS.has(id)) {
+            if (isParcelInfoLayer(id)) {
               const uuid = String(props.id ?? '')
               if (acqId && uuid) {
                 setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid })
@@ -246,7 +279,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
               setAcqInfo({
                 acquisitionId: acqId,
                 layerLabel: BOUNDARY_INFO_LAYERS[id],
-                layerColor: layerDef(id as MapLayerId).color,
+                // BOUNDARY_INFO_LAYERS нь зөвхөн ХИЛИЙН давхаргуудыг
+                // агуулна (төлөвийнх биш) тул тогтмол хүснэгтээс хайна.
+                layerColor: staticLayerStyle(id)?.color ?? PARCEL_STATUS_DEFAULT_COLOR,
                 fallback: toAcquisitionFeatureProps(props),
               })
               break
@@ -336,7 +371,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
 
     const getCql = (id: string): string => {
-      if (PARCEL_STATUS_LAYERS.includes(id as typeof PARCEL_STATUS_LAYERS[number]))
+      if (isParcelStatusLayer(id))
         return parcelCql
       if (id === 'v_acquisition_plan')
         return acqCql
@@ -349,23 +384,67 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       return ''
     }
 
-    const DYNAMIC_LAYERS = [...ACQUISITION_FILTERED_LAYERS, 'au1', 'au2', 'au3'] as const
+    const map = olMap.current
 
-    if (!wmsLayersAdded.current) {
-      const map = olMap.current
-      const record: Record<string, ImageLayer<ImageWMS>> = {}
-      LAYER_DEFS.forEach(d => {
-        record[d.id] = makeWmsLayer(d.id, DEFAULT_VISIBLE.has(d.id), getCql(d.id))
-        map.addLayer(record[d.id])
+    // Тодорхойлолтод байгаа боловч зурган дээр БАЙХГҮЙ давхаргыг нэмнэ.
+    // Энэ нь НЭГ УДААГИЙН үйлдэл БИШ: төлөвийн давхаргууд бүртгэлээс хожим
+    // (мөн админ шинэ төлөв нэмэхэд дахин) ирдэг тул эффект ажиллах бүрд
+    // шинээр ирсэнийг нь нөхнө.
+    const fresh = new Set<string>()
+    layerDefs.forEach(d => {
+      if (wmsLayers.current[d.id]) return
+      const layer = makeWmsLayer(d.id, isDefaultVisible(d.id), getCql(d.id))
+      wmsLayers.current[d.id] = layer
+      map.addLayer(layer)
+      fresh.add(d.id)
+    })
+    wmsLayersAdded.current = true
+
+    // Бүртгэлээс ХАСАГДСАН төлөвийн давхаргыг зургаас авна.
+    const live = new Set<string>(layerDefs.map(d => d.id))
+    Object.keys(wmsLayers.current).forEach(id => {
+      if (!isParcelStatusLayer(id) || live.has(id)) return
+      map.removeLayer(wmsLayers.current[id])
+      delete wmsLayers.current[id]
+    })
+
+    // Шүүлт нь өөрчлөгддөг давхаргуудын CQL-ийг шинэчилнэ. Дөнгөж үүсгэсэн
+    // давхаргууд аль хэдийн зөв шүүлттэй тул давхар шинэчлэхгүй.
+    Object.keys(wmsLayers.current).forEach(id => {
+      if (fresh.has(id)) return
+      if (!isAcquisitionFiltered(id) && id !== 'au1' && id !== 'au2' && id !== 'au3') return
+      // Давхаргын ТОГТМОЛ шүүлтийг (төлөвийнх `status=N`) ЗААВАЛ хамт авна —
+      // эс бөгөөс энэ шинэчлэлт түүнийг дарж бичиж, төлөв бүр БҮХ нэгж
+      // талбарыг зурдаг болно (өнгө нь л өөр, дээд давхарга нь бусдыг халхална).
+      const def = layerDefsRef.current.find(l => l.id === id)
+      const merged = combineCql(def?.cql, getCql(id))
+      wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: merged || undefined })
+    })
+
+    // Самбарын жагсаалтыг тодорхойлолттой тааруулна — хэрэглэгчийн асаасан/
+    // унтраасан сонголтыг ХАДГАЛНА.
+    setLayers(prev => {
+      const seen = new Map(prev.map(l => [l.id, l]))
+      const next = layerDefs.map(d => {
+        const cur = seen.get(d.id)
+        return {
+          id: d.id,
+          label: d.label,
+          color: d.color,
+          visible: cur ? cur.visible : isDefaultVisible(d.id),
+          group: d.group,
+          hatch: d.hatch,
+        }
       })
-      wmsLayers.current = record
-      wmsLayersAdded.current = true
-    } else {
-      DYNAMIC_LAYERS.forEach(id => {
-        const cql = getCql(id)
-        wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: cql || undefined })
-      })
-    }
+      const same =
+        next.length === prev.length &&
+        next.every((l, i) =>
+          prev[i].id === l.id &&
+          prev[i].visible === l.visible &&
+          prev[i].label === l.label &&
+          prev[i].color === l.color)
+      return same ? prev : next
+    })
 
     // Зумлалт нь acqCql-ээс ХАМААРАХГҮЙ: шүүлтгүй (эсвэл зөвхөн он/ажилтнаар
     // шүүсэн) үед ч олдсон чөлөөлөлтүүд рүү нь ойртоно. Өмнө нь `if (acqCql)`
@@ -386,7 +465,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         // хэсэг рүү бүрэн ойртоно.
       })
     }
-  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer])
+  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer, layerDefs])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {
@@ -394,7 +473,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       if (l.id !== id) return l
       const next = { ...l, visible: !l.visible }
       wmsLayers.current[id]?.setVisible(next.visible)
-      const def = LAYER_DEFS.find(d => d.id === id)
+      const def = layerDefsRef.current.find(d => d.id === id)
       // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз):
       // WFS-ээр олон МБ татаж, зэрэг явж буй API дуудлагыг timeout-д унагаадаг.
       if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {

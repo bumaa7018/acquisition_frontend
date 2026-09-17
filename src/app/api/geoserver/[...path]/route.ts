@@ -23,7 +23,17 @@ const ALLOWED_ROOTS = new Set(['land'])
 // `building` давхарга GeoServer-т нийтлэгдээгүй тул энд БАЙХГҮЙ; нийтлэх
 // тохиолдолд `acquisition_id` баганатай эсэхээр нь дараах хоёрын алинд нь
 // хамаарахыг тодорхойлж нэмнэ.
+// Нэгж талбарын төлөвүүд одоо ГАНЦ давхаргаас (`v_parcel_status`) гардаг:
+// frontend төлөв бүрийг `CQL_FILTER=status=N`-ээр ялгана. Өмнө нь төлөв
+// бүрд тусдаа давхарга байсан тул бүртгэлд шинэ төлөв нэмэхэд энэ
+// жагсаалтад ГАРААР нэмэх шаардлагатай байв — эс бөгөөс fail-closed
+// журмаар 403 өгдөг байлаа.
+//
+// ХУУЧИН `v_parcel_s0..s5` нэрсийг хэвээр зөвшөөрнө: GeoServer-ийн
+// каталогоос тэдгээр давхаргууд хасагдаж, хуучин клиентүүд шинэчлэгдэх
+// хүртэл хэрэглэгдсээр байна.
 const PARCEL_STATUS_LAYERS = [
+  'v_parcel_status',
   'v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2',
   'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5',
 ]
@@ -214,6 +224,19 @@ async function proxy(
     if (!Number.isFinite(current) || current <= 0 || current > MAX_FEATURES) {
       setParamCaseInsensitive(qs, limitParam, String(MAX_FEATURES))
     }
+  }
+
+  // `env` — SLD-ийн хувьсагч. Төлөвийн давхаргын өнгө үүгээр ДАМЖИХАА
+  // БОЛЬСОН: SLD нь `v_parcel_status.color` баганаас (эх нь `parcel_status`
+  // хүснэгт) шууд уншина. Шалгалтыг ХЭВЭЭР үлдээв — утга нь GeoServer-ийн
+  // зурагчид ШУУД очдог тул ирээдүйд `env` хэрэглэх загвар нэмэгдвэл
+  // хамгаалалт аль хэдийн байрандаа байна. Зөвхөн `fill:#rrggbb` хэлбэрийг
+  // зөвшөөрч, бусдыг НАМ ГҮМ хаяна (алдаа буцаахгүй).
+  const envParam = getParamCaseInsensitive(qs, 'env')
+  if (envParam && !/^fill:#[0-9a-fA-F]{6}$/.test(envParam)) {
+    qs.forEach((_v, key) => {
+      if (key.toLowerCase() === 'env') qs.delete(key)
+    })
   }
 
   if (isExternalRoleSet(roles)) {

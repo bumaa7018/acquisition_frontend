@@ -312,10 +312,14 @@ api.interceptors.request.use((config) => {
 // ХАМААРДАГГҮЙ (axios-ийн анхдагч нь `0` = хязгааргүй). Backend/proxy гацвал
 // promise хэзээ ч settle хийхгүй, react-query-ийн query мөнхөд `pending`
 // үлдэж, хэрэглэгч төгсгөлгүй skeleton хардаг байлаа.
+// Энэ функц нь axios interceptor-оос ГАДНА мэдэгдлийн SSE стрийм (нүцгэн
+// `fetch`-ээр явдаг тул interceptor хамардаггүй) болон урьдчилан сэргээх
+// таймераас мөн дуудагддаг. Бүгд ЭНЭ нэг single-flight-ыг хуваалцаж байж
+// refresh token нэг л удаа эргэнэ.
 const REFRESH_TIMEOUT_MS = 15_000
 let _refreshInFlight: Promise<string> | null = null
 
-function refreshAccessToken(): Promise<string> {
+export function refreshAccessToken(): Promise<string> {
   if (_refreshInFlight) return _refreshInFlight
 
   const refreshToken = authStorage.getRefreshToken()
@@ -1548,9 +1552,9 @@ export const documentTypeApi = {
 export const parcelStatusApi = {
   list: () =>
     api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data ?? []),
-  create: (body: { code: string; name: string; sort_order?: number }) =>
+  create: (body: { code: string; name: string; sort_order?: number; color?: string }) =>
     api.post<ApiResponse<ParcelStatus>>('/parcel-statuses', body).then(r => r.data.data),
-  update: (id: number, body: { code?: string; name?: string; sort_order?: number }) =>
+  update: (id: number, body: { code?: string; name?: string; sort_order?: number; color?: string }) =>
     api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
 }

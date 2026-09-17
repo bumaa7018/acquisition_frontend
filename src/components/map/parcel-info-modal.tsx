@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { X, MapPin, Users, Banknote, FileText } from "lucide-react";
+import Link from "next/link";
+import { X, MapPin, Users, Banknote, FileText, ArrowUpRight } from "lucide-react";
 import { landApi, parcelApi } from "@/lib/api";
 import { formatArea, formatDate } from "@/lib/utils";
 import { getParcelStatusStyle } from "@/types";
@@ -224,6 +225,31 @@ export default function ParcelInfoModal({
             </>
           )}
         </div>
+
+        {/*
+          ДЭЛГЭРЭНГҮЙ рүү шилжих. Цонхонд зөвхөн хураангуй (эзэмшигч, олговрын
+          нийлбэр) харагддаг ч бүрэн хуудсанд түүх, хөрөнгө, баримт, үнэлгээний
+          урсгал бий. Өмнө нь тэнд очихын тулд цонхоо хааж, Чөлөөлөлт цэсээр
+          дамжин нэгж талбараа дахин хайх шаардлагатай байв.
+
+          Дэлгэрэнгүй ТАТАГДСАН үед л харуулна: 403 (хуваарилагдаагүй) үед
+          хуудас нь мөн адил хоосон гарах тул товч санал болгох нь төөрөгдүүлнэ.
+        */}
+        {!isLoading && !isError && parcel && (
+          <div
+            className="shrink-0 border-t bg-white/70 px-5 py-3 dark:bg-[#1e1f27]/80"
+            style={{ borderColor: `${style.color}33` }}
+          >
+            <Link
+              href={`/parcel/${parcelUuid}?acq=${acquisitionId}`}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: style.color }}
+            >
+              Дэлгэрэнгүй харах
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

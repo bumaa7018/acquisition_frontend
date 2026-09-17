@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { acquisitionCategoryApi, departmentApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
-import { ChevronDown, ChevronRight, FolderOpen, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
+import { ChevronRight, FolderOpen, Plus, Pencil, Trash2, X, Check, Tag } from "lucide-react";
 import { toast } from "sonner";
 import type { AcquisitionCategory, Department } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
@@ -100,6 +100,39 @@ function InlineForm({
   );
 }
 
+/**
+ * Устгах баталгаажуулалт — ХОЛБОГДСОН чөлөөлөлтийг харгалзана.
+ *
+ * ЯАГААД: өмнө нь шууд "устгах уу?" гэж асуугаад устгадаг байсан ба ангилалд
+ * чөлөөлөлт холбогдсон бол backend дээр FK зөрчигдөж "Дотоод алдаа гарлаа"
+ * (500) гэсэн ойлгомжгүй мессеж буцдаг байв. Одоо тоог нь урьдчилж харуулж,
+ * боломжгүй шалтгааныг нь тодорхой хэлнэ.
+ */
+function requestDelete(
+  cat: AcquisitionCategory,
+  onConfirm: () => void,
+): PendingConfirm {
+  const used = cat.acquisition_count ?? 0;
+  if (used > 0) {
+    // БОЛОМЖГҮЙ тохиолдол — баталгаажуулах цонх НЭЭХГҮЙ. ConfirmDialog нь
+    // устгахыг батлах зориулалттай (10 секундын тоолуур, "Болих/Устгах")
+    // тул "чадахгүй" мэдэгдэлд тохирохгүй. Мэдээллийг toast-оор өгнө.
+    toast.error(
+      `"${cat.name}"-д ${used} чөлөөлөлт холбогдсон тул устгах боломжгүй. ` +
+      `Эхлээд тэдгээр чөлөөлөлтийн ангилалыг өөрчилнө үү.`,
+    );
+    return null;
+  }
+  const subs = cat.sub_count ?? 0;
+  return {
+    title: `"${cat.name}" устгах уу?`,
+    description: subs > 0 ? `Түүний ${subs} дэд ангилал хамт устана.` : undefined,
+    confirmLabel: "Устгах",
+    confirmColor: "#f1556c",
+    onConfirm,
+  };
+}
+
 function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
   const queryClient = useQueryClient();
   const [addingNew, setAddingNew] = useState(false);
@@ -153,7 +186,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
 
   return (
     <>
-    <div className="ml-8 mt-2 mb-3 border-l-2 border-slate-100 dark:border-[#37394d] pl-4 space-y-1.5">
+    <div className="space-y-1.5">
       {isLoading && (
         <div className="space-y-1.5 animate-pulse">
           {[...Array(2)].map((_, i) => (
@@ -177,6 +210,14 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
                 <Tag className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
                 <span className="text-[13px] text-slate-700 dark:text-slate-200">{sub.name}</span>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500">#{sub.sort_order}</span>
+                {(sub.acquisition_count ?? 0) > 0 && (
+                  <span
+                    title="Энэ ангилалд холбогдсон чөлөөлөлт — устгах боломжгүй"
+                    className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-400/15 dark:text-amber-300"
+                  >
+                    {sub.acquisition_count} чөлөөлөлт
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -187,7 +228,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
                   <Pencil className="h-3 w-3" />
                 </button>
                 <button
-                  onClick={() => setPendingConfirm({ title: `"${sub.name}" устгах уу?`, confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(sub.id) })}
+                  onClick={() => setPendingConfirm(requestDelete(sub, () => deleteMutation.mutate(sub.id)))}
                   className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
@@ -229,7 +270,7 @@ function SubCategorySection({ parent }: { parent: AcquisitionCategory }) {
 
 export default function AcquisitionCategoryPage() {
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [addingGeneral, setAddingGeneral] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
@@ -285,17 +326,18 @@ export default function AcquisitionCategoryPage() {
     onSuccess: () => {
       toast.success("Устгагдлаа");
       queryClient.invalidateQueries({ queryKey: ["acq-categories", null] });
+      setSelectedId(null); // устгасан мөр дээр зогссон самбарыг сэргээнэ
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
 
-  const toggle = (id: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  // Сонгосон ерөнхий ангилал. Жагсаалт ачаалагдмагц ЭХНИЙХИЙГ нь өөрөө
+  // сонгоно — баруун талын самбар хоосон зогсохгүй.
+  const selected = generals.find((c) => c.id === selectedId) ?? generals[0] ?? null;
+  useEffect(() => {
+    if (selectedId != null && generals.some((c) => c.id === selectedId)) return;
+    setSelectedId(generals[0]?.id ?? null);
+  }, [generals, selectedId]);
 
   return (
     <>
@@ -319,10 +361,20 @@ export default function AcquisitionCategoryPage() {
         </button>
       </div>
 
-      <div className="ap-card overflow-hidden">
+      {/*
+        ЕРӨНХИЙ ангилал ЗҮҮН талд жагсаалт, сонгосон нэгнийх нь ДЭД ангилал
+        БАРУУН талын дэлгэрэнгүй самбарт.
+
+        ЯАГААД: өмнө нь дэд ангилалууд мөр дотор нээгддэг (accordion) байсан
+        тул хэд хэдэн ангилалыг зэрэг нээхэд хаана байгаагаа алдаж, "юуны дэд
+        ангилал бэ" нь ойлгомжгүй болдог байв. Одоо нэг үед ЗӨВХӨН нэг
+        ангилалын агуулга харагдаж, гарчиг нь дээрээ бичигдэнэ.
+      */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+      <div className="ap-card overflow-hidden self-start">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Ангилалуудын жагсаалт
+            Ерөнхий ангилал
           </p>
         </div>
 
@@ -379,60 +431,104 @@ export default function AcquisitionCategoryPage() {
                     />
                   </div>
                 ) : (
-                  <div
-                    className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors group cursor-pointer"
-                    onClick={() => toggle(cat.id)}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(cat.id)}
+                    className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${
+                      selected?.id === cat.id
+                        ? "bg-[#02c0ce]/[0.08] dark:bg-[#02c0ce]/[0.12]"
+                        : "hover:bg-slate-50 dark:hover:bg-[#252630]"
+                    }`}
                   >
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#02c0ce]/10">
                       <FolderOpen className="h-4 w-4 text-[#02c0ce]" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-semibold text-slate-800 dark:text-white">{cat.name}</p>
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                        Эрэмбэ: {cat.sort_order}
-                        {cat.department_id != null && (
-                          <>
-                            {" · "}
-                            <span className="text-[#02c0ce] font-medium">{deptName(cat.department_id)}</span>
-                          </>
-                        )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-white">{cat.name}</p>
+                      <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                        {cat.sub_count ?? 0} дэд ангилал
+                        {(cat.acquisition_count ?? 0) > 0 && ` · ${cat.acquisition_count} чөлөөлөлт`}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        title="Нэр, хариуцсан алба, эрэмбийг засах"
-                        onClick={(e) => { e.stopPropagation(); setEditingId(cat.id); setAddingGeneral(false); }}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 transition-colors"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Засах
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPendingConfirm({ title: `"${cat.name}" болон түүний дэд ангилалуудыг устгах уу?`, confirmLabel: "Устгах", confirmColor: "#f1556c", onConfirm: () => deleteMutation.mutate(cat.id) });
-                        }}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="shrink-0 text-slate-400 ml-1">
-                      {expanded.has(cat.id) ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </div>
-                  </div>
+                    <ChevronRight
+                      className={`h-4 w-4 shrink-0 ${
+                        selected?.id === cat.id ? "text-[#02c0ce]" : "text-slate-300 dark:text-slate-600"
+                      }`}
+                    />
+                  </button>
                 )}
-
-                {/* Sub-categories */}
-                {expanded.has(cat.id) && <SubCategorySection parent={cat} />}
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      {/* ── ДЭЛГЭРЭНГҮЙ: сонгосон ерөнхий ангилал + дэд ангилалууд ────── */}
+      <div className="ap-card overflow-hidden self-start">
+        {!selected ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Tag className="mb-3 h-10 w-10 text-slate-300 dark:text-[#37394d]" />
+            <p className="text-[13px] text-slate-400 dark:text-slate-500">
+              Зүүн талаас ерөнхий ангилал сонгоно уу
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Ерөнхий ангилал
+                </p>
+                <p className="mt-0.5 truncate text-[15px] font-bold text-slate-800 dark:text-white">
+                  {selected.name}
+                </p>
+                <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">
+                  Эрэмбэ: {selected.sort_order}
+                  {selected.department_id != null && (
+                    <>
+                      {" · "}
+                      <span className="font-medium text-[#02c0ce]">{deptName(selected.department_id)}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  title="Нэр, хариуцсан алба, эрэмбийг засах"
+                  onClick={() => { setEditingId(selected.id); setAddingGeneral(false); }}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] transition-colors hover:bg-[#02c0ce]/20"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Засах
+                </button>
+                <button
+                  title="Ерөнхий ангилалыг устгах"
+                  onClick={() =>
+                    setPendingConfirm(requestDelete(selected, () => deleteMutation.mutate(selected.id)))
+                  }
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-500/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Холбогдсон чөлөөлөлт — устгах боломжгүйг УРЬДЧИЛЖ мэдэгдэнэ */}
+            {(selected.acquisition_count ?? 0) > 0 && (
+              <div className="border-b border-amber-100 bg-amber-50/70 px-5 py-2.5 text-[12px] text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+                Энэ ангилалд <b>{selected.acquisition_count}</b> чөлөөлөлт холбогдсон тул устгах боломжгүй.
+              </div>
+            )}
+
+            <div className="px-5 py-4">
+              <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Дэд ангилал
+              </p>
+              <SubCategorySection key={selected.id} parent={selected} />
+            </div>
+          </>
+        )}
+      </div>
       </div>
     </div>
     <ConfirmDialog

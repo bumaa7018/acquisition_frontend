@@ -4,10 +4,17 @@ import { useQuery } from "@tanstack/react-query";
 import { toLonLat, transformExtent } from "ol/proj";
 import { Download, ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
 import { landApi, departmentApi } from "@/lib/api";
-import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
+import { STATUS_LABELS } from "@/types";
 import type { DroneImage } from "@/types";
 import { GS_WFS, gsAuthHeaders, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
-import { layerDef, type MapLayerId } from "./layers";
+import {
+  layerDef,
+  geoServerName,
+  combineCql,
+  parcelStatusIdFromLayer,
+  type MapLayerId,
+} from "./layers";
+import { useParcelStatusLayers } from "./use-parcel-status-layers";
 import {
   composePrintPage,
   downloadCanvasAsPdf,
@@ -36,8 +43,9 @@ import {
  * composePrintPage-ийн "cover" тайралт юу ч огтолдоггүй.
  */
 
-const PARCEL_STATUS_IDS = ["v_parcel_s0", "v_parcel_s1", "v_parcel_s2", "v_parcel_s3", "v_parcel_s4", "v_parcel_s5"] as const;
-const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
+// Нэгж талбарын ТӨЛӨВҮҮД нь `parcel_status` бүртгэлээс ирнэ (доор
+// `useParcelStatusLayers`). Хатуу жагсаалт байхгүй тул шинэ төлөв нэмэхэд
+// хэвлэх цонх өөрөө түүнийг тайлбар/задаргаа/давхаргадаа оруулна.
 const BOUNDARY_IDS = ["v_acquisition_plan", "v_plan_acquisition", "au1", "au2", "au3"] as const;
 
 // Хэвлэхэд зориулсан style-ууд (GeoServer дээр make config-оор ачаалагдана)
@@ -47,13 +55,17 @@ const PRINT_STYLES: Record<string, string> = {
   au3: "au3_boundary_print",
   v_acquisition_plan: "acquisition_plan_print",
   v_plan_acquisition: "plan_acquisition_print",
-  v_parcel_s0: "parcel_s0_print",
-  v_parcel_s1: "parcel_s1_print",
-  v_parcel_s2: "parcel_s2_print",
-  v_parcel_s3: "parcel_s3_print",
-  v_parcel_s4: "parcel_s4_print",
-  v_parcel_s5: "parcel_s5_print",
 };
+
+/**
+ * Төлөвийн давхаргуудын хэвлэх ГАНЦ загвар.
+ *
+ * Өмнө нь төлөв бүрд тусдаа (`parcel_s0_print` … `parcel_s5_print`) байсан
+ * тул шинэ төлөв нэмэхэд хэвлэх зураг дээр ОГТ гарч ирдэггүй байв. Одоо ганц
+ * загвар бөгөөд өнгийг нь давхаргын `color` баганаас (эх нь `parcel_status`
+ * хүснэгт) SLD өөрөө уншина — эндээс дамжуулах шаардлагагүй.
+ */
+const PARCEL_STATUS_PRINT_STYLE = "parcel_status_print";
 
 /**
  * Хэвлэх газрын зургийн ӨРГӨН (px) — нягтаршлын коэффициентээр өснө.
@@ -86,6 +98,9 @@ export default function PrintMapDialog({
 }) {
   const mapCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
+  // Нэгж талбарын ТӨЛӨВҮҮД — бүртгэлээс. Тайлбар, явцын задаргаа болон
+  // хэвлэх давхаргууд бүгд эндээс бүрдэнэ.
+  const { defs: statusLayerDefs } = useParcelStatusLayers();
   const [extent, setExtent] = useState<[number, number, number, number] | null>(null);
 
   const [paper, setPaper] = useState<PrintPaperSize>("A4");
@@ -206,18 +221,23 @@ export default function PrintMapDialog({
   /* ── Зураг авч, хуудас бүрдүүлэх ─────────────────────────────── */
   const legend = useMemo<PrintLegendItem[]>(
     () => [
-      ...PARCEL_STATUS_IDS.map((id, status) => ({ id, status }))
-        .filter(({ id, status }) => (statusCounts[status] ?? 0) > 0 && !appliedLayers.has(id))
-        .map(({ status }) => ({
-          color: PARCEL_STATUS_STYLES[status].color,
-          label: `${PARCEL_STATUS_NAMES[status]} (${statusCounts[status]})`,
-        })),
+      // Төлөвүүд БҮРТГЭЛЭЭС ирнэ (хатуу жагсаалт биш) бөгөөд хэрэглэгчийн
+      // ХАССАН давхарга таних тэмдэгт гарахгүй.
+      ...statusLayerDefs
+        .filter((d) => {
+          const sid = parcelStatusIdFromLayer(d.id) ?? -1;
+          return (statusCounts[sid] ?? 0) > 0 && !appliedLayers.has(d.id);
+        })
+        .map((d) => {
+          const sid = parcelStatusIdFromLayer(d.id) ?? -1;
+          return { color: d.color, label: `${d.label} (${statusCounts[sid]})` };
+        }),
       ...BOUNDARY_IDS.filter((id) => !appliedLayers.has(id)).map((id) => {
         const def = layerDef(id);
         return { color: def.color, label: def.label, line: true };
       }),
     ],
-    [statusCounts, appliedLayers],
+    [statusCounts, statusLayerDefs, appliedLayers],
   );
 
   /* Чагтлах давхаргын жагсаалт — таних тэмдэгтэй ЯГ ижил өнгө/шошго/дараалалтай.
@@ -226,19 +246,16 @@ export default function PrintMapDialog({
   const layerChips = useMemo(() => {
     const counted = Object.keys(statusCounts).length > 0;
     return [
-      ...PARCEL_STATUS_IDS.map((id, status) => ({ id: id as string, status }))
-        .filter(({ status }) => !counted || (statusCounts[status] ?? 0) > 0)
-        .map(({ id, status }) => ({
-          id,
-          color: PARCEL_STATUS_STYLES[status].color,
-          label: PARCEL_STATUS_NAMES[status],
-        })),
+      // Төлөвүүд БҮРТГЭЛЭЭС — шинэ төлөв нэмэхэд чагтлах жагсаалтад өөрөө орно.
+      ...statusLayerDefs
+        .filter((d) => !counted || (statusCounts[parcelStatusIdFromLayer(d.id) ?? -1] ?? 0) > 0)
+        .map((d) => ({ id: d.id as string, color: d.color, label: d.label })),
       ...BOUNDARY_IDS.map((id) => {
         const def = layerDef(id);
         return { id: id as string, color: def.color, label: def.label };
       }),
     ];
-  }, [statusCounts]);
+  }, [statusCounts, statusLayerDefs]);
 
   const toggleLayer = (id: string) =>
     setHiddenLayers((prev) => {
@@ -283,14 +300,16 @@ export default function PrintMapDialog({
       departmentCode: dept?.code,
       statusName: acq ? STATUS_LABELS[acq.status] : undefined,
       progressPercent: acq?.progress_percent ?? 0,
-      progressBreakdown: PARCEL_STATUS_IDS.map((_, status) => ({
-        color: PARCEL_STATUS_STYLES[status].color,
-        label: PARCEL_STATUS_NAMES[status],
-        count: statusCounts[status] ?? 0,
-      })).filter((sl) => sl.count > 0),
+      progressBreakdown: statusLayerDefs
+        .map((d) => ({
+          color: d.color,
+          label: d.label,
+          count: statusCounts[parcelStatusIdFromLayer(d.id) ?? -1] ?? 0,
+        }))
+        .filter((sl) => sl.count > 0),
       specialists: (acq?.assigned_users ?? []).map((u) => u.user_name).filter(Boolean),
     };
-  }, [acq, categories, departments, parcelsAreaM2, statusCounts]);
+  }, [acq, categories, departments, parcelsAreaM2, statusCounts, statusLayerDefs]);
 
   /* Зургийн хэмжээ — хуудасны зургийн талбайн ХАРЬЦААГААР (тайралт үүсэхгүй),
      нягтаршлын коэффициентээр ТОМСГОСОН (PDF дээр тод гарна). */
@@ -343,20 +362,27 @@ export default function PrintMapDialog({
           clipExtent: transformExtent(b, "EPSG:4326", "EPSG:3857") as [number, number, number, number],
         });
       });
-    ([...BOUNDARY_IDS, ...PARCEL_STATUS_IDS] as MapLayerId[])
-      .filter((id) => !appliedLayers.has(id))
-      .map((id) => ({ id, def: layerDef(id) }))
+    // Хилийн давхаргууд ТОГТМОЛ, төлөвийнх нь БҮРТГЭЛЭЭС. Хэрэглэгчийн
+    // хассан (appliedLayers) давхаргыг хэвлэхэд оруулахгүй.
+    [
+      ...BOUNDARY_IDS.map((id) => ({ id: id as string, def: layerDef(id) })),
+      ...statusLayerDefs.map((d) => ({ id: d.id as string, def: d })),
+    ]
+      .filter(({ id }) => !appliedLayers.has(id))
       .sort((x, y) => x.def.zIndex - y.def.zIndex)
       .forEach(({ id, def }) => {
+        const isStatus = parcelStatusIdFromLayer(id) !== null;
         layers.push({
           kind: "wms",
-          layer: `land:${id}`,
-          styles: PRINT_STYLES[id],
-          cql: id.startsWith("au") ? undefined : acqFilter,
+          // Төлөвийн давхаргууд GeoServer дээр байхгүй — эх давхаргаар нь
+          // дуудаж, `status=N`-ээ өөрийн cql-ээр нэмнэ.
+          layer: `land:${geoServerName(id as MapLayerId)}`,
+          styles: isStatus ? PARCEL_STATUS_PRINT_STYLE : PRINT_STYLES[id],
+          cql: id.startsWith("au") ? undefined : combineCql(def.cql, acqFilter) || undefined,
           opacity: def.opacity ?? 0.9,
           // ЗААВАЛ: чөлөөлөлтийн хил + нэгж талбарууд. Бусад нь туслах —
           // унавал алгасаад үлдсэнийг нь хэвлэнэ.
-          required: id === "v_acquisition_plan" || id.startsWith("v_parcel_"),
+          required: id === "v_acquisition_plan" || isStatus,
         });
       });
 

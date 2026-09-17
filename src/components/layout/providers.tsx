@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { useEffect, useState } from "react";
 import { logger } from "@/lib/logger";
 import { authStorage } from "@/lib/auth";
+import { startSessionRefresh } from "@/lib/session-refresh";
 import { useBasemapSync } from "@/components/map/use-basemap-sync";
 
 // axios interceptor нь HTTP хүсэлт бүрийг логлодог, гэхдээ query/mutation-ий
@@ -72,6 +73,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const token = authStorage.getAccessToken();
     if (token) void authStorage.startSession(token);
   }, []);
+
+  // Токеныг хугацаа дуусахаас ӨМНӨ нам гүмхэн сунгана. Үүнгүйгээр 15 минут
+  // тутам хуудасны бүх хүсэлт зэрэг 401 аваад, зэрэгцсэн refresh-үүд нэг
+  // удаагийн refresh token-ыг эргүүлж сесс тасардаг байв.
+  useEffect(() => startSessionRefresh(), []);
 
   return (
     <ThemeProvider

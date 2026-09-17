@@ -15,6 +15,7 @@ import {
   type SortColumn,
   type SortState,
 } from "@/components/ui/sortable-table-head";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -125,7 +126,7 @@ export default function ParcelListPage() {
 
       {/* Filters */}
       <div className="ap-card p-4">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap" {...searchOnEnter(applySearch)}>
           {/* Parcel ID */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />

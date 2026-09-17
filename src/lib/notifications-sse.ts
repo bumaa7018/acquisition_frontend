@@ -1,4 +1,5 @@
 import { authStorage } from "./auth";
+import { refreshAccessToken } from "./api";
 import { logger } from "./logger";
 import type { AppNotification } from "@/types";
 
@@ -33,6 +34,10 @@ export function subscribeNotifications(
   let retryMs = RETRY_MIN_MS;
   let controller: AbortController | null = null;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  // Амжилттай холболтын хооронд токеныг НЭГ л удаа сэргээнэ. Үүнгүйгээр
+  // "сэргээлт амжилттай ч стрийм дахиад 401" гэсэн тохиолдолд хүлээлтгүй
+  // гогцоо үүсч, өмнөх 30 секундын давтамжаас ч дор болно.
+  let refreshedForThisAttempt = false;
 
   async function connect() {
     if (stopped || connecting) return;
@@ -51,14 +56,25 @@ export function subscribeNotifications(
         cache: "no-store",
       });
       if (!res.ok || !res.body) {
-        // 401 → token хуучирсан байж болно: бусад axios дуудлага refresh
-        // хийсний дараа дараагийн оролдлого шинэ token-той холбогдоно.
         connecting = false;
+        // 401 → токен хуучирсан. ӨМНӨ НЬ энд зүгээр backoff-оор дахин
+        // оролддог байсан ба "бусад axios дуудлага refresh хийнэ" гэж
+        // найддаг байв. Хэрэглэгч товч дарахгүй байвал тийм дуудлага явахгүй
+        // тул стрийм 30 секунд тутам ИЖИЛ хуучин токеноор мөнхөд 401 авч,
+        // серверийн логийг дүүргэдэг байлаа (бодит тохиолдол: 19 минутын
+        // турш 31 сек тутам 401). Одоо өөрөө дундын single-flight refresh-ийг
+        // дуудаж, шинэ токеноор ШУУД дахин холбогдоно.
+        if (res.status === 401 && !refreshedForThisAttempt) {
+          refreshedForThisAttempt = true;
+          await refreshAndReconnect();
+          return;
+        }
         scheduleRetry();
         return;
       }
 
       retryMs = RETRY_MIN_MS; // амжилттай холболт — хүлээлтийг тэглэнэ
+      refreshedForThisAttempt = false; // дараагийн тасралтад дахин сэргээж болно
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -107,6 +123,29 @@ export function subscribeNotifications(
     } catch (err) {
       logger.warn("notification stream frame parse failed", { error: String(err) });
     }
+  }
+
+  /**
+   * 401 авсны дараа токеныг сэргээж шууд дахин холбогдоно.
+   *
+   * Сэргээх боломжгүй (сесс үнэхээр дууссан) бол давталтыг ЗОГСООНО —
+   * эс бөгөөс хэрэглэгч гарсны дараа ч 30 секунд тутам 401 үүсгэсээр байна.
+   * Хэрэглэгчийг энд logout хийхгүй: түүнийг axios interceptor дараагийн
+   * үйлдэл дээр нэг мөсөн шийднэ (хоёр газраас зэрэг /login руу шидэхгүй).
+   */
+  async function refreshAndReconnect() {
+    if (stopped) return;
+    try {
+      await refreshAccessToken();
+    } catch (err) {
+      logger.warn("notification stream token refresh failed", {
+        error: String(err),
+      });
+      stopped = true; // дэмий 401 давталт үүсгэхгүй
+      return;
+    }
+    retryMs = RETRY_MIN_MS;
+    connect();
   }
 
   function scheduleRetry() {

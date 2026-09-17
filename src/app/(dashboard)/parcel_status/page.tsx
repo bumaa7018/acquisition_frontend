@@ -6,13 +6,18 @@ import { getApiError } from "@/lib/utils";
 import { Grid2x2, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
-import { getParcelStatusStyle } from "@/types";
+import { getParcelStatusStyle, PARCEL_STATUS_FALLBACK_COLOR } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+
+/** `#rrggbb` эсэхийг шалгана — backend болон DB-ийн CHECK-тэй ижил дүрэм. */
+function isHexColor(v: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(v);
+}
 
 export default function ParcelStatusPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<ParcelStatus | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", sort_order: "" });
+  const [form, setForm] = useState({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
@@ -27,12 +32,13 @@ export default function ParcelStatusPage() {
         code: form.code.trim(),
         name: form.name.trim(),
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
+        color: form.color,
       }),
     onSuccess: () => {
       toast.success("Нэгж талбарын статус үүслээ");
       queryClient.invalidateQueries({ queryKey: ["parcel-statuses"] });
       setShowCreate(false);
-      setForm({ code: "", name: "", sort_order: "" });
+      setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     },
     onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
@@ -43,12 +49,13 @@ export default function ParcelStatusPage() {
         code: form.code.trim() || undefined,
         name: form.name.trim() || undefined,
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
+        color: form.color,
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-statuses"] });
       setEditItem(null);
-      setForm({ code: "", name: "", sort_order: "" });
+      setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     },
     onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
@@ -68,20 +75,21 @@ export default function ParcelStatusPage() {
       code: item.code,
       name: item.name,
       sort_order: String(item.sort_order),
+      color: item.color || PARCEL_STATUS_FALLBACK_COLOR,
     });
     setShowCreate(false);
   };
 
   const openCreate = () => {
     setEditItem(null);
-    setForm({ code: "", name: "", sort_order: "" });
+    setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     setShowCreate(true);
   };
 
   const closeForm = () => {
     setShowCreate(false);
     setEditItem(null);
-    setForm({ code: "", name: "", sort_order: "" });
+    setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
   };
 
   const submit = () => {
@@ -150,10 +158,38 @@ export default function ParcelStatusPage() {
               onKeyDown={(e) => e.key === "Enter" && submit()}
               className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
             />
+            {/*
+              ӨНГӨ — энэ утга нь ЗӨВХӨН энэ жагсаалтын тэмдэглэгээнд биш,
+              ГАЗРЫН ЗУРАГ дээрх тухайн төлөвийн давхаргын өнгөнд шууд
+              хэрэглэгдэнэ (GeoServer-ийн SLD руу `env`-ээр дамжина).
+              Өмнө нь өнгө нь код дотор хатуу бичигдсэн байсан тул шинэ
+              төлөв нэмэхэд зурган дээр саарал л харагддаг байв.
+            */}
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                aria-label="Төлөвийн өнгө"
+                value={form.color}
+                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                className="h-9 w-14 shrink-0 cursor-pointer rounded-lg border border-slate-200 bg-white p-1 dark:border-white/[0.08] dark:bg-[#1e1f27]"
+              />
+              <div className="min-w-0 flex-1">
+                <input
+                  placeholder="#22c55e"
+                  value={form.color}
+                  onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  className="w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 font-mono text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
+                />
+                <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+                  Газрын зураг дээрх энэ төлөвийн давхаргын өнгө
+                </p>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={submit}
-                disabled={isPending || !form.name.trim() || !form.code.trim()}
+                disabled={isPending || !form.name.trim() || !form.code.trim() || !isHexColor(form.color)}
                 className="rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
               >
                 {editItem ? "Хадгалах" : "Үүсгэх"}
@@ -202,7 +238,7 @@ export default function ParcelStatusPage() {
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
             {data.map((item) => {
-              const style = getParcelStatusStyle(item.id, item.name);
+              const style = getParcelStatusStyle(item.id, item.name, item.color);
               return (
                 <div
                   key={item.id}

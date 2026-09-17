@@ -126,6 +126,16 @@ export interface AcquisitionCategory {
    *  өөр сангийн бүртгэл тул зөвхөн дугаар ирнэ — нэрийг /departments
    *  жагсаалтаас тааруулна. null = тодорхойлоогүй. */
   department_id?: number | null;
+  /**
+   * Энэ ангилалд холбогдсон ЧӨЛӨӨЛӨЛТИЙН тоо (ерөнхий ангилалд дэд
+   * ангилалуудаараа дамжсан нь ч орно).
+   *
+   * Устгахын ӨМНӨ анхааруулахад хэрэглэнэ: FK зөрчигдөж ойлгомжгүй алдаа
+   * гарахаас сэргийлнэ.
+   */
+  acquisition_count?: number;
+  /** Дэд ангилалын тоо (зөвхөн ерөнхий ангилалд утгатай). */
+  sub_count?: number;
 }
 
 export interface AcquisitionProgressStatus {
@@ -478,6 +488,13 @@ export interface ParcelStatus {
   code: string;
   name: string;
   sort_order: number;
+  /**
+   * `#rrggbb` — бүртгэлээс ирэх ӨНГӨ. Төлөвийн өнгөний ЭХ СУРВАЛЖ нь энэ:
+   * жагсаалтын тэмдэглэгээ, дашбоардын диаграм, газрын зургийн давхарга
+   * бүгд эндээс авна. Хоосон (шинэ төлөв өнгө сонгоогүй) байж болно —
+   * тэр үед доорх хатуу хүснэгт/саарал өгөгдмөл рүү уначихна.
+   */
+  color?: string;
 }
 
 export const PARCEL_STATUS_STYLES: Record<
@@ -504,13 +521,30 @@ export const PARCEL_STATUS_NAME_STYLES: Record<
   Чөлөөлсөн: PARCEL_STATUS_STYLES[5],
 };
 
-export function getParcelStatusStyle(status?: number, statusName?: string) {
+/**
+ * Төлөвийн өнгө.
+ *
+ * `color` (бүртгэлээс) өгөгдвөл түүнийг ДАВУУ эрхтэйгээр хэрэглэнэ — энэ нь
+ * эх сурвалж. Доорх хатуу хүснэгтүүд нь зөвхөн НӨӨЦ: өнгөө хараахан
+ * тохируулаагүй хуучин төлөв, эсвэл өнгө дамжуулаагүй дуудагчид зориулагдсан.
+ */
+export function getParcelStatusStyle(
+  status?: number,
+  statusName?: string,
+  color?: string,
+) {
+  if (color && /^#[0-9a-fA-F]{6}$/.test(color)) {
+    return { color, bg: `${color}1f` };
+  }
   return (
     (statusName && PARCEL_STATUS_NAME_STYLES[statusName]) ||
     (status !== undefined && PARCEL_STATUS_STYLES[status]) ||
     PARCEL_STATUS_STYLES[0]
   );
 }
+
+/** Өнгө тохируулаагүй ШИНЭ төлөвт санал болгох өгөгдмөл (саарал). */
+export const PARCEL_STATUS_FALLBACK_COLOR = "#94a3b8";
 
 export interface Parcel {
   id: string;

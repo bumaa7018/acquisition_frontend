@@ -7,6 +7,7 @@ import type { LandAcquisition } from "@/types";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, MapPin, ChevronLeft, ChevronRight, X, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -72,7 +73,7 @@ export default function MyAcquisitionsPage() {
       </div>
 
       {/* Search bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" {...searchOnEnter(applySearch)}>
         <div className="flex items-center h-9 flex-1 max-w-xs rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 gap-1.5 focus-within:border-[#02c0ce] focus-within:ring-2 focus-within:ring-[#02c0ce]/15 transition-all">
           <Search className="h-3.5 w-3.5 text-slate-400 shrink-0" />
           <input

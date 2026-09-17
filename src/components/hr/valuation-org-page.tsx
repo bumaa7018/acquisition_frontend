@@ -229,6 +229,13 @@ export function ValuationOrgPage() {
     setFormOpen(true);
   };
 
+  // Маягт ажилтнуудаараа БӨГЛӨГДСӨН эсэх. Засварлах горимд дэлгэрэнгүй (GET /:id)
+  // ирэхээс өмнө `employees` нь хоосон массив байна — тэр үед хадгалбал
+  // backend-д "бүх ажилтныг хас" гэж ойлгогдож, тухайн байгууллагын бүх
+  // ажилтан идэвхгүй болж, сесс нь тасардаг байв. Бөглөгдөөгүй үед талбарыг
+  // ОГТ ИЛГЭЭХГҮЙ (undefined) — ингэснээр backend ажилтанд хүрэхгүй.
+  const employeesHydrated = !editingId || hydratedFor.current === editingId;
+
   const payload = (): ValuationOrgPayload => ({
     name: org.name.trim(),
     short_name: org.short_name.trim(),
@@ -241,17 +248,19 @@ export function ValuationOrgPage() {
     address: org.address.trim(),
     note: org.note.trim(),
     is_active: org.is_active,
-    employees: employees.map((e) => ({
-      id: e.id,
-      last_name: e.last_name.trim(),
-      first_name: e.first_name.trim(),
-      register_no: e.register_no.trim(),
-      phone: e.phone.trim(),
-      email: e.email.trim(),
-      position_name: e.position_name.trim(),
-      username: e.username?.trim() || undefined,
-      password: e.password || undefined,
-    })),
+    employees: employeesHydrated
+      ? employees.map((e) => ({
+          id: e.id,
+          last_name: e.last_name.trim(),
+          first_name: e.first_name.trim(),
+          register_no: e.register_no.trim(),
+          phone: e.phone.trim(),
+          email: e.email.trim(),
+          position_name: e.position_name.trim(),
+          username: e.username?.trim() || undefined,
+          password: e.password || undefined,
+        }))
+      : undefined,
   });
 
   const saveMutation = useMutation({

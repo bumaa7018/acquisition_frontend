@@ -1,6 +1,7 @@
 import { logger } from "./logger";
 
-const ACCESS_TOKEN_KEY = "gov_access_token";
+/** localStorage-ийн түлхүүр. Таб хооронд `storage` event сонсоход хэрэгтэй тул экспортлов. */
+export const ACCESS_TOKEN_KEY = "gov_access_token";
 const REFRESH_TOKEN_KEY = "gov_refresh_token";
 const USER_KEY = "gov_user";
 
@@ -54,6 +55,21 @@ function userFromAccessToken(token: string | null) {
       permissions: [],
     })),
   };
+}
+
+/**
+ * Access token-ы дуусах хугацаа (epoch мс). Задлах боломжгүй эсвэл `exp`
+ * байхгүй бол `null`.
+ *
+ * ЯАГААД ХЭРЭГТЭЙ: апп токен дуусахыг УРЬДЧИЛАН мэдэхгүй байсан тул зөвхөн
+ * 401 ирсний дараа л сэргээдэг байв. Тэр үед хуудасны 20-30 хүсэлт аль хэдийн
+ * 401 аваад, refresh-үүд зэрэг дуудагдаж, нэг удаагийн refresh token эргэлтэд
+ * орж сесс тасардаг байсан (`session-refresh.ts`-ийг үз).
+ */
+export function accessTokenExpiresAt(token: string | null): number | null {
+  const payload = decodeJwtPayload(token) as { exp?: unknown } | null;
+  const exp = payload?.exp;
+  return typeof exp === "number" && Number.isFinite(exp) ? exp * 1000 : null;
 }
 
 // httpOnly session cookie-г тохируулах/цэвэрлэх серверийн route.

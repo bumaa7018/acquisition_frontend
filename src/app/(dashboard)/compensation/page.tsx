@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 type CompStatus = "pending" | "approved" | "rejected" | "";
 type CompType   = "cash" | "land_grant" | "";
@@ -147,7 +148,7 @@ export default function CompensationsPage() {
 
       {/* Filters */}
       <div className="ap-card p-4">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap" {...searchOnEnter(applySearch)}>
           <div className="relative flex-1 min-w-[160px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input

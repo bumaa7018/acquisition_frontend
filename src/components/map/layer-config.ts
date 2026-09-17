@@ -14,12 +14,13 @@ export type MapLayerId =
   | 'parcel'
   | 'building'
   | 'v_parcel_acquisition'
-  | 'v_parcel_s0'
-  | 'v_parcel_s1'
-  | 'v_parcel_s2'
-  | 'v_parcel_s3'
-  | 'v_parcel_s4'
-  | 'v_parcel_s5'
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` БҮРТГЭЛЭЭС
+  // динамикаар үүснэ (доорх `parcelStatusLayerDefs`). Тогтмол жагсаалт биш:
+  // бүртгэлд шинэ төлөв нэмэхэд шинэ id өөрөө гарч ирнэ.
+  //
+  // GeoServer дээр эдгээр нэр БАЙХГҮЙ — бүгд `v_parcel_status` давхаргаас
+  // `status=N` CQL шүүлтээр гардаг (ca_sec_*-тай ижил зарчим).
+  | `v_parcel_s${number}`
   // ГУС-аас ШУУД уншигдах лавлах давхаргууд (appdb-д хуулагддаггүй).
   | 'ca_agreed_parcel'
   | 'ca_sec_parcel'
@@ -100,8 +101,11 @@ export type AgreedCodeLayerId =
  * -ээр эх давхарга рүү хөрвүүлнэ — типээр албадав.
  */
 export type GeoServerLayerId =
-  | Exclude<MapLayerId, AgreedCodeLayerId | SecCodeLayerId>
+  | Exclude<MapLayerId, AgreedCodeLayerId | SecCodeLayerId | `v_parcel_s${number}`>
   | 'v_acquisition_boundary'
+  // Нэгж талбарын БҮХ төлвийг агуулсан ганц давхарга. Төлөв бүрийн давхарга
+  // үүнээс `status=N` шүүлтээр гарна.
+  | typeof PARCEL_STATUS_SOURCE
 
 /**
  * ТОРЛОЛТЫН ХЭЛБЭР — GeoServer-ийн `shape://<нэр>` тэмдэгтэй ИЖИЛ нэр.
@@ -371,7 +375,15 @@ const SEC_SUB_STYLES = Object.fromEntries(
   ]),
 ) as Record<SecCodeLayerId, Omit<MapLayerDef, 'id'>>
 
-export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
+// ТӨЛӨВИЙН давхаргууд энд БАЙХГҮЙ (доорх `parcelStatusLayerDefs` үүсгэнэ).
+// Түлхүүрээс нь ЗААВАЛ хасна: `Record<MapLayerId, …>` дотор template literal
+// түлхүүр нь TypeScript-д ИНДЕКС ГАРЫН ҮСЭГ болж хувирдаг тул хасаагүй бол
+// `MAP_LAYER_STYLES['v_parcel_s0']` нь төрлөөр зөв атлаа ажиллах үед
+// `undefined` буцаах ба алдаа чимээгүй өнгөрнө.
+export const MAP_LAYER_STYLES: Record<
+  Exclude<MapLayerId, `v_parcel_s${number}`>,
+  Omit<MapLayerDef, 'id'>
+> = {
   // Засаг захиргааны хилийн өнгө нь GeoServer-ийн SLD-тэй ЯГ ТААРНА
   // (au1_boundary/au2_boundary/au3_boundary — саарал өнгөний шатлал).
   // Өмнө нь энд ягаан бичигдсэн байсан тул давхаргын самбарын өнгөт
@@ -397,12 +409,8 @@ export const MAP_LAYER_STYLES: Record<MapLayerId, Omit<MapLayerDef, 'id'>> = {
   // Давхаргын opacity-г 1 болгосон — үгүй бол өгөгдмөл 0.9-тэй үржиж 63%
   // болж, SLD дэх тохиргоо зурган дээр таарахгүй.
   v_parcel_acquisition:   { label: 'Нэгж талбар',          color: '#94a3b8', zIndex: 40, opacity: 1 },
-  v_parcel_s0: { label: 'Хүлээгдэж буй',        color: '#64748b', zIndex: 30, group: 'parcel_status', opacity: 1 },
-  v_parcel_s1: { label: 'Зөвшилцөх шатандаа',  color: '#facc15', zIndex: 31, group: 'parcel_status', opacity: 1 },
-  v_parcel_s2: { label: 'Үнэлгээ хийх',         color: '#f97316', zIndex: 32, group: 'parcel_status', opacity: 1 },
-  v_parcel_s3: { label: 'Нөлөөлөгдсөн гарсан', color: '#3b82f6', zIndex: 33, group: 'parcel_status', opacity: 1 },
-  v_parcel_s4: { label: 'Татгалзсан',          color: '#ef4444', zIndex: 34, group: 'parcel_status', opacity: 1 },
-  v_parcel_s5: { label: 'Чөлөөлсөн',          color: '#22c55e', zIndex: 35, group: 'parcel_status', opacity: 1 },
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд ЭНД БАЙХГҮЙ — `parcelStatusLayerDefs()`
+  // тэдгээрийг бүртгэлээс үүсгэнэ. Энэ хүснэгт нь ТОГТМОЛ давхаргуудынх.
   // ГУС-ийн (ЛМ) давхаргууд — `data_landuse` схемээс GeoServer шууд уншина.
   // Өнгө нь SLD-тэй таарна (ca_agreed_parcel.sld / ca_sec_parcel.sld); энд
   // зөвхөн ТАЙЛБАРын дөрвөлжинд хэрэглэгдэнэ.
@@ -458,7 +466,24 @@ export const SEC_CODE_LAYER_IDS: readonly SecCodeLayerId[] = SEC_CODE_LAYERS.map
  * байхгүй — WMS `LAYERS` / WFS `typeName`-д ҮРГЭЛЖ үүнийг дамжуулна.
  */
 export function geoServerName(id: MapLayerId): GeoServerLayerId {
-  return (MAP_LAYER_STYLES[id]?.source ?? id) as GeoServerLayerId
+  // Төлөвийн давхаргууд — GeoServer дээр нэр нь БАЙХГҮЙ, бүгд нэг эх
+  // давхаргаас `status=N` шүүлтээр гардаг (parcelStatusLayerDefs).
+  if (parcelStatusIdFromLayer(id) !== null) return PARCEL_STATUS_SOURCE
+  return (staticLayerStyle(id)?.source ?? id) as GeoServerLayerId
+}
+
+/**
+ * ТОГТМОЛ давхаргын тодорхойлолт (төлөвийнхөөс бусад).
+ *
+ * `MAP_LAYER_STYLES`-ийг ШУУД индекслэхгүй байх нь чухал: түлхүүр нь
+ * төлөвийн id-г ЗОРИУД агуулдаггүй тул `MapLayerId`-ээр индекслэхэд
+ * TypeScript зөвшөөрөхгүй. Энэ туслах нь тэр ялгааг нэг газарт барина.
+ */
+export function staticLayerStyle(
+  id: string,
+): Omit<MapLayerDef, 'id'> | undefined {
+  if (parcelStatusIdFromLayer(id) !== null) return undefined
+  return MAP_LAYER_STYLES[id as Exclude<MapLayerId, `v_parcel_s${number}`>]
 }
 
 /**
@@ -506,11 +531,77 @@ export function isGusReferenceLayer(id: string): boolean {
  * ОЛОН МЕГАБАЙТ WFS татаж, апп-ыг сүлжээгээр боогдуулдаг.
  */
 export function shouldFitOnEnable(id: string): boolean {
-  const def = MAP_LAYER_STYLES[id as MapLayerId]
-  return def?.fitOnEnable !== false
+  return staticLayerStyle(id)?.fitOnEnable !== false
 }
 
-export function layerDef(id: MapLayerId): MapLayerDef {
+export function layerDef(id: Exclude<MapLayerId, `v_parcel_s${number}`>): MapLayerDef {
   return { id, ...MAP_LAYER_STYLES[id] }
 }
 
+
+// ── Нэгж талбарын ТӨЛӨВИЙН давхаргууд (динамик) ────────────────────────────
+//
+// ЯАГААД ДИНАМИК: өмнө нь төлөв бүрд ТУСДАА бүх зүйл байсан — DB харагдац
+// (v_parcel_s0..s5), GeoServer-ийн давхарга, SLD файл, proxy-гийн цагаан
+// жагсаалт, энэ файл дахь мөр, хэвлэхийн загвар. "Нэгж талбарын статус"
+// цэсээр шинэ төлөв нэмэхэд газрын зураг дээр ТЭР ОГТ ГАРЧ ИРДЭГГҮЙ байв.
+//
+// Одоо: GeoServer дээр `v_parcel_status` гэсэн ГАНЦ давхарга байна (бүх
+// төлөвийг агуулна). Төлөв бүрийн давхарга нь түүнээс `status=N` CQL
+// шүүлтээр гарна — яг `ca_sec_*` дэд давхаргууд `code=NN`-ээр гардагтай
+// ижил, аль хэдийн ажиллаж буй зарчим.
+//
+// ӨНГӨ: SLD нь давхаргын `color` баганаас (эх нь `parcel_status` хүснэгт)
+// ШУУД уншина — WMS хүсэлтээр дамжуулахгүй. Доорх `color` талбар нь зөвхөн
+// ДАВХАРГЫН САМБАРЫН тэмдэглэгээнд хэрэглэгдэнэ.
+//
+// Үр дүн: төлөв нэмэх, өнгө солиход GeoServer-т ч, энэ файлд ч гар хүрэхгүй.
+
+/** GeoServer дээрх ЖИНХЭНЭ давхарга — төлөв бүрийн эх сурвалж. */
+export const PARCEL_STATUS_SOURCE = 'v_parcel_status' as const
+
+/** Давхаргын самбар дахь бүлгийн id. */
+export const PARCEL_STATUS_GROUP_ID = 'parcel_status'
+
+/** Төлөвийн давхаргуудын zIndex нь эндээс эхэлж, эрэмбээрээ 1-ээр нэмэгдэнэ. */
+export const PARCEL_STATUS_Z_BASE = 30
+
+/** Өнгө тохируулаагүй төлөвт хэрэглэх саарал. SLD-ийн өгөгдмөлтэй ИЖИЛ байх ёстой. */
+export const PARCEL_STATUS_DEFAULT_COLOR = '#94a3b8'
+
+/** Бүртгэлийн нэг мөрөөс хэрэгтэй хэсэг (`ParcelStatus`-ийн дэд хэсэг). */
+export type ParcelStatusLike = {
+  id: number
+  name: string
+  color?: string
+}
+
+/** `status=N` давхаргын id. GeoServer дээр ийм нэр БАЙХГҮЙ — виртуал. */
+export function parcelStatusLayerId(statusId: number): `v_parcel_s${number}` {
+  return `v_parcel_s${statusId}`
+}
+
+/** Давхаргын id-аас төлөвийн дугаарыг буцаана (виртуал биш бол `null`). */
+export function parcelStatusIdFromLayer(layerId: string): number | null {
+  const m = /^v_parcel_s(\d+)$/.exec(layerId)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * Бүртгэлийн төлөвүүдээс давхаргын тодорхойлолтууд.
+ *
+ * `sort_order`-оор аль хэдийн эрэмбэлэгдсэн жагсаалт хүлээнэ (API тэгж
+ * буцаадаг) — zIndex нь тэр эрэмбээр тавигдана.
+ */
+export function parcelStatusLayerDefs(statuses: ParcelStatusLike[]): MapLayerDef[] {
+  return statuses.map((s, i) => ({
+    id: parcelStatusLayerId(s.id),
+    label: s.name,
+    color: s.color || PARCEL_STATUS_DEFAULT_COLOR,
+    zIndex: PARCEL_STATUS_Z_BASE + i,
+    group: PARCEL_STATUS_GROUP_ID,
+    opacity: 1,
+    source: PARCEL_STATUS_SOURCE,
+    cql: `status=${s.id}`,
+  }))
+}

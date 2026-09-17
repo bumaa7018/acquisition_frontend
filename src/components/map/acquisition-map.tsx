@@ -34,6 +34,7 @@ import AcquisitionInfoModal, {
 import PrintMapDialog from "./print-map-dialog";
 import GusInfoModal, { type GusFeatureProps } from "./gus-info-modal";
 import { useFullscreen } from "./use-fullscreen";
+import { useParcelStatusLayers } from "./use-parcel-status-layers";
 import {
   BASE_Z_INDEX,
   DRONE_Z_INDEX,
@@ -41,10 +42,15 @@ import {
   shouldFitOnEnable,
   layerDef,
   geoServerName,
+  staticLayerStyle,
   combineCql,
+  parcelStatusIdFromLayer,
+  PARCEL_STATUS_DEFAULT_COLOR,
   AGREED_GROUP,
+  AGREED_GROUP_ID,
   AGREED_CODE_LAYER_IDS,
   SEC_GROUP,
+  SEC_GROUP_ID,
   SEC_CODE_LAYER_IDS,
   type MapLayerDef,
   type MapLayerId,
@@ -55,12 +61,13 @@ import type { PrintOrientation } from "./print-map";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 
-// Дашбоардтай ижил: нэгж талбарыг төлөв тус бүрээр (v_parcel_s0..s5) тусад нь сонгож харна
-const PARCEL_STATUS_IDS = ["v_parcel_s0", "v_parcel_s1", "v_parcel_s2", "v_parcel_s3", "v_parcel_s4", "v_parcel_s5"] as const;
 const PARCEL_GROUP: LayerGroupConfig = { id: "parcel_status", label: "Нэгж талбарын хил", color: "#22c55e" };
 
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
-const PARCEL_INFO_LAYERS = new Set<string>([...PARCEL_STATUS_IDS, "v_parcel_acquisition"]);
+// Төлөвийн давхаргууд бүртгэлээс ДИНАМИКААР үүсдэг тул тогтмол жагсаалт биш,
+// id-гаар нь (`v_parcel_s<N>`) танина — шинэ төлөв нэмэхэд өөрөө хамрагдана.
+const isParcelInfoLayer = (id: string) =>
+  parcelStatusIdFromLayer(id) !== null || id === "v_parcel_acquisition";
 // ГУС-ийн дэд давхаргууд (зөвшилцсөн зураг, хамгаалалтын зурвас) — мөн
 // ДЭЛГЭРЭНГҮЙ цонхтой (жижиг popup биш).
 const GUS_INFO_LAYERS = new Set<string>([...AGREED_CODE_LAYER_IDS, ...SEC_CODE_LAYER_IDS]);
@@ -72,11 +79,6 @@ const BOUNDARY_INFO_LAYERS: Record<string, string> = {
   v_plan_acquisition: "Үндсэн төлөвлөлтийн хил",
   v_acquisition_boundary: "Чөлөөлөх бүсийн хил",
 };
-
-function parcelStatusFromLayerId(id: string): number | null {
-  const idx = PARCEL_STATUS_IDS.indexOf(id as (typeof PARCEL_STATUS_IDS)[number]);
-  return idx === -1 ? null : idx;
-}
 
 // Polygon/MultiPolygon GeoJSON геометрийн зөвхөн ГАДНА талын (exterior) ring-үүдийг гаргаж авна
 function extractExteriorRings(geometry: { type?: string; coordinates?: unknown } | undefined): [number, number][][] {
@@ -116,7 +118,7 @@ function computeBboxFromGeoJson(geometry: { coordinates?: unknown } | undefined)
 
 type CqlKey = "acquisition" | "plan" | "au1" | "au2" | "au3";
 
-const LAYER_DEFS: (MapLayerDef & {
+const STATIC_LAYER_DEFS: (MapLayerDef & {
   defaultVisible: boolean;
   cqlKey?: CqlKey;
 })[] = [
@@ -129,12 +131,9 @@ const LAYER_DEFS: (MapLayerDef & {
   // харагдана — өөрийн чөлөөлөлт нь тэдгээрийн дунд хаана байгааг харуулна.
   { ...layerDef("v_plan_acquisition"), defaultVisible: true, cqlKey: "plan" },
   { ...layerDef("v_acquisition_plan"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s0"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s1"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s2"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s3"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s4"), defaultVisible: true, cqlKey: "acquisition" },
-  { ...layerDef("v_parcel_s5"), defaultVisible: true, cqlKey: "acquisition" },
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд ЭНД БАЙХГҮЙ — тэдгээр нь бүртгэлээс
+  // (`useParcelStatusLayers`) АСИНХРОНООР ирж, доор `layerDefs` мемод
+  // яг энэ байрлалд орно. Тиймээс шинэ төлөв нэмэхэд энэ файлд гар хүрэхгүй.
   // ГУС-ийн (ЛМ) лавлах давхаргууд — `data_landuse` схемээс GeoServer шууд
   // уншина. `cqlKey` БАЙХГҮЙ: эдгээрт `acquisition_id`/`plan_code` багана
   // байхгүй тул чөлөөлөлтөөр шүүгдэхгүй, харагдаж буй хэсгээрээ л зурагдана.
@@ -257,6 +256,9 @@ export function AcquisitionMap({
   });
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d");
   const [extentReady, setExtentReady] = useState(false);
+  // Газрын зураг үүссэн эсэх. `olMap` нь ref тул рендерийг өдөөдөггүй — доорх
+  // төлөвийн давхаргын effect нь зураг бэлэн болохыг ЭНЭ төлөвөөр хүлээнэ.
+  const [mapReady, setMapReady] = useState(false);
   // Чөлөөлөлтийн бүтэн хүрээ (EPSG:3857) — хэвлэхийн өмнө зургийг ҮҮГЭЭР
   // тааруулж, бүх нэгж талбар/хил хуудсанд бүтэн орохыг баталгаажуулна.
   const acqExtent = useRef<[number, number, number, number] | null>(null);
@@ -275,8 +277,40 @@ export function AcquisitionMap({
     if (autoPrint) setPrintOpen(true);
   }, [autoPrint]);
 
+  // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` БҮРТГЭЛЭЭС, асинхроноор.
+  const { defs: statusLayerDefs } = useParcelStatusLayers();
+
+  /**
+   * Бүх давхаргын тодорхойлолт: тогтмолууд + бүртгэлээс ирсэн төлөвүүд.
+   *
+   * Төлөвүүд нь ГУС-ийн (зөвшилцсөн зураг / хамгаалалтын зурвас) бүлгүүдийн
+   * ӨМНӨ орно — самбар дээрх эрэмбэ хуучин хатуу жагсаалттай ижил хэвээр.
+   */
+  const layerDefs = useMemo(() => {
+    const withStatus = statusLayerDefs.map((d) => ({
+      ...d,
+      defaultVisible: true,
+      cqlKey: "acquisition" as CqlKey,
+    }));
+    const cut = STATIC_LAYER_DEFS.findIndex(
+      (d) => d.group === AGREED_GROUP_ID || d.group === SEC_GROUP_ID,
+    );
+    const at = cut === -1 ? STATIC_LAYER_DEFS.length : cut;
+    return [
+      ...STATIC_LAYER_DEFS.slice(0, at),
+      ...withStatus,
+      ...STATIC_LAYER_DEFS.slice(at),
+    ];
+  }, [statusLayerDefs]);
+
+  // Газрын зураг үүсэх үед хийгдсэн closure-ууд (singleclick г.м.) нь хожим
+  // ирсэн төлөвийн давхаргуудыг харахгүй тул ref-ээр ХАМГИЙН СҮҮЛИЙН
+  // жагсаалтыг уншина.
+  const layerDefsRef = useRef(layerDefs);
+  layerDefsRef.current = layerDefs;
+
   const [layers, setLayers] = useState<LayerConfig[]>(
-    LAYER_DEFS.map((d) => ({
+    STATIC_LAYER_DEFS.map((d) => ({
       id: d.id,
       label: d.label,
       color: d.color,
@@ -397,7 +431,7 @@ export function AcquisitionMap({
           if (l.id !== id) return l;
           const next = { ...l, visible: !l.visible };
 
-          const status = parcelStatusFromLayerId(id);
+          const status = parcelStatusIdFromLayer(id);
           if (status !== null) {
             // 3D идэвхтэй үед WMS раст давхаргыг Cesium-ийн 3D хашаа/шошготой давхцахаас
             // сэргийлж нуусан хэвээр байлгаад, зөвхөн Cesium-ийн entity-г (status-аар) удирдана
@@ -410,7 +444,7 @@ export function AcquisitionMap({
           }
 
           wmsLayers.current[id]?.setVisible(next.visible);
-          const def = LAYER_DEFS.find((d) => d.id === id);
+          const def = layerDefsRef.current.find((d) => d.id === id);
           // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз):
           // WFS-ээр олон МБ татаж, зэрэг явж буй API дуудлагыг timeout-д унагаадаг.
           if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {
@@ -433,26 +467,39 @@ export function AcquisitionMap({
     if (mode === "3d" && !extentReady) return;
     setMapMode(mode);
 
+    // Төлөвүүд БҮРТГЭЛЭЭС ирдэг тул тогтмол жагсаалтаар биш, ref-ээс уншина
+    // (хамгийн сүүлийн бүртгэл). `status` нь массивын индекс БИШ, бүртгэлийн
+    // жинхэнэ id — шинэ төлөв дунд нь орж ирвэл индекс гулсахгүй.
+    const statusDefs = layerDefsRef.current.filter(
+      (d) => parcelStatusIdFromLayer(d.id) !== null,
+    );
     const statusVisibility: Record<number, boolean> = {};
-    PARCEL_STATUS_IDS.forEach((id, status) => {
-      statusVisibility[status] = layers.find((l) => l.id === id)?.visible ?? true;
+    statusDefs.forEach((d) => {
+      const sid = parcelStatusIdFromLayer(d.id)!;
+      statusVisibility[sid] = layers.find((l) => l.id === d.id)?.visible ?? true;
     });
 
     if (mode === "2d") {
       cesium3D.current?.setEnabled(false);
-      PARCEL_STATUS_IDS.forEach((id, status) => {
-        wmsLayers.current[id]?.setVisible(statusVisibility[status]);
+      statusDefs.forEach((d) => {
+        const sid = parcelStatusIdFromLayer(d.id)!;
+        wmsLayers.current[d.id]?.setVisible(statusVisibility[sid]);
       });
       return;
     }
 
-    // 3D-д WMS раст давхаргыг (v_parcel_sX) нуугаад зөвхөн Cesium-ийн entity-г харуулна —
+    // 3D-д WMS раст давхаргыг нуугаад зөвхөн Cesium-ийн entity-г харуулна —
     // ижил төлвийн талбайг хоёр удаа (WMS + entity) давхарлан зурахаас сэргийлнэ
-    PARCEL_STATUS_IDS.forEach((id) => wmsLayers.current[id]?.setVisible(false));
+    statusDefs.forEach((d) => wmsLayers.current[d.id]?.setVisible(false));
 
     if (cesium3D.current) {
       cesium3D.current.setEnabled(true);
-      PARCEL_STATUS_IDS.forEach((_id, status) => cesium3D.current?.setStatusVisible(status, statusVisibility[status]));
+      statusDefs.forEach((d) =>
+        cesium3D.current?.setStatusVisible(
+          parcelStatusIdFromLayer(d.id)!,
+          statusVisibility[parcelStatusIdFromLayer(d.id)!],
+        ),
+      );
       return;
     }
     const map = olMap.current;
@@ -470,11 +517,103 @@ export function AcquisitionMap({
     }
   }, [extentReady, layers]);
 
+  /**
+   * ТӨЛӨВИЙН давхаргуудыг газрын зураг дээр нэмэх/хасах.
+   *
+   * Бүртгэл нь газрын зураг үүссэнээс ХОЙШ ирдэг (мөн админ төлөв нэмэхэд
+   * дахин ирж болно) тул тусдаа эффектээр синхрончилно. Бүгд GeoServer дээрх
+   * НЭГ давхаргаас (`v_parcel_status`) `status=N` шүүлтээр гарна.
+   *
+   * `mapReady` нь ЗААВАЛ хамаарал байх ёстой. Энэ effect нь газрын зураг
+   * үүсгэдэг effect-ээс ӨМНӨ зарлагдсан тул React эхний рендер дээр үүнийг
+   * ЭХЭЛЖ ажиллуулна — тэр үед `olMap.current` нь null. `olMap` нь ref учраас
+   * утга онооход рендер өдөөгддөггүй; харин `statusLayerDefs` нь react-query-
+   * гийн кэшнээс (staleTime 5 мин) эхний рендерт бэлэн ирээд мемолагдсан тул
+   * IDENTITY нь дахин ӨӨРЧЛӨГДӨХГҮЙ. Үр дүнд нь effect дахин ажиллахгүй,
+   * доорх `setLayers` хэзээ ч дуудагдахгүй бөгөөд давхаргын самбар нь
+   * STATIC_LAYER_DEFS дээр хөлдөж, нэгж талбарын төлөвийн бүлэг ОГТ
+   * ГАРАХГҮЙ байв (дашбоард нь өөр компонент тул энэ эндээс л мэдрэгдэнэ).
+   *
+   * ӨНГӨ ЭНДЭЭС ДАМЖИХГҮЙ: SLD нь давхаргын `color` баганаас (эх нь
+   * `parcel_status` хүснэгт) шууд уншина. `d.color` нь зөвхөн ДАВХАРГЫН
+   * САМБАРЫН тэмдэглэгээнд хэрэглэгдэнэ — зурган дээрх өнгө хоёр өөр замаар
+   * яваад хоорондоо зөрөх боломжийг хаасан.
+   */
+  useEffect(() => {
+    const map = olMap.current;
+    if (!map || statusLayerDefs.length === 0) return;
+    void mapReady; // дээрх тайлбарыг үз — зөвхөн дахин ажиллуулахын тулд
+
+    const added: typeof statusLayerDefs = [];
+    statusLayerDefs.forEach((d) => {
+      if (wmsLayers.current[d.id]) return;
+      const cql = combineCql(d.cql, cqlByKey.acquisition);
+      const layer = new ImageLayer({
+        visible: true,
+        opacity: d.opacity ?? 0.9,
+        zIndex: d.zIndex,
+        source: new ImageWMS({
+          url: GS_WMS,
+          params: {
+            LAYERS: `land:${geoServerName(d.id)}`,
+            FORMAT: "image/png",
+            TRANSPARENT: true,
+            ...(cql ? { CQL_FILTER: cql } : {}),
+          },
+          ratio: 1,
+          serverType: "geoserver",
+          imageLoadFunction: wmsPostLoad,
+        }),
+      });
+      wmsLayers.current[d.id] = layer;
+      map.addLayer(layer);
+      added.push(d);
+    });
+
+    // Бүртгэлээс ХАСАГДСАН төлөв — давхаргыг нь зургаас авна.
+    const live = new Set<string>(statusLayerDefs.map((d) => d.id));
+    Object.keys(wmsLayers.current).forEach((id) => {
+      if (parcelStatusIdFromLayer(id) === null || live.has(id)) return;
+      map.removeLayer(wmsLayers.current[id]);
+      delete wmsLayers.current[id];
+    });
+
+    // Самбарын жагсаалтыг тодорхойлолттой тааруулна. Одоо байгаа давхаргын
+    // асаалттай/унтраалттай байдлыг ХАДГАЛНА — бүртгэл дахин татагдахад
+    // хэрэглэгчийн сонголт эргэж асахгүй.
+    setLayers((prev) => {
+      const seen = new Map(prev.map((l) => [l.id, l]));
+      const next = layerDefs.map((d) => {
+        const cur = seen.get(d.id);
+        return {
+          id: d.id,
+          label: d.label,
+          color: d.color,
+          visible: cur ? cur.visible : d.defaultVisible,
+          group: d.group,
+          hatch: d.hatch,
+        };
+      });
+      const same =
+        next.length === prev.length &&
+        next.every(
+          (l, i) =>
+            prev[i].id === l.id &&
+            prev[i].visible === l.visible &&
+            prev[i].label === l.label &&
+            prev[i].color === l.color,
+        );
+      return same ? prev : next;
+    });
+
+    if (added.length === 0) return;
+  }, [statusLayerDefs, layerDefs, cqlByKey, mapReady]);
+
   useEffect(() => {
     if (!mapRef.current || olMap.current || !acquisitionId) return;
 
     const wmsRecord: Record<string, ImageLayer<ImageWMS>> = {};
-    LAYER_DEFS.forEach((d) => {
+    STATIC_LAYER_DEFS.forEach((d) => {
       // Дэд давхаргын тогтмол шүүлт (code=NN) нь дуудагчийн динамик шүүлттэй
       // AND-ээр нэгдэнэ; LAYERS нь ҮРГЭЛЖ GeoServer дээрх ЭХ давхарга.
       const cql = combineCql(d.cql, d.cqlKey ? cqlByKey[d.cqlKey] : undefined);
@@ -508,7 +647,7 @@ export function AcquisitionMap({
         // Тохируулаагүй бол үндсэн суурь зураг (Google хиймэл дагуул, tile-ийн байгаа
         // дээд түвшин z20).
         createBasemapLayer(),
-        ...LAYER_DEFS.map((d) => wmsRecord[d.id]),
+        ...STATIC_LAYER_DEFS.map((d) => wmsRecord[d.id]),
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -526,7 +665,8 @@ export function AcquisitionMap({
       const pixel = evt.pixel as [number, number];
 
       // Дээд давхаргаас доош нь эрэмбэлж, ЭХНИЙ олдсоныг харуулна.
-      const visibleIds = LAYER_DEFS.filter((d) => wmsRecord[d.id]?.getVisible())
+      const visibleIds = layerDefsRef.current
+        .filter((d) => wmsLayers.current[d.id]?.getVisible())
         .sort((a, b) => b.zIndex - a.zIndex)
         .map((d) => d.id);
       if (!visibleIds.length) return;
@@ -554,7 +694,7 @@ export function AcquisitionMap({
 
           const props = features[0].properties ?? {};
           const acqId = String(props.acquisition_id ?? acquisitionId);
-          if (PARCEL_INFO_LAYERS.has(id)) {
+          if (isParcelInfoLayer(id)) {
             const uuid = String(props.id ?? "");
             if (acqId && uuid) {
               setParcelInfo({ acquisitionId: acqId, parcelUuid: uuid });
@@ -573,7 +713,9 @@ export function AcquisitionMap({
             setAcqInfo({
               acquisitionId: acqId,
               layerLabel: BOUNDARY_INFO_LAYERS[id],
-              layerColor: layerDef(id as MapLayerId).color,
+              // BOUNDARY_INFO_LAYERS нь зөвхөн ХИЛИЙН давхаргуудыг агуулна
+              // (төлөвийнх биш) тул тогтмол хүснэгтээс хайна.
+              layerColor: staticLayerStyle(id)?.color ?? PARCEL_STATUS_DEFAULT_COLOR,
               fallback: toAcquisitionFeatureProps(props),
             });
             return;
@@ -588,6 +730,10 @@ export function AcquisitionMap({
     });
 
     olMap.current = map;
+    // Газрын зураг БЭЛЭН болсныг РЕНДЕРТ мэдэгдэнэ. `olMap` нь ref тул түүнд
+    // утга оноох нь юуг ч дахин ажиллуулдаггүй — төлөвийн давхаргын effect
+    // энэ төлөвөөр л газрын зураг бэлэн болсныг мэднэ.
+    setMapReady(true);
 
     const params = new URLSearchParams({
       service: "WFS",
@@ -656,10 +802,21 @@ export function AcquisitionMap({
         // нэгж талбар олон ring-тэй байж болох тул cesiumParcels (ring тутамд нэг
         // элемент)-ээс тоолвол давхар тоологдоно.
         const counts: Record<number, number> = {};
+        // 3D-ийн өнгө/нэр нь мөн БҮРТГЭЛЭЭС — 2D давхаргатай ижил эх сурвалж.
+        // Эс бөгөөс нэг төлөв хавтгай зураг дээр нэг өнгөтэй, 3D дээр өөр
+        // өнгөтэй харагдана. Бүртгэлд байхгүй төлөвт хуучин хүснэгт рүү унана.
+        const statusMeta = new Map(
+          layerDefsRef.current
+            .map((d) => [parcelStatusIdFromLayer(d.id), d] as const)
+            .filter((e): e is [number, (typeof layerDefsRef.current)[number]] => e[0] !== null),
+        );
         (json?.features ?? []).forEach((f: { id?: string; properties?: { parcel_id?: string; status?: number }; geometry?: { type?: string; coordinates?: unknown } }) => {
           const status = f.properties?.status ?? 0;
-          const style = PARCEL_STATUS_STYLES[status] ?? PARCEL_STATUS_STYLES[0];
-          const statusLabel = PARCEL_STATUS_NAMES[status] ?? "";
+          const meta = statusMeta.get(status);
+          const style = meta
+            ? { color: meta.color }
+            : PARCEL_STATUS_STYLES[status] ?? PARCEL_STATUS_STYLES[0];
+          const statusLabel = meta?.label ?? PARCEL_STATUS_NAMES[status] ?? "";
           counts[status] = (counts[status] ?? 0) + 1;
           extractExteriorRings(f.geometry).forEach((ring, i) => {
             cesiumParcels.push({
@@ -685,6 +842,11 @@ export function AcquisitionMap({
       cesium3D.current = null;
       map.setTarget(undefined);
       olMap.current = null;
+      // Зураг задарсан тул төлөвийн давхаргын effect дахин ажиллах ёстой
+      // (шинэ зураг үүсэхэд `setMapReady(true)` түүнийг өдөөнө). `wmsLayers`-
+      // ыг энд цэвэрлэх шаардлагагүй: зураг үүсгэх effect түүнийг `wmsRecord`-
+      // оор БҮХЭЛД нь сольдог.
+      setMapReady(false);
       historyLayers.current = {};
     };
   }, [acqFilter, acquisitionId, cqlByKey]);

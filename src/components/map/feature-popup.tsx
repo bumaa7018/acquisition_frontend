@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatArea, formatDate } from "@/lib/utils";
-import { MAP_LAYER_STYLES, type MapLayerId } from "./layer-config";
+import { staticLayerStyle } from "./layer-config";
 
 interface FeaturePopupProps {
   layer: string;
@@ -142,7 +142,7 @@ export default function FeaturePopup({
               MAP_LAYER_STYLES-ээс авдаг тул ГУС-ийн давхаргууд (зөвшилцсөн
               зургийн кодууд, хамгаалалтын зурвас) дээр техник id гарахгүй. */}
           <CardTitle className="text-sm">
-            {LAYER_LABELS[layer] ?? MAP_LAYER_STYLES[layer as MapLayerId]?.label ?? layer}
+            {LAYER_LABELS[layer] ?? staticLayerStyle(layer)?.label ?? layer}
           </CardTitle>
           <Button size="icon" variant="ghost" className="h-6 w-6 -mr-1" onClick={onClose}>
             <X className="h-3.5 w-3.5" />

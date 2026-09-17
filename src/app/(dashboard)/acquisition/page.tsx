@@ -46,6 +46,7 @@ import { UserSelect as EmployeeSelect } from "@/components/ui/user-select";
 import { PlanSelect } from "../parcel/_components/plan_select";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/components/ui/plan-code-search";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
@@ -636,7 +637,7 @@ export default function LandPage() {
 
       <div className="ap-card overflow-hidden">
         {/* Filters */}
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]" {...searchOnEnter(applySearch)}>
           <PlanSelect
             value={draft.planCode}
             onChange={(code) => setDraft(d => ({ ...d, planCode: code }))}

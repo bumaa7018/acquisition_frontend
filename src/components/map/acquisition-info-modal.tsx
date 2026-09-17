@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
-import { X, Layers, Map } from "lucide-react";
+import Link from "next/link";
+import { X, Layers, Map, ArrowUpRight } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { formatArea, formatDate } from "@/lib/utils";
 import { STATUS_LABELS } from "@/types";
@@ -237,6 +238,27 @@ export default function AcquisitionInfoModal({
             </>
           )}
         </div>
+
+        {/*
+          ДЭЛГЭРЭНГҮЙ рүү шилжих. Дэлгэрэнгүй АМЖИЛТТАЙ татагдсан үед л
+          харуулна: 403 (хуваарилагдаагүй) эсвэл алдааны үед хуудас нь мөн
+          хоосон гарах тул товч санал болгох нь төөрөгдүүлнэ.
+        */}
+        {!isLoading && !isError && acq && (
+          <div
+            className="shrink-0 border-t bg-white/70 px-5 py-3 dark:bg-[#1e1f27]/80"
+            style={{ borderColor: `${color}33` }}
+          >
+            <Link
+              href={`/acquisition/${acquisitionId}`}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: color }}
+            >
+              Дэлгэрэнгүй харах
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

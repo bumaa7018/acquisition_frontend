@@ -22,6 +22,7 @@ import { authStorage } from "@/lib/auth";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { DecisionDraftForm, type DecisionDraftFormValue } from "./_components/decision_draft_form";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 const EMPTY_FILTER = {
   proposal_no: "",
@@ -591,7 +592,7 @@ export default function DecisionDraftListPage() {
 
       {/* Filters */}
       <div className="ap-card w-full min-w-0 p-4">
-        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_minmax(0,0.75fr)_auto_auto] items-center gap-2">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_minmax(0,0.75fr)_auto_auto] items-center gap-2" {...searchOnEnter(applySearch)}>
           <div className="relative min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input

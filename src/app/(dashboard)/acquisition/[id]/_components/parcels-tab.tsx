@@ -18,6 +18,7 @@ import { canAccessParcel, getCurrentOrgId, isExternalSpecialRole, isFinanceSpeci
 import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
 import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
@@ -168,6 +169,12 @@ export function ParcelsTab({
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<SortState | null>(null);
   const [filterForm, setFilterForm] = useState<ParcelFilter>(EMPTY_FILTER);
+
+  // Шүүлт хэрэглэх — товч болон ENTER хоёулаа үүнийг дуудна.
+  function applySearch() {
+    setFilter({ ...filterForm });
+    setPage(1);
+  }
   const [filter, setFilter] = useState<ParcelFilter>(EMPTY_FILTER);
   const [expandedParcel, setExpandedParcel] = useState<string | null>(null);
   const [expandedGrant, setExpandedGrant] = useState<string | null>(null);
@@ -428,7 +435,7 @@ export function ParcelsTab({
             </p>
           )}
 
-          <div className="mt-3 flex w-full items-center gap-2">
+          <div className="mt-3 flex w-full items-center gap-2" {...searchOnEnter(applySearch)}>
             <input
               type="text"
               placeholder="Дугаараар хайх"
@@ -523,10 +530,7 @@ export function ParcelsTab({
               ))}
             </select>
             <button
-              onClick={() => {
-                setFilter({ ...filterForm });
-                setPage(1);
-              }}
+              onClick={applySearch}
               className="h-8 shrink-0 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
             >
               Хайх

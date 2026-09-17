@@ -26,6 +26,7 @@ import {
 import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -1001,7 +1002,7 @@ export default function ReportPage() {
       {/* Table card */}
       <div className="ap-card overflow-hidden">
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+        <div className="flex flex-wrap items-center gap-2 px-5 py-4 border-b border-slate-100 dark:border-[#37394d]" {...searchOnEnter(handleSearch)}>
           <PlanSelect
             value={inPlanCode}
             onChange={setInPlanCode}

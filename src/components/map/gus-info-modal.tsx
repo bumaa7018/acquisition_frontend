@@ -3,6 +3,7 @@ import { X, Map as MapIcon, FileText, CalendarClock, Users, Shield } from "lucid
 import { formatArea, formatDate } from "@/lib/utils";
 import {
   MAP_LAYER_STYLES,
+  staticLayerStyle,
   AGREED_CODE_LAYERS,
   SEC_CODE_LAYERS,
   type MapLayerId,
@@ -205,7 +206,7 @@ export default function GusInfoModal({
     list.find((l) => l.id === layerId) ?? list.find((l) => String(l.code ?? "") === code);
   const parentId: MapLayerId = isSec ? "ca_sec_parcel" : "ca_agreed_parcel";
   const color = sub?.color ?? MAP_LAYER_STYLES[parentId].color;
-  const label = MAP_LAYER_STYLES[layerId as MapLayerId]?.label ?? sub?.label ?? MAP_LAYER_STYLES[parentId].label;
+  const label = staticLayerStyle(layerId)?.label ?? sub?.label ?? MAP_LAYER_STYLES[parentId].label;
 
   // Гарчиг: тухайн объектын НЭР (байвал), эс бөгөөс дэд төрлийн нэр.
   const heading = text(properties.work_name) || text(properties.ajliin_ner) || text(properties.name) || label;

@@ -18,6 +18,14 @@ import {
   SEC_CODE_LAYER_IDS,
   geoServerName,
   combineCql,
+  staticLayerStyle,
+  parcelStatusLayerDefs,
+  parcelStatusLayerId,
+  parcelStatusIdFromLayer,
+  PARCEL_STATUS_SOURCE,
+  PARCEL_STATUS_GROUP_ID,
+  PARCEL_STATUS_Z_BASE,
+  PARCEL_STATUS_DEFAULT_COLOR,
 } from "../src/components/map/layer-config.ts";
 
 // Дроны ортофото нь СУУРЬ зургийн дээр, давхаргын хэсэгт байгаа БҮХ давхаргын
@@ -312,4 +320,79 @@ test("хамгаалалтын зурвасын өнгө/код/цэг SLD-тэ�
       `${name}: цэгийн өнгө ${sub.color} байх ёстой`,
     );
   }
+});
+
+// ── Нэгж талбарын ТӨЛӨВИЙН давхаргууд — бүртгэлээс динамикаар ──────────────
+//
+// Энэ бүлэг нь яг ТЭР алдааг барина: өмнө нь төлөвийн давхаргууд код дотор
+// хатуу 6 мөр байсан тул "Нэгж талбарын статус" цэсээр шинэ төлөв нэмэхэд
+// газрын зураг дээр огт гарч ирдэггүй байв.
+
+/** Бүртгэлийн жишээ — 6 стандарт төлөв дээр ШИНЭ (7 дахь) нь нэмэгдсэн. */
+const REGISTRY = [
+  { id: 0, name: "Хүлээгдэж буй", color: "#64748b" },
+  { id: 1, name: "Зөвшилцөх шатандаа", color: "#facc15" },
+  { id: 2, name: "Үнэлгээ хийх", color: "#f97316" },
+  { id: 3, name: "Нөлөөлөгдсөн гарсан", color: "#3b82f6" },
+  { id: 4, name: "Татгалзсан", color: "#ef4444" },
+  { id: 5, name: "Чөлөөлсөн", color: "#22c55e" },
+  { id: 6, name: "Шинэ төлөв", color: "#a855f7" },
+];
+
+test("төлөвийн давхаргууд бүртгэлээс бүрэн үүснэ (ШИНЭ төлөв ч орно)", () => {
+  const defs = parcelStatusLayerDefs(REGISTRY);
+  assert.equal(defs.length, REGISTRY.length, "бүртгэлийн мөр бүрд давхарга үүсэх ёстой");
+
+  const added = defs.find((d) => d.id === "v_parcel_s6");
+  assert.ok(added, "шинэ төлөвийн давхарга үүсээгүй — энэ нь засварлаж буй алдаа");
+  assert.equal(added.label, "Шинэ төлөв");
+  assert.equal(added.color, "#a855f7", "өнгө нь бүртгэлээс ирэх ёстой");
+  assert.equal(added.cql, "status=6", "төлөвөө CQL-ээр ялгах ёстой");
+  assert.equal(added.group, PARCEL_STATUS_GROUP_ID);
+});
+
+test("бүх төлөвийн давхарга GeoServer дээрх НЭГ эх давхаргыг заана", () => {
+  for (const d of parcelStatusLayerDefs(REGISTRY)) {
+    assert.equal(d.source, PARCEL_STATUS_SOURCE, `${d.id}: эх давхарга буруу`);
+    // WMS `LAYERS`-д яг эх давхаргын нэр очих ёстой — виртуал нэр БИШ.
+    assert.equal(geoServerName(d.id), PARCEL_STATUS_SOURCE, `${d.id}: geoServerName буруу`);
+  }
+});
+
+test("өнгө тохируулаагүй төлөв саарал өгөгдмөлтэй (SLD-ийнхтэй ижил)", () => {
+  const [def] = parcelStatusLayerDefs([{ id: 9, name: "Өнгөгүй" }]);
+  assert.equal(def.color, PARCEL_STATUS_DEFAULT_COLOR);
+});
+
+test("давхаргын id ↔ төлөвийн дугаар хоёр тийшээ хөрвөнө", () => {
+  assert.equal(parcelStatusLayerId(6), "v_parcel_s6");
+  assert.equal(parcelStatusIdFromLayer("v_parcel_s6"), 6);
+  assert.equal(parcelStatusIdFromLayer("v_parcel_s0"), 0);
+  // Төлөвийнх БИШ давхаргууд null буцаана — эс бөгөөс хилийн давхаргуудыг
+  // төлөв гэж андуурч, өнгө/шүүлтийг нь эвдэнэ.
+  assert.equal(parcelStatusIdFromLayer("v_parcel_acquisition"), null);
+  assert.equal(parcelStatusIdFromLayer("v_acquisition_plan"), null);
+  assert.equal(parcelStatusIdFromLayer("au2"), null);
+});
+
+test("төлөвийн давхаргууд эрэмбээрээ давхцалгүй zIndex авна", () => {
+  const defs = parcelStatusLayerDefs(REGISTRY);
+  const zs = defs.map((d) => d.zIndex);
+  assert.equal(new Set(zs).size, zs.length, "zIndex давхцаж болохгүй");
+  assert.equal(zs[0], PARCEL_STATUS_Z_BASE);
+  for (let i = 1; i < zs.length; i++) {
+    assert.ok(zs[i] > zs[i - 1], "бүртгэлийн эрэмбээр өсөх ёстой");
+  }
+  // Дроны ортофотогийн дээр байх ёстой (бусад давхаргуудтай ижил дүрэм).
+  for (const z of zs) assert.ok(z > DRONE_Z_INDEX, "дроны зургийн дээр байх ёстой");
+});
+
+test("төлөвийн давхаргууд ТОГТМОЛ хүснэгтэд байхгүй (эх сурвалж нь бүртгэл)", () => {
+  // Хатуу мөр үлдвэл бүртгэлийнхтэй зөрж, хоёр өөр өнгө/нэр үүснэ.
+  for (const id of ["v_parcel_s0", "v_parcel_s5", "v_parcel_s6"]) {
+    assert.equal(MAP_LAYER_STYLES[id], undefined, `${id}: тогтмол хүснэгтэд үлдсэн байна`);
+    assert.equal(staticLayerStyle(id), undefined, `${id}: staticLayerStyle утга буцаав`);
+  }
+  // Харин хилийн давхаргууд ХЭВЭЭР тогтмол хүснэгтэд байна.
+  assert.ok(staticLayerStyle("v_acquisition_plan"), "хилийн давхарга алга болжээ");
 });
