@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { parcelApi, landApi, documentTypeApi } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
-import { getParcelStatusStyle } from "@/types";
+import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
@@ -135,9 +135,13 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
     if (selected) updateStatusMutation.mutate(selected.id);
   }
 
+  // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС. Хатуу хүснэгтэд зөвхөн
+  // анхны 6 төлөв байдаг тул шинэ төлөв саарлаар харагддаг байв.
+  const statusStyle = useParcelStatusStyle();
+
   const currentStatusId = parcelFull?.status_id ?? parcelFull?.status;
   const currentStatusName = parcelFull?.status_name;
-  const currentStyle = getParcelStatusStyle(currentStatusId, currentStatusName ?? "");
+  const currentStyle = statusStyle(currentStatusId, currentStatusName);
   const isMovingFromEvaluationToReleased =
     currentStatusName === EVALUATION_STATUS_NAME && selected?.name === RELEASED_STATUS_NAME;
   const blocksForUnapprovedCompensation = isMovingFromEvaluationToReleased && !compApproved;
@@ -220,7 +224,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
             <div className="p-5">
               <ol className="relative border-l-2 border-slate-100 dark:border-[#37394d] space-y-0">
                 {history.map((h, idx) => {
-                  const style = getParcelStatusStyle(h.status_id, h.status_name);
+                  const style = statusStyle(h.status_id, h.status_name);
                   const isLatest = idx === 0;
                   return (
                     <li key={h.id} className="ml-5 pb-6 last:pb-0">
@@ -310,7 +314,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
 
               <div className="p-3 space-y-1.5">
                 {availableStatuses.map((s) => {
-                  const style = getParcelStatusStyle(s.id, s.name);
+                  const style = statusStyle(s.id, s.name);
                   return (
                     <button
                       key={s.id}
@@ -379,7 +383,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </div>
 
                 {(() => {
-                  const style = getParcelStatusStyle(selected.id, selected.name);
+                  const style = statusStyle(selected.id, selected.name);
                   return (
                     <div
                       className="rounded-xl px-4 py-3 flex items-center gap-2"

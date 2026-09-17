@@ -52,3 +52,8 @@ export const PARCEL_STATUS_GROUP = {
   label: "Нэгж талбарын хил",
   color: "#22c55e",
 };
+
+
+// Төлөвийн өнгөний hook нь `@/lib/use-parcel-status-style`-д — газрын зургаас
+// гадна (жагсаалт, дэлгэрэнгүй хуудас) ч хэрэглэгддэг тул тэнд төвлөрүүлэв.
+export { useParcelStatusColors } from "@/lib/use-parcel-status-style";

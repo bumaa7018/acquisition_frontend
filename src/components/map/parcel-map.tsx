@@ -32,6 +32,7 @@ import {
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
 import { PARCEL_STATUS_STYLES } from "@/types";
+import { useParcelStatusColors } from "./use-parcel-status-layers";
 import { logger } from "@/lib/logger";
 
 const WMS_LAYER_DEFS: (MapLayerDef & {
@@ -64,12 +65,24 @@ const VECTOR_LAYER_DEFS: MapLayerDef[] = [
 
 const ALL_LAYER_DEFS = [...WMS_LAYER_DEFS, ...VECTOR_LAYER_DEFS];
 
+/**
+ * Нэгж талбарын өнгө — `parcel_status` БҮРТГЭЛЭЭС.
+ *
+ * OpenLayers энэ функцийг объект зурах бүрд дуудна. Бүртгэл нь асинхроноор
+ * ирдэг тул тогтмолоор биш, ref-ээр уншина: өнгө ирэхэд давхаргыг дахин
+ * зурахад шинэ утга шууд хэрэгжинэ. Өмнө нь код дотор хатуу бичсэн хүснэгт
+ * ашигладаг байсан тул бүртгэлд өнгө солиход энэ зураг хуучин өнгөтэй хоцордог байв.
+ */
+const statusColorRef: { current: Map<number, string> } = { current: new Map() };
+
 function parcelStyle(feature: { get: (k: string) => unknown }): Style {
   const sid = (feature.get("status_id") as number) ?? 0;
-  const s = PARCEL_STATUS_STYLES[sid] ?? PARCEL_STATUS_STYLES[0];
+  const color =
+    statusColorRef.current.get(sid) ??
+    (PARCEL_STATUS_STYLES[sid] ?? PARCEL_STATUS_STYLES[0]).color;
   return new Style({
-    stroke: new Stroke({ color: s.color, width: 2 }),
-    fill:   new Fill({ color: `${s.color}cc` }),
+    stroke: new Stroke({ color, width: 2 }),
+    fill:   new Fill({ color: `${color}cc` }),
   });
 }
 
@@ -94,6 +107,14 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
   const olMap        = useRef<OLMap | null>(null);
   const wmsLayers    = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const vectorLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
+
+  // Төлөвийн өнгө бүртгэлээс. Ирэхэд вектор давхаргыг дахин зуруулна —
+  // эс бөгөөс анхны зурагдсан өнгө нь өгөгдмөлөөрөө үлдэнэ.
+  const statusColors = useParcelStatusColors();
+  useEffect(() => {
+    statusColorRef.current = statusColors;
+    Object.values(vectorLayers.current).forEach((l) => l.changed());
+  }, [statusColors]);
   const wktFormat    = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
 

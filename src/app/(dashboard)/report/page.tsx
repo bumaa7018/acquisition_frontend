@@ -27,6 +27,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -570,6 +571,9 @@ function ProgressModal({
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function ReportPage() {
+  // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
+  const statusStyle = useParcelStatusStyle();
+
   // Input state — хэрэглэгч бичиж буй утга
   const [inPlanCode, setInPlanCode] = useState("");
   const [inAcqId, setInAcqId] = useState("");
@@ -930,7 +934,7 @@ export default function ReportPage() {
                     label={s.name || "—"}
                     value={s.count}
                     maxVal={Math.max(...stats.statuses.map((x) => x.count))}
-                    color={getParcelStatusStyle(s.status, s.name).color}
+                    color={statusStyle(s.status, s.name).color}
                   />
                 ))}
               </div>

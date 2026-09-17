@@ -1,0 +1,788 @@
+<title>Газар чөлөөлөлтийн систем</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@500;600;700;800&family=PT+Sans:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ── Тэмдэглэгээ ───────────────────────────────────────────────────────────
+   Хэмжилтийн хуудасны өнгө: судалгааны цаас, бэхний хар, кадастрын тор.
+   Хоёр өнгө (шавар = PHP хэв маяг, номин = Газар чөлөөлөлтийн систем) нь өнгөний ялгарлын
+   шалгуурыг гэрэл, харанхуй хоёуланд давсан.                              */
+:root {
+  --paper:      #fafcfb;
+  --surface:    #ffffff;
+  --ink:        #10202b;
+  --ink-2:      #40545f;
+  --ink-3:      #6d818b;
+  --rule:       #cbd7d5;
+  --rule-soft:  #dde5e3;
+  --accent:     #0aa2ad;
+  --legacy:     #b8722c;
+  --grid:       rgba(16, 32, 43, 0.032);
+  --shade:      rgba(16, 32, 43, 0.05);
+
+  --display: "Golos Text", "Helvetica Neue", Arial, sans-serif;
+  --body:    "PT Sans", "Segoe UI", Arial, sans-serif;
+  --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:     #0c161c;
+    --surface:   #121f27;
+    --ink:       #e8eeed;
+    --ink-2:     #a9bcc2;
+    --ink-3:     #7a8f97;
+    --rule:      #2a3b44;
+    --rule-soft: #1f2e36;
+    --accent:    #159aa6;
+    --legacy:    #c07a34;
+    --grid:      rgba(232, 238, 237, 0.05);
+    --shade:     rgba(232, 238, 237, 0.045);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:     #0c161c;
+  --surface:   #121f27;
+  --ink:       #e8eeed;
+  --ink-2:     #a9bcc2;
+  --ink-3:     #7a8f97;
+  --rule:      #2a3b44;
+  --rule-soft: #1f2e36;
+  --accent:    #159aa6;
+  --legacy:    #c07a34;
+  --grid:      rgba(232, 238, 237, 0.05);
+  --shade:     rgba(232, 238, 237, 0.045);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  /* Кадастрын хэмжилтийн тор — 32px алхамтай, маш бүдэг. */
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sheet { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
+
+/* ── Гарчиг ──────────────────────────────────────────────────────────────── */
+.masthead { padding-block: 46px 28px; border-bottom: 2px solid var(--ink); }
+.eyebrow {
+  font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 18px;
+}
+h1 {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(27px, 4.1vw, 42px); line-height: 1.1;
+  letter-spacing: -0.022em; margin: 0; text-wrap: balance;
+}
+h1 .thin { font-weight: 500; color: var(--ink-2); display: block; }
+.lede { margin: 18px 0 0; max-width: 64ch; font-size: clamp(15px, 1.6vw, 17px); color: var(--ink-2); }
+
+/* ── Хэсэг ───────────────────────────────────────────────────────────────── */
+section { padding-block: 52px; border-bottom: 1px solid var(--rule); }
+section:last-of-type { border-bottom: 0; }
+.sechead { display: flex; align-items: baseline; gap: 14px; margin-bottom: 8px; }
+.secnum { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); letter-spacing: 0.06em; }
+h2 {
+  font-family: var(--display); font-weight: 700;
+  font-size: clamp(23px, 3.4vw, 31px); letter-spacing: -0.015em;
+  line-height: 1.15; margin: 0; text-wrap: balance;
+}
+.secsub { margin: 0 0 30px; max-width: 66ch; color: var(--ink-2); }
+
+/* ── Хоёр бүтэц ──────────────────────────────────────────────────────────── */
+.pair { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.arch { background: var(--surface); border: 1px solid var(--rule); padding: 22px; }
+.arch.now { border-color: var(--accent); border-width: 2px; padding: 21px; }
+.archtag {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 4px;
+}
+.arch.old .archtag { color: var(--legacy); }
+.arch.now .archtag { color: var(--accent); }
+.arch h3 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0 0 16px; letter-spacing: -0.01em; }
+.arch svg { width: 100%; height: auto; max-width: 100%; display: block; }
+.archlist { margin: 16px 0 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.archlist li { display: grid; grid-template-columns: 14px 1fr; gap: 9px; font-size: 14.5px; color: var(--ink-2); line-height: 1.5; }
+.archlist .mk { font-family: var(--mono); font-weight: 600; }
+.arch.old .mk { color: var(--legacy); }
+.arch.now .mk { color: var(--accent); }
+
+/* ── Тоон заалт ──────────────────────────────────────────────────────────── */
+.readouts { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.readout { background: var(--surface); padding: 20px 18px; }
+.readout .k {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.07em;
+  text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px; min-height: 2.4em;
+}
+.readout .v {
+  font-family: var(--display); font-weight: 800; font-size: 38px; line-height: 1;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--accent);
+}
+.readout .v small { font-size: 17px; font-weight: 600; letter-spacing: 0; }
+.readout .sub { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin: 9px 0 0; }
+
+figure { margin: 30px 0 0; }
+figcaption { font-size: 13px; color: var(--ink-3); margin-top: 12px; max-width: 72ch; }
+.chartwrap { overflow-x: auto; }
+.chartwrap svg { display: block; min-width: 480px; width: 100%; height: auto; }
+
+/* ── Тайлбарын хос ───────────────────────────────────────────────────────── */
+.cols { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.note h3 { font-family: var(--display); font-size: 17px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
+.note.old h3 { color: var(--legacy); }
+.note.now h3 { color: var(--accent); }
+.note p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+/* ── Чадвар ──────────────────────────────────────────────────────────────── */
+.caps { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
+@media (min-width: 840px) { .caps.six { grid-template-columns: repeat(3, 1fr); } }
+.cap { background: var(--surface); padding: 19px 18px; }
+.cap .n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.08em; }
+.cap h3 { font-family: var(--display); font-size: 16px; font-weight: 700; margin: 7px 0 6px; }
+.cap p { margin: 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.5; }
+
+/* ── Хүснэгт ─────────────────────────────────────────────────────────────── */
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 580px; background: var(--surface); }
+caption { text-align: left; font-size: 13px; color: var(--ink-3); padding-bottom: 10px; }
+th, td { text-align: left; padding: 13px 14px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; font-size: 14.5px; }
+thead th {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--rule); font-weight: 500;
+}
+tbody th { font-family: var(--display); font-weight: 600; font-size: 14.5px; color: var(--ink); width: 26%; }
+td.old { color: var(--ink-2); }
+td.now { color: var(--ink); background: var(--shade); }
+
+footer { padding-block: 34px 0; border-top: 2px solid var(--ink); margin-top: 8px; }
+footer p { margin: 0 0 10px; font-size: 13px; color: var(--ink-3); max-width: 82ch; }
+footer .m { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.04em; }
+
+
+/* ── ХАРЬЦУУЛАХ ХҮСНЭГТ: сэдэв бүр хоёр талаа зэрэгцүүлнэ ───────────────
+   Утгыг ӨНГӨӨР биш ТЭМДГЭЭР (✓ / ✗) дамжуулна — өнгө ялгахгүй хүн, хар цагаан
+   хэвлэлт хоёуланд ижил уншигдана. Өнгө нь зөвхөн давхар бэхэлгээ.          */
+/* Графикийн тайлбар — өнгөт дөрвөлжин + шошго. */
+.legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 0 0 14px; padding: 0; list-style: none; }
+.legend li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.swatch { width: 13px; height: 13px; border-radius: 3px; flex: none; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.cmpwrap { overflow-x: auto; }
+table.cmp { border-collapse: collapse; width: 100%; min-width: 620px; background: var(--surface); }
+table.cmp thead th {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.09em; text-transform: uppercase;
+  text-align: left; padding: 12px 16px;
+  border-bottom: 2px solid var(--ink); color: var(--ink-3);
+}
+table.cmp thead th.old { color: var(--legacy); }
+table.cmp thead th.new { color: var(--accent); }
+table.cmp tbody th {
+  font-family: var(--display); font-weight: 700; font-size: 14.5px;
+  text-align: left; padding: 14px 16px; vertical-align: top;
+  color: var(--ink); width: 21%;
+  border-bottom: 1px solid var(--rule-soft);
+}
+table.cmp td {
+  padding: 14px 16px; vertical-align: top; font-size: 14.5px; line-height: 1.5;
+  border-bottom: 1px solid var(--rule-soft);
+}
+table.cmp td.old { color: var(--ink-2); width: 39.5%; }
+table.cmp td.new { color: var(--ink); background: var(--shade); width: 39.5%; }
+table.cmp .mk {
+  display: inline-block; width: 1.25em; font-weight: 700;
+  font-size: 15px; line-height: 1.4; vertical-align: top;
+}
+table.cmp td.old .mk { color: var(--legacy); }
+table.cmp td.new .mk { color: var(--accent); }
+table.cmp .txt { display: inline-block; width: calc(100% - 1.4em); vertical-align: top; }
+table.cmp tbody tr:last-child th,
+table.cmp tbody tr:last-child td { border-bottom: 0; }
+
+/* ── Дэд системийн зураглал ─────────────────────────────────────────────── */
+.sysmap { background: var(--surface); border: 1px solid var(--rule); padding: 20px; overflow-x: auto; }
+.sysmap svg { display: block; min-width: 620px; width: 100%; height: auto; }
+
+/* ── Кэйс ───────────────────────────────────────────────────────────────── */
+.cases { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+.case { background: var(--surface); display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--rule); }
+.case > div { background: var(--surface); padding: 15px 17px; }
+.case .before { color: var(--ink-2); }
+.case .after { background: var(--shade); }
+.case h4 {
+  font-family: var(--display); font-size: 14.5px; font-weight: 700;
+  margin: 0 0 6px; color: var(--ink);
+}
+.case p { margin: 0; font-size: 14px; line-height: 1.5; }
+.case .lbl {
+  display: block; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px;
+}
+.case .before .lbl { color: var(--legacy); }
+.case .after .lbl { color: var(--accent); }
+@media (max-width: 620px) { .case { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <p class="eyebrow">Нийслэлийн газрын алба · Системийн танилцуулга</p>
+    <h1>Газар чөлөөлөлтийн<br>цахим систем
+    </h1>
+    <p class="lede">
+      Газар чөлөөлөлтийн системийг PHP-Laravel хэв маягийн <b>нэг том блок</b> биш,
+      <b>салангид хэсгүүдээр</b> барьсан. Гаднаас зөвхөн дэлгэц харагдаж,
+      логик, газрын зураг, өгөгдлийн сан нь хаалттай бүсэд ажиллана. Доор
+      энэ сонголт хурд, аюулгүй байдал, холболтын чадварт юу өгч байгааг харуулав.
+    </p>
+  </header>
+
+  <!-- 01 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">01</span><h2>Системийг бүрдүүлэгч хэсгүүд</h2></div>
+    <p class="secsub">
+      Энэ бол нэг программ биш, хоорондоо тодорхой хаалгаар холбогдсон
+      <b>есөн бие даасан хэсэг</b>. Хэсэг бүр өөрийн ажилтай, тусад нь
+      шинэчлэгдэж, тусад нь хүчин чадлаа нэмнэ.
+    </p>
+
+    <div class="sysmap">
+      <svg viewBox="0 0 700 340" role="img" aria-label="Системийн бүрэлдэхүүн хэсгүүдийн зураглал: гадна талд хэрэглэгч ба бусад систем; хаалганы давхаргад дэлгэц; хаалттай бүсэд логик, өгөгдлийн сан, газрын зураг, файлын сан; хяналтын бүсэд лог цуглуулагч, лог сан, хяналтын самбар; гадаад холбоост ГУС болон ХУР.">
+        <!-- Гадна -->
+        <text x="8" y="16" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1.2" fill="var(--ink-3)">ГАДНА</text>
+        <rect x="8" y="26" width="112" height="34" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+        <text x="64" y="47" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Хэрэглэгч</text>
+        <rect x="8" y="68" width="112" height="34" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+        <text x="64" y="89" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Бусад систем</text>
+
+        <path d="M122 45 L156 45" stroke="var(--accent)" stroke-width="2"/>
+        <path d="M150 40 L156 45 L150 50" fill="none" stroke="var(--accent)" stroke-width="2"/>
+        <path d="M122 85 L156 85" stroke="var(--accent)" stroke-width="2"/>
+        <path d="M150 80 L156 85 L150 90" fill="none" stroke="var(--accent)" stroke-width="2"/>
+
+        <!-- Хаалга -->
+        <rect x="158" y="26" width="84" height="76" fill="var(--accent)" opacity="0.15" stroke="var(--accent)" stroke-width="2"/>
+        <text x="200" y="56" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12.5" fill="var(--ink)">Дэлгэц</text>
+        <text x="200" y="72" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="var(--ink-3)">ХААЛГА · ЭРХ</text>
+
+        <!-- Хаалттай бүс -->
+        <rect x="264" y="14" width="238" height="196" fill="var(--accent)" opacity="0.06"/>
+        <rect x="264" y="14" width="238" height="196" fill="none" stroke="var(--accent)" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="383" y="29" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="1.2" fill="var(--accent)">ХААЛТТАЙ БҮС</text>
+
+        <path d="M244 64 L268 64" stroke="var(--accent)" stroke-width="2"/>
+        <path d="M262 59 L268 64 L262 69" fill="none" stroke="var(--accent)" stroke-width="2"/>
+
+        <rect x="278" y="40" width="210" height="30" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="383" y="59" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Логик — дүрэм журам</text>
+        <rect x="278" y="80" width="210" height="30" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="383" y="99" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Өгөгдлийн сан + газарзүй</text>
+        <rect x="278" y="120" width="210" height="30" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="383" y="139" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Газрын зургийн сервер</text>
+        <rect x="278" y="160" width="210" height="30" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="383" y="179" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="12" fill="var(--ink-2)">Файлын сан</text>
+
+        <!-- Хяналтын бүс -->
+        <rect x="264" y="226" width="238" height="102" fill="var(--legacy)" opacity="0.06"/>
+        <rect x="264" y="226" width="238" height="102" fill="none" stroke="var(--legacy)" stroke-width="1" stroke-dasharray="4 3"/>
+        <text x="383" y="241" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="1.2" fill="var(--legacy)">ХЯНАЛТЫН БҮС</text>
+        <rect x="278" y="250" width="66" height="28" fill="var(--surface)" stroke="var(--legacy)" stroke-width="1.5"/>
+        <text x="311" y="268" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="10.5" fill="var(--ink-2)">Цуглуулагч</text>
+        <rect x="350" y="250" width="66" height="28" fill="var(--surface)" stroke="var(--legacy)" stroke-width="1.5"/>
+        <text x="383" y="268" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="10.5" fill="var(--ink-2)">Логийн сан</text>
+        <rect x="422" y="250" width="66" height="28" fill="var(--surface)" stroke="var(--legacy)" stroke-width="1.5"/>
+        <text x="455" y="268" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="10.5" fill="var(--ink-2)">Самбар</text>
+        <text x="383" y="300" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="11" fill="var(--ink-3)">алдаа, ачаалал, хандалтыг тасралтгүй хардаг</text>
+        <path d="M383 196 L383 244" stroke="var(--legacy)" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <path d="M378 238 L383 244 L388 238" fill="none" stroke="var(--legacy)" stroke-width="1.5"/>
+
+        <!-- Гадаад эх сурвалж -->
+        <text x="524" y="29" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="1.2" fill="var(--ink-3)">ГАДААД ЭХ СУРВАЛЖ</text>
+        <rect x="524" y="40" width="168" height="34" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+        <text x="608" y="61" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="11.5" fill="var(--ink-2)">ГУС — төлөвлөгөө</text>
+        <rect x="524" y="82" width="168" height="34" fill="var(--surface)" stroke="var(--rule)" stroke-width="1.5"/>
+        <text x="608" y="103" text-anchor="middle" font-family="PT Sans, sans-serif" font-size="11.5" fill="var(--ink-2)">ХУР — өмчлөл</text>
+        <path d="M490 55 L520 55" stroke="var(--ink-3)" stroke-width="1.5"/>
+        <path d="M514 50 L520 55 L514 60" fill="none" stroke="var(--ink-3)" stroke-width="1.5"/>
+        <path d="M490 99 L520 99" stroke="var(--ink-3)" stroke-width="1.5"/>
+        <path d="M514 94 L520 99 L514 104" fill="none" stroke="var(--ink-3)" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- 02 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">02</span><h2>PHP-Laravel хэв маягтай зэрэгцүүлбэл</h2></div>
+    <p class="secsub">
+      Сэдэв бүрийг <b>хоёр талаар нь зэрэгцүүлэн</b> харуулав — зүүн талд
+      түгээмэл хувилбар, баруун талд Газар чөлөөлөлтийн систем.
+    </p>
+
+    <div class="cmpwrap">
+      <table class="cmp">
+        <caption class="visually-hidden">PHP-Laravel хэв маяг ба Газар чөлөөлөлтийн системийн харьцуулалт</caption>
+        <thead>
+          <tr>
+            <th scope="col">Сэдэв</th>
+            <th scope="col" class="old">✗ &nbsp;PHP-Laravel хэв маяг</th>
+            <th scope="col" class="new">✓ &nbsp;Газар чөлөөлөлтийн систем</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Дотоод зохион байгуулалт</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Дэлгэц, логик, газрын зураг, өгөгдлийн сан бүгд <b>нэг программ дотор</b>. Гаднаас нэг хаалгаар орвол бүгдэд нь хүрнэ.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Есөн салангид хэсэг, хоорондоо тодорхой хаалгаар холбогдоно. Гаднаас зөвхөн <b>дэлгэц</b> харагдана.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Нэг дэлгэц нээхэд</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Хүсэлт дотроо ажлаа <b>дараалуулна</b>. Найман асуулт хэрэгтэй дэлгэц найманых нь хугацааг нийлүүлж хүлээнэ.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Найман асуулт <b>нэг мөчид</b> явна. Хамгийн удаан нь дуусахад дэлгэц бэлэн.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Хүн олширвол</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Хэрэглэгч бүрд тусдаа процесс. Тоо нэмэгдэхэд санах ой дүүрч, бүх систем удаашрана.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Нэг программ мянга мянган хүсэлтийг зэрэг авна. Хэрэглэгч нэмэгдэхэд процесс хуримтлагдахгүй.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Бусад системтэй холбогдох</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Дэлгэц, логик нь <b>салаагүй</b> тул гаднаас дуудах бэлэн цэг байхгүй. Өгөгдлийн сан руу шууд орох, эсвэл дотор нь тусгай код нэмэх шаардлагатай.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Бүх үйлдэл аль хэдийн хаалгаар явдаг тул бусад систем <b>яг тэр цэгээр</b> холбогдоно. Өгөгдлийн санд хүрэхгүй.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Жижиг засвар хийхэд</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Нэг мөр засахад бүх системийг дахин байрлуулна. Тэр хугацаанд ажил зогсоно.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Зөвхөн хөндсөн хэсгээ шинэчилнэ. Ачаалал ирсэн хэсгээ л томсгоно — бүгдийг биш.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Хяналт, алдаа илрүүлэлт</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Алдаа гарвал серверийн файл уншиж хайна. Хэдэн системд юу болсныг нэгтгэж харах бэлэн арга байхгүй.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Бүх хэсгийн лог нэг дор цуглаж график болно. Асуудлыг <b>хэрэглэгч мэдэхээс өмнө</b> харна.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Газрын зургийн аюулгүй байдал</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Зургийн сервер ихэвчлэн шууд нээлттэй. Хаяг нь мэдэгдвэл нэгж талбарын геометрийг гаднаас татаж болно.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Зургийн сервер гаднаас хандах боломжгүй. Хүсэлт бүр хаалгаар дамжиж, хэрэглэгчийн эрхээр <b>хумигдана</b>.</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 03 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">03</span><h2>Хурд — юунаас гардаг вэ</h2></div>
+    <p class="secsub">
+      Хяналтын самбар нээхэд систем өгөгдлийн сангаас найман өөр зүйл асуух
+      хэрэгтэй болдог. Асуултуудаа хэрхэн тавих нь бүхэл бүтэн ялгаа үүсгэнэ.
+    </p>
+
+    <div class="chartwrap">
+      <svg viewBox="0 0 700 208" role="img" aria-label="Дээд эгнээнд найман асуулт нэг нэгнийхээ ард дараалан явж удаан дуусаж байна; доод эгнээнд ижил найман асуулт зэрэг явж хурдан дуусаж байна.">
+        <text x="10" y="18" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1" fill="var(--legacy)">PHP-LARAVEL · ДАРААЛЖ</text>
+        <text x="10" y="35" font-family="PT Sans, sans-serif" font-size="12.5" fill="var(--ink-3)">нэг нь дуустал нөгөө нь хүлээнэ</text>
+        <rect x="10" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.95"/>
+        <rect x="86" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.9"/>
+        <rect x="162" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.85"/>
+        <rect x="238" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.8"/>
+        <rect x="314" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.75"/>
+        <rect x="390" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.7"/>
+        <rect x="466" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.65"/>
+        <rect x="542" y="46" width="72" height="17" rx="4" fill="var(--legacy)" opacity="0.6"/>
+        <line x1="10" y1="74" x2="614" y2="74" stroke="var(--rule)" stroke-width="1"/>
+        <text x="622" y="78" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--legacy)">удаан</text>
+
+        <text x="10" y="120" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="1" fill="var(--accent)">ГАЗАР ЧӨЛӨӨЛӨЛТИЙН СИСТЕМ · ЗЭРЭГ</text>
+        <text x="10" y="137" font-family="PT Sans, sans-serif" font-size="12.5" fill="var(--ink-3)">найман асуулт нэг мөчид</text>
+        <rect x="10" y="148" width="72" height="8" rx="3" fill="var(--accent)"/>
+        <rect x="10" y="158" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.92"/>
+        <rect x="10" y="168" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.84"/>
+        <rect x="10" y="178" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.76"/>
+        <rect x="86" y="148" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.92"/>
+        <rect x="86" y="158" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.84"/>
+        <rect x="86" y="168" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.76"/>
+        <rect x="86" y="178" width="72" height="8" rx="3" fill="var(--accent)" opacity="0.68"/>
+        <line x1="10" y1="194" x2="158" y2="194" stroke="var(--rule)" stroke-width="1"/>
+        <text x="166" y="198" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--accent)">хурдан</text>
+      </svg>
+    </div>
+
+    <div class="cmpwrap" style="margin-top: 30px">
+      <table class="cmp">
+        <caption class="visually-hidden">Хурдны шалтгааныг хоёр системээр зэрэгцүүлсэн</caption>
+        <thead>
+          <tr>
+            <th scope="col">Хурдад нөлөөлөх зүйл</th>
+            <th scope="col" class="old">✗ &nbsp;PHP-Laravel хэв маяг</th>
+            <th scope="col" class="new">✓ &nbsp;Газар чөлөөлөлтийн систем</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Нэг хүсэлтийн доторх ажил</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Дараалж явна — нэг нь дуустал нөгөө нь хүлээнэ.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Зэрэг явна — бие даасан асуултууд нэг мөчид.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Найман асуулттай дэлгэц</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Найман асуултын хугацаа <b>нийлбэр болно</b>.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Хамгийн удаан асуултын хугацаа л зарцуулагдана.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Программ ачаалагдах</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Хүсэлт бүрд программ дахин ачаалагдана.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Нэг удаа ачаалагдаад санах ойд сууна — давтан зардалгүй.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Олон хэрэглэгч зэрэг</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Хэрэглэгч бүрд тусдаа процесс; санах ой хурдан дүүрнэ.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Нэг программ мянга мянган хүсэлтэд зэрэг үйлчилнэ.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Хүнд тооцоо давтагдахад</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Ижил тооцоо дэлгэцийн хэсэг бүрд дахин хийгдэнэ.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Нэг удаа бодоод бүх хэсэгтээ дамжуулна.</span></td>
+          </tr>
+          <tr>
+            <th scope="row">Хэмжих, шалгах</th>
+            <td class="old"><span class="mk" aria-hidden="true">✗</span><span class="txt">Хурдыг тогтмол хэмжих бэлэн арга байхгүй.</span></td>
+            <td class="new"><span class="mk" aria-hidden="true">✓</span><span class="txt">Хэмжилт автоматжсан — өөрчлөлт хурдыг муутгавал шууд барина.</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <figure style="margin-top: 30px">
+      <p class="secsub" style="margin-bottom: 16px">
+        Ижил дэлгэцийг хоёр аргаар хэмжсэн үр дүн. Нэг хуваарь дээр
+        зэрэгцүүлсэн тул зөрүү нь нүдэнд шууд харагдана.
+      </p>
+      <ul class="legend">
+        <li><span class="swatch" style="background: var(--legacy)"></span>Ажлаа дараалуулбал</li>
+        <li><span class="swatch" style="background: var(--accent)"></span>Газар чөлөөлөлтийн систем — зэрэг</li>
+      </ul>
+      <div class="chartwrap">
+        <svg viewBox="0 0 700 246" role="img" aria-label="Гурван дэлгэцийн хугацааг хоёр аргаар зэрэгцүүлсэн. Хяналтын самбар: дараалуулбал 148 миллисекунд, зэрэг 77. Самбар жилээр шүүсэн: дараалуулбал 518, зэрэг 219. Жагсаалтууд: хоёуланд 2 миллисекунд.">
+          <line x1="250" y1="26" x2="250" y2="206" stroke="var(--rule)" stroke-width="1"/>
+          <line x1="250" y1="206" x2="676" y2="206" stroke="var(--rule)" stroke-width="1"/>
+          <line x1="405" y1="26" x2="405" y2="206" stroke="var(--rule-soft)" stroke-width="1"/>
+          <line x1="560" y1="26" x2="560" y2="206" stroke="var(--rule-soft)" stroke-width="1"/>
+          <text x="250" y="224" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-3)">0</text>
+          <text x="405" y="224" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-3)">200 мс</text>
+          <text x="560" y="224" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="var(--ink-3)">400 мс</text>
+
+          <text x="240" y="47" text-anchor="end" font-family="PT Sans, sans-serif" font-size="13.5" font-weight="700" fill="var(--ink)">Хяналтын самбар</text>
+          <rect x="250" y="34" width="115" height="16" rx="4" fill="var(--legacy)"/>
+          <text x="373" y="46" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">148 мс</text>
+          <rect x="250" y="54" width="60" height="16" rx="4" fill="var(--accent)"/>
+          <text x="318" y="66" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">77 мс</text>
+          <text x="240" y="66" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--accent)">2 дахин хурдан</text>
+
+          <text x="240" y="110" text-anchor="end" font-family="PT Sans, sans-serif" font-size="13.5" font-weight="700" fill="var(--ink)">Самбар, жилээр шүүсэн</text>
+          <rect x="250" y="97" width="401" height="16" rx="4" fill="var(--legacy)"/>
+          <text x="643" y="109" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--surface)">518 мс</text>
+          <rect x="250" y="117" width="170" height="16" rx="4" fill="var(--accent)"/>
+          <text x="428" y="129" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">219 мс</text>
+          <text x="240" y="129" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--accent)">2.4 дахин хурдан</text>
+
+          <text x="240" y="173" text-anchor="end" font-family="PT Sans, sans-serif" font-size="13.5" font-weight="700" fill="var(--ink)">Жагсаалтууд</text>
+          <rect x="250" y="160" width="3" height="16" rx="1.5" fill="var(--legacy)"/>
+          <text x="261" y="172" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">2 мс</text>
+          <rect x="250" y="180" width="3" height="16" rx="1.5" fill="var(--accent)"/>
+          <text x="261" y="192" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600" fill="var(--ink)">2 мс</text>
+          <text x="240" y="192" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="11.5" font-weight="600" fill="var(--ink-3)">ялгаагүй</text>
+        </svg>
+      </div>
+      <figcaption>
+        Жагсаалт нэг л асуулга явуулдаг тул дараалуулах зүйл байхгүй — зөрүү гарахгүй.
+        Харин хяналтын самбар найман асуулгатай учир бүх зөрүү тэндээс гарна.
+        Туршилтын сан: 100 чөлөөлөлт · 10 000 нэгж талбар · 30 000 олговор · 50 000 төлөвийн түүх.
+      </figcaption>
+    </figure>
+
+    <div class="cols" style="margin-top: 30px">
+      <div class="note">
+        <h3>Энэ тоог хэрхэн гаргасан бэ</h3>
+        <p>
+          Зүүн баганын утга нь таамаг биш. <b>Ижил систем, ижил асуулга, ижил
+          өгөгдөл</b> дээр зөвхөн зэрэгцээ ажиллагааг нь салгаж хэмжсэн —
+          PHP-FPM хүсэлт дотроо ажлаа дараалуулдагтай ижил нөхцөл. Тус бүр
+          12 удаа, медиан утга.
+        </p>
+      </div>
+      <div class="note">
+        <h3>Жинхэнэ зөрүү үүнээс их</h3>
+        <p>
+          Бодит PHP-Laravel систем дээр <b>үүн дээр нэмээд</b> хүсэлт бүрийн
+          программ ачаалалт, ORM-ийн мөр боловсруулалт нэмэгдэнэ. Тэдгээрийг
+          энд <b>тооцоогүй</b> тул дээрх зөрүү бага талдаа тооцогдсон гэж
+          үзнэ үү.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">04</span><h2>Бусад системтэй шууд холбогдох</h2></div>
+    <p class="secsub">
+      Энэ бол салангид бүтцийн хамгийн бодит давуу тал: систем мэдээллээ
+      <b>бэлэн хаалгаар</b> өгч, авч чадна.
+    </p>
+
+    <div class="cols">
+      <div class="note old">
+        <h3>Нэг том блок дээр яагаад хэцүү вэ</h3>
+        <p>
+          Дэлгэц, логик нь салаагүй тул гаднаас дуудах бэлэн цэг байдаггүй.
+          Өөр систем мэдээлэл авах гэвэл хоёрын нэгийг хийнэ: өгөгдлийн сан
+          руу нь шууд орох (эрх, аюулгүй байдал алдагдана) эсвэл программ
+          дотор нь тусгай код бичих (тэр бүрд дахин суулгана).
+        </p>
+      </div>
+      <div class="note now">
+        <h3>Энд яагаад бэлэн байна вэ</h3>
+        <p>
+          Дэлгэц өөрөө хаалгаар дамжиж ажилладаг тул тэр хаалга нь аль хэдийн
+          бэлэн. Өөр систем яг тэр цэгээр холбогдож, өөрт нь зөвшөөрөгдсөн
+          хэмжээний мэдээллийг авна — өгөгдлийн санд хүрэхгүй.
+        </p>
+      </div>
+    </div>
+
+    <div class="caps" style="margin-top: 22px">
+      <div class="cap">
+        <p class="n">Татах</p>
+        <h3>ГУС-аас төлөвлөгөө</h3>
+        <p>
+          Төлөвлөгөөний дугаараар хил, талбай, зориулалт нь эх сурвалжаасаа
+          шууд орж ирнэ. Гараар хуулах, дахин бичих алхам байхгүй.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Татах</p>
+        <h3>ХУР-аас өмчлөл</h3>
+        <p>
+          Эзэмшигчийн мэдээллийг улсын бүртгэлээс шалгана. Овог нэр, регистр
+          гараар бичихээс үүдэх алдаа арилна.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Өгөх</p>
+        <h3>Бусад байгууллагад</h3>
+        <p>
+          Чөлөөлөлтийн явц, нэгж талбарын төлөвийг өөр систем хаалгаар авч
+          чадна. Эрх нь хаалган дээр шалгагдах тул хэн юу харахыг хянана.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Нэмэх</p>
+        <h3>Шинэ дэлгэц холбох</h3>
+        <p>
+          Гар утасны хувилбар, өөр албаны тусгай дэлгэц нэмэхэд байгаа
+          хаалга руугаа холбоно. Логикийг дахин бичихгүй.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">05</span><h2>Хүний гараас гарах алдаа хаана багасах вэ</h2></div>
+    <p class="secsub">
+      Гар ажиллагаа бүр алдааны эх үүсвэр. Доор системийн хаасан бодит
+      цоорхойнуудыг үйлдэл тус бүрээр харуулав.
+    </p>
+
+    <div class="cases">
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Талбайн хэмжээ</h4>
+          <p>
+            Зураглалаас тоо уншиж хүснэгтэд бичнэ. Нэг тоо буруу бичигдвэл
+            олговрын дүн хүртэл буруу болно.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Хилээс автоматаар</h4>
+          <p>
+            Талбай, давхцлыг өгөгдлийн сан өөрөө тооцно. Хүн тоо оруулахгүй
+            тул буруу бичих боломж байхгүй.
+          </p>
+        </div>
+      </div>
+
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Эзэмшигчийн мэдээлэл</h4>
+          <p>
+            Овог нэр, регистрийн дугаарыг бичиж оруулна. Нэг үсэг зөрвөл
+            дараагийн шатанд хүн олдохгүй.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Улсын бүртгэлээс</h4>
+          <p>
+            Регистрээр шалгаж, мэдээллийг эх сурвалжаас нь татна.
+            Бичилтийн алдаа гарах эх үүсвэр арилна.
+          </p>
+        </div>
+      </div>
+
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Тайлан нэгтгэх</h4>
+          <p>
+            Хэдэн хүний хүснэгтийг цуглуулж нийлүүлнэ. Хувилбар хоцрох,
+            нийлбэр зөрөх нь байнга тохиолддог.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Нэг эх сурвалжаас</h4>
+          <p>
+            Тайлан бүртгэлээс шууд бүрдэнэ. Хүн бүр ижил тоо хардаг тул
+            зөрөх боломжгүй.
+          </p>
+        </div>
+      </div>
+
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Захирамжийн төсөл</h4>
+          <p>
+            Нэгж талбарын жагсаалт, дүнг баримт руу гараар хуулна. Хасагдсан
+            талбар үлдэх, тоо зөрөх эрсдэлтэй.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Бүртгэлээс бүрдэнэ</h4>
+          <p>
+            Төсөл нь холбогдсон талбаруудаасаа шууд угсрагдана. Талбар
+            өөрчлөгдвөл баримт нь дагаж шинэчлэгдэнэ.
+          </p>
+        </div>
+      </div>
+
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Төлөв дамжуулах</h4>
+          <p>
+            Утсаар ярьж, цаасаар дамжуулна. Хэн юуг хэзээ зөвшөөрснийг
+            эргэж тогтоох боломжгүй.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Дүрэмтэй шилжилт</h4>
+          <p>
+            Зөвшөөрөгдсөн шилжилт л боломжтой, холбогдох хүнд шууд мэдэгдэнэ.
+            Үйлдэл бүр нэр, огноотойгоо үлдэнэ.
+          </p>
+        </div>
+      </div>
+
+      <div class="case">
+        <div class="before">
+          <span class="lbl">Гараар</span>
+          <h4>Хоёр удаа олгох</h4>
+          <p>
+            Нэг талбарт олговор давхар олгогдсон эсэхийг хүн санаж,
+            хүснэгтээс хайж шалгана.
+          </p>
+        </div>
+        <div class="after">
+          <span class="lbl">Системээр</span>
+          <h4>Бүртгэл өөрөө хамгаална</h4>
+          <p>
+            Олговор нэгж талбартайгаа холбоотой тул давхардлыг систем барина.
+            Баталгаажсаны дараа засах боломжийг хаана.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 ─────────────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="sechead"><span class="secnum">06</span><h2>Нэвтэрснээр гарах үр дүн</h2></div>
+    <p class="secsub">Бүтэц, автоматжуулалт хоёр нийлээд ажлын байранд ингэж тусна.</p>
+
+    <div class="caps six">
+      <div class="cap">
+        <p class="n">Хяналт</p>
+        <h3>Бүх чөлөөлөлт нэг дэлгэцэд</h3>
+        <p>
+          Бүртгэл бүрийн явц, талбай, олговрын дүн шууд харагдана. Хүснэгт
+          цуглуулж, гараар нэгтгэх ажил хэрэггүй болно.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Газрын зураг</p>
+        <h3>Явц нь өнгөөрөө харагдана</h3>
+        <p>
+          Нэгж талбар бүр төлөвийнхөө өнгөөр зурагдана. Аль хэсэг хаана явааг
+          жагсаалт уншилгүй ойлгоно.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Хугацаа</p>
+        <h3>Хүлээлт богиносно</h3>
+        <p>
+          Мэдээлэл хайх, нэгтгэх, дамжуулахад зарцуулагддаг цаг арилж, ажил өөрөө
+          хийгдэх хугацаа л үлдэнэ.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Хариуцлага</p>
+        <h3>Хэн юу хийсэн нь үлдэнэ</h3>
+        <p>
+          Үйлдэл бүр бүртгэгдэнэ. Маргаан гарахад хэн, хэзээ, юуг өөрчилснийг
+          эргэж харна.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Найдвартай</p>
+        <h3>Асуудлыг урьдчилж харна</h3>
+        <p>
+          Алдаа, ачааллыг хяналтын самбар тасралтгүй хардаг тул доголдлыг
+          хэрэглэгч мэдэхээс өмнө засна.
+        </p>
+      </div>
+      <div class="cap">
+        <p class="n">Ирээдүй</p>
+        <h3>Өргөжих зай нээлттэй</h3>
+        <p>
+          Шинэ дэлгэц, шинэ байгууллага, шинэ мэдээллийн эх сурвалж нэмэхэд
+          байгаа хаалга руугаа холбоно.
+        </p>
+      </div>
+    </div>
+  </section>
+</div>

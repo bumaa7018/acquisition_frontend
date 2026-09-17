@@ -23,6 +23,8 @@ import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
+import type { ParcelStatus } from "@/types";
+import { monthlyTimeline } from "@/lib/timeline-months";
 import {
   Map as MapIcon,
   Layers,
@@ -43,6 +45,7 @@ import { toast } from "sonner";
 import { ProgressBadge } from "@/components/ui/progress-badge";
 import { authStorage } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { searchOnEnter } from "@/components/ui/search-on-enter";
 
 // "Ажлын зураг" цонх — дотроо OpenLayers газрын зураг үүсгэдэг тул
 // зөвхөн хэрэглэгч товч дархад л ачаална (ssr: false).
@@ -54,6 +57,9 @@ const MapView = dynamic(() => import("@/components/map/map-view"), {
     <div className="w-full h-full animate-pulse bg-slate-100 dark:bg-[#252630]" />
   ),
 });
+
+/** Тогтвортой хоосон утга — `?? []` нь рендер бүрд шинэ массив үүсгэхээс сэргийлнэ. */
+const EMPTY_STATUS_LIST: ParcelStatus[] = [];
 
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from(
@@ -1183,7 +1189,12 @@ export default function DashboardPage() {
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
   const filteredAcqs     = useMemo(() => dashData?.acquisitions ?? [], [dashData?.acquisitions]);
-  const parcelStatusList = dashData?.parcel_statuses ?? [];
+  // ЗААВАЛ мемолно: `?? []` нь рендер бүрд ШИНЭ массив үүсгэдэг тул доорх
+  // өнгөний хүснэгт байнга дахин бодогдоно.
+  const parcelStatusList = useMemo(
+    () => dashData?.parcel_statuses ?? EMPTY_STATUS_LIST,
+    [dashData?.parcel_statuses],
+  );
   const totalParcels     = dashData?.total_parcels   ?? 0;
   const freedParcels     = dashData?.freed_parcels   ?? 0;
   const freedAreaHa      = (dashData?.freed_area_m2  ?? 0) / 10_000;
@@ -1191,15 +1202,30 @@ export default function DashboardPage() {
   const totalOrders      = dashData?.total_orders    ?? 0;
   const totalCompensation = (dashData?.total_compensation ?? 0) / 1_000_000_000;
 
+  /* Төлөвийн ӨНГӨ нь `parcel_status` бүртгэлээс. Дашбоардын хариунд
+     бүртгэл аль хэдийн ирдэг тул НЭМЭЛТ дуудлага үүсэхгүй. Задаргааны
+     мөрөнд өнгө байдаггүй тул id-гаар нь тааруулна. */
+  const statusColorById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of parcelStatusList) if (s.color) m.set(s.id, s.color);
+    return m;
+  }, [parcelStatusList]);
+
   const STATUSES = useMemo(() => (dashData?.status_breakdown ?? []).map((s) => ({
     key:   `ps-${s.status_id}`,
     label: s.name,
-    color: getParcelStatusStyle(s.status_id, s.name).color,
+    // Бүртгэлийн өнгө ДАВУУ; тохируулаагүй хуучин төлөвт хатуу хүснэгт рүү унана.
+    color: statusColorById.get(s.status_id) ?? getParcelStatusStyle(s.status_id, s.name).color,
     count: s.count,
     area:  Math.round(s.area_m2),
-  })), [dashData?.status_breakdown]);
+  })), [dashData?.status_breakdown, statusColorById]);
 
-  const TIMELINE = dashData?.timeline ?? [];
+  /* Цагийн график — сонгосон оны БҮХ сарыг гаргана (лог: timeline-months.ts).
+     Тооцоо нь цэвэр функцэд байгаа тул тестээр хамгаалагдсан. */
+  const TIMELINE = useMemo(
+    () => monthlyTimeline(dashData?.timeline ?? [], appliedFilter.years.map(Number)),
+    [dashData?.timeline, appliedFilter.years],
+  );
 
   /* ── Чөлөөлөлтийн ГҮЙЦЭТГЭЛ ───────────────────────────────────────
      Гүйцэтгэл = эцсийн төлөвт шилжсэн нэгж талбар / нийт нэгж талбар.
@@ -1322,7 +1348,7 @@ export default function DashboardPage() {
             ЯАГААД: өмнө нь товчнууд ч grid-ийн элемент байсан тул "Дэд ангилал"
             гарч ирэхэд 6 баганад 7 элемент болж товчнууд ганцаараа шинэ мөрт
             үсэрч, шүүлт дутуу/тасарсан харагддаг байв. */}
-        <div className="flex flex-col xl:flex-row xl:items-end gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-end gap-3" {...searchOnEnter(handleView)}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end flex-1 min-w-0">
           {/* Acquisition select */}
           <div className="flex flex-col gap-1 min-w-0">
@@ -1745,7 +1771,7 @@ export default function DashboardPage() {
 
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
-              ЭХЛЭСЭН ОГНООГООР НЭГЖ ТАЛБАР
+              БАТАЛГААЖСАН ОГНООГООР НЭГЖ ТАЛБАР · САРААР
             </p>
             {TIMELINE.length === 0 ? (
               <p className="text-[11px] text-slate-400 dark:text-slate-500 py-4 text-center">

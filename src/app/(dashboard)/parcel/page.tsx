@@ -16,6 +16,7 @@ import {
   type SortState,
 } from "@/components/ui/sortable-table-head";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -51,6 +52,9 @@ const COLUMNS: SortColumn[] = [
 
 export default function ParcelListPage() {
   const [draft, setDraft] = useState(EMPTY);
+  // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
+  const statusStyle = useParcelStatusStyle();
+
   const [filter, setFilter] = useState(EMPTY);
   const [page, setPage] = useState(1);
   const [searchTick, setSearchTick] = useState(0);
@@ -319,7 +323,7 @@ export default function ParcelListPage() {
                         {p.status_name ? (
                           <span
                             className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                            style={getParcelStatusStyle(p.status_id, p.status_name)}
+                            style={statusStyle(p.status_id, p.status_name)}
                           >
                             {p.status_name}
                           </span>

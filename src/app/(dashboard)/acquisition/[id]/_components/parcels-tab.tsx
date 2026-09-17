@@ -19,6 +19,7 @@ import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } 
 import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
@@ -158,6 +159,9 @@ export function ParcelsTab({
   isBeforeFieldStage?: boolean;
 }) {
   const queryClient = useQueryClient();
+  // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
+  const statusStyle = useParcelStatusStyle();
+
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
   const isFinance = isFinanceSpecialist();
@@ -681,7 +685,7 @@ export function ParcelsTab({
                           {p.status_name ? (
                             <span
                               className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                              style={getParcelStatusStyle(p.status, p.status_name)}
+                              style={statusStyle(p.status, p.status_name)}
                             >
                               {p.status_name}
                             </span>

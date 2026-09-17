@@ -5,6 +5,7 @@ import { X, MapPin, Users, Banknote, FileText, ArrowUpRight } from "lucide-react
 import { landApi, parcelApi } from "@/lib/api";
 import { formatArea, formatDate } from "@/lib/utils";
 import { getParcelStatusStyle } from "@/types";
+import { useParcelStatusColors } from "./use-parcel-status-layers";
 import type { Compensation, ParcelHolder } from "@/types";
 
 /**
@@ -71,12 +72,34 @@ export default function ParcelInfoModal({
 }) {
   const enabled = !!acquisitionId && !!parcelUuid;
 
-  const { data: parcel, isLoading, isError } = useQuery({
+  const { data: parcel, isLoading, isError, error } = useQuery({
     queryKey: ["parcel-full", acquisitionId, parcelUuid],
     queryFn: () => landApi.getParcel(acquisitionId, parcelUuid),
     enabled,
     retry: false,
   });
+
+  /*
+   * Алдааны ЖИНХЭНЭ шалтгааныг ялгана.
+   *
+   * Өмнө нь ямар ч алдааг "үзэх эрх байхгүй байж болзошгүй" гэж ТААМАГЛАЖ
+   * харуулдаг байсан тул 404 (бүртгэлд байхгүй), 500 (серверийн алдаа),
+   * сүлжээний тасалдал гурвуул ижил мессежтэй гарч, юу болсныг нь ч, яаж
+   * засахыг нь ч хэлдэггүй байв. Чөлөөлөлтийн цонх (acquisition-info-modal)
+   * үүнийг аль хэдийн зөв ялгадаг — ижил зарчмыг энд хэрэглэв.
+   */
+  const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  const failMessage = !isError && parcel
+    ? ""
+    : httpStatus === 403
+      ? "Та энэ чөлөөлөлтөд хуваарилагдаагүй тул нэгж талбарын дэлгэрэнгүйг харах боломжгүй."
+      : httpStatus === 404
+        ? "Энэ нэгж талбар бүртгэлээс олдсонгүй. Газрын зураг дээрх мэдээлэл хуучирсан байж болзошгүй — хуудсаа сэргээнэ үү."
+        : httpStatus === 401
+          ? "Нэвтрэх хугацаа дууссан байна. Дахин нэвтэрч орно уу."
+          : httpStatus != null
+            ? `Мэдээлэл ачаалж чадсангүй (алдаа ${httpStatus}). Дахин оролдоно уу.`
+            : "Мэдээлэл ачаалж чадсангүй. Сүлжээгээ шалгаад дахин оролдоно уу.";
 
   const { data: acq } = useQuery({
     queryKey: ["land", acquisitionId],
@@ -101,7 +124,16 @@ export default function ParcelInfoModal({
     retry: false,
   });
 
-  const style = getParcelStatusStyle(parcel?.status_id, parcel?.status_name ?? "");
+  // Цонхны өнгө нь газрын зураг дээрх нэгж талбарынхтай ИЖИЛ байх ёстой —
+  // хоёулаа `parcel_status` бүртгэлийн өнгөнөөс гарна. Өмнө нь цонх код дотор
+  // хатуу бичсэн хүснэгтээс авдаг байсан тул бүртгэлд өнгө солиход зураг
+  // дээрх талбар өөр, цонх өөр өнгөтэй болдог байв.
+  const statusColors = useParcelStatusColors();
+  const style = getParcelStatusStyle(
+    parcel?.status_id,
+    parcel?.status_name ?? "",
+    parcel?.status_id != null ? statusColors.get(parcel.status_id) : undefined,
+  );
 
   // Газрын үнэлгээ = нэгж талбарт (target_type "parcel"), хөрөнгийн үнэлгээ =
   // хөрөнгө бүрд (target_type "asset"). Зөвхөн ҮНДСЭН урсгалыг тооцно —
@@ -168,9 +200,14 @@ export default function ParcelInfoModal({
               ))}
             </div>
           ) : isError || !parcel ? (
-            <p className="px-5 py-10 text-center text-[13px] text-slate-500">
-              Мэдээлэл ачаалж чадсангүй — энэ нэгж талбарыг үзэх эрх байхгүй байж болзошгүй.
-            </p>
+            <div className="px-5 py-10 text-center">
+              <p className="text-[13px] text-slate-500 dark:text-slate-400">{failMessage}</p>
+              {/* Дугаарыг харуулах нь дэмжлэг үзүүлэхэд шууд хэрэглэгддэг —
+                  хэрэглэгч аль талбар дээр асуудал гарсныг хэлж чадна. */}
+              <p className="mt-2 font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                {parcelUuid.slice(0, 8)}
+              </p>
+            </div>
           ) : (
             <>
               <div className="px-5 py-3">

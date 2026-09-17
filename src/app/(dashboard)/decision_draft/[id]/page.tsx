@@ -39,11 +39,15 @@ import {
 import { LinkParcelDialog } from "./_components/link_parcel_dialog";
 import { ConfirmDecisionDialog } from "./_components/confirm_decision_dialog";
 import { FundingSourcesCard } from "./_components/funding_sources_card";
+import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 
 export default function DecisionDraftDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
+  const statusStyle = useParcelStatusStyle();
+
 
   const [editing, setEditing] = useState(false);
   const [showLink, setShowLink] = useState(false);
@@ -559,7 +563,7 @@ export default function DecisionDraftDetailPage() {
                         {p.parcel_status_name ? (
                           <span
                             className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                            style={getParcelStatusStyle(p.parcel_status, p.parcel_status_name)}
+                            style={statusStyle(p.parcel_status, p.parcel_status_name)}
                           >
                             {p.parcel_status_name}
                           </span>
