@@ -2,18 +2,51 @@
 // xlsx (SheetJS) нь зөвхөн browser дээр ажиллах тул DINAMIC IMPORT ашиглаж,
 // үндсэн bundle-д орохоос сэргийлж, SSR үед `window` алдаа гаргахгүй.
 
-import { extractValuation, type Grid, type Workbook } from "./extract.ts";
+import { extractValuation, mapSheets, type Grid, type Workbook } from "./extract.ts";
+import { extractSingleSheet } from "./extract-single.ts";
+import { countSections } from "./sections.ts";
 import { validateParsed } from "./validate.ts";
 import type { ParsedValuation } from "./types.ts";
 import { logger } from "../logger.ts";
 
 export * from "./types.ts";
 export { extractValuation } from "./extract.ts";
+export { extractSingleSheet } from "./extract-single.ts";
+export { splitSections, isSingleSheetLayout, countSections } from "./sections.ts";
 export { validateParsed } from "./validate.ts";
+
+/**
+ * Workbook-ийн загварыг таньж (шинэ: нэг sheet дээрх 3.1–5.1 хэсгүүд / хуучин: хүснэгт
+ * бүр тусдаа sheet) тохирох задлагчаар уншина. Хуучин файл хэвээр ажиллана.
+ */
+export function extractAnyLayout(wb: Workbook): Omit<ParsedValuation, "warnings"> {
+  const names = Object.keys(wb);
+  // ХУУЧИН загварыг УРЬТАЛНА: хүснэгт бүр тусдаа sheet дээр байгаа нь sheet нэрээр
+  // танигдвал тэр замаар уншина. (Хуучин файлууд дотроо "ҮТ-загвар" гэсэн БӨГЛӨӨГҮЙ
+  // нэг хуудсан загвар агуулж болох тул зөвхөн хэсгийн тоогоор шийдэж болохгүй.)
+  const sheetMap = mapSheets(names);
+  const legacyHits = ["propertyDesc", "buildingCost", "otherAssets", "landValuation"].filter(
+    (k) => sheetMap[k],
+  ).length;
+  if (legacyHits >= 2) return extractValuation(wb);
+
+  // ШИНЭ загвар: хамгийн олон хэсэг танигдсан хуудсыг сонгоно.
+  let best: string | null = null;
+  let bestScore = 0;
+  for (const name of names) {
+    const score = countSections(wb[name]);
+    if (score > bestScore) {
+      bestScore = score;
+      best = name;
+    }
+  }
+  if (best && bestScore >= 3) return extractSingleSheet(wb[best]);
+  return extractValuation(wb);
+}
 
 /** Задлан авсан workbook-оос ParsedValuation (extract + validate) үүсгэх. */
 export function buildValuation(wb: Workbook): ParsedValuation {
-  const base = extractValuation(wb);
+  const base = extractAnyLayout(wb);
   return { ...base, warnings: validateParsed(base) };
 }
 

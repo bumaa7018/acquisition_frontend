@@ -27,6 +27,8 @@ import type {
   LandValuation,
   LandValuationUpsert,
   ValuationImportPayload,
+  ValuationSectionNote,
+  ValuationNotesPayload,
   ValuationImportResult,
   Document,
   ParcelHolder,
@@ -479,6 +481,33 @@ class ProfApiService {
         body,
       )
       .then(r => r.data.data)
+  }
+
+  // ── Үнэлгээний хүснэгтийн тайлбар ───────────────────────────────────────────
+
+  profListValuationNotes(
+    acqId: string,
+    parcelId: string,
+    valuationType?: string,
+  ): Promise<ValuationSectionNote[]> {
+    return apiClient
+      .get<ApiResponse<ValuationSectionNote[]>>(
+        `/prof/land-acquisitions/${acqId}/valuation-notes`,
+        { params: { parcel_id: parcelId, valuation_type: valuationType || undefined } },
+      )
+      .then(r => r.data.data ?? [])
+  }
+
+  profSaveValuationNotes(
+    acqId: string,
+    body: ValuationNotesPayload,
+  ): Promise<ValuationSectionNote[]> {
+    return apiClient
+      .put<ApiResponse<ValuationSectionNote[]>>(
+        `/prof/land-acquisitions/${acqId}/valuation-notes`,
+        body,
+      )
+      .then(r => r.data.data ?? [])
   }
 }
 

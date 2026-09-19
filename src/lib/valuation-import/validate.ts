@@ -44,14 +44,32 @@ export function validateParsed(v: Omit<ParsedValuation, "warnings">): ParsedWarn
     if (a.building) {
       const b = a.building;
       const coefProduct = b.coefficients.reduce((p, c) => p * (c.value || 1), 1);
-      if (b.unitCostM2 != null && b.areaM2 != null && b.replacementCost != null) {
+      // Шинэ загварт өртгийн гинж: БҮРЭН орлуулах → элэгдэл хасах → НӨХӨН орлуулах.
+      // Тиймээс "нэгж×талбай×итгэлцүүр"-ийг БҮРЭН орлуулах өртөгтэй харьцуулна
+      // (нөхөн орлуулахтай харьцуулбал элэгдлийн хэмжээгээр үргэлж зөрнө).
+      const itemVal = (kw: RegExp): number | null =>
+        b.items.find((x) => kw.test(x.label))?.value ?? null;
+      const fullCost = itemVal(/бүрэн орлуулах/i);
+      const target = fullCost ?? b.replacementCost;
+      if (b.unitCostM2 != null && b.areaM2 != null && target != null) {
         const expected = b.unitCostM2 * b.areaM2 * coefProduct;
-        if (!approxEqual(expected, b.replacementCost))
+        if (!approxEqual(expected, target))
           w.push({
             code: "REPLACEMENT_COST_MISMATCH",
             level: "warning",
             assetSeq: a.seqNo,
-            message: `"${a.name}": нөхөн орлуулах өртөг = нэгж×талбай×итгэлцүүр тэнцэхгүй байна.`,
+            message: `"${a.name}": ${fullCost != null ? "бүрэн" : "нөхөн"} орлуулах өртөг = нэгж×талбай×итгэлцүүр тэнцэхгүй байна.`,
+          });
+      }
+      // Нөхөн орлуулах = бүрэн орлуулах − элэгдлийн дүн
+      const deprAmount = itemVal(/элэгдлийн дүн/i);
+      if (fullCost != null && deprAmount != null && b.replacementCost != null) {
+        if (!approxEqual(fullCost - deprAmount, b.replacementCost))
+          w.push({
+            code: "DEPRECIATION_MISMATCH",
+            level: "warning",
+            assetSeq: a.seqNo,
+            message: `"${a.name}": нөхөн орлуулах өртөг = бүрэн орлуулах − элэгдлийн дүн тэнцэхгүй байна.`,
           });
       }
       for (const c of b.coefficients) {

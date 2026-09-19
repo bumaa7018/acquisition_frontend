@@ -31,16 +31,16 @@ const SHEET_TARGETS: Record<string, string[]> = {
   summary: ["нэгтгэл шинэ", "нэгтгэл"],
 };
 
-function text(c: Cell): string {
+export function text(c: Cell): string {
   return c == null ? "" : String(c);
 }
 
-function rowText(row: Grid[number]): string {
+export function rowText(row: Grid[number]): string {
   return row.map(text).join(" ");
 }
 
 /** Тухайн мөрөн доторх хамгийн баруун талын тоон утга. */
-function lastNumber(row: Grid[number]): number | null {
+export function lastNumber(row: Grid[number]): number | null {
   for (let i = row.length - 1; i >= 0; i--) {
     const n = parseNumber(row[i]);
     if (n != null) return n;
@@ -49,7 +49,7 @@ function lastNumber(row: Grid[number]): number | null {
 }
 
 /** Түлхүүр үг(үүд) агуулсан эхний мөрийн индексийг олно. */
-function findRowIndex(grid: Grid, ...keywords: string[]): number {
+export function findRowIndex(grid: Grid, ...keywords: string[]): number {
   const keys = keywords.map(normalizeKey);
   return grid.findIndex((row) => {
     const rk = normalizeKey(rowText(row));
@@ -217,7 +217,7 @@ export function extractLand(
 }
 
 // Хөрөнгийн төрлийн текстээс kind тодорхойлох ("Үл хөдлөх"/"Эд хөрөнгө"/"Газар").
-function typeToKind(t: string): "real_state" | "property" | "land" | null {
+export function typeToKind(t: string): "real_state" | "property" | "land" | null {
   const k = normalizeKey(t);
   if (!k) return null;
   if (k.includes("газар")) return "land";
@@ -226,7 +226,7 @@ function typeToKind(t: string): "real_state" | "property" | "land" | null {
   return null;
 }
 
-interface PropDescCols {
+export interface PropDescCols {
   headerIdx: number;
   seq: number;
   name: number;
@@ -240,7 +240,7 @@ interface PropDescCols {
  * "Хөрөнгийн тодорхойлолт" хүснэгтийн баганын байрлалыг ТОЛГОЙГООР нь тодорхойлно.
  * Загвар өөрчлөгдөж "Хөрөнгийн төрөл" багана нэмэгдсэн тул бэхлэсэн индекс ашиглахгүй.
  */
-function detectPropDescCols(grid: Grid): PropDescCols {
+export function detectPropDescCols(grid: Grid): PropDescCols {
   const headerIdx = grid.findIndex((row) => {
     const rk = normalizeKey(rowText(row));
     return rk.includes("хөрөнгийннэр") || rk.includes("талбайнхэмжээ") || (rk.includes("төрөл") && rk.includes("хэмжээ"));
@@ -255,7 +255,7 @@ function detectPropDescCols(grid: Grid): PropDescCols {
     else if (k.includes("тодорхойл")) cols.desc = i;
     else if (k.includes("нэр")) cols.name = i;
     else if (k.includes("хэмжих") || k.includes("хэмжиг")) cols.unit = i;
-    else if (k.includes("талбай") || k.includes("хэмжээ")) cols.qty = i;
+    else if (k.includes("талбай") || k.includes("хэмжээ") || k.includes("чадал")) cols.qty = i;
   }
   return cols;
 }
@@ -351,7 +351,7 @@ export function extractBuildingCosts(grid: Grid | null): ParsedBuildingCost[] {
   });
 }
 
-interface PriceRow {
+export interface PriceRow {
   name: string;
   unit: string;
   quantity: number | null;
@@ -361,7 +361,7 @@ interface PriceRow {
 
 // Үнэ-төрлийн (Бусад хөрөнгө / зардал) хүснэгтийн баганыг ТОЛГОЙГООР нь илрүүлнэ —
 // багана нэмэгдэх/солигдоход тэсвэртэй. Толгой олдохгүй бол тогтмол индексээр (fallback).
-interface PriceCols {
+export interface PriceCols {
   headerIdx: number;
   seq: number;
   name: number;
@@ -370,7 +370,7 @@ interface PriceCols {
   unitPrice: number;
   total: number;
 }
-function detectPriceCols(grid: Grid, startIdx = 0): PriceCols {
+export function detectPriceCols(grid: Grid, startIdx = 0): PriceCols {
   let headerIdx = -1;
   for (let i = startIdx; i < grid.length; i++) {
     const rk = normalizeKey(rowText(grid[i]));
@@ -394,7 +394,7 @@ function detectPriceCols(grid: Grid, startIdx = 0): PriceCols {
 }
 
 /** "Бусад хөрөнгө" хүснэгтээс нэр→үнэ мэдээлэл (багана толгойгоор илрүүлж). */
-function extractOtherAssets(grid: Grid | null): PriceRow[] {
+export function extractOtherAssets(grid: Grid | null): PriceRow[] {
   if (!grid) return [];
   const rows: PriceRow[] = [];
   const cols = detectPriceCols(grid);
@@ -403,6 +403,8 @@ function extractOtherAssets(grid: Grid | null): PriceRow[] {
     const row = grid[i];
     const name = text(row[cols.name]).trim();
     if (!name) continue;
+    // Хүснэгтийн НИЙЛБЭР мөрийг хөрөнгө болгож авахгүй (шинэ загварт "Нийт" мөр байдаг)
+    if (/^(нийт|дүн|бүгд)/.test(normalizeKey(name))) continue;
     // Өгөгдлийн мөр: дугаартай ЭСВЭЛ ямар нэг үнэ/тоо бүхий (толгой/гарчгийг алгасна)
     const numeric =
       parseNumber(row[cols.seq]) != null ||
@@ -545,7 +547,10 @@ function extractSummaryTotal(grid: Grid | null): number | null {
   return null;
 }
 
-/** Бүх бүлгийг нэгтгэн ParsedValuation үүсгэх (validation-гүй — index.ts дуудна). */
+/**
+ * ХУУЧИН (олон sheet-тэй) загвараас бүх бүлгийг нэгтгэн ParsedValuation үүсгэх.
+ * Шинэ (нэг sheet) загварыг extract-single.ts задлах бөгөөд сонголтыг index.ts хийнэ.
+ */
 export function extractValuation(wb: Workbook): Omit<ParsedValuation, "warnings"> {
   const names = Object.keys(wb);
   const sheetMap = mapSheets(names);
@@ -556,6 +561,9 @@ export function extractValuation(wb: Workbook): Omit<ParsedValuation, "warnings"
     clearance: extractClearance(sheetMap.clearance ? wb[sheetMap.clearance] : null),
     summaryTotal: extractSummaryTotal(sheetMap.summary ? wb[sheetMap.summary] : null),
     sheetMap,
+    notes: {},
+    layout: "multi-sheet",
+    conclusion: "",
   };
 }
 

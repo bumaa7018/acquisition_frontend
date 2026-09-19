@@ -40,9 +40,11 @@ import {
   parseValuationFile,
   validateParsed,
   fileSha256,
+  VALUATION_SECTION_LABELS,
   type AssetKind,
   type ParsedAsset,
   type ParsedValuation,
+  type ValuationSectionKey,
 } from "@/lib/valuation-import";
 
 // svc-ийн энэ модульд шаардлагатай дэд хэсэг (real_estate_tab-ийн svc үүнд нийцнэ).
@@ -117,6 +119,25 @@ function mapBuildingCalcs(
   return out;
 }
 
+/**
+ * Барилгын тодорхойлолтын (Хүснэгт-4) үзүүлэлтийг DB-ийн spec төрлүүдтэй нэрээр
+ * тааруулна. Таарахгүй үзүүлэлт (загварт шинээр нэмэгдсэн) хоосон үлдэнэ —
+ * spec нь ТӨРӨЛД суурилсан тул нэрээр шинэ төрөл үүсгэх боломжгүй.
+ */
+function mapBuildingSpecs(
+  spec: NonNullable<ParsedAsset["spec"]>,
+  specTypes: AssetSpecType[],
+): { spec_type_id: number; value: string }[] {
+  return specTypes.map((t) => {
+    let best: { value: string; score: number } | null = null;
+    for (const item of spec.items) {
+      const score = similarity(t.name, item.label);
+      if (!best || score > best.score) best = { value: item.value, score };
+    }
+    return { spec_type_id: t.id, value: best && best.score >= 0.6 ? best.value : "" };
+  });
+}
+
 export function ValuationExcelImport({
   acqId,
   parcelId,
@@ -189,6 +210,10 @@ export function ValuationExcelImport({
   const patchLand = (patch: Partial<ParsedValuation["land"]>) => {
     setData((prev) => (prev ? revalidate({ ...prev, land: { ...prev.land, ...patch } }) : prev));
   };
+  // Excel-ээс уншсан ТАЙЛБАР-ыг оруулахын өмнө засах боломжтой
+  const patchNote = (key: ValuationSectionKey, note: string) => {
+    setData((prev) => (prev ? { ...prev, notes: { ...prev.notes, [key]: note } } : prev));
+  };
   // Preview дээр оруулахгүй мөрийг хасах
   const removeAsset = (idx: number) => {
     setData((prev) =>
@@ -251,7 +276,13 @@ export function ValuationExcelImport({
         notes: "Excel-ээс импортолсон",
         unit_price: a.unitPrice ?? 0,
         compensation_amount: a.totalPrice ?? 0,
-        specs: isRealState ? specTypes.map((t) => ({ spec_type_id: t.id, value: "" })) : undefined,
+        floor_count: a.floorCount ?? 0,
+        // Барилгын тодорхойлолтын хүснэгт (шинэ загвар) байвал утгыг нь онооно
+        specs: isRealState
+          ? a.spec
+            ? mapBuildingSpecs(a.spec, specTypes)
+            : specTypes.map((t) => ({ spec_type_id: t.id, value: "" }))
+          : undefined,
         calculations: isRealState
           ? a.building
             ? mapBuildingCalcs(a.building, calcTypes)
@@ -295,6 +326,10 @@ export function ValuationExcelImport({
         source_file_hash: fileHash || undefined,
       },
       assets,
+      // Хүснэгт бүрийн ТАЙЛБАР — хоосон биш утгуудыг л илгээнэ
+      section_notes: Object.fromEntries(
+        Object.entries(data.notes ?? {}).filter(([, v]) => (v ?? "").trim() !== ""),
+      ),
     };
 
     try {
@@ -475,11 +510,23 @@ export function ValuationExcelImport({
                     <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-[12px] dark:border-[#37394d]">
                       <span className="text-slate-500">
                         Гэрчилгээ: {data.land.certNo || "—"} · Нэгж талбар: {data.land.parcelNo || "—"}
+                        {data.land.purpose ? ` · Зориулалт: ${data.land.purpose}` : ""}
                       </span>
                       <span className="font-semibold text-slate-800 dark:text-slate-100">
                         Газрын үнэ: {money((data.land.affectedAreaM2 ?? 0) * (data.land.basePriceM2 ?? 0))}
                       </span>
                     </div>
+                    {data.land.location && (
+                      <div className="border-t border-slate-100 px-4 py-2.5 text-[12px] text-slate-500 dark:border-[#37394d]">
+                        Байршил: {data.land.location}
+                      </div>
+                    )}
+                    <NoteEditor
+                      sectionKey="land_valuation"
+                      value={data.notes?.land_valuation ?? ""}
+                      onChange={(v) => patchNote("land_valuation", v)}
+                      disabled={phase === "submitting"}
+                    />
                   </Section>
 
                   {/* Хөрөнгийн тодорхойлолт */}
@@ -584,7 +631,66 @@ export function ValuationExcelImport({
                         </tbody>
                       </table>
                     </div>
+                    <NoteEditor
+                      sectionKey="property_desc"
+                      value={data.notes?.property_desc ?? ""}
+                      onChange={(v) => patchNote("property_desc", v)}
+                      disabled={phase === "submitting"}
+                    />
                   </Section>
+
+                  {/* Барилгын тодорхойлолт (Хүснэгт-4) — барилга бүр багана */}
+                  {(() => {
+                    const specs = data.assets
+                      .filter((a) => a.spec)
+                      .map((a) => ({ name: a.name, s: a.spec! }));
+                    if (!specs.length) return null;
+                    const labels: string[] = [];
+                    for (const { s: sp } of specs)
+                      for (const it of sp.items)
+                        if (!labels.includes(it.label)) labels.push(it.label);
+                    return (
+                      <Section icon={Building2} title="Барилгын тодорхойлолт" tone="sky">
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[480px] text-[12px]">
+                            <thead>
+                              <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
+                                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Үзүүлэлт
+                                </th>
+                                {specs.map((x, i) => (
+                                  <th
+                                    key={i}
+                                    className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
+                                  >
+                                    {x.name}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                              {labels.map((label, li) => (
+                                <tr key={li}>
+                                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{label}</td>
+                                  {specs.map((x, ci) => (
+                                    <td key={ci} className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
+                                      {x.s.items.find((it) => it.label === label)?.value || "—"}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <NoteEditor
+                          sectionKey="building_spec"
+                          value={data.notes?.building_spec ?? ""}
+                          onChange={(v) => patchNote("building_spec", v)}
+                          disabled={phase === "submitting"}
+                        />
+                      </Section>
+                    );
+                  })()}
 
                   {/* Барилгын өртгийн хандлага — барилга бүр ХОЙШ БАГАНА (Excel шиг) */}
                   {(() => {
@@ -660,6 +766,12 @@ export function ValuationExcelImport({
                             </tbody>
                           </table>
                         </div>
+                        <NoteEditor
+                          sectionKey="building_cost"
+                          value={data.notes?.building_cost ?? ""}
+                          onChange={(v) => patchNote("building_cost", v)}
+                          disabled={phase === "submitting"}
+                        />
                       </Section>
                     );
                   })()}
@@ -708,6 +820,18 @@ export function ValuationExcelImport({
                           </tbody>
                         </table>
                       </div>
+                      {(["temporary_cost", "clearance_cost", "lost_income"] as ValuationSectionKey[]).map(
+                        (k) => (
+                          <NoteEditor
+                            key={k}
+                            sectionKey={k}
+                            withLabel
+                            value={data.notes?.[k] ?? ""}
+                            onChange={(v) => patchNote(k, v)}
+                            disabled={phase === "submitting"}
+                          />
+                        ),
+                      )}
                     </Section>
                   )}
 
@@ -745,6 +869,33 @@ export function ValuationExcelImport({
                         </tfoot>
                       </table>
                     </div>
+                    <NoteEditor
+                      sectionKey="summary"
+                      value={data.notes?.summary ?? ""}
+                      onChange={(v) => patchNote("summary", v)}
+                      disabled={phase === "submitting"}
+                    />
+                  </Section>
+
+                  {/* Үлдсэн хэсгүүдийн тайлбар (эрх зүйн байдал, бусад хөрөнгө, дүгнэлт, баталгаа) */}
+                  <Section icon={ReceiptText} title="Бусад тайлбар" tone="slate">
+                    {(
+                      [
+                        "land_legal",
+                        "other_assets",
+                        "conclusion",
+                        "certification",
+                      ] as ValuationSectionKey[]
+                    ).map((k) => (
+                      <NoteEditor
+                        key={k}
+                        sectionKey={k}
+                        withLabel
+                        value={data.notes?.[k] ?? ""}
+                        onChange={(v) => patchNote(k, v)}
+                        disabled={phase === "submitting"}
+                      />
+                    ))}
                   </Section>
                 </div>
               )}
@@ -829,6 +980,37 @@ function Section({
         <p className="text-[12px] font-semibold text-slate-700 dark:text-white">{title}</p>
       </div>
       {children}
+    </div>
+  );
+}
+
+// Excel-ээс уншсан ТАЙЛБАР — хүснэгт бүрийн доор, оруулахын өмнө засаж болно.
+function NoteEditor({
+  sectionKey,
+  value,
+  onChange,
+  disabled,
+  withLabel,
+}: {
+  sectionKey: ValuationSectionKey;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+  withLabel?: boolean;
+}) {
+  return (
+    <div className="border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        Тайлбар{withLabel ? ` — ${VALUATION_SECTION_LABELS[sectionKey]}` : ""}
+      </p>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        rows={value ? 3 : 2}
+        placeholder="Excel-д тайлбар байхгүй — шаардлагатай бол энд бичнэ үү"
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-[#02c0ce] disabled:opacity-60 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
+      />
     </div>
   );
 }

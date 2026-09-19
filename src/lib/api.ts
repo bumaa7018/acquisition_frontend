@@ -71,7 +71,7 @@ import type {
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, BoundaryPreview, FundingSource,
-  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, AssetSpec, AssetCalculation,
+  CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
   ValuationSubmission, ValuationSubmissionHistory, ValuationSnapshot,
@@ -900,6 +900,13 @@ export const landApi = {
     api.delete(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(() => undefined),
   importValuation: (acqId: string, body: ValuationImportPayload) =>
     api.post<ApiResponse<ValuationImportResult>>(`/land-acquisitions/${acqId}/valuation-import`, body).then(r => r.data.data),
+  // Үнэлгээний хүснэгт бүрийн тайлбар
+  listValuationNotes: (acqId: string, parcelId: string, valuationType?: string) =>
+    api.get<ApiResponse<ValuationSectionNote[]>>(`/land-acquisitions/${acqId}/valuation-notes`, {
+      params: { parcel_id: parcelId, valuation_type: valuationType || undefined },
+    }).then(r => r.data.data ?? []),
+  saveValuationNotes: (acqId: string, body: ValuationNotesPayload) =>
+    api.put<ApiResponse<ValuationSectionNote[]>>(`/land-acquisitions/${acqId}/valuation-notes`, body).then(r => r.data.data ?? []),
   listCompensations: (acqId: string, parcelId?: string, valuationType?: string) =>
     api.get<ApiResponse<Compensation[]>>(`/land-acquisitions/${acqId}/compensations`, {
       params: { parcel_id: parcelId || undefined, valuation_type: valuationType || undefined },

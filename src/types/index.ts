@@ -1346,12 +1346,35 @@ export interface LandValuationUpsert {
   source_file_hash?: string;
 }
 
+// Үнэлгээний хүснэгт (3.1–5.1) бүрийн ТАЙЛБАР.
+// section_key нь src/lib/valuation-import-ийн ValuationSectionKey-тэй ижил утгатай.
+export interface ValuationSectionNote {
+  id: string;
+  acquisition_id: string;
+  parcel_id: string;
+  valuation_type: ValuationType;
+  section_key: string;
+  note: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Тайлбар хадгалах body — мапад ОРООГҮЙ хэсгийн тайлбар хэвээр үлдэнэ,
+// хоосон бичвэр нь тухайн хэсгийн тайлбарыг устгана.
+export interface ValuationNotesPayload {
+  parcel_id: string;
+  valuation_type?: ValuationType;
+  notes: Record<string, string>;
+}
+
 // Excel-ээс бүхэл үнэлгээг нэг хүсэлтээр (нэг транзакц) оруулах payload.
 export interface ValuationImportAssetPayload {
   asset_number?: string;
   asset_type: "real_state" | "property";
   asset_name: string;
   area_m2: number;
+  floor_count?: number; // "Давхрын тоо" үзүүлэлтээс
   unit?: string;
   capacity?: string;
   description?: string;
@@ -1389,6 +1412,8 @@ export interface ValuationImportPayload {
     source_file_hash?: string;
   };
   assets: ValuationImportAssetPayload[];
+  // Excel-ийн "ТАЙЛБАР:" мөрүүд (section_key → бичвэр)
+  section_notes?: Record<string, string>;
 }
 
 export interface ValuationImportResult {

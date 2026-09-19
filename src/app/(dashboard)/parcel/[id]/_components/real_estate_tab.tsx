@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef, type ReactNode } from "react";
 import {
   useQuery,
   useQueries,
@@ -26,6 +26,8 @@ import {
   type LandValuation,
   type LandValuationUpsert,
   type ValuationImportPayload,
+  type ValuationNotesPayload,
+  type ValuationSectionNote,
   type ParcelFull,
   type ValuationOrg,
   type ValuationSubmission,
@@ -59,6 +61,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
+import {
+  VALUATION_SECTION_KEYS,
+  VALUATION_SECTION_LABELS,
+  type ValuationSectionKey,
+} from "@/lib/valuation-import";
 import { ValuationExcelImport } from "./valuation_excel_import";
 import { AssetPhotoUpload } from "./asset_photo_upload";
 import {
@@ -104,6 +111,19 @@ const EMPTY_ASSET = {
   capacity: "",
   description: "",
 };
+
+// Дэлгэцийн хүснэгтэд шууд харьяалагдах тайлбарууд (хүснэгтийн доор гарна).
+const TABLE_NOTE_KEYS: ValuationSectionKey[] = [
+  "land_valuation",
+  "building_spec",
+  "building_cost",
+  "other_assets",
+  "summary",
+];
+// Үлдсэн хэсгүүд — "Үнэлгээний бусад тайлбар" картад гарна.
+const OTHER_NOTE_KEYS: ValuationSectionKey[] = VALUATION_SECTION_KEYS.filter(
+  (k) => !TABLE_NOTE_KEYS.includes(k),
+);
 
 type SpecValues = Record<number, string>;
 type CalcValues = Record<number, { unit: string; value: string }>;
@@ -208,10 +228,12 @@ function BuildingCostSection({
   acqId,
   assets,
   listCalcs,
+  note,
 }: {
   acqId: string;
   assets: Asset[];
   listCalcs: (a: string, id: string) => Promise<AssetCalculation[]>;
+  note?: ReactNode;
 }) {
   const results = useQueries({
     queries: assets.map((a) => ({
@@ -364,6 +386,99 @@ function BuildingCostSection({
           </tbody>
         </table>
       </div>
+      {note}
+    </div>
+  );
+}
+
+// Хүснэгтийн ТАЙЛБАР — Excel-ийн "ТАЙЛБАР:" мөрийн дэлгэц дээрх хувилбар.
+// Хүснэгт бүрийн ДООР байрлана: үнэлгээний үндэслэлийг (суурь үнийн тодотгол,
+// элэгдлийн хувь хэрхэн тогтоосон г.м) хянагч тэндээс уншина.
+function ValuationNoteBlock({
+  sectionKey,
+  value,
+  canEdit,
+  saving,
+  onSave,
+  label,
+}: {
+  sectionKey: ValuationSectionKey;
+  value: string;
+  canEdit: boolean;
+  saving: boolean;
+  onSave: (note: string) => void;
+  label?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  // Сервер талын утга шинэчлэгдвэл (хадгалсан/дахин татсан) засварлаагүй үед дагана.
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  if (!canEdit && !value) return null;
+
+  return (
+    <div className="border-t border-slate-100 px-5 py-3 dark:border-[#37394d]">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Тайлбар{label ? ` — ${label}` : ""}
+        </p>
+        {canEdit && !editing && (
+          <button
+            onClick={() => {
+              setDraft(value);
+              setEditing(true);
+            }}
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#02c0ce] hover:underline"
+          >
+            <Pencil className="h-3 w-3" />
+            {value ? "Засах" : "Тайлбар нэмэх"}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div className="mt-2 flex flex-col gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            placeholder="Үнэлгээний үндэслэл, тайлбарыг бичнэ үү…"
+            className={`${INP} h-auto py-2 leading-relaxed`}
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setEditing(false);
+                setDraft(value);
+              }}
+              disabled={saving}
+              className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+            >
+              Болих
+            </button>
+            <button
+              onClick={() => {
+                onSave(draft.trim());
+                setEditing(false);
+              }}
+              disabled={saving || draft === value}
+              className="inline-flex h-8 items-center rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+            >
+              Хадгалах
+            </button>
+          </div>
+        </div>
+      ) : value ? (
+        <p
+          className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-slate-600 dark:text-slate-300"
+          data-section={sectionKey}
+        >
+          {value}
+        </p>
+      ) : (
+        <p className="mt-1 text-[12px] text-slate-400">Тайлбар оруулаагүй байна</p>
+      )}
     </div>
   );
 }
@@ -372,9 +487,11 @@ function BuildingCostSection({
 function ConsolidationCard({
   rows,
   total,
+  note,
 }: {
   rows: { label: string; value: number }[];
   total: number;
+  note?: ReactNode;
 }) {
   return (
     <div className="ap-card overflow-hidden">
@@ -425,6 +542,7 @@ function ConsolidationCard({
           </tfoot>
         </table>
       </div>
+      {note}
     </div>
   );
 }
@@ -476,6 +594,10 @@ export function RealEstateTab({
           profApi.profUpsertLandValuation(a, body),
         importValuation: (a: string, body: ValuationImportPayload) =>
           profApi.profImportValuation(a, body),
+        listValuationNotes: (a: string, p: string, vt?: string) =>
+          profApi.profListValuationNotes(a, p, vt),
+        saveValuationNotes: (a: string, body: ValuationNotesPayload) =>
+          profApi.profSaveValuationNotes(a, body),
         deleteLandValuation: (a: string, p: string, vt?: string) =>
           profApi.profDeleteLandValuation(a, p, vt),
         uploadAssetPhoto: (a: string, id: string, file: File) =>
@@ -561,6 +683,10 @@ export function RealEstateTab({
           landApi.upsertLandValuation(a, body),
         importValuation: (a: string, body: ValuationImportPayload) =>
           landApi.importValuation(a, body),
+        listValuationNotes: (a: string, p: string, vt?: string) =>
+          landApi.listValuationNotes(a, p, vt),
+        saveValuationNotes: (a: string, body: ValuationNotesPayload) =>
+          landApi.saveValuationNotes(a, body),
         deleteLandValuation: (a: string, p: string, vt?: string) =>
           landApi.deleteLandValuation(a, p, vt),
         uploadAssetPhoto: (a: string, id: string, file: File) =>
@@ -801,6 +927,42 @@ export function RealEstateTab({
     queryFn: () => svc.getLandValuation(acqId, effectiveParcelCode, activeType),
     enabled: !!acqId && !!effectiveParcelCode,
   });
+
+  // Хүснэгт бүрийн ТАЙЛБАР (Excel-ийн "ТАЙЛБАР:" мөр эсвэл гараас бичсэн).
+  // Хуучин хувилбарын backend дээр энэ маршрут байхгүй (404) — тайлбар нь табын
+  // НЭМЭЛТ мэдээлэл тул алдааг залгиж, хоосноор үргэлжлүүлнэ (таб эвдрэхгүй)
+  // ба дахин оролдлого хийж хүсэлт үржүүлэхгүй.
+  const { data: sectionNotes = [] } = useQuery<ValuationSectionNote[]>({
+    queryKey: ["valuation-notes", acqId, effectiveParcelCode, activeType],
+    queryFn: () =>
+      svc
+        .listValuationNotes(acqId, effectiveParcelCode, activeType)
+        .catch(() => [] as ValuationSectionNote[]),
+    enabled: !!acqId && !!effectiveParcelCode,
+    retry: false,
+  });
+  const noteOf = (key: ValuationSectionKey) =>
+    sectionNotes.find((n) => n.section_key === key)?.note ?? "";
+
+  const saveNoteMutation = useMutation({
+    mutationFn: (body: ValuationNotesPayload) =>
+      svc.saveValuationNotes(acqId, body),
+    onSuccess: () => {
+      toast.success("Тайлбар хадгалагдлаа");
+      queryClient.invalidateQueries({
+        queryKey: ["valuation-notes", acqId, effectiveParcelCode, activeType],
+      });
+    },
+    onError: (err) =>
+      toast.error(getApiError(err, "Тайлбар хадгалахад алдаа гарлаа")),
+  });
+  // Нэг хүснэгтийн тайлбарыг дангаар нь хадгална (бусад хэсгийнх хэвээр үлдэнэ).
+  const saveNote = (key: ValuationSectionKey, note: string) =>
+    saveNoteMutation.mutate({
+      parcel_id: effectiveParcelCode,
+      valuation_type: activeType,
+      notes: { [key]: note },
+    });
 
   // Нөхөх олговрын үнэлгээний илгээх/зөвшөөрөх төлөв — урсгал бүрт тусдаа
   const { data: submission } = useQuery<ValuationSubmission | null>({
@@ -1335,6 +1497,7 @@ export function RealEstateTab({
     rows: ReturnType<typeof assetValuationRows>,
     emptyText: string,
     tone: SectionTone,
+    noteKey?: ValuationSectionKey,
   ) => {
     const total = sumCompensations(rows.flatMap((row) => row.compensations));
 
@@ -1713,6 +1876,15 @@ export function RealEstateTab({
             </table>
           </div>
         )}
+        {noteKey && (
+          <ValuationNoteBlock
+            sectionKey={noteKey}
+            value={noteOf(noteKey)}
+            canEdit={canEditCurrent}
+            saving={saveNoteMutation.isPending}
+            onSave={(text) => saveNote(noteKey, text)}
+          />
+        )}
       </div>
     );
   };
@@ -2023,6 +2195,14 @@ export function RealEstateTab({
                       activeType,
                     ],
                   });
+                  queryClient.invalidateQueries({
+                    queryKey: [
+                      "valuation-notes",
+                      acqId,
+                      effectiveParcelCode,
+                      activeType,
+                    ],
+                  });
                 }}
               />
               <button
@@ -2159,6 +2339,13 @@ export function RealEstateTab({
             </tfoot>
           </table>
         </div>
+        <ValuationNoteBlock
+          sectionKey="land_valuation"
+          value={noteOf("land_valuation")}
+          canEdit={canEditCurrent}
+          saving={saveNoteMutation.isPending}
+          onSave={(text) => saveNote("land_valuation", text)}
+        />
         {/* Excel-ээс импортолсон үнэлгээний тайлангийн мэдээлэл (байгаа бол) */}
         {landValuation &&
           (landValuation.appraiser_org_name ||
@@ -2371,12 +2558,22 @@ export function RealEstateTab({
             realStateRows,
             "Үл хөдлөх хөрөнгө бүртгэгдээгүй",
             REAL_ESTATE_TONE,
+            "building_spec",
           )}
           {realStateRows.length > 0 && (
             <BuildingCostSection
               acqId={acqId}
               assets={realStateRows.map((r) => r.asset)}
               listCalcs={svc.listAssetCalculations}
+              note={
+                <ValuationNoteBlock
+                  sectionKey="building_cost"
+                  value={noteOf("building_cost")}
+                  canEdit={canEditCurrent}
+                  saving={saveNoteMutation.isPending}
+                  onSave={(text) => saveNote("building_cost", text)}
+                />
+              }
             />
           )}
           {renderAssetTable(
@@ -2384,6 +2581,7 @@ export function RealEstateTab({
             propertyRows,
             "Эд хөрөнгө бүртгэгдээгүй",
             PROPERTY_TONE,
+            "other_assets",
           )}
           {(landTotalValue > 0 || totals.assetTotal > 0) && (
             <ConsolidationCard
@@ -2403,7 +2601,42 @@ export function RealEstateTab({
                 },
               ]}
               total={grandTotalValue}
+              note={
+                <ValuationNoteBlock
+                  sectionKey="summary"
+                  value={noteOf("summary")}
+                  canEdit={canEditCurrent}
+                  saving={saveNoteMutation.isPending}
+                  onSave={(text) => saveNote("summary", text)}
+                />
+              }
             />
+          )}
+          {/* Дэлгэц дээр өөрийн хүснэгтгүй (зардлын, эрх зүйн байдал, дүгнэлт г.м)
+              хэсгүүдийн тайлбарыг НЭГ картад цуглуулж харуулна — Excel-ээс уншсан
+              тайлбар аль нь ч алдагдахгүй. */}
+          {(canEditCurrent || OTHER_NOTE_KEYS.some((k) => noteOf(k))) && (
+            <div className="ap-card overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 dark:border-[#37394d]">
+                <FileText className="h-4 w-4 text-[#02c0ce]" />
+                <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+                  Үнэлгээний бусад тайлбар
+                </p>
+              </div>
+              {OTHER_NOTE_KEYS.filter(
+                (k) => canEditCurrent || noteOf(k),
+              ).map((k) => (
+                <ValuationNoteBlock
+                  key={k}
+                  sectionKey={k}
+                  label={VALUATION_SECTION_LABELS[k]}
+                  value={noteOf(k)}
+                  canEdit={canEditCurrent}
+                  saving={saveNoteMutation.isPending}
+                  onSave={(text) => saveNote(k, text)}
+                />
+              ))}
+            </div>
           )}
         </>
       )}

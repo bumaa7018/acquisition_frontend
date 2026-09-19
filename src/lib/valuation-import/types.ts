@@ -25,6 +25,66 @@ export interface ParsedLand {
   basePriceM2: number | null; // 1 м² суурь үнэ
   totalValue: number | null; // газрын нийт үнэ
   description: string;
+  // Шинэ загварын "Газрын эрх зүйн байдал" (Хүснэгт-2)-аас ирдэг нэмэлт мэдээлэл
+  stateRegNo?: string; // улсын бүртгэлийн дугаар
+  certAreaM2?: number | null; // гэрчилгээнд заасан газрын хэмжээ
+  purpose?: string; // газрын зориулалт
+  location?: string; // газрын байршил
+}
+
+// Үнэлгээний хүснэгт (хэсэг) бүрийн түлхүүр — ТАЙЛБАР-ыг хадгалах/харуулахад
+// frontend ба backend НЭГ ижил түлхүүр ашиглана.
+export type ValuationSectionKey =
+  | "property_desc" // 3.1 Үнэлж буй хөрөнгүүдийн танилцуулга
+  | "land_legal" // 3.2 Газрын эрх зүйн байдал
+  | "land_valuation" // 3.3 Газрын үнэлгээ
+  | "building_spec" // 3.4 Барилгын тодорхойлолт
+  | "building_cost" // 3.5 Барилгын өртгийн хандлага
+  | "other_assets" // 3.6 Бусад эд хөрөнгө
+  | "temporary_cost" // 3.7 Түр суурьшуулах зардал
+  | "clearance_cost" // 3.8 Газар чөлөөлөх зардал
+  | "lost_income" // 3.9 Орлогын алдагдсан боломж
+  | "summary" // 4.1 Хураангуй нэгтгэл
+  | "conclusion" // 4.2 Дүгнэлт
+  | "certification"; // 5.1 Үнэлгээний баталгаа
+
+export const VALUATION_SECTION_KEYS: ValuationSectionKey[] = [
+  "property_desc",
+  "land_legal",
+  "land_valuation",
+  "building_spec",
+  "building_cost",
+  "other_assets",
+  "temporary_cost",
+  "clearance_cost",
+  "lost_income",
+  "summary",
+  "conclusion",
+  "certification",
+];
+
+// Хэсэг бүрийн дэлгэц дээрх нэр (тайлбарыг харуулах толгой).
+export const VALUATION_SECTION_LABELS: Record<ValuationSectionKey, string> = {
+  property_desc: "Үнэлж буй хөрөнгүүдийн танилцуулга",
+  land_legal: "Газрын эрх зүйн байдал",
+  land_valuation: "Газрын үнэлгээ",
+  building_spec: "Барилгын тодорхойлолт",
+  building_cost: "Барилгын өртгийн хандлага",
+  other_assets: "Бусад эд хөрөнгө",
+  temporary_cost: "Түр суурьшуулах зардал",
+  clearance_cost: "Газар чөлөөлөх зардал",
+  lost_income: "Орлогын алдагдсан боломж",
+  summary: "Хураангуй нэгтгэл",
+  conclusion: "Үнэлгээний дүгнэлт",
+  certification: "Үнэлгээний баталгаа, хязгаарлах нөхцөл",
+};
+
+export type ValuationNotes = Partial<Record<ValuationSectionKey, string>>;
+
+// Барилгын тодорхойлолт (Хүснэгт-4) — барилга бүрийн үзүүлэлтүүд.
+export interface ParsedBuildingSpec {
+  name: string; // багананы толгой (Барилга-1 г.м)
+  items: { label: string; value: string }[];
 }
 
 export interface ParsedCoefficient {
@@ -63,6 +123,8 @@ export interface ParsedAsset {
   unitPrice: number | null; // Бусад хөрөнгө хүснэгтээс
   totalPrice: number | null; // тухайн хөрөнгийн нийт үнэ (нөхөн олговрын дүн)
   building?: ParsedBuildingCost; // зөвхөн барилгад
+  spec?: ParsedBuildingSpec; // зөвхөн барилгад (Хүснэгт-4)
+  floorCount?: number | null; // "Давхрын тоо" үзүүлэлтээс
 }
 
 // Газар чөлөөлөх / түр суурьшуулах зэрэг нэгж талбар түвшний зардал.
@@ -93,4 +155,9 @@ export interface ParsedValuation {
   warnings: ParsedWarning[];
   // Логик нэр → бодит sheet нэр (fuzzy тааруулсан). Тааруулж чадаагүй бол null.
   sheetMap: Record<string, string | null>;
+  // Хүснэгт бүрийн ТАЙЛБАР (шинэ загвар). Хуучин загварт хоосон.
+  notes: ValuationNotes;
+  // Задалсан загварын хэлбэр — preview дээр анхааруулга/дэлгэц тохируулахад.
+  layout: "single-sheet" | "multi-sheet";
+  conclusion: string; // 4.2 дүгнэлтийн бичвэр (байвал)
 }
