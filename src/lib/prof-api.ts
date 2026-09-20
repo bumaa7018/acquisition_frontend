@@ -312,6 +312,12 @@ class ProfApiService {
       .then(r => r.data.data)
   }
 
+  profUpdateAsset(acqId: string, assetId: string, body: Partial<Asset>): Promise<Asset | undefined> {
+    return apiClient
+      .put<ApiResponse<Asset>>(`/prof/land-acquisitions/${acqId}/assets/${assetId}`, body)
+      .then(r => r.data.data)
+  }
+
   profDeleteAsset(acqId: string, assetId: string): Promise<void> {
     return apiClient.delete(`/prof/land-acquisitions/${acqId}/assets/${assetId}`)
   }

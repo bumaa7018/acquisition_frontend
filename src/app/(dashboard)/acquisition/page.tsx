@@ -47,6 +47,7 @@ import { PlanSelect } from "../parcel/_components/plan_select";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/components/ui/plan-code-search";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { YearMultiSelect } from "@/components/ui/year-multi-select";
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
@@ -470,15 +471,14 @@ const EMPTY_DRAFT = {
   subCat: 0,
   employeeId: "",
   employeeName: "",
-  year: 0,
+  years: [] as number[],
   // Сум/дүүргийн код — чөлөөлөлтийн хилээр тодорхойлогдож
   // land_acquisition_au-д хадгалагдсан утга.
   au2Code: "",
 };
 type AcqDraft = typeof EMPTY_DRAFT;
 
-const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 2019 + 1 }, (_, i) => CURRENT_YEAR - i);
+
 
 export default function LandPage() {
   const router = useRouter();
@@ -557,7 +557,7 @@ export default function LandPage() {
   }
 
   const hasFilter = !!(
-    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.year || draft.au2Code
+    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.years.length > 0 || draft.au2Code
   );
 
   const { data: rawData, isLoading } = useQuery({
@@ -575,7 +575,7 @@ export default function LandPage() {
         sub_category_id: filter.subCat || undefined,
         assigned_user_id: filter.employeeId || undefined,
         au2_code: filter.au2Code || undefined,
-        years: filter.year ? [filter.year] : undefined,
+        years: filter.years.length ? filter.years : undefined,
       }),
     enabled: !isProfOrg,
   });
@@ -695,14 +695,11 @@ export default function LandPage() {
             <option value="">Бүх сум/дүүрэг</option>
             {districts.map(d => <option key={d.code} value={d.code}>{d.name || d.code}</option>)}
           </select>
-          <select
-            value={draft.year}
-            onChange={(e) => setDraft(d => ({ ...d, year: Number(e.target.value) }))}
-            className="w-24 shrink-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
-          >
-            <option value={0}>Бүх он</option>
-            {YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+          <YearMultiSelect
+            value={draft.years}
+            onChange={(years) => setDraft(d => ({ ...d, years }))}
+            className="w-32 shrink-0"
+          />
           <button
             onClick={applySearch}
             className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors shrink-0"

@@ -4,7 +4,7 @@
 // флоугаас ТУСДАА. Мэрг. байгууллага Илгээх → Санхүү Зөвшөөрөх/Буцаах. Бүх шилжилтэд
 // тайлбар шаардлагатай ба төлөвийн түүх хадгалагдана.
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Building2,
   Calculator,
@@ -24,6 +24,8 @@ import {
   Camera,
   ReceiptText,
   CircleDollarSign,
+  Boxes,
+  Truck,
   XCircle,
   ChevronDown,
   Pencil,
@@ -42,6 +44,20 @@ import {
   VALUATION_STATUS_LABELS,
   VALUATION_TYPE_LABELS,
 } from "@/types";
+import {
+  VSection,
+  VHeadRight,
+  VLandValuationTable,
+  VAssetsTable,
+  VBuildingSpecTable,
+  VBuildingCostTable,
+  VCostTable,
+  VSummaryTable,
+  V_COST_GROUPS,
+  VPhotoMark,
+  VFileChip,
+  sectionHeading,
+} from "./valuation_view";
 import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS } from "./constants";
 import {
   assetValuationRows,
@@ -254,7 +270,7 @@ const ACTION_META: Record<
   },
   cancel: {
     title: "Баталгаажсан үнэлгээг хүчингүй болгох",
-    desc: "Одоогийн баталгаажсан үнэлгээг түүх болгон хадгалаад, нэгж талбарыг дахин үнэлгээ оруулах төлөвт буцаана. Цуцлах тайлангийн PDF хавсралт заавал.",
+    desc: "Одоогийн баталгаажсан үнэлгээг түүх болгон хадгалаад, нэгж талбарыг дахин үнэлгээ оруулах төлөвт буцаана. Хүчингүй болгосон ҮНДЭСЛЭЛИЙН PDF заавал хавсаргана.",
     label: "Хүчингүй болгох",
     color: "#dc2626",
     Icon: Ban,
@@ -282,11 +298,12 @@ export function ValuationTransitionModal({
   onClose: () => void;
 }) {
   const meta = ACTION_META[action];
-  // Хавсралт нь буцаалт/цуцлалтад хамаарна: илгээх/зөвшөөрөх дээр файл
-  // асуувал тэр файл хаана хадгалагдахыг хэрэглэгч андуурна (backend ч хаядаг).
+  // Хавсралт: ИЛГЭЭХ үед = баталгаажаагүй үнэлгээний тайлан (PDF/Word, ЗААВАЛ),
+  // буцаах үед = үндэслэлийн PDF (заавал биш), цуцлах үед = PDF (заавал).
   const allowAttachment =
-    (action === "return" || action === "cancel") && !!onFile;
-  const attachmentRequired = action === "cancel";
+    (action === "submit" || action === "return" || action === "cancel") && !!onFile;
+  const attachmentRequired = action === "cancel" || action === "submit";
+  const isDraftReport = action === "submit";
   const noteEmpty = note.trim().length === 0;
   const attachmentMissing = attachmentRequired && !file;
   return (
@@ -332,7 +349,7 @@ export function ValuationTransitionModal({
           {allowAttachment && (
             <div className="mt-3">
               <label className="mb-1 block text-[11px] font-semibold text-slate-500">
-                Хавсралт{" "}
+                {isDraftReport ? "Баталгаажаагүй үнэлгээний тайлан" : "Хавсралт"}{" "}
                 {attachmentRequired ? (
                   <span className="text-rose-500">*</span>
                 ) : (
@@ -369,7 +386,11 @@ export function ValuationTransitionModal({
                   Файл сонгох
                   <input
                     type="file"
-                    accept="application/pdf,.pdf"
+                    accept={
+                      isDraftReport
+                        ? "application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        : "application/pdf,.pdf"
+                    }
                     className="hidden"
                     disabled={pending}
                     onChange={(e) => {
@@ -382,9 +403,11 @@ export function ValuationTransitionModal({
                 </label>
               )}
               <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                {attachmentRequired
-                  ? "Цуцлах үндэслэл болон тайлангийн PDF хавсралт заавал хавсаргана."
-                  : "Залруулга шаардсан хуудас, дүнгийн зөрүүний хүснэгт зэргийг хавсаргаж болно."}
+                {isDraftReport
+                  ? "Санхүү хянахдаа уншина. PDF эсвэл Word (.docx). Дахин илгээхэд солигдоно."
+                  : attachmentRequired
+                    ? "Хүчингүй болгосон үндэслэлийн PDF-ийг заавал хавсаргана."
+                    : "Залруулга шаардсан хуудас, дүнгийн зөрүүний хүснэгт зэргийг хавсаргаж болно."}
               </p>
             </div>
           )}
@@ -511,38 +534,6 @@ function compensationLabel(comp: Compensation) {
   );
 }
 
-type SnapshotTone = {
-  card: string;
-  header: string;
-  tableHead: string;
-  footer: string;
-  icon: string;
-};
-
-const SNAPSHOT_LAND_TONE: SnapshotTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-emerald-200 dark:border-l-emerald-500/40",
-  header: "bg-emerald-50/70 dark:bg-emerald-500/10",
-  tableHead: "bg-emerald-50/55 dark:bg-emerald-500/10",
-  footer: "bg-emerald-50/70 dark:bg-emerald-500/10",
-  icon: "text-emerald-500",
-};
-
-const SNAPSHOT_REAL_ESTATE_TONE: SnapshotTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-sky-200 dark:border-l-sky-500/40",
-  header: "bg-sky-50/70 dark:bg-sky-500/10",
-  tableHead: "bg-sky-50/55 dark:bg-sky-500/10",
-  footer: "bg-sky-50/70 dark:bg-sky-500/10",
-  icon: "text-sky-500",
-};
-
-const SNAPSHOT_PROPERTY_TONE: SnapshotTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-amber-200 dark:border-l-amber-500/40",
-  header: "bg-amber-50/70 dark:bg-amber-500/10",
-  tableHead: "bg-amber-50/55 dark:bg-amber-500/10",
-  footer: "bg-amber-50/70 dark:bg-amber-500/10",
-  icon: "text-amber-500",
-};
-
 function SnapshotStatusBadge({ status }: { status?: string }) {
   if (status === "approved")
     return (
@@ -566,432 +557,6 @@ function SnapshotStatusBadge({ status }: { status?: string }) {
   );
 }
 
-function SnapshotCompensationRows({
-  compensations,
-  emptyText,
-  showStatus = true,
-  actionColumn = false,
-}: {
-  compensations: Compensation[];
-  emptyText: string;
-  showStatus?: boolean;
-  actionColumn?: boolean;
-}) {
-  if (!compensations.length) {
-    return (
-      <tr>
-        <td
-          colSpan={5 + (showStatus ? 1 : 0) + (actionColumn ? 1 : 0)}
-          className="px-3 py-4 text-center text-slate-400"
-        >
-          {emptyText}
-        </td>
-      </tr>
-    );
-  }
-  return (
-    <>
-      {compensations.map((comp) => (
-        <tr key={comp.id}>
-          <td className="px-3 py-2.5 text-slate-700 dark:text-slate-200">
-            {compensationLabel(comp)}
-          </td>
-          <td className="px-3 py-2.5 text-slate-500">
-            {COMP_TYPE_LABELS[comp.compensation_type] ??
-              comp.compensation_type}
-          </td>
-          <td className="px-3 py-2.5 tabular-nums text-slate-500">
-            {comp.coverage_percent}%
-          </td>
-          <td className="px-3 py-2.5 font-semibold tabular-nums text-slate-800 dark:text-slate-100">
-            {money(comp.amount)}
-          </td>
-          <td className="px-3 py-2.5 text-slate-400">
-            {comp.compensation_date ? formatDate(comp.compensation_date) : "—"}
-            {/* Архивын ҮНЭЛГЭЭНИЙ ТАЙЛАН — олговрын мөр устсан ч файл нь
-                хадгалалтад үлдэнэ. */}
-            {comp.valuation_report_url && (
-              <a
-                href={comp.valuation_report_url}
-                target="_blank"
-                rel="noreferrer"
-                title={comp.valuation_report_name || "Үнэлгээний тайлан"}
-                className="mt-1 flex max-w-[150px] items-center gap-1 text-[10px] font-semibold text-[#02c0ce] hover:underline"
-              >
-                <FileText className="h-3 w-3 shrink-0" />
-                <span className="truncate">
-                  {comp.valuation_report_name || "Үнэлгээний тайлан"}
-                </span>
-              </a>
-            )}
-          </td>
-          {showStatus && (
-            <td className="px-3 py-2.5">
-              <div className="flex flex-col gap-1">
-                <SnapshotStatusBadge status={comp.status} />
-                {comp.review_note && comp.status === "approved" && (
-                  <p
-                    className="text-[10px] text-emerald-600 dark:text-emerald-400 max-w-[160px] truncate"
-                    title={comp.review_note}
-                  >
-                    {comp.review_note}
-                  </p>
-                )}
-                {comp.review_note && comp.status === "rejected" && (
-                  <p
-                    className="text-[10px] text-red-500 dark:text-red-400 max-w-[160px] truncate"
-                    title={comp.review_note}
-                  >
-                    {comp.review_note}
-                  </p>
-                )}
-              </div>
-            </td>
-          )}
-          {actionColumn && <td className="px-3 py-2.5" />}
-        </tr>
-      ))}
-    </>
-  );
-}
-
-function SnapshotAssetTable({
-  title,
-  rows,
-  emptyText,
-  tone,
-}: {
-  title: string;
-  rows: ReturnType<typeof assetValuationRows>;
-  emptyText: string;
-  tone: SnapshotTone;
-}) {
-  const total = sumCompensations(rows.flatMap((row) => row.compensations));
-  const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
-
-  return (
-    <div className={tone.card}>
-      <div
-        className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${tone.header}`}
-      >
-        <div className="flex items-center gap-2">
-          <Building2 className={`h-4 w-4 ${tone.icon}`} />
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-            {title}
-          </p>
-        </div>
-        <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
-          {money(total)}
-        </p>
-      </div>
-      {!rows.length ? (
-        <div className="px-5 py-7 text-center text-[12px] text-slate-400">
-          {emptyText}
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[12px]">
-            <thead>
-              <tr
-                className={`border-b border-slate-100 dark:border-[#37394d] ${tone.tableHead}`}
-              >
-                {[
-                  "Хөрөнгө",
-                  "Дугаар",
-                  "Талбай",
-                  "Эзэмшигч",
-                  "Нийт үнэлгээ",
-                  "",
-                ].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                    >
-                      {head}
-                    </th>
-                  ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-              {rows.map(({ asset, compensations, total: assetTotal }) => {
-                const expanded = expandedAssetId === asset.id;
-                return (
-                  <Fragment key={asset.id}>
-                    <tr className="hover:bg-slate-50/60 dark:hover:bg-[#252630]/50">
-                      <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
-                        {asset.asset_name ||
-                          ASSET_TYPE_LABELS[asset.asset_type]}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {asset.asset_number || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {formatArea(asset.area_m2)}
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">
-                        {asset.owner_name || "—"}
-                      </td>
-                      <td className="px-4 py-3 font-semibold tabular-nums text-slate-800 dark:text-slate-100">
-                        {money(assetTotal)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="inline-flex items-center gap-1">
-                          {/* Архивын ЗУРАГ — хөрөнгийн мөр устсан ч файл нь
-                              хадгалалтад үлдэнэ. Зөвхөн харах (засах биш). */}
-                          {asset.photo_pdf_url && (
-                            <a
-                              href={asset.photo_pdf_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={asset.photo_pdf_name || "Зураг харах"}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630]"
-                            >
-                              <Camera className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                          <button
-                            onClick={() =>
-                              setExpandedAssetId(expanded ? null : asset.id)
-                            }
-                            title={expanded ? "Хаах" : "Засах"}
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
-                              expanded
-                                ? "bg-[#02c0ce]/10 text-[#02c0ce]"
-                                : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630]"
-                            }`}
-                          >
-                            {expanded ? (
-                              <ChevronDown className="h-3.5 w-3.5" />
-                            ) : (
-                              <Pencil className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                    {expanded && (
-                      <tr
-                        key={`${asset.id}-details`}
-                        className="bg-slate-50/60 dark:bg-[#1a1d20]"
-                      >
-                        <td colSpan={6} className="px-4 py-4">
-                          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-white/[0.08] dark:bg-[#1e1f27]">
-                            <table className="w-full text-[12px]">
-                              <thead>
-                                <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                                  {[
-                                    "Үнэлсэн хэсэг",
-                                    "Хэлбэр",
-                                    "Хувь",
-                                    "Дүн",
-                                    "Огноо",
-                                    "Статус",
-                                    "",
-                                  ].map((head) => (
-                                    <th
-                                      key={head}
-                                      className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                                    >
-                                      {head}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                                <SnapshotCompensationRows
-                                  compensations={compensations}
-                                  emptyText="Үнэлгээний задаргаа бүртгэгдээгүй"
-                                  actionColumn
-                                />
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SnapshotBuildingCostSection({
-  assets,
-  calcTypes,
-}: {
-  assets: SnapshotAsset[];
-  calcTypes: AssetCalcType[];
-}) {
-  const calcTypeByID = new Map(calcTypes.map((type) => [type.id, type]));
-  const cols = assets
-    .map((asset) => ({
-      asset,
-      calcs: (asset.calculations ?? [])
-        .map((calc, idx) => {
-          const calcTypeID = Number(calc.calc_type_id || 0);
-          const calcType = calcTypeByID.get(calcTypeID);
-          return {
-            id: String(calc.id || `${asset.id}-calc-${idx}`),
-            asset_id: String(calc.asset_id || asset.id),
-            calc_type_id: calcTypeID,
-            calc_code: String(calc.calc_code || calcType?.code || ""),
-            calc_name: String(calc.calc_name || calcType?.name || ""),
-            calc_group: calc.calc_group || calcType?.grp || "",
-            unit: String(calc.unit || calcType?.default_unit || ""),
-            value: Number(calc.value || 0),
-          };
-        })
-        .filter((calc) => calc.calc_name && Number(calc.value) !== 0),
-    }))
-    .filter((x) => x.calcs.length > 0);
-  if (!cols.length) return null;
-
-  // Эгнээний тодорхойлолт: calc төрлүүдийн нэгдэл (эхнийхээс эрэмбэ хадгална)
-  const rowDefs: { name: string; unit: string; group: string }[] = [];
-  const seen = new Set<string>();
-  for (const { calcs } of cols)
-    for (const c of calcs)
-      if (!seen.has(c.calc_name)) {
-        seen.add(c.calc_name);
-        rowDefs.push({
-          name: c.calc_name,
-          unit: c.unit,
-          group: c.calc_group ?? "",
-        });
-      }
-  const groupedRowDefs: typeof rowDefs = [];
-  const emittedGroups = new Set<string>();
-  for (const row of rowDefs) {
-    if (!row.group) {
-      groupedRowDefs.push(row);
-      continue;
-    }
-    if (emittedGroups.has(row.group)) continue;
-    emittedGroups.add(row.group);
-    groupedRowDefs.push(...rowDefs.filter((item) => item.group === row.group));
-  }
-  const valOf = (calcs: (typeof cols)[number]["calcs"], name: string) => {
-    const c = calcs.find((x) => x.calc_name === name);
-    return c ? Number(c.value).toLocaleString() : "—";
-  };
-  // Бүлэг (Итгэлцүүр г.м)-ийн rowspan-г тооцоолно
-  const groupSpan = new Map<number, number>();
-  const groupCovered = new Set<number>();
-  for (let i = 0; i < groupedRowDefs.length;) {
-    const g = groupedRowDefs[i].group;
-    if (g) {
-      let j = i;
-      while (
-        j + 1 < groupedRowDefs.length &&
-        groupedRowDefs[j + 1].group === g
-      )
-        j++;
-      groupSpan.set(i, j - i + 1);
-      for (let k = i + 1; k <= j; k++) groupCovered.add(k);
-      i = j + 1;
-    } else i++;
-  }
-
-  return (
-    <div className={SNAPSHOT_REAL_ESTATE_TONE.card}>
-      <div
-        className={`flex items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_REAL_ESTATE_TONE.header}`}
-      >
-        <Calculator className={`h-4 w-4 ${SNAPSHOT_REAL_ESTATE_TONE.icon}`} />
-        <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-          Барилгын өртгийн хандлага
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-[12px]">
-          <thead>
-            <tr
-              className={`border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_REAL_ESTATE_TONE.tableHead}`}
-            >
-              <th
-                colSpan={2}
-                className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-              >
-                Үзүүлэлт
-              </th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Хэмжих нэгж
-              </th>
-              {cols.map(({ asset }) => (
-                <th
-                  key={asset.id}
-                  className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                >
-                  {asset.asset_name || "Барилга"}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-            <tr>
-              <td
-                colSpan={2}
-                className="px-4 py-2.5 text-slate-700 dark:text-slate-200"
-              >
-                Барилгын талбай
-              </td>
-              <td className="px-4 py-2.5 text-slate-500">м²</td>
-              {cols.map(({ asset }) => (
-                <td
-                  key={asset.id}
-                  className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100"
-                >
-                  {formatArea(asset.area_m2)}
-                </td>
-              ))}
-            </tr>
-            {groupedRowDefs.map((rd, idx) => (
-              <tr key={rd.name}>
-                {rd.group ? (
-                  <>
-                    {groupSpan.has(idx) && (
-                      <td
-                        rowSpan={groupSpan.get(idx)}
-                        className="px-4 py-2.5 align-top font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-[#37394d]"
-                      >
-                        {rd.group}
-                      </td>
-                    )}
-                    <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">
-                      {rd.name}
-                    </td>
-                  </>
-                ) : (
-                  <td
-                    colSpan={2}
-                    className="px-4 py-2.5 text-slate-700 dark:text-slate-200"
-                  >
-                    {rd.name}
-                  </td>
-                )}
-                <td className="px-4 py-2.5 text-slate-500">{rd.unit}</td>
-                {cols.map(({ asset, calcs }) => (
-                  <td
-                    key={asset.id}
-                    className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100"
-                  >
-                    {valOf(calcs, rd.name)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function SnapshotDetailModal({
   snapshot,
   calcTypes,
@@ -1004,9 +569,6 @@ function SnapshotDetailModal({
   const assets = snapshotAssets(snapshot);
   const compensations = snapshotCompensations(snapshot);
   const land = snapshotLandValuation(snapshot);
-  const realStateAssets = assets.filter(
-    (asset) => asset.asset_type === "real_state",
-  );
   const realStateRows = assetValuationRows(assets, compensations, "real_state");
   const propertyRows = assetValuationRows(assets, compensations, "property");
   const landComps = parcelValuations(compensations, snapshot.parcel_id).filter(
@@ -1018,6 +580,103 @@ function SnapshotDetailModal({
   const landTotal = Number(land.total_value || 0) || landArea * landPrice;
   const grandTotal = landTotal + totals.assetTotal;
   const hasLandValuation = landArea > 0 || landPrice > 0 || landTotal > 0;
+
+  // ЗӨВХӨН ЭНЭ хүчингүй болсон үнэлгээний файлууд. Эцэг компонентоос
+  // (одоогийн урсгалаас) файл АВАХГҮЙ: цуцлалтын дараа шинээр үнэлгээ хийж
+  // баталгаажуулбал түүний "Баталгаажсан тайлан" нь хуучин түүхэн бичлэг дээр
+  // гарч ирж, өөр үнэлгээний баримтыг энэ үнэлгээнийх мэт харуулж байсан.
+  // Цуцлах мөчид энэ үнэлгээнд хамаарч байсан БҮХ файлыг backend нь
+  // `snapshot.files`-д хуулж, нэгж талбарын хавсралт/илгээлтээс хасдаг.
+  // Хуучин (000039-өөс өмнөх) snapshot-д тэр жагсаалт хоосон тул
+  // report_url/source_url багана руу ухарна.
+  //
+  // ЗУРАГ энд ОРОХГҮЙ: хөрөнгийн зургийг хүснэгтийн "Харах" товчоор нээнэ
+  // (snapshot доторх photo_pdf_url).
+  const legacyFiles: ValuationHistoryFile[] = [
+    ...(snapshot.report_url
+      ? [
+          {
+            label: "Баталгаажсан тайлан",
+            name: snapshot.report_name,
+            href: snapshot.report_url,
+            tone: "emerald" as const,
+          },
+        ]
+      : []),
+    ...(snapshot.source_url
+      ? [
+          {
+            label: "Үнэлгээний хүснэгт",
+            name: snapshot.source_name,
+            href: snapshot.source_url,
+          },
+        ]
+      : []),
+  ];
+  const detailFiles: ValuationHistoryFile[] = (
+    snapshot.files?.length
+      ? snapshot.files.map((f) => ({
+          label: f.label,
+          name: f.name,
+          href: f.url,
+          tone:
+            f.label === "Баталгаажсан тайлан" ? ("emerald" as const) : undefined,
+        }))
+      : legacyFiles
+  ).filter(
+    (f, i, arr) => !!f.href && arr.findIndex((x) => x.href === f.href) === i,
+  );
+
+  // Барилгын үзүүлэлт/өртгийн багануудыг snapshot доторх spec/calc-аас бэлдэнэ
+  // (табтай ИЖИЛ бүтэц: багана = барилга, мөр = үзүүлэлт).
+  const snapshotSpecColumns = snapshot.assets
+    .filter((a) => a.asset_type === "real_state" && (a.specs ?? []).some((sp) => (sp.value ?? "").trim() !== ""))
+    .map((a) => ({
+      id: String(a.id ?? ""),
+      name: a.asset_name || "Барилга",
+      items: [
+        { label: "Давхрын тоо", value: a.floor_count ? String(a.floor_count) : "" },
+        ...(a.specs ?? []).map((sp) => ({ label: sp.spec_name ?? "", value: sp.value ?? "" })),
+        { label: "Талбай", value: formatArea(Number(a.area_m2 ?? 0)) },
+      ],
+    }));
+  const snapshotCostColumns = snapshot.assets
+    .filter((a) => a.asset_type === "real_state" && (a.calculations ?? []).some((c) => Number(c.value) !== 0))
+    .map((a) => ({
+      id: String(a.id ?? ""),
+      name: a.asset_name || "Барилга",
+      items: [
+        { label: "Барилгын талбай", group: "", unit: "м²", value: Number(a.area_m2 ?? 0) || null },
+        ...(a.calculations ?? [])
+          .filter((c) => Number(c.value) !== 0)
+          .map((c) => ({
+            label:
+              c.calc_name ||
+              calcTypes.find((t) => t.id === c.calc_type_id)?.name ||
+              "Үзүүлэлт",
+            group: c.calc_group ?? calcTypes.find((t) => t.id === c.calc_type_id)?.grp ?? "",
+            unit: c.unit ?? "",
+            value: Number(c.value),
+          })),
+      ],
+    }));
+
+  // Бусад эд хөрөнгө ба зардлын хүснэгтүүд — табтай ИЖИЛ дүрмээр ангилна.
+  const snapshotCostMatched = new Set<string>();
+  const snapshotCostSections = V_COST_GROUPS.map((g) => {
+    const rows = propertyRows.filter((r) => {
+      const hay = `${r.asset.description ?? ""} ${r.asset.notes ?? ""} ${r.asset.asset_name ?? ""}`;
+      const hit = g.match.test(hay);
+      if (hit) snapshotCostMatched.add(r.asset.id);
+      return hit;
+    });
+    return { key: g.key, title: g.title, rows };
+  });
+  snapshotCostSections.unshift({
+    key: "other_assets" as (typeof V_COST_GROUPS)[number]["key"],
+    title: "Бусад эд хөрөнгийн үнэлгээ",
+    rows: propertyRows.filter((r) => !snapshotCostMatched.has(r.asset.id)),
+  });
 
   return (
     <div
@@ -1040,22 +699,8 @@ function SnapshotDetailModal({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Тухайн үнэлгээний ТАЙЛАН — хавсралтаас хасагдсан ч эндээс
-                татагдана. */}
-            {snapshot.report_url && (
-              <a
-                href={snapshot.report_url}
-                target="_blank"
-                rel="noreferrer"
-                title={snapshot.report_name || "Үнэлгээний тайлан"}
-                className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/5 dark:border-white/[0.08]"
-              >
-                <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">
-                  {snapshot.report_name || "Үнэлгээний тайлан"}
-                </span>
-              </a>
-            )}
+            {/* Тайлан нь доорх "Хавсаргасан файлууд" хэсэгт бусад файлын
+                хамт гарна — толгойд давхардуулахгүй. */}
             <button
               onClick={onClose}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
@@ -1091,293 +736,220 @@ function SnapshotDetailModal({
             </p>
           )}
 
-          {hasLandValuation && (
-            <div className={SNAPSHOT_LAND_TONE.card}>
-              <div
-                className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.header}`}
-              >
-                <div className="flex items-center gap-2">
-                  <ReceiptText
-                    className={`h-4 w-4 ${SNAPSHOT_LAND_TONE.icon}`}
-                  />
-                  <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                    Газрын үнэлгээ
-                  </p>
-                </div>
-                <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
-                  {money(landTotal)}
-                </p>
+          {/* ХАВСАРГАСАН ФАЙЛУУД — ЗӨВХӨН энэ цуцлалтад хамаарах файлууд
+              (Баталгаажсан тайлан, Тайлан, Үнэлгээний хүснэгт). Цуцлах үед
+              эдгээр нь parcel_document / илгээлтийн мөрөөс хасагдаж snapshot-д
+              холбогддог тул өөр газар (Баримт бичиг, Нөхөх олговор) харагдахгүй.
+              Зургийг хүснэгтийн "Харах" товчоор нээнэ. */}
+          {detailFiles.length > 0 && (
+            <div className="ap-card px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Хавсаргасан файлууд
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {detailFiles.map((f, i) => (
+                  <VFileChip key={i} label={f.label} name={f.name} href={f.href} tone={f.tone} />
+                ))}
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr
-                      className={`border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.tableHead}`}
-                    >
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Үзүүлэлт
-                      </th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Хэмжих нэгж
-                      </th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Утга
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                    <tr>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                        Чөлөөлөлтөнд өртсөн газрын хэмжээ
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">м²</td>
-                      <td className="px-4 py-3">
-                        <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100">
-                          {landArea ? landArea.toLocaleString() : "—"}
-                        </span>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                        Газрын 1 м² талбайн суурь үнэ
-                      </td>
-                      <td className="px-4 py-3 text-slate-500">Төгрөг</td>
-                      <td className="px-4 py-3">
-                        <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100">
-                          {landPrice ? landPrice.toLocaleString() : "—"}
-                        </span>
-                      </td>
-                    </tr>
-                  </tbody>
-                  <tfoot>
-                    <tr
-                      className={`border-t-2 border-slate-200 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.footer}`}
-                    >
-                      <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">
-                        Газрын үнэлгээ
-                      </td>
-                      <td />
-                      <td className="px-4 py-3 font-bold tabular-nums text-slate-900 dark:text-white">
-                        {money(landTotal)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              {(land.appraiser_org_name ||
-                land.ownership_cert_no ||
-                land.source_file_name) && (
-                <div className="grid gap-x-6 gap-y-1.5 border-t border-slate-100 px-5 py-3 text-[12px] dark:border-[#37394d] md:grid-cols-2 lg:grid-cols-3">
-                  {land.ownership_cert_no && (
-                    <div>
-                      <span className="text-slate-400">
-                        Өмчлөх эрхийн гэрчилгээ:{" "}
-                      </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.ownership_cert_no}
-                      </span>
-                    </div>
-                  )}
-                  {land.appraiser_org_name && (
-                    <div>
-                      <span className="text-slate-400">
-                        Үнэлгээний байгууллага:{" "}
-                      </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.appraiser_org_name}
-                      </span>
-                    </div>
-                  )}
-                  {land.appraiser_director && (
-                    <div>
-                      <span className="text-slate-400">Захирал: </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.appraiser_director}
-                      </span>
-                    </div>
-                  )}
-                  {land.appraiser_reg_no && (
-                    <div>
-                      <span className="text-slate-400">Регистр: </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.appraiser_reg_no}
-                      </span>
-                    </div>
-                  )}
-                  {land.appraiser_contact && (
-                    <div>
-                      <span className="text-slate-400">Холбоо барих: </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.appraiser_contact}
-                      </span>
-                    </div>
-                  )}
-                  {land.source_file_name && (
-                    <div>
-                      <span className="text-slate-400">Эх файл: </span>
-                      <span className="text-slate-700 dark:text-slate-200">
-                        {land.source_file_name}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
+          )}
+
+          {/* ХҮСНЭГТҮҮД — "Нөхөх олговор" табтай ЯГ ижил бүтэц, ижил компонент
+              (valuation_view). Ялгаа нь зөвхөн ЗАСАХ боломжгүй: түүх тул бүх
+              нүд зөвхөн уншигдана. */}
+          {hasLandValuation && (
+            <VSection
+              icon={ReceiptText}
+              title={sectionHeading("land_valuation").title}
+              tone="emerald"
+              right={
+                <VHeadRight
+                  label={sectionHeading("land_valuation").label}
+                  extra={
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      {money(landTotal)}
+                    </span>
+                  }
+                />
+              }
+            >
+              <VLandValuationTable
+                total={landTotal}
+                areaCell={<span className="font-semibold">{landArea ? landArea.toLocaleString() : "—"}</span>}
+                priceCell={<span className="font-semibold">{landPrice ? landPrice.toLocaleString() : "—"}</span>}
+              />
+            </VSection>
+          )}
+
+          <VSection
+            icon={Boxes}
+            title={sectionHeading("property_desc").title}
+            tone="sky"
+            right={
+              <VHeadRight
+                label={sectionHeading("property_desc").label}
+                extra={<span className="text-slate-400">{assets.length} хөрөнгө</span>}
+              />
+            }
+          >
+            <VAssetsTable
+              rows={[...realStateRows, ...propertyRows].map((row, i) => ({
+                id: row.asset.id,
+                seq: i + 1,
+                name: row.asset.asset_name || ASSET_TYPE_LABELS[row.asset.asset_type],
+                kind: row.asset.asset_type,
+                unit: row.asset.unit,
+                qty: row.asset.area_m2 || null,
+                total: row.total,
+                description: row.asset.description || "",
+                hasPhoto: !!row.asset.photo_pdf_url,
+              }))}
+              showPhoto
+              renderPhoto={(row) => {
+                const a = assets.find((x) => x.id === row.id);
+                return <VPhotoMark has={!!a?.photo_pdf_url} href={a?.photo_pdf_url} />;
+              }}
+              emptyText="Хөрөнгө бүртгэгдээгүй"
+            />
+          </VSection>
+
+          {snapshotSpecColumns.length > 0 && (
+            <VSection
+              icon={Building2}
+              title={sectionHeading("building_spec").title}
+              tone="sky"
+              right={<VHeadRight label={sectionHeading("building_spec").label} />}
+            >
+              <VBuildingSpecTable columns={snapshotSpecColumns} />
+            </VSection>
+          )}
+
+          {snapshotCostColumns.length > 0 && (
+            <VSection
+              icon={Calculator}
+              title={sectionHeading("building_cost").title}
+              tone="sky"
+              right={<VHeadRight label={sectionHeading("building_cost").label} />}
+            >
+              <VBuildingCostTable columns={snapshotCostColumns} />
+            </VSection>
+          )}
+
+          {snapshotCostSections.map(({ key, title, rows }) =>
+            rows.length === 0 ? null : (
+              <VSection
+                key={key}
+                icon={key === "other_assets" ? Boxes : Truck}
+                title={sectionHeading(key).title || title}
+                tone={key === "other_assets" ? "sky" : "amber"}
+                right={
+                  <VHeadRight
+                    label={sectionHeading(key).label}
+                    extra={
+                      <span className="font-semibold text-slate-800 dark:text-slate-100">
+                        {money(sumCompensations(rows.flatMap((r) => r.compensations)))}
+                      </span>
+                    }
+                  />
+                }
+              >
+                <VCostTable
+                  rows={rows.map((r) => ({
+                    id: r.asset.id,
+                    name: r.asset.asset_name || "—",
+                    unit: r.asset.unit,
+                    qty: r.asset.area_m2 || null,
+                    unitPrice: r.asset.unit_price || null,
+                    total: r.total,
+                    hasPhoto: !!r.asset.photo_pdf_url,
+                  }))}
+                  showPhoto
+                  renderPhoto={(row) => {
+                    const a = assets.find((x) => x.id === row.id);
+                    return <VPhotoMark has={!!a?.photo_pdf_url} href={a?.photo_pdf_url} />;
+                  }}
+                />
+              </VSection>
+            ),
           )}
 
           {landComps.length > 0 && (
-            <div className={SNAPSHOT_LAND_TONE.card}>
-              <div
-                className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.header}`}
-              >
-                <div className="flex items-center gap-2">
-                  <ReceiptText
-                    className={`h-4 w-4 ${SNAPSHOT_LAND_TONE.icon}`}
-                  />
-                  <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                    Газрын олговор
-                  </p>
-                </div>
-                <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
+            <VSection
+              icon={ReceiptText}
+              title="Газрын олговор"
+              tone="emerald"
+              right={
+                <span className="font-semibold text-slate-800 dark:text-slate-100">
                   {money(totals.landTotal)}
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[620px] text-[12px]">
-                  <thead>
-                    <tr
-                      className={`border-b border-slate-100 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.tableHead}`}
-                    >
-                      {["Үнэлгээ", "Хэлбэр", "Хувь", "Дүн", "Огноо"].map(
-                        (head) => (
-                          <th
-                            key={head}
-                            className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                          >
-                            {head}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                    <SnapshotCompensationRows
-                      compensations={landComps}
-                      emptyText="Газрын олговор бүртгэгдээгүй"
-                      showStatus={false}
-                    />
-                  </tbody>
-                  <tfoot>
-                    <tr
-                      className={`border-t border-slate-200 dark:border-[#37394d] ${SNAPSHOT_LAND_TONE.footer}`}
-                    >
-                      <td
-                        colSpan={3}
-                        className="px-4 py-3 text-right font-semibold text-slate-500"
-                      >
-                        Нийт газрын олговор
-                      </td>
-                      <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
-                        {money(totals.landTotal)}
-                      </td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+                </span>
+              }
+            >
+              {landComps.map((comp) => (
+                <div
+                  key={comp.id}
+                  className="flex items-center justify-between gap-2 border-b border-slate-50 px-4 py-2.5 text-[12px] last:border-0 dark:border-[#37394d]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-slate-700 dark:text-slate-200">
+                      {comp.note?.trim() || COMP_TYPE_LABELS[comp.compensation_type] || comp.compensation_type}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type} ·{" "}
+                      {comp.coverage_percent}%
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-semibold tabular-nums text-slate-800 dark:text-white">
+                    {money(comp.amount)}
+                  </span>
+                </div>
+              ))}
+            </VSection>
           )}
-
-          <SnapshotAssetTable
-            title="Үл хөдлөх хөрөнгийн үнэлгээ"
-            rows={realStateRows}
-            emptyText="Үл хөдлөх хөрөнгө бүртгэгдээгүй"
-            tone={SNAPSHOT_REAL_ESTATE_TONE}
-          />
-          {realStateRows.length > 0 && (
-            <SnapshotBuildingCostSection
-              assets={realStateAssets}
-              calcTypes={calcTypes}
-            />
-          )}
-          <SnapshotAssetTable
-            title="Эд хөрөнгийн үнэлгээ"
-            rows={propertyRows}
-            emptyText="Эд хөрөнгө бүртгэгдээгүй"
-            tone={SNAPSHOT_PROPERTY_TONE}
-          />
 
           {(landTotal > 0 || totals.assetTotal > 0) && (
-            <div className="ap-card overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 dark:border-[#37394d]">
-                <CircleDollarSign className="h-4 w-4 text-[#02c0ce]" />
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                  Нэгтгэл
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-[12px]">
-                  <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                      <th className="w-12 px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Д/д
-                      </th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Үнэлэгдсэн хөрөнгийн төрөл
-                      </th>
-                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        Мөнгөн дүн /₮/
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                    {[
-                      { label: "Газар", value: landTotal },
-                      {
-                        label: "Үл хөдлөх хөрөнгө",
-                        value: sumCompensations(
-                          realStateRows.flatMap((row) => row.compensations),
-                        ),
-                      },
-                      {
-                        label: "Эд хөрөнгө",
-                        value: sumCompensations(
-                          propertyRows.flatMap((row) => row.compensations),
-                        ),
-                      },
-                    ].map((row, idx) => (
-                      <tr key={row.label}>
-                        <td className="px-4 py-2.5 text-slate-400">
-                          {idx + 1}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">
-                          {row.label}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">
-                          {money(row.value)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-200 bg-slate-50/70 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                      <td />
-                      <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">
-                        Нөхөн олговрын нийт дүн
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900 dark:text-white">
-                        {money(grandTotal || snapshotTotal(snapshot))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
+            <VSection
+              icon={CircleDollarSign}
+              title={sectionHeading("summary").title}
+              tone="slate"
+              right={
+                <VHeadRight
+                  label={sectionHeading("summary").label}
+                  extra={
+                    <span className="font-semibold text-[#02c0ce]">
+                      {money(grandTotal || snapshotTotal(snapshot))}
+                    </span>
+                  }
+                />
+              }
+            >
+              <VSummaryTable
+                rows={[
+                  { label: "Газрын үнэлгээ", value: landTotal },
+                  {
+                    label: "Үл хөдлөх хөрөнгө",
+                    value: sumCompensations(realStateRows.flatMap((r) => r.compensations)),
+                  },
+                  {
+                    label: "Эд хөрөнгө, зардал",
+                    value: sumCompensations(propertyRows.flatMap((r) => r.compensations)),
+                  },
+                ]}
+                total={grandTotal || snapshotTotal(snapshot)}
+              />
+            </VSection>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+/** Түүхэн snapshot дээр харуулах хавсаргасан файл (тайлан, эх Excel). */
+interface ValuationHistoryFile {
+  label: string;
+  name?: string;
+  href?: string;
+  tone?: "sky" | "emerald" | "slate";
 }
 
 export function ValuationHistoryModal({

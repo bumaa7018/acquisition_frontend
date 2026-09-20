@@ -22,6 +22,7 @@ import { profApi } from "@/lib/prof-api";
 import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import type { ParcelStatus } from "@/types";
 import { monthlyTimeline } from "@/lib/timeline-months";
@@ -62,10 +63,8 @@ const MapView = dynamic(() => import("@/components/map/map-view"), {
 const EMPTY_STATUS_LIST: ParcelStatus[] = [];
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from(
-  { length: CURRENT_YEAR - 2000 + 1 },
-  (_, i) => CURRENT_YEAR - i,
-);
+// Оны сонголт — БҮХ дэлгэцэд нэг ижил муж (2010-оос хойш).
+const YEAR_OPTIONS = SHARED_YEAR_OPTIONS;
 
 /* ── Text highlighter ────────────────────────────────── */
 function Highlight({ text, query }: { text: string; query: string }) {

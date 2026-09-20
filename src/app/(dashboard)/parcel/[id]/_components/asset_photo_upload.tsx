@@ -12,7 +12,7 @@ import { getApiError } from "@/lib/utils";
 
 // Олон зургийг нэг PDF болгох. Формат жигдрүүлэхийн тулд бүх зургийг canvas-аар
 // JPEG болгож (том зургийг 1600px хүртэл багасгаж), pdf-lib-ээр хуудас болгон нэмнэ.
-async function imagesToPdf(files: File[]): Promise<Uint8Array> {
+export async function imagesToPdf(files: File[]): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const MAX = 1600;
   for (const file of files) {
@@ -40,6 +40,14 @@ async function imagesToPdf(files: File[]): Promise<Uint8Array> {
   return doc.save();
 }
 
+/** Зургийн файлуудыг нэг PDF файл болгоно (хөрөнгийн зураг заавал PDF-ээр хадгалагдана). */
+export async function photosToPdfFile(files: File[], name: string): Promise<File> {
+  const bytes = await imagesToPdf(files);
+  return new File([bytes as unknown as BlobPart], `zurag-${name || "hurungu"}.pdf`, {
+    type: "application/pdf",
+  });
+}
+
 export interface AssetPhotoAsset {
   id: string;
   asset_name: string;
@@ -52,12 +60,18 @@ export function AssetPhotoUpload({
   canEdit,
   uploadFn,
   onDone,
+  label,
+  hideView,
 }: {
   acqId: string;
   asset: AssetPhotoAsset;
   canEdit: boolean;
   uploadFn: (a: string, id: string, file: File) => Promise<{ photo_pdf_url: string; photo_pdf_name: string } | undefined>;
   onDone: () => void;
+  /** Утга өгвөл дүрс биш, БИЧВЭРТЭЙ товч болно (жагсаалтын нүдэнд "Зураг оруулах"). */
+  label?: string;
+  /** Жагсаалтад PDF-ийн холбоос хэрэггүй (мөр дарахад дэлгэрэнгүйд харагдана). */
+  hideView?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [photos, setPhotos] = useState<File[]>([]);
@@ -96,7 +110,7 @@ export function AssetPhotoUpload({
 
   return (
     <>
-      {asset.photo_pdf_url && (
+      {asset.photo_pdf_url && !hideView && (
         <a
           href={asset.photo_pdf_url}
           target="_blank"
@@ -107,15 +121,25 @@ export function AssetPhotoUpload({
           <FileText className="h-3.5 w-3.5" />
         </a>
       )}
-      {canEdit && (
-        <button
-          onClick={() => setOpen(true)}
-          title={asset.photo_pdf_url ? "Зураг солих" : "Зураг оруулах"}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630]"
-        >
-          <Camera className="h-3.5 w-3.5" />
-        </button>
-      )}
+      {canEdit &&
+        (label ? (
+          <button
+            onClick={() => setOpen(true)}
+            title={asset.photo_pdf_url ? "Зураг солих" : "Зураг оруулах"}
+            className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#02c0ce]/40 bg-[#02c0ce]/5 px-2 text-[11px] font-semibold text-[#02c0ce] transition-colors hover:bg-[#02c0ce]/10"
+          >
+            <Camera className="h-3 w-3" />
+            {label}
+          </button>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            title={asset.photo_pdf_url ? "Зураг солих" : "Зураг оруулах"}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630]"
+          >
+            <Camera className="h-3.5 w-3.5" />
+          </button>
+        ))}
 
       {open && (
         <div

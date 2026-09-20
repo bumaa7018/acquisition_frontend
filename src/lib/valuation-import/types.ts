@@ -81,6 +81,55 @@ export const VALUATION_SECTION_LABELS: Record<ValuationSectionKey, string> = {
 
 export type ValuationNotes = Partial<Record<ValuationSectionKey, string>>;
 
+// Excel дэх хүснэгтийн ТАНИХ мэдээлэл — дугаар, "Хүснэгт-N" шошго, гарчиг, дараалал.
+// Дэлгэц дээр хүснэгтийг ЯГ Excel-ийн дугаар/нэр/дарааллаар харуулахад хэрэглэнэ.
+export interface ValuationSectionMeta {
+  no: string; // "3.3"
+  label: string; // "Хүснэгт-3"
+  title: string; // "Газрын үнэлгээ" (дугааргүй цэвэр гарчиг)
+  order: number; // Excel дэх дараалал (0-оос)
+}
+
+export type ValuationSections = Partial<Record<ValuationSectionKey, ValuationSectionMeta>>;
+
+// Загварын СТАНДАРТ дугаарлалт. Excel-ээс дугаар ирээгүй үед (хуучин загвар,
+// эсвэл хадгалагдаагүй импорт) дэлгэц үүнийг хэрэглэнэ — ингэснээр хүснэгтийн
+// дугаар/шошго ХАА САЙГҮЙ ижил харагдана.
+export const VALUATION_SECTION_DEFAULTS: Record<
+  ValuationSectionKey,
+  { no: string; label: string }
+> = {
+  property_desc: { no: "3.1", label: "Хүснэгт 1" },
+  land_legal: { no: "3.2", label: "Хүснэгт-2" },
+  land_valuation: { no: "3.3", label: "Хүснэгт-3" },
+  building_spec: { no: "3.4", label: "Хүснэгт-4" },
+  building_cost: { no: "3.5", label: "Хүснэгт-5" },
+  other_assets: { no: "3.6", label: "Хүснэгт-6" },
+  temporary_cost: { no: "3.7", label: "Хүснэгт-7" },
+  clearance_cost: { no: "3.8", label: "Хүснэгт-8" },
+  lost_income: { no: "3.9", label: "Хүснэгт-9" },
+  summary: { no: "4.1", label: "Хүснэгт-10" },
+  conclusion: { no: "4.2", label: "" },
+  certification: { no: "5.1", label: "" },
+};
+
+// Хүснэгтгүй файлд (хуучин загвар) ашиглах ӨГӨГДМӨЛ дараалал — шинэ загварын
+// 3.1 → 5.1 дугаарлалттай ижил.
+export const VALUATION_SECTION_ORDER: ValuationSectionKey[] = [
+  "property_desc",
+  "land_legal",
+  "land_valuation",
+  "building_spec",
+  "building_cost",
+  "other_assets",
+  "temporary_cost",
+  "clearance_cost",
+  "lost_income",
+  "summary",
+  "conclusion",
+  "certification",
+];
+
 // Барилгын тодорхойлолт (Хүснэгт-4) — барилга бүрийн үзүүлэлтүүд.
 export interface ParsedBuildingSpec {
   name: string; // багананы толгой (Барилга-1 г.м)
@@ -157,6 +206,8 @@ export interface ParsedValuation {
   sheetMap: Record<string, string | null>;
   // Хүснэгт бүрийн ТАЙЛБАР (шинэ загвар). Хуучин загварт хоосон.
   notes: ValuationNotes;
+  // Хүснэгт бүрийн дугаар/нэр/дараалал (шинэ загвар). Хуучин загварт хоосон.
+  sections: ValuationSections;
   // Задалсан загварын хэлбэр — preview дээр анхааруулга/дэлгэц тохируулахад.
   layout: "single-sheet" | "multi-sheet";
   conclusion: string; // 4.2 дүгнэлтийн бичвэр (байвал)

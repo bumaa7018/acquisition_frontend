@@ -32,6 +32,7 @@ import type {
   ParsedValuation,
   ValuationNotes,
   ValuationSectionKey,
+  ValuationSections,
 } from "./types.ts";
 
 /** Мөрийн хоосон биш нүднүүдийг (индекстэй нь) буцаана. */
@@ -202,6 +203,22 @@ function collectNotes(sections: ValuationSection[]): ValuationNotes {
   return notes;
 }
 
+/** Хэсэг бүрийн дугаар/шошго/гарчиг/дарааллыг цуглуулна (Excel-ийн хүснэгтийн таних мэдээлэл). */
+function collectSections(sections: ValuationSection[]): ValuationSections {
+  const out: ValuationSections = {};
+  let order = 0;
+  for (const s of sections) {
+    if (!s.key || out[s.key]) continue;
+    out[s.key] = {
+      no: s.no,
+      label: s.tableLabel,
+      title: cleanTitle(s.title),
+      order: order++,
+    };
+  }
+  return out;
+}
+
 /** ШИНЭ загварын нэг sheet-ийг бүрэн задлана. */
 export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"> {
   const sections = splitSections(grid);
@@ -241,6 +258,9 @@ export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"
   const hasSpecData = specs.some((sp) => sp.items.some((it) => it.value !== ""));
   const usedBuilding = new Set<number>();
   const usedSpec = new Set<number>();
+  // "Бусад эд хөрөнгө" (3.6) хүснэгтийн аль мөр нь аль хэдийн хөрөнгөтэй
+  // тааруулагдсаныг тэмдэглэнэ — ингэснээр нэг мөр ХОЁР хөрөнгө болж орохгүй.
+  const usedPrice = new Set<number>();
 
   const assets: ParsedAsset[] = [];
   const start = cols.headerIdx >= 0 ? cols.headerIdx + 1 : 0;
@@ -259,7 +279,10 @@ export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"
       continue;
     }
 
-    const kind: AssetKind | null = detectKind(name);
+    // Хөрөнгийн ТӨРЛИЙГ системийн бүртгэлээс хайхгүй: барилга/сууц нь үл хөдлөх,
+    // БУСАД БҮХ зүйл нэрээрээ "эд хөрөнгө" болж хадгалагдана. Ингэснээр загварт
+    // байхгүй шинэ төрлийн хөрөнгө ч чөлөөтэй орж ирнэ.
+    const kind: AssetKind = detectKind(name) ?? "property";
     const asset: ParsedAsset = {
       seqNo,
       name,
@@ -291,14 +314,14 @@ export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"
       }
     } else {
       const m = priceNames.length ? bestMatch(name, priceNames, 0.7) : null;
-      if (m) {
+      if (m && !usedPrice.has(m.index)) {
+        usedPrice.add(m.index);
         const p = priceRows[m.index];
         asset.unitPrice = p.unitPrice;
         if (asset.quantity == null) asset.quantity = p.quantity;
         asset.totalPrice =
           p.totalPrice ??
           (asset.quantity != null && p.unitPrice != null ? asset.quantity * p.unitPrice : null);
-        if (asset.kind == null) asset.kind = "property";
       }
     }
 
@@ -314,9 +337,14 @@ export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"
     assets.push(asset);
   }
 
-  // Хөрөнгийн танилцуулгад ороогүй ч "Бусад эд хөрөнгө"-д үнэтэй байгаа мөрүүдийг нэмнэ
+  // Хөрөнгийн танилцуулгад (3.1) ороогүй ч "Бусад эд хөрөнгө" (3.6)-д үнэтэй
+  // байгаа мөрүүдийг НЭМЖ хөрөнгө болгоно. Аль хэдийн тааруулагдсан (usedPrice)
+  // болон нэр нь давхацсан мөрийг ДАХИН нэмэхгүй — эс бөгөөс нэг эд хөрөнгө
+  // хоёр хүснэгтэд хоёр өөр бичлэг болж хадгалагдана.
   const known = new Set(assets.map((a) => normalizeKey(a.name)));
-  for (const p of priceRows) {
+  for (let pi = 0; pi < priceRows.length; pi++) {
+    const p = priceRows[pi];
+    if (usedPrice.has(pi)) continue;
     if (known.has(normalizeKey(p.name))) continue;
     if ((p.totalPrice == null || p.totalPrice === 0) && p.unitPrice == null) continue;
     assets.push({
@@ -366,6 +394,7 @@ export function extractSingleSheet(grid: Grid): Omit<ParsedValuation, "warnings"
       return map;
     })(),
     notes: collectNotes(sections),
+    sections: collectSections(sections),
     layout: "single-sheet",
     conclusion,
   };

@@ -955,6 +955,13 @@ export interface ValuationSubmission {
    */
   attachment_url: string;
   attachment_name: string;
+  /**
+   * БАТАЛГААЖААГҮЙ үнэлгээний тайлан — ИЛГЭЭХ үед хавсаргана (PDF/Word).
+   * Буцаах/цуцлах хавсралтаас ТУСДАА хадгалагддаг тул хяналтын бүх шатанд
+   * уншигдана. Солих нь зөвхөн дахин илгээх замаар.
+   */
+  draft_report_url: string;
+  draft_report_name: string;
   created_at: string;
   updated_at: string;
 }
@@ -1028,6 +1035,23 @@ export interface ValuationSnapshot {
    */
   report_url?: string;
   report_name?: string;
+  /** Цуцлах үед хавсралтаас хасагдсан эх хүснэгт (Excel) — түүхээс татагдана. */
+  source_url?: string;
+  source_name?: string;
+  /**
+   * Цуцлах мөчид ЭНЭ үнэлгээнд хамаарч байсан файлуудын бүрэн жагсаалт
+   * (Баталгаажсан тайлан, Тайлан, Үнэлгээний хүснэгт). Зөвхөн түүхийн
+   * дэлгэрэнгүйд харагдана. Хуучин snapshot-д хоосон — тэр үед
+   * report_url/source_url руу ухарна.
+   */
+  files?: ValuationSnapshotFile[];
+}
+
+/** Архивын нэг файлын холбоос. */
+export interface ValuationSnapshotFile {
+  label: string;
+  name?: string;
+  url?: string;
 }
 
 export const VALUATION_STATUS_LABELS: Record<ValuationStatus, string> = {
@@ -1355,6 +1379,11 @@ export interface ValuationSectionNote {
   valuation_type: ValuationType;
   section_key: string;
   note: string;
+  // Excel дэх хүснэгтийн таних мэдээлэл — дэлгэц дугаар/нэр/дарааллыг үүнээс авна
+  section_no?: string; // "3.3"
+  table_label?: string; // "Хүснэгт-3"
+  title?: string; // "Газрын үнэлгээ"
+  sort_order?: number;
   updated_by?: string;
   created_at: string;
   updated_at: string;
@@ -1414,6 +1443,15 @@ export interface ValuationImportPayload {
   assets: ValuationImportAssetPayload[];
   // Excel-ийн "ТАЙЛБАР:" мөрүүд (section_key → бичвэр)
   section_notes?: Record<string, string>;
+  // Хүснэгт бүрийн тайлбар + дугаар/нэр/дараалал (Excel-ийнхээр харуулахад)
+  sections?: {
+    key: string;
+    note: string;
+    section_no: string;
+    table_label: string;
+    title: string;
+    sort_order: number;
+  }[];
 }
 
 export interface ValuationImportResult {

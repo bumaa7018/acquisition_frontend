@@ -21,6 +21,7 @@ import {
 import {
   type Asset,
   type AssetCalculation,
+  type AssetSpec,
   type Compensation,
   type CompensationHistory,
   type LandValuation,
@@ -43,8 +44,6 @@ import {
   Trash2,
   Building2,
   ReceiptText,
-  ChevronDown,
-  ChevronRight,
   Calculator,
   CircleDollarSign,
   Camera,
@@ -57,17 +56,40 @@ import {
   Pencil,
   Paperclip,
   FileText,
+  Download,
   Upload,
+  Truck,
+  Boxes,
 } from "lucide-react";
 import { toast } from "sonner";
 import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
 import {
-  VALUATION_SECTION_KEYS,
+  VSection,
+  VNote,
+  VPhotoMark,
+  VFileChip,
+  VFootNote,
+  VHeadRight,
+  VKeyValueTable,
+  VLandValuationTable,
+  VAssetsTable,
+  VBuildingSpecTable,
+  VBuildingCostTable,
+  VCostTable,
+  VSummaryTable,
+  V_COST_GROUPS,
+  sectionHeading,
+  type VAssetRow,
+  type VCostRow,
+} from "./valuation_view";
+import {
+  VALUATION_SECTION_ORDER,
   VALUATION_SECTION_LABELS,
   type ValuationSectionKey,
 } from "@/lib/valuation-import";
 import { ValuationExcelImport } from "./valuation_excel_import";
-import { AssetPhotoUpload } from "./asset_photo_upload";
+import { AssetPhotoUpload, photosToPdfFile } from "./asset_photo_upload";
+import { AssetPhotoView } from "./asset_photo_view";
 import {
   ValuationSubmissionBar,
   ValuationTransitionModal,
@@ -110,20 +132,9 @@ const EMPTY_ASSET = {
   unit: "",
   capacity: "",
   description: "",
+  // Зөвхөн эд хөрөнгөд: аль зардлын хүснэгтэд харагдахыг тодорхойлно ("" = бусад эд хөрөнгө)
+  cost_category: "",
 };
-
-// Дэлгэцийн хүснэгтэд шууд харьяалагдах тайлбарууд (хүснэгтийн доор гарна).
-const TABLE_NOTE_KEYS: ValuationSectionKey[] = [
-  "land_valuation",
-  "building_spec",
-  "building_cost",
-  "other_assets",
-  "summary",
-];
-// Үлдсэн хэсгүүд — "Үнэлгээний бусад тайлбар" картад гарна.
-const OTHER_NOTE_KEYS: ValuationSectionKey[] = VALUATION_SECTION_KEYS.filter(
-  (k) => !TABLE_NOTE_KEYS.includes(k),
-);
 
 type SpecValues = Record<number, string>;
 type CalcValues = Record<number, { unit: string; value: string }>;
@@ -173,38 +184,6 @@ const EMPTY_VALUATION = {
 
 type ValuationForm = typeof EMPTY_VALUATION;
 
-type SectionTone = {
-  card: string;
-  header: string;
-  tableHead: string;
-  footer: string;
-  icon: string;
-};
-
-const LAND_TONE: SectionTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-emerald-200 dark:border-l-emerald-500/40",
-  header: "bg-emerald-50/70 dark:bg-emerald-500/10",
-  tableHead: "bg-emerald-50/55 dark:bg-emerald-500/10",
-  footer: "bg-emerald-50/70 dark:bg-emerald-500/10",
-  icon: "text-emerald-500",
-};
-
-const REAL_ESTATE_TONE: SectionTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-sky-200 dark:border-l-sky-500/40",
-  header: "bg-sky-50/70 dark:bg-sky-500/10",
-  tableHead: "bg-sky-50/55 dark:bg-sky-500/10",
-  footer: "bg-sky-50/70 dark:bg-sky-500/10",
-  icon: "text-sky-500",
-};
-
-const PROPERTY_TONE: SectionTone = {
-  card: "ap-card overflow-hidden border-l-4 border-l-amber-200 dark:border-l-amber-500/40",
-  header: "bg-amber-50/70 dark:bg-amber-500/10",
-  tableHead: "bg-amber-50/55 dark:bg-amber-500/10",
-  footer: "bg-amber-50/70 dark:bg-amber-500/10",
-  icon: "text-amber-500",
-};
-
 function money(value: number) {
   return `${Math.round(Number(value) || 0).toLocaleString()}₮`;
 }
@@ -222,18 +201,26 @@ function valuationOrgLabel(org?: ValuationOrg) {
   return org.name || org.short_name || org.register_no;
 }
 
-// Барилгын өртгийн хандлага — үл хөдлөх хөрөнгө бүрийг ХОЙШ БАГАНА болгож (Excel шиг)
-// нэг хүснэгтэд харуулна. asset_calculation-г хөрөнгө бүрээр татаж, calc төрлөөр эгнээ болгоно.
+// Барилгын өртгийн хандлага (Хүснэгт-5) — asset_calculation-ыг барилга бүрээр
+// татаж, Excel оруулах цонхтой ИЖИЛ хүснэгтээр (VBuildingCostTable) харуулна.
 function BuildingCostSection({
   acqId,
   assets,
   listCalcs,
   note,
+  title = "Барилгын өртгийн хандлагаарх тооцоолол",
+  label,
+  activeId,
+  onSelect,
 }: {
   acqId: string;
   assets: Asset[];
   listCalcs: (a: string, id: string) => Promise<AssetCalculation[]>;
   note?: ReactNode;
+  title?: string;
+  label?: string;
+  activeId?: string | null;
+  onSelect?: (id: string) => void;
 }) {
   const results = useQueries({
     queries: assets.map((a) => ({
@@ -241,311 +228,120 @@ function BuildingCostSection({
       queryFn: () => listCalcs(acqId, a.id),
     })),
   });
-  const cols = assets
+  const columns = assets
     .map((asset, i) => ({
       asset,
       calcs: (results[i]?.data ?? []).filter((c) => Number(c.value) !== 0),
     }))
-    .filter((x) => x.calcs.length > 0);
-  if (!cols.length) return null;
-
-  // Эгнээний тодорхойлолт: calc төрлүүдийн нэгдэл (эхнийхээс эрэмбэ хадгална)
-  const rowDefs: { name: string; unit: string; group: string }[] = [];
-  const seen = new Set<string>();
-  for (const { calcs } of cols)
-    for (const c of calcs)
-      if (!seen.has(c.calc_name)) {
-        seen.add(c.calc_name);
-        rowDefs.push({
-          name: c.calc_name,
-          unit: c.unit,
+    .filter((x) => x.calcs.length > 0)
+    .map(({ asset, calcs }) => ({
+      id: asset.id,
+      name: asset.asset_name || "Барилга",
+      items: [
+        { label: "Барилгын талбай", group: "", unit: "м²", value: asset.area_m2 ?? null },
+        ...calcs.map((c) => ({
+          label: c.calc_name,
           group: c.calc_group ?? "",
-        });
-      }
-  const groupedRowDefs: typeof rowDefs = [];
-  const emittedGroups = new Set<string>();
-  for (const row of rowDefs) {
-    if (!row.group) {
-      groupedRowDefs.push(row);
-      continue;
-    }
-    if (emittedGroups.has(row.group)) continue;
-    emittedGroups.add(row.group);
-    groupedRowDefs.push(...rowDefs.filter((item) => item.group === row.group));
-  }
-  const valOf = (calcs: AssetCalculation[], name: string) => {
-    const c = calcs.find((x) => x.calc_name === name);
-    return c ? Number(c.value).toLocaleString() : "—";
-  };
-  // Бүлэг (Итгэлцүүр г.м)-ийн rowspan-г тооцоолно
-  const groupSpan = new Map<number, number>();
-  const groupCovered = new Set<number>();
-  for (let i = 0; i < groupedRowDefs.length;) {
-    const g = groupedRowDefs[i].group;
-    if (g) {
-      let j = i;
-      while (
-        j + 1 < groupedRowDefs.length &&
-        groupedRowDefs[j + 1].group === g
-      )
-        j++;
-      groupSpan.set(i, j - i + 1);
-      for (let k = i + 1; k <= j; k++) groupCovered.add(k);
-      i = j + 1;
-    } else i++;
-  }
+          unit: c.unit,
+          value: Number(c.value),
+        })),
+      ],
+    }));
+  if (!columns.length) return null;
 
   return (
-    <div className={REAL_ESTATE_TONE.card}>
-      <div
-        className={`flex items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${REAL_ESTATE_TONE.header}`}
-      >
-        <Calculator className={`h-4 w-4 ${REAL_ESTATE_TONE.icon}`} />
-        <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-          Барилгын өртгийн хандлага
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] text-[12px]">
-          <thead>
-            <tr
-              className={`border-b border-slate-100 dark:border-[#37394d] ${REAL_ESTATE_TONE.tableHead}`}
-            >
-              <th
-                colSpan={2}
-                className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-              >
-                Үзүүлэлт
-              </th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Хэмжих нэгж
-              </th>
-              {cols.map(({ asset }) => (
-                <th
-                  key={asset.id}
-                  className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                >
-                  {asset.asset_name || "Барилга"}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-            <tr>
-              <td
-                colSpan={2}
-                className="px-4 py-2.5 text-slate-700 dark:text-slate-200"
-              >
-                Барилгын талбай
-              </td>
-              <td className="px-4 py-2.5 text-slate-500">м²</td>
-              {cols.map(({ asset }) => (
-                <td
-                  key={asset.id}
-                  className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100"
-                >
-                  {formatArea(asset.area_m2)}
-                </td>
-              ))}
-            </tr>
-            {groupedRowDefs.map((rd, idx) => (
-              <tr key={rd.name}>
-                {rd.group ? (
-                  <>
-                    {groupSpan.has(idx) && (
-                      <td
-                        rowSpan={groupSpan.get(idx)}
-                        className="px-4 py-2.5 align-top font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-[#37394d]"
-                      >
-                        {rd.group}
-                      </td>
-                    )}
-                    <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">
-                      {rd.name}
-                    </td>
-                  </>
-                ) : (
-                  <td
-                    colSpan={2}
-                    className="px-4 py-2.5 text-slate-700 dark:text-slate-200"
-                  >
-                    {rd.name}
-                  </td>
-                )}
-                <td className="px-4 py-2.5 text-slate-500">{rd.unit}</td>
-                {cols.map(({ asset, calcs }) => (
-                  <td
-                    key={asset.id}
-                    className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100"
-                  >
-                    {valOf(calcs, rd.name)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <VSection icon={Calculator} title={title} tone="sky" right={<VHeadRight label={label} />}>
+      <VBuildingCostTable columns={columns} activeId={activeId} onSelect={onSelect} />
       {note}
-    </div>
+    </VSection>
   );
 }
 
-// Хүснэгтийн ТАЙЛБАР — Excel-ийн "ТАЙЛБАР:" мөрийн дэлгэц дээрх хувилбар.
-// Хүснэгт бүрийн ДООР байрлана: үнэлгээний үндэслэлийг (суурь үнийн тодотгол,
-// элэгдлийн хувь хэрхэн тогтоосон г.м) хянагч тэндээс уншина.
-function ValuationNoteBlock({
-  sectionKey,
-  value,
-  canEdit,
-  saving,
-  onSave,
+// Барилгын тодорхойлолт (Хүснэгт-4) — asset_spec-ийг барилга бүрээр багана болгож,
+// оруулах цонхтой ИЖИЛ хүснэгтээр харуулна.
+function BuildingSpecSection({
+  acqId,
+  assets,
+  listSpecs,
+  note,
+  title = "Барилгын тодорхойлолт",
   label,
+  activeId,
+  onSelect,
 }: {
-  sectionKey: ValuationSectionKey;
-  value: string;
-  canEdit: boolean;
-  saving: boolean;
-  onSave: (note: string) => void;
+  acqId: string;
+  assets: Asset[];
+  listSpecs: (a: string, id: string) => Promise<AssetSpec[]>;
+  note?: ReactNode;
+  title?: string;
   label?: string;
+  activeId?: string | null;
+  onSelect?: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  // Сервер талын утга шинэчлэгдвэл (хадгалсан/дахин татсан) засварлаагүй үед дагана.
-  useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [value, editing]);
-
-  if (!canEdit && !value) return null;
+  const results = useQueries({
+    queries: assets.map((a) => ({
+      queryKey: ["asset-specs", acqId, a.id],
+      queryFn: () => listSpecs(acqId, a.id),
+    })),
+  });
+  const columns = assets
+    .map((asset, i) => ({
+      asset,
+      specs: (results[i]?.data ?? []).filter((x) => (x.value ?? "").trim() !== ""),
+    }))
+    .filter((x) => x.specs.length > 0)
+    .map(({ asset, specs }) => ({
+      id: asset.id,
+      name: asset.asset_name || "Барилга",
+      items: [
+        { label: "Давхрын тоо", value: asset.floor_count ? String(asset.floor_count) : "" },
+        ...specs.map((sp) => ({ label: sp.spec_name, value: sp.value })),
+        { label: "Талбай", value: formatArea(asset.area_m2) },
+      ],
+    }));
+  if (!columns.length) return null;
 
   return (
-    <div className="border-t border-slate-100 px-5 py-3 dark:border-[#37394d]">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Тайлбар{label ? ` — ${label}` : ""}
-        </p>
-        {canEdit && !editing && (
-          <button
-            onClick={() => {
-              setDraft(value);
-              setEditing(true);
-            }}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#02c0ce] hover:underline"
-          >
-            <Pencil className="h-3 w-3" />
-            {value ? "Засах" : "Тайлбар нэмэх"}
-          </button>
-        )}
-      </div>
-      {editing ? (
-        <div className="mt-2 flex flex-col gap-2">
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            rows={3}
-            placeholder="Үнэлгээний үндэслэл, тайлбарыг бичнэ үү…"
-            className={`${INP} h-auto py-2 leading-relaxed`}
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={() => {
-                setEditing(false);
-                setDraft(value);
-              }}
-              disabled={saving}
-              className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
-            >
-              Болих
-            </button>
-            <button
-              onClick={() => {
-                onSave(draft.trim());
-                setEditing(false);
-              }}
-              disabled={saving || draft === value}
-              className="inline-flex h-8 items-center rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
-            >
-              Хадгалах
-            </button>
-          </div>
-        </div>
-      ) : value ? (
-        <p
-          className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-slate-600 dark:text-slate-300"
-          data-section={sectionKey}
-        >
-          {value}
-        </p>
-      ) : (
-        <p className="mt-1 text-[12px] text-slate-400">Тайлбар оруулаагүй байна</p>
-      )}
-    </div>
+    <VSection icon={Building2} title={title} tone="sky" right={<VHeadRight label={label} />}>
+      <VBuildingSpecTable columns={columns} activeId={activeId} onSelect={onSelect} />
+      {note}
+    </VSection>
   );
 }
 
-// Нэгтгэл — үнэлгээний нэгдсэн задаргааг Excel-ийн "нэгтгэл" хүснэгт шиг харуулна.
+
+// Хураангуй нэгтгэл (Хүснэгт-10) — оруулах цонхтой ижил хүснэгт.
 function ConsolidationCard({
   rows,
   total,
   note,
+  title = "Хөрөнгийн үнэлгээний хураангуй нэгтгэл",
+  label,
 }: {
   rows: { label: string; value: number }[];
   total: number;
   note?: ReactNode;
+  title?: string;
+  label?: string;
 }) {
   return (
-    <div className="ap-card overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 dark:border-[#37394d]">
-        <CircleDollarSign className="h-4 w-4 text-[#02c0ce]" />
-        <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-          Нэгтгэл
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-[12px]">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-              <th className="w-12 px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Д/д
-              </th>
-              <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Үнэлэгдсэн хөрөнгийн төрөл
-              </th>
-              <th className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Мөнгөн дүн /₮/
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-            {rows.map((r, i) => (
-              <tr key={r.label}>
-                <td className="px-4 py-2.5 text-slate-400">{i + 1}</td>
-                <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">
-                  {r.label}
-                </td>
-                <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">
-                  {money(r.value)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-slate-200 bg-slate-50/70 dark:border-[#37394d] dark:bg-[#1a1d20]">
-              <td />
-              <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">
-                Нөхөн олговрын нийт дүн
-              </td>
-              <td className="px-4 py-3 text-right font-bold tabular-nums text-slate-900 dark:text-white">
-                {money(total)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+    <VSection
+      icon={CircleDollarSign}
+      title={title}
+      tone="slate"
+      right={
+        <VHeadRight
+          label={label}
+          extra={<span className="font-semibold text-[#02c0ce]">{money(total)}</span>}
+        />
+      }
+    >
+      <VSummaryTable rows={rows} total={total} />
       {note}
-    </div>
+    </VSection>
   );
 }
+
 
 export function RealEstateTab({
   acqId,
@@ -604,6 +400,8 @@ export function RealEstateTab({
           profApi.profUploadAssetPhoto(a, id, file),
         createAsset: (a: string, body: Partial<Asset>) =>
           profApi.profCreateAsset(a, body),
+        updateAsset: (a: string, id: string, body: Partial<Asset>) =>
+          profApi.profUpdateAsset(a, id, body),
         upsertAssetSpecs: (
           a: string,
           id: string,
@@ -693,6 +491,8 @@ export function RealEstateTab({
           landApi.uploadAssetPhoto(a, id, file),
         createAsset: (a: string, body: Partial<Asset>) =>
           landApi.createAsset(a, body),
+        updateAsset: (a: string, id: string, body: Partial<Asset>) =>
+          landApi.updateAsset(a, id, body),
         upsertAssetSpecs: (
           a: string,
           id: string,
@@ -943,6 +743,41 @@ export function RealEstateTab({
   });
   const noteOf = (key: ValuationSectionKey) =>
     sectionNotes.find((n) => n.section_key === key)?.note ?? "";
+  // Excel-ээс ирсэн хүснэгтийн таних мэдээлэл (дугаар, "Хүснэгт-N", гарчиг, дараалал).
+  const secMeta = (key: ValuationSectionKey) =>
+    sectionNotes.find((n) => n.section_key === key);
+  /**
+   * Хүснэгтийн гарчиг ("3.3 Газрын үнэлгээ") ба "Хүснэгт-3" шошго.
+   * Excel-ээс хадгалагдсан утга байвал түүнийг, эс бөгөөс ЗАГВАРЫН СТАНДАРТ
+   * дугаарлалтыг хэрэглэнэ — ингэснээр дугаар хаана ч хоосон харагдахгүй.
+   */
+  const head = (key: ValuationSectionKey) => {
+    const m = secMeta(key);
+    return sectionHeading(key, {
+      no: m?.section_no,
+      label: m?.table_label,
+      title: m?.title,
+    });
+  };
+  /**
+   * Хүснэгтүүдийг ЯГ Excel-ийн дарааллаар эрэмбэлнэ. Оруулсан файлаас
+   * `sort_order` ирсэн бол түүгээр, эс бөгөөс загварын өгөгдмөл (3.1 → 5.1)
+   * дарааллаар. Ингэснээр загварын дугаарлалт өөрчлөгдвөл дэлгэц дагана.
+   */
+  const orderedSections = (items: [ValuationSectionKey, ReactNode][]) =>
+    items
+      .map((item, i) => ({ item, i }))
+      .sort((a, b) => {
+        const rank = ([key]: [ValuationSectionKey, ReactNode]) => {
+          const m = secMeta(key);
+          if (m && m.sort_order != null && (m.section_no || m.table_label))
+            return m.sort_order;
+          return VALUATION_SECTION_ORDER.indexOf(key);
+        };
+        const d = rank(a.item) - rank(b.item);
+        return d !== 0 ? d : a.i - b.i;
+      })
+      .map(({ item: [key, node] }) => <Fragment key={key}>{node}</Fragment>);
 
   const saveNoteMutation = useMutation({
     mutationFn: (body: ValuationNotesPayload) =>
@@ -1073,17 +908,24 @@ export function RealEstateTab({
     queryKey: ["document-types", "parcel"],
     queryFn: () => documentTypeApi.list("parcel"),
     staleTime: Infinity,
-    enabled: valStatus === "approved",
   });
   const reportDocType = docTypes.find((t) => t.type === "valuation_report");
+  // "Үнэлгээний хүснэгт" — Excel-ээр оруулсан ЭХ файл (импортын үед хадгалагдана).
+  const sourceDocType = docTypes.find((t) => t.type === "valuation_source");
   const { data: parcelDocs = [] } = useQuery({
     queryKey: ["parcel-documents", parcelId],
     queryFn: () => svc.listDocuments(parcelId),
-    enabled: !!parcelId && valStatus === "approved",
+    enabled: !!parcelId,
   });
   const reportDoc = parcelDocs.find(
     (d) => !!reportDocType && d.document_type_id === reportDocType.id,
   );
+  // Үнэлгээг оруулсан эх Excel — хамгийн сүүлд орсныг нь авна.
+  const sourceDoc = sourceDocType
+    ? [...parcelDocs]
+        .filter((d) => d.document_type_id === sourceDocType.id)
+        .sort((a, b) => (a.uploaded_at < b.uploaded_at ? 1 : -1))[0]
+    : undefined;
   // Тайлан БҮРТГЭГДСЭН эсэх — backend-ийн цуцлалтын шалгалттай ИЖИЛ: шинэ
   // флоугийн parcel_document ЭСВЭЛ баталгаажсан олговрын valuation_report_url
   // (хуучин өгөгдөл) аль нэг нь хангалттай. Зөвхөн эхнийхийг шалгавал хуучин
@@ -1205,7 +1047,9 @@ export function RealEstateTab({
         area_m2: Number(form.area_m2) || 0,
         owner_name: form.owner_name,
         address: form.address,
-        notes: form.notes,
+        // Зардлын ангилал нь хүснэгтийн бүлэглэлд ашиглагддаг тул notes-д хадгална
+        // (Excel импорт мөн "… · <ангилал>" гэж бичдэг — нэг дүрэм).
+        notes: [form.notes, form.cost_category].filter(Boolean).join(" · "),
         unit: form.unit,
         capacity: form.capacity,
         description: form.description,
@@ -1251,16 +1095,13 @@ export function RealEstateTab({
         ),
       );
 
-      await Promise.all(
-        photos.map((file) =>
-          svc.uploadDocument(
-            parcelId,
-            file,
-            undefined,
-            `Хөрөнгийн зураг: ${form.asset_name || form.asset_number || "—"}`,
-          ),
-        ),
-      );
+      // Сонгосон зургуудыг НЭГ PDF болгож, тухайн ХӨРӨНГИЙН зураг болгон хавсаргана.
+      // (Өмнө нь нэгж талбарын баримт болж ордог байсан тул хөрөнгө "зураггүй"
+      // хэвээр үлдэж, илгээх шатанд саатуулдаг байв.)
+      if (photos.length > 0) {
+        const pdf = await photosToPdfFile(photos, form.asset_name || form.asset_number || created.id);
+        await svc.uploadAssetPhoto(acqId, created.id, pdf);
+      }
 
       return created;
     },
@@ -1294,6 +1135,7 @@ export function RealEstateTab({
     onSuccess: () => {
       toast.success("Үнэлгээний задаргаа нэмэгдлээ");
       setValuationForm(EMPTY_VALUATION);
+      setCompModal(null);
       queryClient.invalidateQueries({
         queryKey: ["compensations", acqId, effectiveParcelCode, activeType],
       });
@@ -1469,6 +1311,125 @@ export function RealEstateTab({
     { label: "Нэгдсэн дүн", value: grandTotalValue, Icon: CircleDollarSign },
   ];
 
+  // Excel-ийн 3.6–3.9 хүснэгтүүд. Импортын үед зардлын мөрүүд нь "эд хөрөнгө"
+  // болж хадгалагддаг (asset.description = зардлын хүснэгтийн нэр) тул эндээс
+  // ангилан, Excel-тэй ижил тусдаа хүснэгт болгож харуулна.
+  const costMatched = new Set<string>();
+  const costSections = V_COST_GROUPS.map((g) => {
+    const rows = propertyRows.filter((r) => {
+      const hay = `${r.asset.description ?? ""} ${r.asset.notes ?? ""} ${r.asset.asset_name ?? ""}`;
+      const hit = g.match.test(hay);
+      if (hit) costMatched.add(r.asset.id);
+      return hit;
+    });
+    return { key: g.key, title: g.title, rows };
+  });
+  costSections.unshift({
+    key: "other_assets" as ValuationSectionKey,
+    title: "Бусад эд хөрөнгийн үнэлгээ",
+    rows: propertyRows.filter((r) => !costMatched.has(r.asset.id)),
+  });
+
+  // Хөрөнгийн танилцуулгын хүснэгт (Excel-ийн Хүснэгт-1-тэй ижил бүтэц)
+  const assetTableRows: VAssetRow[] = [...realStateRows, ...propertyRows].map((row, i) => ({
+    id: row.asset.id,
+    seq: i + 1,
+    name: row.asset.asset_name || ASSET_TYPE_LABELS[row.asset.asset_type],
+    kind: row.asset.asset_type,
+    unit: row.asset.unit,
+    qty: row.asset.area_m2 || null,
+    total: row.total,
+    description: row.asset.description || "",
+    hasPhoto: !!row.asset.photo_pdf_url,
+  }));
+
+  // Баруун талын дэлгэрэнгүйд харуулах сонгосон хөрөнгө
+  const selectedAssetRow =
+    [...realStateRows, ...propertyRows].find((r) => r.asset.id === expandedAssetId) ?? null;
+
+  // Сонгосон хөрөнгийн ЗАСВАРЛАХ маягт (аль ч хүснэгтийн мөрөөс ижил ажиллана)
+  const assetFormOf = (a: Asset | undefined | null) => ({
+    asset_name: a?.asset_name ?? "",
+    unit: a?.unit ?? "",
+    area_m2: a?.area_m2 ? String(a.area_m2) : "",
+    unit_price: a?.unit_price ? String(a.unit_price) : "",
+    owner_name: a?.owner_name ?? "",
+    asset_number: a?.asset_number ?? "",
+    description: a?.description ?? "",
+  });
+  const [assetEditForm, setAssetEditForm] = useState(assetFormOf(null));
+  // Хөрөнгийн мэдээллийг засах нь ТУСДАА үйлдэл — попапаар (баруун самбар нь
+  // зөвхөн ХАРАХ). Хүснэгтийн арын баганын товч эсвэл самбарын "Засах" нээнэ.
+  const [assetModal, setAssetModal] = useState<string | null>(null);
+  // Үнэлгээ (олговор) нэмэх нь ТУСДАА үйлдэл — хүснэгтийн дээрх товчоор попап
+  // нээгдэнэ (дэлгэрэнгүй самбар нь зөвхөн ХАРАХ/ЗАСАХ-д зориулагдсан).
+  const [compModal, setCompModal] = useState<{ assetId: string } | null>(null);
+  // Попапд засагдаж буй хөрөнгө (маягтыг нээх үед дүүргэнэ).
+  const modalAsset =
+    [...realStateRows, ...propertyRows].find((r) => r.asset.id === assetModal)?.asset ?? null;
+  const assetEditDirty =
+    !!modalAsset && JSON.stringify(assetEditForm) !== JSON.stringify(assetFormOf(modalAsset));
+
+  /**
+   * Жагсаалтын "Зураг" нүд. Зураггүй мөр дээр ЗУРАГ ОРУУЛАХ товч шууд гарна —
+   * үнэлгээ илгээхэд хөрөнгө бүр зурагтай байх ёстой тул хэрэглэгч дэлгэрэнгүй
+   * рүү орохгүйгээр эндээс нөхнө.
+   */
+  const photoCell = (assetId: string) => {
+    const asset = [...realStateRows, ...propertyRows].find((r) => r.asset.id === assetId)?.asset;
+    if (!asset) return null;
+    if (asset.photo_pdf_url) return <VPhotoMark has href={asset.photo_pdf_url} />;
+    if (!canEditCurrent) return <VPhotoMark />;
+    return (
+      <AssetPhotoUpload
+        acqId={acqId}
+        asset={asset}
+        canEdit
+        hideView
+        label="Зураг оруулах"
+        uploadFn={svc.uploadAssetPhoto}
+        onDone={() =>
+          queryClient.invalidateQueries({
+            queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
+          })
+        }
+      />
+    );
+  };
+
+  /** Хүснэгтийн мөрөөс: дэлгэрэнгүйг баруун талд нээх, эсвэл засах попап дуудах. */
+  const openAsset = (id: string, edit = false) => {
+    setExpandedAssetId(id);
+    if (edit) {
+      const row = [...realStateRows, ...propertyRows].find((r) => r.asset.id === id);
+      setAssetEditForm(assetFormOf(row?.asset ?? null));
+      setAssetModal(id);
+    }
+  };
+
+  const updateAssetMutation = useMutation({
+    mutationFn: () => {
+      if (!assetModal) throw new Error("Хөрөнгө сонгогдоогүй байна");
+      return svc.updateAsset(acqId, assetModal, {
+        asset_name: assetEditForm.asset_name,
+        unit: assetEditForm.unit,
+        area_m2: Number(assetEditForm.area_m2) || 0,
+        unit_price: Number(assetEditForm.unit_price) || 0,
+        owner_name: assetEditForm.owner_name,
+        asset_number: assetEditForm.asset_number,
+        description: assetEditForm.description,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Хөрөнгийн мэдээлэл шинэчлэгдлээ");
+      setAssetModal(null);
+      queryClient.invalidateQueries({
+        queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
+      });
+    },
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
+  });
+
   const StatusBadge = ({ status }: { status?: string }) => {
     if (status === "approved")
       return (
@@ -1492,402 +1453,6 @@ export function RealEstateTab({
     );
   };
 
-  const renderAssetTable = (
-    title: string,
-    rows: ReturnType<typeof assetValuationRows>,
-    emptyText: string,
-    tone: SectionTone,
-    noteKey?: ValuationSectionKey,
-  ) => {
-    const total = sumCompensations(rows.flatMap((row) => row.compensations));
-
-    return (
-      <div className={tone.card}>
-        <div
-          className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${tone.header}`}
-        >
-          <div className="flex items-center gap-2">
-            <Building2 className={`h-4 w-4 ${tone.icon}`} />
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              {title}
-            </p>
-          </div>
-          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
-            {money(total)}
-          </p>
-        </div>
-
-        {!rows.length ? (
-          <div className="px-5 py-7 text-center text-[12px] text-slate-400">
-            {emptyText}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-[12px]">
-              <thead>
-                <tr
-                  className={`border-b border-slate-100 dark:border-[#37394d] ${tone.tableHead}`}
-                >
-                  {[
-                    "Хөрөнгө",
-                    "Дугаар",
-                    "Талбай",
-                    "Эзэмшигч",
-                    "Нийт үнэлгээ",
-                    "",
-                  ].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                {rows.map(({ asset, compensations, total: assetTotal }) => {
-                  const expanded = expandedAssetId === asset.id;
-                  return (
-                    <Fragment key={asset.id}>
-                      <tr className="hover:bg-slate-50/60 dark:hover:bg-[#252630]/50">
-                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
-                          {asset.asset_name ||
-                            ASSET_TYPE_LABELS[asset.asset_type]}
-                        </td>
-                        <td className="px-4 py-3 text-slate-500">
-                          {asset.asset_number || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-slate-500">
-                          {formatArea(asset.area_m2)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-500">
-                          {asset.owner_name || "—"}
-                        </td>
-                        <td className="px-4 py-3 font-semibold tabular-nums text-slate-800 dark:text-slate-100">
-                          {money(assetTotal)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              onClick={() =>
-                                setExpandedAssetId(expanded ? null : asset.id)
-                              }
-                              title={expanded ? "Хаах" : "Засах"}
-                              className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
-                                expanded
-                                  ? "bg-[#02c0ce]/10 text-[#02c0ce]"
-                                  : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#252630]"
-                              }`}
-                            >
-                              {expanded ? (
-                                <ChevronDown className="h-3.5 w-3.5" />
-                              ) : (
-                                <Pencil className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                            {(asset.asset_type === "real_state" ||
-                              asset.photo_pdf_url) && (
-                              <AssetPhotoUpload
-                                acqId={acqId}
-                                asset={asset}
-                                canEdit={
-                                  canEditCurrent &&
-                                  asset.asset_type === "real_state"
-                                }
-                                uploadFn={svc.uploadAssetPhoto}
-                                onDone={() =>
-                                  queryClient.invalidateQueries({
-                                    queryKey: [
-                                      "parcel-assets",
-                                      acqId,
-                                      effectiveParcelCode,
-                                      activeType,
-                                    ],
-                                  })
-                                }
-                              />
-                            )}
-                            {canEditCurrent && (
-                              <button
-                                onClick={() =>
-                                  setPendingConfirm({
-                                    title: "Хөрөнгө устгах уу?",
-                                    description: asset.asset_name || undefined,
-                                    confirmLabel: "Устгах",
-                                    confirmColor: "#f1556c",
-                                    onConfirm: () =>
-                                      deleteAssetMutation.mutate(asset.id),
-                                  })
-                                }
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      {expanded && (
-                        <tr
-                          key={`${asset.id}-details`}
-                          className="bg-slate-50/60 dark:bg-[#1a1d20]"
-                        >
-                          <td colSpan={6} className="px-4 py-4">
-                            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-white/[0.08] dark:bg-[#1e1f27]">
-                              <table className="w-full text-[12px]">
-                                <thead>
-                                  <tr className="border-b border-slate-100 dark:border-[#37394d]">
-                                    {[
-                                      "Үнэлсэн хэсэг",
-                                      "Хэлбэр",
-                                      "Хувь",
-                                      "Дүн",
-                                      "Огноо",
-                                      "Статус",
-                                      "",
-                                    ].map((head) => (
-                                      <th
-                                        key={head}
-                                        className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                                      >
-                                        {head}
-                                      </th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                                  {compensations.length ? (
-                                    compensations.map((comp) => (
-                                      <tr key={comp.id}>
-                                        <td className="px-3 py-2.5 text-slate-700 dark:text-slate-200">
-                                          {detailLabel(comp)}
-                                        </td>
-                                        <td className="px-3 py-2.5 text-slate-500">
-                                          {COMP_TYPE_LABELS[
-                                            comp.compensation_type
-                                          ] ?? comp.compensation_type}
-                                        </td>
-                                        <td className="px-3 py-2.5 text-slate-500 tabular-nums">
-                                          {comp.coverage_percent}%
-                                        </td>
-                                        <td className="px-3 py-2.5 font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
-                                          {money(comp.amount)}
-                                        </td>
-                                        <td className="px-3 py-2.5 text-slate-400">
-                                          {comp.compensation_date
-                                            ? formatDate(comp.compensation_date)
-                                            : "—"}
-                                        </td>
-                                        <td className="px-3 py-2.5">
-                                          <div className="flex flex-col gap-1">
-                                            <StatusBadge status={comp.status} />
-                                            {comp.review_note &&
-                                              comp.status === "approved" && (
-                                                <p
-                                                  className="text-[10px] text-emerald-600 dark:text-emerald-400 max-w-[160px] truncate"
-                                                  title={comp.review_note}
-                                                >
-                                                  {comp.review_note}
-                                                </p>
-                                              )}
-                                            {comp.review_note &&
-                                              comp.status === "rejected" && (
-                                                <p
-                                                  className="text-[10px] text-red-500 dark:text-red-400 max-w-[160px] truncate"
-                                                  title={comp.review_note}
-                                                >
-                                                  {comp.review_note}
-                                                </p>
-                                              )}
-                                          </div>
-                                        </td>
-                                        <td className="px-3 py-2.5 text-right">
-                                          <div className="inline-flex items-center gap-1">
-                                            {isFinance &&
-                                              comp.status === "pending" && (
-                                                <>
-                                                  <button
-                                                    onClick={() =>
-                                                      setApproveModal({
-                                                        compId: comp.id,
-                                                        note: "",
-                                                      })
-                                                    }
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-                                                    title="Зөвшөөрөх"
-                                                  >
-                                                    <CheckCircle className="h-3.5 w-3.5" />
-                                                  </button>
-                                                  <button
-                                                    onClick={() =>
-                                                      setRejectModal({
-                                                        compId: comp.id,
-                                                        note: "",
-                                                      })
-                                                    }
-                                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
-                                                    title="Татгалзах"
-                                                  >
-                                                    <XCircle className="h-3.5 w-3.5" />
-                                                  </button>
-                                                </>
-                                              )}
-                                            <button
-                                              onClick={() =>
-                                                openHistory(comp.id)
-                                              }
-                                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
-                                              title="Түүх харах"
-                                            >
-                                              <History className="h-3.5 w-3.5" />
-                                            </button>
-                                            {canEditCurrent &&
-                                              comp.status !== "approved" && (
-                                                <button
-                                                  onClick={() =>
-                                                    setPendingConfirm({
-                                                      title:
-                                                        "Үнэлгээ устгах уу?",
-                                                      confirmLabel: "Устгах",
-                                                      confirmColor: "#f1556c",
-                                                      onConfirm: () =>
-                                                        deleteCompensationMutation.mutate(
-                                                          comp.id,
-                                                        ),
-                                                    })
-                                                  }
-                                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
-                                                >
-                                                  <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                              )}
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))
-                                  ) : (
-                                    <tr>
-                                      <td
-                                        colSpan={6}
-                                        className="px-3 py-4 text-center text-slate-400"
-                                      >
-                                        Үнэлгээний задаргаа бүртгэгдээгүй
-                                      </td>
-                                    </tr>
-                                  )}
-                                </tbody>
-                              </table>
-
-                              {canEditCurrent && (
-                                <div className="grid gap-3 border-t border-slate-100 p-3 dark:border-[#37394d] md:grid-cols-[1.4fr_120px_130px_150px_auto]">
-                                  <input
-                                    value={valuationForm.note}
-                                    onChange={(e) =>
-                                      setValuationForm((prev) => ({
-                                        ...prev,
-                                        note: e.target.value,
-                                      }))
-                                    }
-                                    placeholder="Үнэлсэн хэсэг"
-                                    className={INP}
-                                  />
-                                  <select
-                                    value={valuationForm.compensation_type}
-                                    onChange={(e) =>
-                                      setValuationForm((prev) => ({
-                                        ...prev,
-                                        compensation_type: e.target
-                                          .value as Compensation["compensation_type"],
-                                      }))
-                                    }
-                                    className={INP}
-                                  >
-                                    <option value="cash">Мөнгө</option>
-                                    <option value="land_grant">
-                                      Дүйцүүлсэн
-                                    </option>
-                                  </select>
-                                  <input
-                                    value={valuationForm.coverage_percent}
-                                    onChange={(e) =>
-                                      setValuationForm((prev) => ({
-                                        ...prev,
-                                        coverage_percent: e.target.value,
-                                      }))
-                                    }
-                                    type="number"
-                                    placeholder="Хувь"
-                                    className={INP}
-                                  />
-                                  <input
-                                    value={valuationForm.amount}
-                                    onChange={(e) =>
-                                      setValuationForm((prev) => ({
-                                        ...prev,
-                                        amount: e.target.value,
-                                      }))
-                                    }
-                                    type="number"
-                                    placeholder="Дүн"
-                                    className={INP}
-                                  />
-                                  <button
-                                    onClick={() =>
-                                      createCompensationMutation.mutate(
-                                        asset.id,
-                                      )
-                                    }
-                                    disabled={
-                                      createCompensationMutation.isPending ||
-                                      !Number(valuationForm.amount)
-                                    }
-                                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
-                                  >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    Нэмэх
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr
-                  className={`border-t border-slate-200 dark:border-[#37394d] ${tone.footer}`}
-                >
-                  <td
-                    colSpan={4}
-                    className="px-4 py-3 text-right text-[12px] font-semibold text-slate-500"
-                  >
-                    Нийт үнэлгээ
-                  </td>
-                  <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
-                    {money(total)}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-        {noteKey && (
-          <ValuationNoteBlock
-            sectionKey={noteKey}
-            value={noteOf(noteKey)}
-            canEdit={canEditCurrent}
-            saving={saveNoteMutation.isPending}
-            onSave={(text) => saveNote(noteKey, text)}
-          />
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -1934,28 +1499,24 @@ export function RealEstateTab({
           // Илгээхийн өмнө "Үл хөдлөх" төрлийн хөрөнгө бүр зурагтай эсэхийг шалгана
           // (backend мөн адил шалгаж 422 буцаана).
           if (action === "submit") {
-            const missingPhotos = parcelAssets.filter(
-              (a) => a.asset_type === "real_state" && !a.photo_pdf_url,
-            );
+            // 3.1 хүснэгтийн БҮХ хөрөнгө зурагтай байх ёстой (үл хөдлөх, эд хөрөнгө аль аль нь)
+            const missingPhotos = parcelAssets.filter((a) => !a.photo_pdf_url);
             if (missingPhotos.length > 0) {
-              toast.error("Зураг оруулаагүй үл хөдлөх хөрөнгө байна", {
+              toast.error("Зураг оруулаагүй хөрөнгө байна", {
                 description:
                   missingPhotos
                     .map(
                       (a) => a.asset_name || a.asset_number || "Нэргүй хөрөнгө",
                     )
                     .join(", ") +
-                  " — илгээхийн өмнө хөрөнгө бүрт зураг (PDF) хавсаргана уу.",
+                  " — илгээхийн өмнө хөрөнгө бүрт зураг хавсаргана уу.",
               });
               return;
             }
           }
-          if (action === "cancel" && !hasValuationReport) {
-            toast.error(
-              "Үнэлгээ цуцлахын өмнө баталгаажсан үнэлгээний тайлан хавсаргана уу",
-            );
-            return;
-          }
+          // Хүчингүй болгоход БАТАЛГААЖСАН ТАЙЛАН шаардахгүй: тайлан нь нэгж
+          // талбарыг "Чөлөөлсөн" болгоход хэрэгтэй. Хүчингүй болгоход зөвхөн
+          // ҮНДЭСЛЭЛИЙН файл (цонх дотор заавал) хавсаргагдана.
           setSubModal({ action, note: "", file: null });
         }}
         onHistory={() => setSubHistoryOpen(true)}
@@ -1973,7 +1534,7 @@ export function RealEstateTab({
               </p>
             </div>
             <p className="text-[11px] text-slate-400 dark:text-slate-500">
-              Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө тайлан (PDF)
+              Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө БАТАЛГААЖСАН ТАЙЛАН (PDF)
               хавсаргасан байх шаардлагатай
             </p>
           </div>
@@ -2144,79 +1705,6 @@ export function RealEstateTab({
         </div>
       )}
 
-      {/* Хөрөнгийн бүртгэл — нэмэх/импортын товчнууд табын дээд хэсэгт */}
-      <div className="ap-card overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-slate-400" />
-            <div>
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                Хөрөнгийн бүртгэл
-              </p>
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                {effectiveParcelCode || parcelId} нэгж талбар
-              </p>
-            </div>
-          </div>
-          {canEditCurrent && (
-            <div className="flex items-center gap-2">
-              <ValuationExcelImport
-                acqId={acqId}
-                parcelId={parcelId}
-                parcelCode={effectiveParcelCode}
-                valuationType={activeType}
-                svc={svc}
-                specTypes={specTypes}
-                calcTypes={calcTypes}
-                existingAssets={parcelAssets}
-                existingComps={allComps}
-                onDone={() => {
-                  queryClient.invalidateQueries({
-                    queryKey: [
-                      "parcel-assets",
-                      acqId,
-                      effectiveParcelCode,
-                      activeType,
-                    ],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: [
-                      "compensations",
-                      acqId,
-                      effectiveParcelCode,
-                      activeType,
-                    ],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: [
-                      "land-valuation",
-                      acqId,
-                      effectiveParcelCode,
-                      activeType,
-                    ],
-                  });
-                  queryClient.invalidateQueries({
-                    queryKey: [
-                      "valuation-notes",
-                      acqId,
-                      effectiveParcelCode,
-                      activeType,
-                    ],
-                  });
-                }}
-              />
-              <button
-                onClick={() => setShowForm(true)}
-                className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                Хөрөнгө нэмэх
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="ap-card grid grid-cols-3 divide-x divide-slate-100 overflow-hidden dark:divide-[#37394d]">
         {summaryItems.map(({ label, value, Icon }) => (
           <div
@@ -2236,313 +1724,34 @@ export function RealEstateTab({
         ))}
       </div>
 
-      {/* Газрын үнэлгээ — мэргэжлийн байгуулгын үнэлгээчин */}
-      <div className={LAND_TONE.card}>
-        <div
-          className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.header}`}
-        >
-          <div className="flex items-center gap-2">
-            <ReceiptText className={`h-4 w-4 ${LAND_TONE.icon}`} />
-            <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-              Газрын үнэлгээ
-            </p>
-          </div>
-          <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
-            {money(landTotalValue)}
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
-            <thead>
-              <tr
-                className={`border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.tableHead}`}
-              >
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Үзүүлэлт
-                </th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Хэмжих нэгж
-                </th>
-                <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Утга
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-              <tr>
-                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                  Чөлөөлөлтөнд өртсөн газрын хэмжээ
-                </td>
-                <td className="px-4 py-3 text-slate-500">м²</td>
-                <td className="px-4 py-3">
-                  {canEditCurrent && landEditing ? (
-                    <input
-                      type="number"
-                      value={landValuationForm.land_area_m2}
-                      onChange={(e) => {
-                        setLandValuationEdited(true);
-                        setLandValuationForm((f) => ({
-                          ...f,
-                          land_area_m2: e.target.value,
-                        }));
-                      }}
-                      placeholder="0"
-                      className={`${INP} w-40 tabular-nums`}
-                    />
-                  ) : (
-                    <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100">
-                      {lvArea ? lvArea.toLocaleString() : "—"}
-                    </span>
-                  )}
-                </td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                  Газрын 1 м² талбайн суурь үнэ
-                </td>
-                <td className="px-4 py-3 text-slate-500">Төгрөг</td>
-                <td className="px-4 py-3">
-                  {canEditCurrent && landEditing ? (
-                    <input
-                      type="number"
-                      value={landValuationForm.base_price_per_m2}
-                      onChange={(e) => {
-                        setLandValuationEdited(true);
-                        setLandValuationForm((f) => ({
-                          ...f,
-                          base_price_per_m2: e.target.value,
-                        }));
-                      }}
-                      placeholder="0"
-                      className={`${INP} w-40 tabular-nums`}
-                    />
-                  ) : (
-                    <span className="tabular-nums font-semibold text-slate-800 dark:text-slate-100">
-                      {lvPrice ? lvPrice.toLocaleString() : "—"}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr
-                className={`border-t-2 border-slate-200 dark:border-[#37394d] ${LAND_TONE.footer}`}
-              >
-                <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">
-                  Газрын үнэлгээ
-                </td>
-                <td />
-                <td className="px-4 py-3 font-bold tabular-nums text-slate-900 dark:text-white">
-                  {money(lvTotal)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-        <ValuationNoteBlock
-          sectionKey="land_valuation"
-          value={noteOf("land_valuation")}
-          canEdit={canEditCurrent}
-          saving={saveNoteMutation.isPending}
-          onSave={(text) => saveNote("land_valuation", text)}
-        />
-        {/* Excel-ээс импортолсон үнэлгээний тайлангийн мэдээлэл (байгаа бол) */}
-        {landValuation &&
-          (landValuation.appraiser_org_name ||
-            landValuation.ownership_cert_no ||
-            landValuation.source_file_name) && (
-            <div className="grid gap-x-6 gap-y-1.5 border-t border-slate-100 px-5 py-3 text-[12px] dark:border-[#37394d] md:grid-cols-2 lg:grid-cols-3">
-              {landValuation.ownership_cert_no && (
-                <div>
-                  <span className="text-slate-400">
-                    Өмчлөх эрхийн гэрчилгээ:{" "}
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.ownership_cert_no}
-                  </span>
-                </div>
-              )}
-              {landValuation.appraiser_org_name && (
-                <div>
-                  <span className="text-slate-400">
-                    Үнэлгээний байгууллага:{" "}
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.appraiser_org_name}
-                  </span>
-                </div>
-              )}
-              {landValuation.appraiser_director && (
-                <div>
-                  <span className="text-slate-400">Захирал: </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.appraiser_director}
-                  </span>
-                </div>
-              )}
-              {landValuation.appraiser_reg_no && (
-                <div>
-                  <span className="text-slate-400">Регистр: </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.appraiser_reg_no}
-                  </span>
-                </div>
-              )}
-              {landValuation.appraiser_contact && (
-                <div>
-                  <span className="text-slate-400">Холбоо барих: </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.appraiser_contact}
-                  </span>
-                </div>
-              )}
-              {landValuation.source_file_name && (
-                <div>
-                  <span className="text-slate-400">Эх файл: </span>
-                  <span className="text-slate-700 dark:text-slate-200">
-                    {landValuation.source_file_name}
-                  </span>
-                </div>
-              )}
-            </div>
+      {/* ТАЙЛАН — нэгдсэн дүнгийн дараа. Илгээхэд хавсаргасан тайлан ба
+          баталгаажсаны дараах тайланг нэг мөрөнд, өргөтгөл/татах дүрстэй.
+          ЗӨВХӨН ОДООГИЙН үнэлгээний файл: reportDoc/sourceDoc нь parcel_document
+          дээр байгаа мөрүүд, draft_report нь энэ илгээлтийнх. Үнэлгээ цуцлахад
+          гурвуулаа snapshot руу шилжиж энэ талбараас арилдаг (000039). */}
+      {(submission?.draft_report_url || reportDoc || sourceDoc) && (
+        <div className="ap-card flex flex-wrap items-center gap-2 px-4 py-3">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Тайлан
+          </span>
+          {submission?.draft_report_url && (
+            <VFileChip
+              label="Тайлан"
+              name={submission.draft_report_name}
+              href={submission.draft_report_url}
+            />
           )}
-        {canEditCurrent && (
-          <div className="flex justify-end gap-2 border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
-            {landEditing ? (
-              <>
-                <button
-                  onClick={() => {
-                    setLandEditing(false);
-                    setLandValuationEdited(false);
-                    setLandValuationForm({
-                      land_area_m2: landValuation?.land_area_m2
-                        ? String(landValuation.land_area_m2)
-                        : "",
-                      base_price_per_m2: landValuation?.base_price_per_m2
-                        ? String(landValuation.base_price_per_m2)
-                        : "",
-                    });
-                  }}
-                  disabled={upsertLandValuationMutation.isPending}
-                  className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
-                >
-                  Болих
-                </button>
-                <button
-                  onClick={() => upsertLandValuationMutation.mutate()}
-                  disabled={
-                    upsertLandValuationMutation.isPending ||
-                    (!lvArea && !lvPrice)
-                  }
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
-                >
-                  Хадгалах
-                </button>
-              </>
-            ) : (
-              <>
-                {landValuation && (lvArea > 0 || lvPrice > 0) && (
-                  <button
-                    onClick={() =>
-                      setPendingConfirm({
-                        title: "Газрын үнэлгээ устгах уу?",
-                        confirmLabel: "Устгах",
-                        confirmColor: "#f1556c",
-                        onConfirm: () => deleteLandValuationMutation.mutate(),
-                      })
-                    }
-                    disabled={deleteLandValuationMutation.isPending}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 px-4 text-[12px] font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:hover:bg-red-500/10"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Устгах
-                  </button>
-                )}
-                <button
-                  onClick={() => setLandEditing(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90"
-                >
-                  Засах
-                </button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Existing land compensations */}
-      {landComps.length > 0 && (
-        <div className={LAND_TONE.card}>
-          <div
-            className={`flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.header}`}
-          >
-            <div className="flex items-center gap-2">
-              <ReceiptText className={`h-4 w-4 ${LAND_TONE.icon}`} />
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                Газрын олговор
-              </p>
-            </div>
-            <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-100">
-              {money(totals.landTotal)}
-            </p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-[12px]">
-              <thead>
-                <tr
-                  className={`border-b border-slate-100 dark:border-[#37394d] ${LAND_TONE.tableHead}`}
-                >
-                  {["Үнэлгээ", "Хэлбэр", "Хувь", "Дүн", "Огноо"].map((head) => (
-                    <th
-                      key={head}
-                      className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                    >
-                      {head}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                {landComps.map((comp) => (
-                  <tr key={comp.id}>
-                    <td className="px-4 py-3 text-slate-700 dark:text-slate-200">
-                      {detailLabel(comp)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500">
-                      {COMP_TYPE_LABELS[comp.compensation_type] ??
-                        comp.compensation_type}
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 tabular-nums">
-                      {comp.coverage_percent}%
-                    </td>
-                    <td className="px-4 py-3 font-semibold tabular-nums text-slate-800 dark:text-white">
-                      {money(comp.amount)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-400">
-                      {comp.compensation_date
-                        ? formatDate(comp.compensation_date)
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr
-                  className={`border-t border-slate-200 dark:border-[#37394d] ${LAND_TONE.footer}`}
-                >
-                  <td
-                    colSpan={3}
-                    className="px-4 py-3 text-right font-semibold text-slate-500"
-                  >
-                    Нийт газрын олговор
-                  </td>
-                  <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
-                    {money(totals.landTotal)}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          {reportDoc && (
+            <VFileChip
+              label="Баталгаажсан тайлан"
+              name={reportDoc.name}
+              href={reportDoc.file_url}
+              tone="emerald"
+            />
+          )}
+          {sourceDoc && (
+            <VFileChip label="Үнэлгээний хүснэгт" name={sourceDoc.name} href={sourceDoc.file_url} />
+          )}
         </div>
       )}
 
@@ -2552,57 +1761,345 @@ export function RealEstateTab({
           <div className="h-36 rounded-xl bg-slate-100 dark:bg-[#252630]" />
         </div>
       ) : (
-        <>
-          {renderAssetTable(
-            "Үл хөдлөх хөрөнгийн үнэлгээ",
-            realStateRows,
-            "Үл хөдлөх хөрөнгө бүртгэгдээгүй",
-            REAL_ESTATE_TONE,
-            "building_spec",
-          )}
-          {realStateRows.length > 0 && (
-            <BuildingCostSection
-              acqId={acqId}
-              assets={realStateRows.map((r) => r.asset)}
-              listCalcs={svc.listAssetCalculations}
-              note={
-                <ValuationNoteBlock
-                  sectionKey="building_cost"
-                  value={noteOf("building_cost")}
-                  canEdit={canEditCurrent}
-                  saving={saveNoteMutation.isPending}
-                  onSave={(text) => saveNote("building_cost", text)}
+        /* Үнэлгээний хүснэгтүүд — Excel оруулах цонхтой ИЖИЛ бүтэц, ижил компонент.
+           Зүүн багана = хүснэгтүүд (тайлбар нь хүснэгт бүрийн доор), баруун багана =
+           тоон мэдээлэл, үйлдэл, сонгосон хөрөнгийн дэлгэрэнгүй. */
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="flex min-w-0 flex-col gap-4">
+            {/* Хүснэгтүүд нь ЗӨВХӨН Excel-ийн дугаар/дарааллаар эрэмбэлэгдэнэ:
+                оруулсан файлын `sort_order`-ийг ашиглана, байхгүй бол загварын
+                өгөгдмөл (3.1 → 5.1) дараалал. */}
+            {orderedSections([
+              /* eslint-disable react/jsx-key -- key-г orderedSections Fragment дээр өгнө */
+              ["land_legal", (
+            /* Газрын эрх зүйн байдал */
+            <VSection
+              icon={ReceiptText}
+              title={head("land_legal").title}
+              tone="emerald"
+              right={<VHeadRight label={head("land_legal").label} />}
+            >
+              <VKeyValueTable
+                rows={[
+                  ["Нэгж талбарын дугаар", effectiveParcelCode || parcelId],
+                  ["Гэрчилгээний дугаар", landValuation?.ownership_cert_no || "—"],
+                  [
+                    "Нэгж талбарын нийт хэмжээ",
+                    parcelData?.area_m2 ? formatArea(parcelData.area_m2) : "—",
+                  ],
+                  ["Чөлөөлөлтөнд өртсөн хэмжээ", lvArea ? formatArea(lvArea) : "—"],
+                ]}
+              />
+              <VNote
+                sectionKey="land_legal"
+                value={noteOf("land_legal")}
+                canEdit={canEditCurrent}
+                saving={saveNoteMutation.isPending}
+                onSave={(text) => saveNote("land_legal", text)}
+              />
+            </VSection>
+              )],
+              ["land_valuation", (
+            /* Газрын үнэлгээ */
+            <VSection
+              icon={Calculator}
+              title={head("land_valuation").title}
+              tone="emerald"
+              right={
+                <VHeadRight
+                  label={head("land_valuation").label}
+                  extra={
+                    <span className="font-semibold text-slate-800 dark:text-slate-100">
+                      {money(landTotalValue)}
+                    </span>
+                  }
                 />
               }
-            />
-          )}
-          {renderAssetTable(
-            "Эд хөрөнгийн үнэлгээ",
-            propertyRows,
-            "Эд хөрөнгө бүртгэгдээгүй",
-            PROPERTY_TONE,
-            "other_assets",
-          )}
-          {(landTotalValue > 0 || totals.assetTotal > 0) && (
+            >
+              <VLandValuationTable
+                total={lvTotal}
+                areaCell={
+                  canEditCurrent && landEditing ? (
+                    <input
+                      type="number"
+                      value={landValuationForm.land_area_m2}
+                      onChange={(e) => {
+                        setLandValuationEdited(true);
+                        setLandValuationForm((f) => ({ ...f, land_area_m2: e.target.value }));
+                      }}
+                      placeholder="0"
+                      className={`${INP} w-32 text-right tabular-nums`}
+                    />
+                  ) : (
+                    <span className="font-semibold">{lvArea ? lvArea.toLocaleString() : "—"}</span>
+                  )
+                }
+                priceCell={
+                  canEditCurrent && landEditing ? (
+                    <input
+                      type="number"
+                      value={landValuationForm.base_price_per_m2}
+                      onChange={(e) => {
+                        setLandValuationEdited(true);
+                        setLandValuationForm((f) => ({ ...f, base_price_per_m2: e.target.value }));
+                      }}
+                      placeholder="0"
+                      className={`${INP} w-32 text-right tabular-nums`}
+                    />
+                  ) : (
+                    <span className="font-semibold">{lvPrice ? lvPrice.toLocaleString() : "—"}</span>
+                  )
+                }
+              />
+              {canEditCurrent && (
+                <div className="flex justify-end gap-2 border-t border-slate-100 px-4 py-2.5 dark:border-[#37394d]">
+                  {landEditing ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setLandEditing(false);
+                          setLandValuationEdited(false);
+                          setLandValuationForm({
+                            land_area_m2: landValuation?.land_area_m2 ? String(landValuation.land_area_m2) : "",
+                            base_price_per_m2: landValuation?.base_price_per_m2
+                              ? String(landValuation.base_price_per_m2)
+                              : "",
+                          });
+                        }}
+                        disabled={upsertLandValuationMutation.isPending}
+                        className="inline-flex h-8 items-center rounded-lg border border-slate-200 px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+                      >
+                        Болих
+                      </button>
+                      <button
+                        onClick={() => upsertLandValuationMutation.mutate()}
+                        disabled={upsertLandValuationMutation.isPending || (!lvArea && !lvPrice)}
+                        className="inline-flex h-8 items-center rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+                      >
+                        Хадгалах
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {landValuation && (lvArea > 0 || lvPrice > 0) && (
+                        <button
+                          onClick={() =>
+                            setPendingConfirm({
+                              title: "Газрын үнэлгээ устгах уу?",
+                              confirmLabel: "Устгах",
+                              confirmColor: "#f1556c",
+                              onConfirm: () => deleteLandValuationMutation.mutate(),
+                            })
+                          }
+                          disabled={deleteLandValuationMutation.isPending}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-[12px] font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Устгах
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setLandEditing(true)}
+                        className="inline-flex h-8 items-center rounded-lg bg-[#02c0ce] px-4 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90"
+                      >
+                        Засах
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              <VNote
+                sectionKey="land_valuation"
+                value={noteOf("land_valuation")}
+                canEdit={canEditCurrent}
+                saving={saveNoteMutation.isPending}
+                onSave={(text) => saveNote("land_valuation", text)}
+              />
+            </VSection>
+              )],
+              ["property_desc", (
+            /* Хөрөнгийн тодорхойлолт — мөр дээр дарж баруун талд дэлгэрэнгүйг харна */
+            <VSection
+              icon={Boxes}
+              title={head("property_desc").title}
+              tone="sky"
+              right={
+                <VHeadRight
+                  label={head("property_desc").label}
+                  extra={
+                    <span className="flex items-center gap-2">
+                      <span className="text-slate-400">{parcelAssets.length} хөрөнгө</span>
+                      {canEditCurrent && parcelAssets.length > 0 && (
+                        <button
+                          onClick={() => {
+                            // Маягтыг цэвэрлэж нээнэ — сонгосон мөр байвал тэр
+                            // хөрөнгийг урьдчилан сонгоно.
+                            setValuationForm(EMPTY_VALUATION);
+                            setCompModal({
+                              assetId: selectedAssetRow?.asset.id ?? parcelAssets[0].id,
+                            });
+                          }}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#02c0ce]/40 bg-[#02c0ce]/5 px-2.5 text-[11px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/10"
+                        >
+                          <Plus className="h-3 w-3" /> Үнэлгээ нэмэх
+                        </button>
+                      )}
+                    </span>
+                  }
+                />
+              }
+            >
+              <VAssetsTable
+                rows={assetTableRows}
+                activeId={expandedAssetId}
+                showPhoto
+                renderPhoto={(row) => photoCell(row.id)}
+                onRowClick={(row) => openAsset(row.id)}
+                renderActions={(row) => (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAsset(row.id, true);
+                    }}
+                    title="Засах"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              />
+              <VNote
+                sectionKey="property_desc"
+                value={noteOf("property_desc")}
+                canEdit={canEditCurrent}
+                saving={saveNoteMutation.isPending}
+                onSave={(text) => saveNote("property_desc", text)}
+              />
+            </VSection>
+              )],
+              ["building_spec", (
+            /* Барилгын тодорхойлолт (asset_spec) */
+            realStateRows.length > 0 && (
+              <BuildingSpecSection
+                acqId={acqId}
+                assets={realStateRows.map((r) => r.asset)}
+                listSpecs={svc.listAssetSpecs}
+                activeId={expandedAssetId}
+                onSelect={(id) => setExpandedAssetId(expandedAssetId === id ? null : id)}
+                title={head("building_spec").title}
+                label={head("building_spec").label}
+                note={
+                  <VNote
+                    sectionKey="building_spec"
+                    value={noteOf("building_spec")}
+                    canEdit={canEditCurrent}
+                    saving={saveNoteMutation.isPending}
+                    onSave={(text) => saveNote("building_spec", text)}
+                  />
+                }
+              />
+            )
+              )],
+              ["building_cost", (
+            /* Барилгын өртгийн хандлага (asset_calculation) */
+            realStateRows.length > 0 && (
+              <BuildingCostSection
+                acqId={acqId}
+                assets={realStateRows.map((r) => r.asset)}
+                listCalcs={svc.listAssetCalculations}
+                activeId={expandedAssetId}
+                onSelect={(id) => setExpandedAssetId(expandedAssetId === id ? null : id)}
+                title={head("building_cost").title}
+                label={head("building_cost").label}
+                note={
+                  <VNote
+                    sectionKey="building_cost"
+                    value={noteOf("building_cost")}
+                    canEdit={canEditCurrent}
+                    saving={saveNoteMutation.isPending}
+                    onSave={(text) => saveNote("building_cost", text)}
+                  />
+                }
+              />
+            )
+              )],
+              /* Бусад эд хөрөнгө ба зардлын хүснэгтүүд (Excel-ийн 3.6–3.9) */
+            ...costSections.map(({ key, title, rows }): [ValuationSectionKey, ReactNode] => [
+              key,
+              rows.length === 0 && !noteOf(key) && !canEditCurrent ? null : (
+                <VSection
+                  key={key}
+                  icon={key === "other_assets" ? Boxes : Truck}
+                  title={head(key).title}
+                  tone={key === "other_assets" ? "sky" : "amber"}
+                  right={
+                    <VHeadRight
+                      label={head(key).label}
+                      extra={
+                        <span className="font-semibold text-slate-800 dark:text-slate-100">
+                          {money(sumCompensations(rows.flatMap((r) => r.compensations)))}
+                        </span>
+                      }
+                    />
+                  }
+                >
+                  <VCostTable
+                    rows={rows.map((r) => ({
+                      id: r.asset.id,
+                      name: r.asset.asset_name || "—",
+                      unit: r.asset.unit,
+                      qty: r.asset.area_m2 || null,
+                      unitPrice: r.asset.unit_price || null,
+                      total: r.total,
+                      hasPhoto: !!r.asset.photo_pdf_url,
+                    }))}
+                    activeId={expandedAssetId}
+                    showPhoto
+                    renderPhoto={(row) => photoCell(row.id)}
+                    onRowClick={(row) => openAsset(row.id)}
+                    renderActions={(row) => (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAsset(row.id, true);
+                        }}
+                        title="Засах"
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  />
+                  <VNote
+                    sectionKey={key}
+                    value={noteOf(key)}
+                    canEdit={canEditCurrent}
+                    saving={saveNoteMutation.isPending}
+                    onSave={(text) => saveNote(key, text)}
+                  />
+                </VSection>
+              ),
+            ]),
+              ["summary", (
+            /* Нэгтгэл */
             <ConsolidationCard
               rows={[
-                { label: "Газар", value: landTotalValue },
+                { label: "Газрын үнэлгээ", value: landTotalValue },
                 {
                   label: "Үл хөдлөх хөрөнгө",
-                  value: sumCompensations(
-                    realStateRows.flatMap((r) => r.compensations),
-                  ),
+                  value: sumCompensations(realStateRows.flatMap((r) => r.compensations)),
                 },
                 {
-                  label: "Эд хөрөнгө",
-                  value: sumCompensations(
-                    propertyRows.flatMap((r) => r.compensations),
-                  ),
+                  label: "Эд хөрөнгө, зардал",
+                  value: sumCompensations(propertyRows.flatMap((r) => r.compensations)),
                 },
               ]}
               total={grandTotalValue}
+              title={head("summary").title}
+              label={head("summary").label}
               note={
-                <ValuationNoteBlock
+                <VNote
                   sectionKey="summary"
                   value={noteOf("summary")}
                   canEdit={canEditCurrent}
@@ -2611,34 +2108,368 @@ export function RealEstateTab({
                 />
               }
             />
-          )}
-          {/* Дэлгэц дээр өөрийн хүснэгтгүй (зардлын, эрх зүйн байдал, дүгнэлт г.м)
-              хэсгүүдийн тайлбарыг НЭГ картад цуглуулж харуулна — Excel-ээс уншсан
-              тайлбар аль нь ч алдагдахгүй. */}
-          {(canEditCurrent || OTHER_NOTE_KEYS.some((k) => noteOf(k))) && (
+              )],
+              ["certification", (
+            /* Дүгнэлт, баталгаа — хүснэгтгүй, зөвхөн тайлбартай хэсгүүд */
+            (canEditCurrent || noteOf("conclusion") || noteOf("certification")) && (
+              <VSection icon={FileText} title="Дүгнэлт, үнэлгээний баталгаа" tone="slate">
+                {(["conclusion", "certification"] as ValuationSectionKey[]).map((k) => (
+                  <VNote
+                    key={k}
+                    sectionKey={k}
+                    label={VALUATION_SECTION_LABELS[k]}
+                    value={noteOf(k)}
+                    canEdit={canEditCurrent}
+                    saving={saveNoteMutation.isPending}
+                    onSave={(text) => saveNote(k, text)}
+                  />
+                ))}
+              </VSection>
+            )
+              )],
+              /* eslint-enable react/jsx-key */
+            ])}
+          </div>
+          {/* ── Баруун багана: тоон мэдээлэл, үйлдэл, дэлгэрэнгүй ── */}
+          <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
+            {/* Үйлдэл — Excel импорт, хөрөнгө нэмэх (баруун баганад, босоо байрлалтай) */}
             <div className="ap-card overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3 dark:border-[#37394d]">
-                <FileText className="h-4 w-4 text-[#02c0ce]" />
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                  Үнэлгээний бусад тайлбар
-                </p>
+              <div className="flex flex-col gap-3 px-4 py-3.5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-slate-400" />
+                  <div>
+                    <p className="text-[12px] font-semibold text-slate-700 dark:text-white">
+                      Хөрөнгийн бүртгэл
+                    </p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                      {effectiveParcelCode || parcelId} нэгж талбар
+                    </p>
+                  </div>
+                </div>
+                {canEditCurrent && (
+                  <div className="flex flex-col gap-2 [&>*]:w-full [&_button]:w-full [&_button]:justify-center">
+                    <ValuationExcelImport
+                      acqId={acqId}
+                      parcelId={parcelId}
+                      parcelCode={effectiveParcelCode}
+                      valuationType={activeType}
+                      svc={svc}
+                      specTypes={specTypes}
+                      calcTypes={calcTypes}
+                      existingAssets={parcelAssets}
+                      existingComps={allComps}
+                      sourceDocTypeId={sourceDocType?.id}
+                      onDone={() => {
+                        queryClient.invalidateQueries({
+                          queryKey: [
+                            "parcel-assets",
+                            acqId,
+                            effectiveParcelCode,
+                            activeType,
+                          ],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: [
+                            "compensations",
+                            acqId,
+                            effectiveParcelCode,
+                            activeType,
+                          ],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: [
+                            "land-valuation",
+                            acqId,
+                            effectiveParcelCode,
+                            activeType,
+                          ],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: [
+                            "valuation-notes",
+                            acqId,
+                            effectiveParcelCode,
+                            activeType,
+                          ],
+                        });
+                        // Эх Excel нь "Үнэлгээний хүснэгт" баримт болж орсон
+                        queryClient.invalidateQueries({
+                          queryKey: ["parcel-documents", parcelId],
+                        });
+                      }}
+                    />
+                    <button
+                      onClick={() => setShowForm(true)}
+                      className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Хөрөнгө нэмэх
+                    </button>
+                  </div>
+                )}
               </div>
-              {OTHER_NOTE_KEYS.filter(
-                (k) => canEditCurrent || noteOf(k),
-              ).map((k) => (
-                <ValuationNoteBlock
-                  key={k}
-                  sectionKey={k}
-                  label={VALUATION_SECTION_LABELS[k]}
-                  value={noteOf(k)}
-                  canEdit={canEditCurrent}
-                  saving={saveNoteMutation.isPending}
-                  onSave={(text) => saveNote(k, text)}
-                />
-              ))}
             </div>
-          )}
-        </>
+
+            {selectedAssetRow ? (
+              <VSection
+                icon={Building2}
+                title={selectedAssetRow.asset.asset_name || "Хөрөнгийн дэлгэрэнгүй"}
+                tone="sky"
+                right={
+                  <button
+                    onClick={() => setExpandedAssetId(null)}
+                    className="text-slate-400 hover:text-slate-600"
+                    title="Хаах"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                }
+              >
+                {/* Зураг — сонгосон мөрийн зургууд ЭНД шууд харагдана (дарж томруулна) */}
+                <div className="border-b border-slate-100 dark:border-[#37394d]">
+                  <AssetPhotoView
+                    url={selectedAssetRow.asset.photo_pdf_url}
+                    name={selectedAssetRow.asset.asset_name}
+                  />
+                  <div className="flex items-center justify-between gap-2 px-4 py-2">
+                    <span className="text-[11px] text-slate-400">
+                      {selectedAssetRow.asset.photo_pdf_url
+                        ? "Хөрөнгийн зураг"
+                        : "Зураг заавал шаардлагатай"}
+                    </span>
+                    <AssetPhotoUpload
+                      acqId={acqId}
+                      asset={selectedAssetRow.asset}
+                      canEdit={canEditCurrent}
+                      uploadFn={svc.uploadAssetPhoto}
+                      onDone={() =>
+                        queryClient.invalidateQueries({
+                          queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* Хөрөнгийн мэдээлэл — АНХНААСАА зөвхөн ХАРАХ. Засах нь хүснэгтийн
+                    арын баганын "Засах" товчоор нээгдэнэ. */}
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-4 py-3 text-[12px]">
+                    {(
+                      [
+                        ["Нэр", selectedAssetRow.asset.asset_name || "—", true],
+                        ["Төрөл", ASSET_TYPE_LABELS[selectedAssetRow.asset.asset_type], false],
+                        ["Хэмжих нэгж", selectedAssetRow.asset.unit || "—", false],
+                        ["Хүчин чадал", formatArea(selectedAssetRow.asset.area_m2), false],
+                        [
+                          "Нэгж үнэ",
+                          selectedAssetRow.asset.unit_price
+                            ? money(selectedAssetRow.asset.unit_price)
+                            : "—",
+                          false,
+                        ],
+                        ["Эзэмшигч", selectedAssetRow.asset.owner_name || "—", false],
+                        ["Дугаар", selectedAssetRow.asset.asset_number || "—", false],
+                      ] as [string, string, boolean][]
+                    ).map(([label, value, wide]) => (
+                      <div key={label} className={wide ? "col-span-2" : ""}>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-400">{label}</p>
+                        <p className="text-slate-700 dark:text-slate-200">{value}</p>
+                      </div>
+                    ))}
+                    {selectedAssetRow.asset.description && (
+                      <div className="col-span-2">
+                        <p className="text-[10px] uppercase tracking-wider text-slate-400">
+                          Тодорхойлолт
+                        </p>
+                        <p className="whitespace-pre-line text-slate-600 dark:text-slate-300">
+                          {selectedAssetRow.asset.description}
+                        </p>
+                      </div>
+                    )}
+                    {canEditCurrent && (
+                      <div className="col-span-2 flex justify-end">
+                        <button
+                          onClick={() => openAsset(selectedAssetRow.asset.id, true)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> Засах
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                <VFootNote>
+                  Нийт үнэлгээ:{" "}
+                  <span className="font-semibold text-slate-800 dark:text-white">
+                    {money(selectedAssetRow.total)}
+                  </span>
+                </VFootNote>
+
+                {/* Үнэлгээний задаргаа (нөхөн олговрууд) */}
+                <div className="border-t border-slate-100 dark:border-[#37394d]">
+                  {selectedAssetRow.compensations.length ? (
+                    selectedAssetRow.compensations.map((comp) => (
+                      <div
+                        key={comp.id}
+                        className="flex items-start justify-between gap-2 border-b border-slate-50 px-4 py-2.5 last:border-0 dark:border-[#37394d]"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] text-slate-700 dark:text-slate-200">
+                            {detailLabel(comp)}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type} ·{" "}
+                            {comp.coverage_percent}% ·{" "}
+                            {comp.compensation_date ? formatDate(comp.compensation_date) : "—"}
+                          </p>
+                          <div className="mt-1">
+                            <StatusBadge status={comp.status} />
+                          </div>
+                          {comp.review_note && (
+                            <p
+                              className={`mt-1 text-[10px] ${comp.status === "rejected" ? "text-red-500" : "text-emerald-600"}`}
+                            >
+                              {comp.review_note}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[12px] font-semibold tabular-nums text-slate-800 dark:text-white">
+                            {money(comp.amount)}
+                          </span>
+                          <div className="inline-flex items-center gap-0.5">
+                            {isFinance && comp.status === "pending" && (
+                              <>
+                                <button
+                                  onClick={() => setApproveModal({ compId: comp.id, note: "" })}
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
+                                  title="Зөвшөөрөх"
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => setRejectModal({ compId: comp.id, note: "" })}
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                  title="Татгалзах"
+                                >
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </button>
+                              </>
+                            )}
+                            <button
+                              onClick={() => openHistory(comp.id)}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-[#252630]"
+                              title="Түүх харах"
+                            >
+                              <History className="h-3.5 w-3.5" />
+                            </button>
+                            {canEditCurrent && comp.status !== "approved" && (
+                              <button
+                                onClick={() =>
+                                  setPendingConfirm({
+                                    title: "Үнэлгээ устгах уу?",
+                                    confirmLabel: "Устгах",
+                                    confirmColor: "#f1556c",
+                                    onConfirm: () => deleteCompensationMutation.mutate(comp.id),
+                                  })
+                                }
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                                title="Устгах"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="px-4 py-3 text-[12px] text-slate-400">
+                      Үнэлгээний задаргаа бүртгэгдээгүй
+                    </p>
+                  )}
+                </div>
+
+              </VSection>
+            ) : (
+              <VSection icon={Building2} title="Хөрөнгийн дэлгэрэнгүй" tone="sky">
+                <p className="px-4 py-4 text-[12px] text-slate-400">
+                  Хүснэгтээс хөрөнгө сонгоход үнэлгээний задаргаа, зураг, үйлдлүүд энд харагдана.
+                </p>
+              </VSection>
+            )}
+
+            {/* Газрын олговор */}
+            {landComps.length > 0 && (
+              <VSection
+                icon={ReceiptText}
+                title="Газрын олговор"
+                tone="emerald"
+                right={
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">
+                    {money(totals.landTotal)}
+                  </span>
+                }
+              >
+                {landComps.map((comp) => (
+                  <div
+                    key={comp.id}
+                    className="flex items-center justify-between gap-2 border-b border-slate-50 px-4 py-2.5 text-[12px] last:border-0 dark:border-[#37394d]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-slate-700 dark:text-slate-200">{detailLabel(comp)}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type} ·{" "}
+                        {comp.coverage_percent}%
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-semibold tabular-nums text-slate-800 dark:text-white">
+                      {money(comp.amount)}
+                    </span>
+                  </div>
+                ))}
+              </VSection>
+            )}
+
+            {/* Үнэлгээний тайлангийн мэдээлэл (Excel-ээс импортолсон) */}
+            {landValuation &&
+              (landValuation.appraiser_org_name ||
+                landValuation.ownership_cert_no ||
+                landValuation.source_file_name) && (
+                <VSection icon={FileText} title="Үнэлгээний тайлангийн мэдээлэл" tone="slate">
+                  <div className="grid gap-1.5 px-4 py-3 text-[11px]">
+                    {[
+                      ["Үнэлгээний байгууллага", landValuation.appraiser_org_name],
+                      ["Захирал", landValuation.appraiser_director],
+                      ["Регистр", landValuation.appraiser_reg_no],
+                      ["Тусгай зөвшөөрөл", landValuation.appraiser_license],
+                      ["Холбоо барих", landValuation.appraiser_contact],
+                    ]
+                      .filter(([, v]) => !!v)
+                      .map(([label, value]) => (
+                        <div key={label} className="flex justify-between gap-2">
+                          <span className="text-slate-400">{label}</span>
+                          <span className="truncate text-right text-slate-700 dark:text-slate-200" title={value as string}>
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                  {/* ЭХ файл — татаж авах боломжтой (импортын үед хадгалагдсан
+                      "Үнэлгээний хүснэгт" баримт). Хуучин өгөгдөлд зөвхөн НЭР
+                      байгаа тул холбоосгүй чип болж харагдана. */}
+                  {(sourceDoc || landValuation.source_file_name) && (
+                    <div className="border-t border-slate-100 px-4 py-2.5 dark:border-[#37394d]">
+                      <VFileChip
+                        label="Эх файл"
+                        name={sourceDoc?.name || landValuation.source_file_name}
+                        href={sourceDoc?.file_url}
+                      />
+                    </div>
+                  )}
+                </VSection>
+              )}
+          </aside>
+        </div>
       )}
 
       {showForm && (
@@ -2683,12 +2514,15 @@ export function RealEstateTab({
                   </p>
                   <select
                     value={form.asset_type}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const next = e.target.value as Asset["asset_type"];
+                      // Үл хөдлөх рүү шилжихэд зардлын ангилал утгагүй болно
                       setForm((f) => ({
                         ...f,
-                        asset_type: e.target.value as Asset["asset_type"],
-                      }))
-                    }
+                        asset_type: next,
+                        cost_category: next === "property" ? f.cost_category : "",
+                      }));
+                    }}
                     className={INP}
                   >
                     <option value="real_state">Үл хөдлөх хөрөнгө</option>
@@ -2726,6 +2560,27 @@ export function RealEstateTab({
                     />
                   </div>
                 ))}
+                {form.asset_type === "property" && (
+                  <div>
+                    <p className="mb-1 text-[11px] text-slate-400">
+                      Зардлын ангилал
+                    </p>
+                    <select
+                      value={form.cost_category}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, cost_category: e.target.value }))
+                      }
+                      className={INP}
+                    >
+                      <option value="">Бусад эд хөрөнгө</option>
+                      {V_COST_GROUPS.map((g) => (
+                        <option key={g.key} value={g.title}>
+                          {g.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="md:col-span-4">
                   <p className="mb-1 text-[11px] text-slate-400">
                     Үнэлж буй хөрөнгийн тодорхойлолт
@@ -3135,6 +2990,233 @@ export function RealEstateTab({
         </div>
       )}
 
+      {/* Хөрөнгийн мэдээлэл ЗАСАХ попап — хүснэгтийн арын баганын товчоор нээгдэнэ. */}
+      {assetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !updateAssetMutation.isPending) setAssetModal(null);
+          }}
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div className="flex items-center gap-2">
+                <Pencil className="h-4.5 w-4.5 text-[#02c0ce]" />
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
+                  Хөрөнгийн мэдээлэл засах
+                </p>
+              </div>
+              <button
+                onClick={() => setAssetModal(null)}
+                disabled={updateAssetMutation.isPending}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-[#252630]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 px-5 py-4">
+              {(
+                [
+                  ["asset_name", "Нэр", "text"],
+                  ["unit", "Хэмжих нэгж", "text"],
+                  ["area_m2", "Хүчин чадал", "number"],
+                  ["unit_price", "Нэгж үнэ", "number"],
+                  ["owner_name", "Эзэмшигч", "text"],
+                  ["asset_number", "Дугаар", "text"],
+                ] as [keyof typeof assetEditForm, string, string][]
+              ).map(([field, label, type]) => (
+                <div key={String(field)} className={field === "asset_name" ? "col-span-2" : ""}>
+                  <p className="mb-1 text-[11px] text-slate-400">{label}</p>
+                  <input
+                    type={type}
+                    value={assetEditForm[field]}
+                    onChange={(e) => setAssetEditForm((f) => ({ ...f, [field]: e.target.value }))}
+                    className={`${INP} ${type === "number" ? "tabular-nums" : ""}`}
+                  />
+                </div>
+              ))}
+              <div className="col-span-2">
+                <p className="mb-1 text-[11px] text-slate-400">Тодорхойлолт</p>
+                <textarea
+                  value={assetEditForm.description}
+                  onChange={(e) =>
+                    setAssetEditForm((f) => ({ ...f, description: e.target.value }))
+                  }
+                  rows={3}
+                  className={`${INP} h-auto resize-none py-2`}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <button
+                onClick={() =>
+                  setPendingConfirm({
+                    title: "Хөрөнгө устгах уу?",
+                    description: assetEditForm.asset_name || undefined,
+                    confirmLabel: "Устгах",
+                    confirmColor: "#f1556c",
+                    onConfirm: () => {
+                      deleteAssetMutation.mutate(assetModal);
+                      setAssetModal(null);
+                    },
+                  })
+                }
+                disabled={updateAssetMutation.isPending}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-[13px] font-semibold text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:hover:bg-red-500/10"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Устгах
+              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAssetModal(null)}
+                  disabled={updateAssetMutation.isPending}
+                  className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+                >
+                  Болих
+                </button>
+                <button
+                  onClick={() => updateAssetMutation.mutate()}
+                  disabled={updateAssetMutation.isPending || !assetEditDirty}
+                  className="inline-flex h-9 items-center rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+                >
+                  Хадгалах
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Үнэлгээ (нөхөн олговор) нэмэх попап — ТУСДАА үйлдэл тул дэлгэрэнгүй
+          самбарт биш, хүснэгтийн дээрх товчоор нээгдэнэ. */}
+      {compModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !createCompensationMutation.isPending)
+              setCompModal(null);
+          }}
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-white/[0.08] dark:bg-[#1e1f27]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <div className="flex items-center gap-2">
+                <CircleDollarSign className="h-5 w-5 text-[#02c0ce]" />
+                <p className="text-[14px] font-semibold text-slate-800 dark:text-white">
+                  Үнэлгээ нэмэх
+                </p>
+              </div>
+              <button
+                onClick={() => setCompModal(null)}
+                disabled={createCompensationMutation.isPending}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-[#252630]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 px-5 py-4">
+              <div>
+                <p className="mb-1 text-[11px] text-slate-400">Хөрөнгө</p>
+                <select
+                  value={compModal.assetId}
+                  onChange={(e) => setCompModal({ assetId: e.target.value })}
+                  className={INP}
+                >
+                  {parcelAssets.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.asset_name || ASSET_TYPE_LABELS[a.asset_type]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] text-slate-400">Үнэлсэн хэсэг</p>
+                <input
+                  value={valuationForm.note}
+                  onChange={(e) => setValuationForm((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="Жишээ: Барилгын нөхөн орлуулах өртөг"
+                  className={INP}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="mb-1 text-[11px] text-slate-400">Хэлбэр</p>
+                  <select
+                    value={valuationForm.compensation_type}
+                    onChange={(e) =>
+                      setValuationForm((prev) => ({
+                        ...prev,
+                        compensation_type: e.target.value as Compensation["compensation_type"],
+                      }))
+                    }
+                    className={INP}
+                  >
+                    <option value="cash">Мөнгө</option>
+                    <option value="land_grant">Дүйцүүлсэн</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="mb-1 text-[11px] text-slate-400">Хувь</p>
+                  <input
+                    value={valuationForm.coverage_percent}
+                    onChange={(e) =>
+                      setValuationForm((prev) => ({ ...prev, coverage_percent: e.target.value }))
+                    }
+                    type="number"
+                    placeholder="100"
+                    className={`${INP} tabular-nums`}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="mb-1 text-[11px] text-slate-400">Дүн (₮)</p>
+                  <input
+                    value={valuationForm.amount}
+                    onChange={(e) =>
+                      setValuationForm((prev) => ({ ...prev, amount: e.target.value }))
+                    }
+                    type="number"
+                    placeholder="0"
+                    className={`${INP} tabular-nums`}
+                  />
+                </div>
+                <div>
+                  <p className="mb-1 text-[11px] text-slate-400">Огноо</p>
+                  <input
+                    value={valuationForm.compensation_date}
+                    onChange={(e) =>
+                      setValuationForm((prev) => ({
+                        ...prev,
+                        compensation_date: e.target.value,
+                      }))
+                    }
+                    type="date"
+                    className={INP}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
+              <button
+                onClick={() => setCompModal(null)}
+                disabled={createCompensationMutation.isPending}
+                className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-white/[0.08] dark:text-slate-300 dark:hover:bg-[#252630]"
+              >
+                Болих
+              </button>
+              <button
+                onClick={() => createCompensationMutation.mutate(compModal.assetId)}
+                disabled={createCompensationMutation.isPending || !Number(valuationForm.amount)}
+                className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" />
+                Нэмэх
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Зөвшөөрөх modal */}
       {approveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 backdrop-blur-sm">
@@ -3390,6 +3472,11 @@ export function RealEstateTab({
             svc.listValuationSnapshots(acqId, parcelId, activeType)
           }
           calcTypes={calcTypes}
+          // ОДООГИЙН урсгалын файлуудыг түүх рүү ДАМЖУУЛАХГҮЙ: хүчингүй болсон
+          // үнэлгээний "Дэлгэрэнгүй" нь зөвхөн ТУХАЙН үнэлгээний файлыг
+          // (snapshot дээр хуулагдсан тайлан/эх Excel) харуулна. Одоогийн
+          // тайлан/хүснэгт нь энэ табын "Тайлан" мөр болон Баримт бичиг
+          // хэсгээс татагдана.
           onClose={() => setSubHistoryOpen(false)}
         />
       )}

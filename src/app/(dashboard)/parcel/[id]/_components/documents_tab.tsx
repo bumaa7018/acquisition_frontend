@@ -61,6 +61,9 @@ export function DocumentsTab({
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
+  // parcel_document-д бүртгэгдсэн БҮХ файл энд харагдана (үнэлгээний эх Excel,
+  // тайлан г.м. ялгаагүй) — баримтын жагсаалт бол нэгж талбарын бүх хавсралтын
+  // цорын ганц бүрэн дүр зураг байх ёстой.
   const { data: docs = [], isLoading } = useQuery({
     queryKey: ["parcel-documents", parcelId],
     queryFn: () =>
@@ -74,6 +77,7 @@ export function DocumentsTab({
     queryFn: () => documentTypeApi.list("parcel"),
     staleTime: 60_000,
   });
+
 
   const uploadMutation = useMutation({
     mutationFn: ({

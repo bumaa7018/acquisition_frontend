@@ -448,7 +448,9 @@ export function extractAssets(
     // Төрлийг ТОДОРХОЙ баганаас авна (байхгүй бол нэрээр таамаглана)
     const tk = cols.type >= 0 ? typeToKind(text(row[cols.type])) : null;
     if (tk === "land" || isLand(name)) continue; // газар нь land, энд орохгүй
-    const kind: AssetKind | null = tk === "real_state" || tk === "property" ? tk : detectKind(name);
+    // Төрөл нь тодорхой байвал түүнийг, эс бөгөөс нэрээр таамаглана; танигдаагүй
+    // бол "эд хөрөнгө" (нэрийг нь хэвээр хадгална) — төрөл нь блоклох шалтгаан биш.
+    const kind: AssetKind = (tk === "real_state" || tk === "property" ? tk : detectKind(name)) ?? "property";
 
     const asset: ParsedAsset = {
       seqNo,
@@ -484,7 +486,6 @@ export function extractAssets(
         asset.totalPrice =
           p.totalPrice ??
           (asset.quantity != null && p.unitPrice != null ? asset.quantity * p.unitPrice : null);
-        if (asset.kind == null) asset.kind = "property";
       }
     }
     assets.push(asset);
@@ -562,6 +563,7 @@ export function extractValuation(wb: Workbook): Omit<ParsedValuation, "warnings"
     summaryTotal: extractSummaryTotal(sheetMap.summary ? wb[sheetMap.summary] : null),
     sheetMap,
     notes: {},
+    sections: {},
     layout: "multi-sheet",
     conclusion: "",
   };

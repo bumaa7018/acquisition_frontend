@@ -37,9 +37,27 @@ import { getApiError } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { similarity } from "@/lib/valuation-import/fuzzy";
 import {
+  VSection,
+  VNoteInput,
+  VHeadRight,
+  VKeyValueTable,
+  VLandValuationTable,
+  VAssetsTable,
+  VBuildingSpecTable,
+  VBuildingCostTable,
+  VCostTable,
+  VSummaryTable,
+  V_COST_GROUPS,
+  costGroupKey,
+  sectionHeading,
+  type VAssetRow,
+  type VCostRow,
+} from "./valuation_view";
+import {
   parseValuationFile,
   validateParsed,
   fileSha256,
+  VALUATION_SECTION_KEYS,
   VALUATION_SECTION_LABELS,
   type AssetKind,
   type ParsedAsset,
@@ -51,6 +69,13 @@ import {
 // Бүх импорт нэг API дуудлагаар (backend транзакц) хийгдэнэ.
 export interface ValuationImportSvc {
   importValuation: (a: string, body: ValuationImportPayload) => Promise<ValuationImportResult | undefined>;
+  /** Эх Excel файлыг "Үнэлгээний хүснэгт" баримт болгон хадгалахад. */
+  uploadDocument: (
+    parcelId: string,
+    file: File,
+    docTypeId?: number,
+    name?: string,
+  ) => Promise<unknown>;
 }
 
 interface Props {
@@ -64,15 +89,14 @@ interface Props {
   // Тухайн нэгж талбарт одоо байгаа хөрөнгө/үнэлгээ — дахин импортлоход эдгээрийг устгана
   existingAssets: Asset[];
   existingComps: Compensation[];
+  /** "Үнэлгээний хүснэгт" баримтын төрлийн id — эх файлыг хадгалахад. */
+  sourceDocTypeId?: number;
   onDone: () => void;
 }
 
 const nf = new Intl.NumberFormat("mn-MN");
 function money(v: number | null | undefined) {
   return v == null ? "—" : `${nf.format(Math.round(v))}₮`;
-}
-function num(v: number | null | undefined) {
-  return v == null ? "—" : nf.format(v);
 }
 
 const KIND_LABEL: Record<AssetKind, string> = {
@@ -148,12 +172,16 @@ export function ValuationExcelImport({
   calcTypes,
   existingAssets,
   existingComps,
+  sourceDocTypeId,
   onDone,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [data, setData] = useState<ParsedValuation | null>(null);
   const [fileName, setFileName] = useState("");
+  // Эх файлыг ХАДГАЛНА — импорт амжилттай болсны дараа "Үнэлгээний хүснэгт"
+  // баримт болгон байршуулж, дараа нь татаж авах боломжтой болгоно.
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
@@ -166,6 +194,7 @@ export function ValuationExcelImport({
     setData(null);
     setFileName("");
     setFileHash("");
+    setSourceFile(null);
     setPendingConfirm(null);
   };
   const close = () => {
@@ -180,6 +209,7 @@ export function ValuationExcelImport({
       return;
     }
     setFileName(file.name);
+    setSourceFile(file);
     setPhase("parsing");
     try {
       const parsed = await parseValuationFile(file);
@@ -214,6 +244,16 @@ export function ValuationExcelImport({
   const patchNote = (key: ValuationSectionKey, note: string) => {
     setData((prev) => (prev ? { ...prev, notes: { ...prev.notes, [key]: note } } : prev));
   };
+  const patchClearance = (idx: number, patch: Partial<ParsedValuation["clearance"][number]>) => {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            clearance: prev.clearance.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
+          }
+        : prev,
+    );
+  };
   // Preview дээр оруулахгүй мөрийг хасах
   const removeAsset = (idx: number) => {
     setData((prev) =>
@@ -226,11 +266,10 @@ export function ValuationExcelImport({
     );
   };
 
-  const errors = data?.warnings.filter((w) => w.level === "error") ?? [];
-  const warnings = data?.warnings.filter((w) => w.level === "warning") ?? [];
-  const canSubmit = !!data && errors.length === 0;
+  // Хүснэгтийн гарчиг/шошго — Excel-ээс ирсэн дугаар, эс бөгөөс загварын стандарт.
+  const head = (key: ValuationSectionKey) => sectionHeading(key, data?.sections?.[key]);
 
-  // Нэгтгэлийн тооцоолол (preview дээр харуулна)
+  // Нэгтгэлийн тооцоолол (хүснэгтүүдэд хэрэглэгдэнэ)
   const landTotal = data?.land.totalValue ?? 0;
   const buildingTotal =
     data?.assets.filter((a) => a.kind === "real_state").reduce((s, a) => s + (a.totalPrice ?? 0), 0) ?? 0;
@@ -238,6 +277,104 @@ export function ValuationExcelImport({
     data?.assets.filter((a) => a.kind === "property").reduce((s, a) => s + (a.totalPrice ?? 0), 0) ?? 0;
   const clearanceTotal = data?.clearance.reduce((s, c) => s + (c.totalPrice ?? 0), 0) ?? 0;
   const grandTotal = landTotal + buildingTotal + propertyTotal + clearanceTotal;
+
+  // ── Дэлгэцийн хүснэгтэд буулгах өгөгдөл (нийтлэг хүснэгтийн бүтцэд) ──
+  const assetRows: VAssetRow[] = (data?.assets ?? []).map((a, i) => ({
+    id: String(i),
+    seq: a.seqNo,
+    name: a.name,
+    kind: a.kind,
+    unit: a.unit,
+    qty: a.quantity,
+    total: a.totalPrice,
+    description: a.description,
+    badge: a.building ? (
+      <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
+        барилгын өртөг
+      </span>
+    ) : undefined,
+  }));
+  const specColumns = (data?.assets ?? [])
+    .filter((a) => a.spec)
+    .map((a) => ({ name: a.name, items: a.spec!.items }));
+  const buildingAssets = (data?.assets ?? [])
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => !!a.building || a.kind === "real_state");
+  const costColumns = (data?.assets ?? [])
+    .filter((a) => a.building)
+    .map((a) => ({ name: a.name, items: a.building!.items }));
+
+  // 3.6 бусад эд хөрөнгө + 3.7–3.9 зардлын хүснэгтүүд (Excel-тэй ижил тусдаа хүснэгт)
+  const propertyCostRows: VCostRow[] = (data?.assets ?? [])
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => a.kind === "property")
+    .map(({ a, i }) => ({
+      id: `a${i}`,
+      name: a.name,
+      unit: a.unit,
+      qty: a.quantity,
+      unitPrice: a.unitPrice,
+      total: a.totalPrice,
+    }));
+  const costSections: {
+    key: ValuationSectionKey;
+    title: string;
+    rows: VCostRow[];
+    total: number;
+    remove?: (id: string) => void;
+    patch?: (
+      id: string,
+      patch: { qty?: number | null; unitPrice?: number | null; total?: number | null },
+    ) => void;
+  }[] = [
+    {
+      key: "other_assets" as ValuationSectionKey,
+      title: "Бусад эд хөрөнгө",
+      rows: propertyCostRows,
+      total: propertyTotal,
+      remove: (id: string) => removeAsset(Number(id.slice(1))),
+      patch: (id: string, patch: { qty?: number | null; unitPrice?: number | null; total?: number | null }) =>
+        patchAsset(Number(id.slice(1)), {
+          quantity: patch.qty,
+          unitPrice: patch.unitPrice,
+          totalPrice: patch.total,
+        }),
+    },
+    ...V_COST_GROUPS.map((g) => {
+      const picked = (data?.clearance ?? [])
+        .map((c, i) => ({ c, i }))
+        .filter(({ c }) => (costGroupKey(c.category) ?? "clearance_cost") === g.key);
+      return {
+        key: g.key,
+        title: g.title,
+        rows: picked.map(({ c, i }) => ({
+          id: `c${i}`,
+          name: c.name,
+          unit: c.unit,
+          qty: c.quantity,
+          unitPrice: c.unitPrice,
+          total: c.totalPrice,
+        })),
+        total: picked.reduce((sum, { c }) => sum + (c.totalPrice ?? 0), 0),
+        remove: (id: string) => removeClearance(Number(id.slice(1))),
+        patch: (
+          id: string,
+          patch: { qty?: number | null; unitPrice?: number | null; total?: number | null },
+        ) =>
+          patchClearance(Number(id.slice(1)), {
+            quantity: patch.qty,
+            unitPrice: patch.unitPrice,
+            totalPrice: patch.total,
+          }),
+      };
+    }),
+  ].filter((sec) => sec.rows.length > 0 || !!data?.notes?.[sec.key]);
+
+  const errors = data?.warnings.filter((w) => w.level === "error") ?? [];
+  const warnings = data?.warnings.filter((w) => w.level === "warning") ?? [];
+  const canSubmit = !!data && errors.length === 0;
+
+  // Нэгтгэлийн тооцоолол (preview дээр харуулна)
 
   // "Системд оруулах" дарахад: хуучин мэдээлэл байвал баталгаажуулаад, дараа нь оруулна.
   const handleSubmitClick = () => {
@@ -330,11 +467,43 @@ export function ValuationExcelImport({
       section_notes: Object.fromEntries(
         Object.entries(data.notes ?? {}).filter(([, v]) => (v ?? "").trim() !== ""),
       ),
+      // Хүснэгтийн дугаар/нэр/дараалал — дэлгэц дээр Excel-ийнхээрээ харагдана.
+      // Тайлбаргүй хүснэгтийг ч илгээнэ (дугаар/дараалал нь хадгалагдана).
+      sections: VALUATION_SECTION_KEYS.flatMap((key) => {
+        const meta = data.sections?.[key];
+        const note = (data.notes?.[key] ?? "").trim();
+        if (!meta && !note) return [];
+        return [
+          {
+            key,
+            note,
+            section_no: meta?.no ?? "",
+            table_label: meta?.label ?? "",
+            title: meta?.title ?? VALUATION_SECTION_LABELS[key],
+            sort_order: meta?.order ?? VALUATION_SECTION_KEYS.indexOf(key),
+          },
+        ];
+      }),
     };
 
     try {
       // Бүх устгал + оруулалт НЭГ API дуудлагаар (backend транзакц)
       await svc.importValuation(acqId, payload);
+      // Эх Excel-ийг баримт болгон хадгална. Амжилтгүй болбол импортыг
+      // БУЦААХГҮЙ — үнэлгээ аль хэдийн орсон, зөвхөн эх файл дутуу үлдэнэ.
+      if (sourceFile && sourceDocTypeId) {
+        try {
+          await svc.uploadDocument(
+            parcelId,
+            sourceFile,
+            sourceDocTypeId,
+            `Үнэлгээний хүснэгт: ${fileName}`,
+          );
+        } catch (err) {
+          logger.warn("valuation source file upload failed", { error: String(err) });
+          toast.warning("Үнэлгээ орсон ч эх Excel файлыг хадгалж чадсангүй");
+        }
+      }
       toast.success("Хөрөнгийн үнэлгээ системд амжилттай орлоо");
       onDone();
       close();
@@ -476,7 +645,7 @@ export function ValuationExcelImport({
 
                   {/* Байгууллага */}
                   {data.org.name && (
-                    <Section icon={ReceiptText} title="Үнэлгээний байгууллага" tone="slate">
+                    <VSection icon={ReceiptText} title="Үнэлгээний байгууллага" tone="slate">
                       <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 px-4 py-3 text-[12px] md:grid-cols-3">
                         <Field label="Нэр" value={data.org.name} />
                         <Field label="Захирал" value={data.org.director} />
@@ -485,409 +654,350 @@ export function ValuationExcelImport({
                         <Field label="Холбоо барих" value={data.org.contact} />
                         <Field label="Хаяг" value={data.org.address} />
                       </div>
-                    </Section>
+                    </VSection>
                   )}
 
-                  {/* Газрын үнэлгээ */}
-                  <Section icon={ReceiptText} title="Газрын үнэлгээ" tone="emerald">
-                    <div className="grid gap-3 px-4 py-3 md:grid-cols-3">
-                      <LabeledInput
-                        label="Өмчлөгч / эзэмшигч"
-                        value={data.land.ownerName}
-                        onChange={(v) => patchLand({ ownerName: v })}
+                  {/* 3.1 Үнэлж буй хөрөнгүүдийн танилцуулга */}
+                  <VSection
+                    icon={Boxes}
+                    title={head("property_desc").title}
+                    tone="sky"
+                    right={
+                      <VHeadRight
+                        label={head("property_desc").label}
+                        extra={<span className="text-slate-400">{data.assets.length} хөрөнгө</span>}
                       />
-                      <LabeledNumber
-                        label="Чөлөөлөгдөх талбай (м²)"
-                        value={data.land.affectedAreaM2}
-                        onChange={(v) => patchLand({ affectedAreaM2: v })}
-                      />
-                      <LabeledNumber
-                        label="1 м² суурь үнэ (₮)"
-                        value={data.land.basePriceM2}
-                        onChange={(v) => patchLand({ basePriceM2: v })}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-[12px] dark:border-[#37394d]">
-                      <span className="text-slate-500">
-                        Гэрчилгээ: {data.land.certNo || "—"} · Нэгж талбар: {data.land.parcelNo || "—"}
-                        {data.land.purpose ? ` · Зориулалт: ${data.land.purpose}` : ""}
-                      </span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-100">
-                        Газрын үнэ: {money((data.land.affectedAreaM2 ?? 0) * (data.land.basePriceM2 ?? 0))}
-                      </span>
-                    </div>
-                    {data.land.location && (
-                      <div className="border-t border-slate-100 px-4 py-2.5 text-[12px] text-slate-500 dark:border-[#37394d]">
-                        Байршил: {data.land.location}
-                      </div>
-                    )}
-                    <NoteEditor
-                      sectionKey="land_valuation"
-                      value={data.notes?.land_valuation ?? ""}
-                      onChange={(v) => patchNote("land_valuation", v)}
-                      disabled={phase === "submitting"}
+                    }
+                  >
+                    <VAssetsTable
+                      rows={assetRows}
+                      renderKind={(row, i) => (
+                        <select
+                          value={row.kind ?? ""}
+                          onChange={(e) =>
+                            patchAsset(i, { kind: (e.target.value || null) as AssetKind | null })
+                          }
+                          className={`h-8 rounded-md border px-2 text-[11px] outline-none focus:border-[#02c0ce] dark:bg-[#1e1f27] ${
+                            row.kind == null
+                              ? "border-red-300 text-red-600"
+                              : "border-slate-200 text-slate-700 dark:border-white/[0.08] dark:text-slate-200"
+                          }`}
+                        >
+                          <option value="">— сонгох —</option>
+                          <option value="real_state">{KIND_LABEL.real_state}</option>
+                          <option value="property">{KIND_LABEL.property}</option>
+                        </select>
+                      )}
+                      renderQty={(row, i) => (
+                        <input
+                          type="number"
+                          value={row.qty ?? ""}
+                          onChange={(e) =>
+                            patchAsset(i, {
+                              quantity: e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          className="h-8 w-24 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
+                        />
+                      )}
+                      renderActions={(row, i) => (
+                        <button
+                          type="button"
+                          onClick={() => removeAsset(i)}
+                          disabled={phase === "submitting"}
+                          title="Энэ хөрөнгийг оруулахгүй"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      emptyText="Хөрөнгө олдсонгүй"
                     />
-                  </Section>
-
-                  {/* Хөрөнгийн тодорхойлолт */}
-                  <Section icon={Boxes} title="Хөрөнгийн тодорхойлолт" tone="sky">
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[900px] text-[12px]">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                            {["№", "Нэр", "Төрөл", "Нэгж", "Тоо/талбай", "Нийт үнэ", "Тодорхойлолт", ""].map(
-                              (h, hi) => (
-                                <th
-                                  key={hi}
-                                  className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                                >
-                                  {h}
-                                </th>
-                              ),
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                          {data.assets.map((a, idx) => (
-                            <tr key={idx} className={a.kind == null ? "bg-red-50/40 dark:bg-red-500/5" : ""}>
-                              <td className="px-3 py-2 text-slate-400">{a.seqNo ?? "—"}</td>
-                              <td className="px-3 py-2 font-medium text-slate-700 dark:text-slate-200">
-                                {a.name}
-                              </td>
-                              <td className="px-3 py-2">
-                                <select
-                                  value={a.kind ?? ""}
-                                  onChange={(e) =>
-                                    patchAsset(idx, { kind: (e.target.value || null) as AssetKind | null })
-                                  }
-                                  className={`h-8 rounded-md border px-2 text-[11px] outline-none focus:border-[#02c0ce] dark:bg-[#1e1f27] ${
-                                    a.kind == null
-                                      ? "border-red-300 text-red-600"
-                                      : "border-slate-200 text-slate-700 dark:border-white/[0.08] dark:text-slate-200"
-                                  }`}
-                                >
-                                  <option value="">— сонгох —</option>
-                                  <option value="real_state">{KIND_LABEL.real_state}</option>
-                                  <option value="property">{KIND_LABEL.property}</option>
-                                </select>
-                              </td>
-                              <td className="px-3 py-2 text-slate-500">{a.unit || "—"}</td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={a.quantity ?? ""}
-                                  onChange={(e) =>
-                                    patchAsset(idx, {
-                                      quantity: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  className="h-8 w-24 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
-                                />
-                              </td>
-                              <td className="px-3 py-2">
-                                <input
-                                  type="number"
-                                  value={a.totalPrice ?? ""}
-                                  onChange={(e) =>
-                                    patchAsset(idx, {
-                                      totalPrice: e.target.value === "" ? null : Number(e.target.value),
-                                    })
-                                  }
-                                  placeholder="0"
-                                  className="h-8 w-32 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
-                                />
-                              </td>
-                              <td
-                                className="max-w-[280px] truncate px-3 py-2 text-slate-400"
-                                title={a.description}
-                              >
-                                {a.description || "—"}
-                                {a.building && (
-                                  <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
-                                    барилгын өртөг
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => removeAsset(idx)}
-                                  disabled={phase === "submitting"}
-                                  title="Энэ хөрөнгийг оруулахгүй"
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-500/10"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                          {data.assets.length === 0 && (
-                            <tr>
-                              <td colSpan={8} className="px-3 py-6 text-center text-slate-400">
-                                Хөрөнгө олдсонгүй
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                    <NoteEditor
+                    <VNoteInput
                       sectionKey="property_desc"
                       value={data.notes?.property_desc ?? ""}
                       onChange={(v) => patchNote("property_desc", v)}
                       disabled={phase === "submitting"}
                     />
-                  </Section>
+                  </VSection>
 
-                  {/* Барилгын тодорхойлолт (Хүснэгт-4) — барилга бүр багана */}
-                  {(() => {
-                    const specs = data.assets
-                      .filter((a) => a.spec)
-                      .map((a) => ({ name: a.name, s: a.spec! }));
-                    if (!specs.length) return null;
-                    const labels: string[] = [];
-                    for (const { s: sp } of specs)
-                      for (const it of sp.items)
-                        if (!labels.includes(it.label)) labels.push(it.label);
-                    return (
-                      <Section icon={Building2} title="Барилгын тодорхойлолт" tone="sky">
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[480px] text-[12px]">
-                            <thead>
-                              <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                                  Үзүүлэлт
-                                </th>
-                                {specs.map((x, i) => (
-                                  <th
-                                    key={i}
-                                    className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                                  >
-                                    {x.name}
-                                  </th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                              {labels.map((label, li) => (
-                                <tr key={li}>
-                                  <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{label}</td>
-                                  {specs.map((x, ci) => (
-                                    <td key={ci} className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                                      {x.s.items.find((it) => it.label === label)?.value || "—"}
-                                    </td>
-                                  ))}
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <NoteEditor
-                          sectionKey="building_spec"
-                          value={data.notes?.building_spec ?? ""}
-                          onChange={(v) => patchNote("building_spec", v)}
-                          disabled={phase === "submitting"}
-                        />
-                      </Section>
-                    );
-                  })()}
+                  {/* 3.2 Газрын эрх зүйн байдал */}
+                  <VSection
+                    icon={ReceiptText}
+                    title={head("land_legal").title}
+                    tone="emerald"
+                    right={<VHeadRight label={head("land_legal").label} />}
+                  >
+                    <VKeyValueTable
+                      rows={[
+                        [
+                          "Газар өмчлөгчийн овог нэр",
+                          <input
+                            key="owner"
+                            value={data.land.ownerName}
+                            onChange={(e) => patchLand({ ownerName: e.target.value })}
+                            className={INP}
+                          />,
+                        ],
+                        ["Газрын гэрчилгээний дугаар", data.land.certNo || "—"],
+                        ["Нэгж талбарын дугаар", data.land.parcelNo || "—"],
+                        ["Улсын бүртгэлийн дугаар", data.land.stateRegNo || "—"],
+                        ["Газрын зориулалт", data.land.purpose || "—"],
+                        ["Газрын байршил", data.land.location || "—"],
+                      ]}
+                    />
+                    <VNoteInput
+                      sectionKey="land_legal"
+                      value={data.notes?.land_legal ?? ""}
+                      onChange={(v) => patchNote("land_legal", v)}
+                      disabled={phase === "submitting"}
+                    />
+                  </VSection>
 
-                  {/* Барилгын өртгийн хандлага — барилга бүр ХОЙШ БАГАНА (Excel шиг) */}
-                  {(() => {
-                    const blds = data.assets.filter((a) => a.building).map((a) => ({ name: a.name, b: a.building! }));
-                    if (!blds.length) return null;
-                    // Мөрийн жагсаалт = бүх барилгын items-ийн нэгдэл (эрэмбийг хадгална).
-                    const rowDefs: { label: string; unit: string; group: string }[] = [];
-                    const seen = new Set<string>();
-                    for (const { b } of blds)
-                      for (const it of b.items)
-                        if (!seen.has(it.label)) {
-                          seen.add(it.label);
-                          rowDefs.push({ label: it.label, unit: it.unit, group: it.group });
+                  {/* 3.3 Газрын үнэлгээ */}
+                  <VSection
+                    icon={ReceiptText}
+                    title={head("land_valuation").title}
+                    tone="emerald"
+                    right={
+                      <VHeadRight
+                        label={head("land_valuation").label}
+                        extra={
+                          <span className="font-semibold text-slate-800 dark:text-slate-100">
+                            {money(landTotal)}
+                          </span>
                         }
-                    // Бүлгийн (Итгэлцүүр г.м) rowspan
-                    const gSpan = new Map<number, number>();
-                    const gCovered = new Set<number>();
-                    for (let i = 0; i < rowDefs.length; ) {
-                      const g = rowDefs[i].group;
-                      if (g) {
-                        let j = i;
-                        while (j + 1 < rowDefs.length && rowDefs[j + 1].group === g) j++;
-                        gSpan.set(i, j - i + 1);
-                        for (let k = i + 1; k <= j; k++) gCovered.add(k);
-                        i = j + 1;
-                      } else i++;
+                      />
                     }
-                    const valOf = (b: (typeof blds)[number]["b"], label: string) => {
-                      const it = b.items.find((x) => x.label === label);
-                      if (!it) return "—";
-                      if (it.value != null) return nf.format(it.value);
-                      return it.raw || "—"; // тоон биш (текст) утгыг түүхийгээр нь харуулна
-                    };
-                    return (
-                      <Section icon={Building2} title="Барилгын өртгийн хандлага" tone="sky">
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[480px] text-[12px]">
-                            <thead>
-                              <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                                <th colSpan={2} className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Үзүүлэлт</th>
-                                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Хэмжих нэгж</th>
-                                {blds.map((x, i) => (
-                                  <th key={i} className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">{x.name}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                              {rowDefs.map((rd, ri) => {
-                                const strong = /нөхөн орлуулах/i.test(rd.label);
-                                return (
-                                  <tr key={ri}>
-                                    {rd.group ? (
-                                      <>
-                                        {gSpan.has(ri) && (
-                                          <td rowSpan={gSpan.get(ri)} className="px-4 py-2.5 align-top font-medium text-slate-600 dark:text-slate-300 border-r border-slate-100 dark:border-[#37394d]">
-                                            {rd.group}
-                                          </td>
-                                        )}
-                                        <td className={`px-4 py-2.5 text-slate-700 dark:text-slate-200 ${strong ? "font-semibold" : ""}`}>{rd.label}</td>
-                                      </>
-                                    ) : (
-                                      <td colSpan={2} className={`px-4 py-2.5 text-slate-700 dark:text-slate-200 ${strong ? "font-semibold" : ""}`}>{rd.label}</td>
-                                    )}
-                                    <td className="px-4 py-2.5 text-slate-500">{rd.unit}</td>
-                                    {blds.map((x, ci) => (
-                                      <td key={ci} className={`px-4 py-2.5 text-right tabular-nums text-slate-800 dark:text-slate-100 ${strong ? "font-bold" : "font-medium"}`}>
-                                        {valOf(x.b, rd.label)}
-                                      </td>
-                                    ))}
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                        <NoteEditor
-                          sectionKey="building_cost"
-                          value={data.notes?.building_cost ?? ""}
-                          onChange={(v) => patchNote("building_cost", v)}
-                          disabled={phase === "submitting"}
+                  >
+                    <VLandValuationTable
+                      areaCell={
+                        <input
+                          type="number"
+                          value={data.land.affectedAreaM2 ?? ""}
+                          onChange={(e) =>
+                            patchLand({
+                              affectedAreaM2: e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          className={`${INP} w-32 text-right tabular-nums`}
                         />
-                      </Section>
-                    );
-                  })()}
+                      }
+                      priceCell={
+                        <input
+                          type="number"
+                          value={data.land.basePriceM2 ?? ""}
+                          onChange={(e) =>
+                            patchLand({
+                              basePriceM2: e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          className={`${INP} w-32 text-right tabular-nums`}
+                        />
+                      }
+                      total={landTotal}
+                    />
+                    <VNoteInput
+                      sectionKey="land_valuation"
+                      value={data.notes?.land_valuation ?? ""}
+                      onChange={(v) => patchNote("land_valuation", v)}
+                      disabled={phase === "submitting"}
+                    />
+                  </VSection>
 
-                  {/* Түр суурьшуулах / чөлөөлөх зардал */}
-                  {data.clearance.length > 0 && (
-                    <Section icon={Truck} title="Газар чөлөөлөх / түр суурьшуулах зардал" tone="amber">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-[12px]">
-                          <thead>
-                            <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                              {["Ангилал", "Нэр", "Нэгж", "Тоо", "Нэгж үнэ", "Нийт үнэ", ""].map((h, hi) => (
-                                <th
-                                  key={hi}
-                                  className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400"
-                                >
-                                  {h}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                            {data.clearance.map((c, i) => (
-                              <tr key={i}>
-                                <td className="px-3 py-2 text-slate-400">{c.category}</td>
-                                <td className="px-3 py-2 text-slate-700 dark:text-slate-200">{c.name}</td>
-                                <td className="px-3 py-2 text-slate-500">{c.unit || "—"}</td>
-                                <td className="px-3 py-2 tabular-nums text-slate-500">{num(c.quantity)}</td>
-                                <td className="px-3 py-2 tabular-nums text-slate-500">{money(c.unitPrice)}</td>
-                                <td className="px-3 py-2 tabular-nums font-semibold text-slate-800 dark:text-slate-100">
-                                  {money(c.totalPrice)}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeClearance(i)}
-                                    disabled={phase === "submitting"}
-                                    title="Энэ зардлыг оруулахгүй"
-                                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-500/10"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {(["temporary_cost", "clearance_cost", "lost_income"] as ValuationSectionKey[]).map(
-                        (k) => (
-                          <NoteEditor
-                            key={k}
-                            sectionKey={k}
-                            withLabel
-                            value={data.notes?.[k] ?? ""}
-                            onChange={(v) => patchNote(k, v)}
-                            disabled={phase === "submitting"}
-                          />
-                        ),
-                      )}
-                    </Section>
+                  {/* 3.4 Барилгын тодорхойлолт */}
+                  {specColumns.length > 0 && (
+                    <VSection
+                      icon={Building2}
+                      title={head("building_spec").title}
+                      tone="sky"
+                      right={<VHeadRight label={head("building_spec").label} />}
+                    >
+                      <VBuildingSpecTable columns={specColumns} />
+                      <VNoteInput
+                        sectionKey="building_spec"
+                        value={data.notes?.building_spec ?? ""}
+                        onChange={(v) => patchNote("building_spec", v)}
+                        disabled={phase === "submitting"}
+                      />
+                    </VSection>
                   )}
 
-                  {/* Нэгтгэл — Excel шиг хүснэгт */}
-                  <Section icon={ReceiptText} title="Нэгтгэл" tone="slate">
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[420px] text-[12px]">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-slate-50/60 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                            <th className="w-12 px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Д/д</th>
-                            <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Үнэлэгдсэн хөрөнгийн төрөл</th>
-                            <th className="px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Мөнгөн дүн /₮/</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
-                          {[
-                            { label: "Газар", value: landTotal },
-                            { label: "Барилга", value: buildingTotal },
-                            { label: "Бусад эд хөрөнгийн үнэлгээ", value: propertyTotal },
-                            { label: "Түр суурьшуулах зардал", value: clearanceTotal },
-                          ].map((r, i) => (
-                            <tr key={r.label}>
-                              <td className="px-4 py-2.5 text-slate-400">{i + 1}</td>
-                              <td className="px-4 py-2.5 text-slate-700 dark:text-slate-200">{r.label}</td>
-                              <td className="px-4 py-2.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">{money(r.value)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-slate-200 bg-slate-50/70 dark:border-[#37394d] dark:bg-[#1a1d20]">
-                            <td />
-                            <td className="px-4 py-3 font-bold text-slate-800 dark:text-white">Нөхөн олговрын нийт дүн</td>
-                            <td className="px-4 py-3 text-right font-bold tabular-nums text-[#02c0ce]">{money(grandTotal)}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                    <NoteEditor
+                  {/* 3.5 Барилгын өртгийн хандлага */}
+                  {costColumns.length > 0 && (
+                    <VSection
+                      icon={Building2}
+                      title={head("building_cost").title}
+                      tone="sky"
+                      right={
+                        <VHeadRight
+                          label={head("building_cost").label}
+                          extra={
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">
+                              {money(buildingTotal)}
+                            </span>
+                          }
+                        />
+                      }
+                    >
+                      <VBuildingCostTable columns={costColumns} />
+                      {/* Барилгын ОРУУЛАХ дүн — 3.1 хүснэгтэд үнэ давхардуулахгүйн тулд
+                          барилгын үнэлгээг ЗӨВХӨН энд засна. */}
+                      <div className="grid gap-2 border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
+                        {buildingAssets.map(({ a, i }) => (
+                          <div key={i} className="flex items-center justify-between gap-3">
+                            <span className="truncate text-[12px] text-slate-500">
+                              {a.name} — системд орох үнэлгээ
+                            </span>
+                            <input
+                              type="number"
+                              value={a.totalPrice ?? ""}
+                              onChange={(e) =>
+                                patchAsset(i, {
+                                  totalPrice: e.target.value === "" ? null : Number(e.target.value),
+                                })
+                              }
+                              placeholder="0"
+                              className="h-8 w-36 shrink-0 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <VNoteInput
+                        sectionKey="building_cost"
+                        value={data.notes?.building_cost ?? ""}
+                        onChange={(v) => patchNote("building_cost", v)}
+                        disabled={phase === "submitting"}
+                      />
+                    </VSection>
+                  )}
+
+                  {/* 3.6 Бусад эд хөрөнгө + 3.7–3.9 зардлын хүснэгтүүд */}
+                  {costSections.map(({ key, title, rows, total, remove, patch }) => (
+                    <VSection
+                      key={key}
+                      icon={key === "other_assets" ? Boxes : Truck}
+                      title={head(key).title}
+                      tone={key === "other_assets" ? "sky" : "amber"}
+                      right={
+                        <VHeadRight
+                          label={head(key).label}
+                          extra={
+                            <span className="font-semibold text-slate-800 dark:text-slate-100">
+                              {money(total)}
+                            </span>
+                          }
+                        />
+                      }
+                    >
+                      <VCostTable
+                        rows={rows}
+                        renderQty={
+                          patch
+                            ? (row) => (
+                                <input
+                                  type="number"
+                                  value={row.qty ?? ""}
+                                  onChange={(e) =>
+                                    patch(row.id, {
+                                      qty: e.target.value === "" ? null : Number(e.target.value),
+                                    })
+                                  }
+                                  className="h-8 w-20 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
+                                />
+                              )
+                            : undefined
+                        }
+                        renderUnitPrice={
+                          patch
+                            ? (row) => (
+                                <input
+                                  type="number"
+                                  value={row.unitPrice ?? ""}
+                                  onChange={(e) =>
+                                    patch(row.id, {
+                                      unitPrice: e.target.value === "" ? null : Number(e.target.value),
+                                    })
+                                  }
+                                  className="h-8 w-28 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
+                                />
+                              )
+                            : undefined
+                        }
+                        renderTotal={
+                          patch
+                            ? (row) => (
+                                <input
+                                  type="number"
+                                  value={row.total ?? ""}
+                                  onChange={(e) =>
+                                    patch(row.id, {
+                                      total: e.target.value === "" ? null : Number(e.target.value),
+                                    })
+                                  }
+                                  placeholder="0"
+                                  className="h-8 w-32 rounded-md border border-slate-200 px-2 text-right tabular-nums outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27]"
+                                />
+                              )
+                            : undefined
+                        }
+                        renderActions={
+                          remove
+                            ? (row) => (
+                                <button
+                                  type="button"
+                                  onClick={() => remove(row.id)}
+                                  disabled={phase === "submitting"}
+                                  title="Энэ зардлыг оруулахгүй"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-500/10"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )
+                            : undefined
+                        }
+                      />
+                      <VNoteInput
+                        sectionKey={key}
+                        value={data.notes?.[key] ?? ""}
+                        onChange={(v) => patchNote(key, v)}
+                        disabled={phase === "submitting"}
+                      />
+                    </VSection>
+                  ))}
+
+                  {/* 4.1 Хураангуй нэгтгэл */}
+                  <VSection
+                    icon={ReceiptText}
+                    title={head("summary").title}
+                    tone="slate"
+                    right={
+                      <VHeadRight
+                        label={head("summary").label}
+                        extra={<span className="font-semibold text-[#02c0ce]">{money(grandTotal)}</span>}
+                      />
+                    }
+                  >
+                    <VSummaryTable
+                      rows={[
+                        { label: "Газрын үнэлгээ", value: landTotal },
+                        { label: "Үл хөдлөх хөрөнгө", value: buildingTotal },
+                        { label: "Эд хөрөнгө, зардал", value: propertyTotal + clearanceTotal },
+                      ]}
+                      total={grandTotal}
+                    />
+                    <VNoteInput
                       sectionKey="summary"
                       value={data.notes?.summary ?? ""}
                       onChange={(v) => patchNote("summary", v)}
                       disabled={phase === "submitting"}
                     />
-                  </Section>
+                  </VSection>
 
-                  {/* Үлдсэн хэсгүүдийн тайлбар (эрх зүйн байдал, бусад хөрөнгө, дүгнэлт, баталгаа) */}
-                  <Section icon={ReceiptText} title="Бусад тайлбар" tone="slate">
-                    {(
-                      [
-                        "land_legal",
-                        "other_assets",
-                        "conclusion",
-                        "certification",
-                      ] as ValuationSectionKey[]
-                    ).map((k) => (
-                      <NoteEditor
+                  {/* 4.2 / 5.1 — хүснэгтгүй, зөвхөн тайлбартай хэсгүүд */}
+                  <VSection icon={FileSpreadsheet} title="Дүгнэлт, үнэлгээний баталгаа" tone="slate">
+                    {(["conclusion", "certification"] as ValuationSectionKey[]).map((k) => (
+                      <VNoteInput
                         key={k}
                         sectionKey={k}
                         withLabel
@@ -896,7 +1006,7 @@ export function ValuationExcelImport({
                         disabled={phase === "submitting"}
                       />
                     ))}
-                  </Section>
+                  </VSection>
                 </div>
               )}
             </div>
@@ -952,68 +1062,6 @@ export function ValuationExcelImport({
 }
 
 // ── Туслах жижиг компонентууд ──
-
-const TONES: Record<string, string> = {
-  slate: "border-l-slate-200 dark:border-l-slate-500/40",
-  emerald: "border-l-emerald-200 dark:border-l-emerald-500/40",
-  sky: "border-l-sky-200 dark:border-l-sky-500/40",
-  amber: "border-l-amber-200 dark:border-l-amber-500/40",
-};
-
-function Section({
-  icon: Icon,
-  title,
-  tone,
-  children,
-}: {
-  icon: typeof Building2;
-  title: string;
-  tone: keyof typeof TONES;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      className={`overflow-hidden rounded-xl border border-l-4 border-slate-200 dark:border-white/[0.08] ${TONES[tone]}`}
-    >
-      <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50/50 px-4 py-2.5 dark:border-[#37394d] dark:bg-[#1a1d20]">
-        <Icon className="h-4 w-4 text-slate-400" />
-        <p className="text-[12px] font-semibold text-slate-700 dark:text-white">{title}</p>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// Excel-ээс уншсан ТАЙЛБАР — хүснэгт бүрийн доор, оруулахын өмнө засаж болно.
-function NoteEditor({
-  sectionKey,
-  value,
-  onChange,
-  disabled,
-  withLabel,
-}: {
-  sectionKey: ValuationSectionKey;
-  value: string;
-  onChange: (v: string) => void;
-  disabled: boolean;
-  withLabel?: boolean;
-}) {
-  return (
-    <div className="border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-        Тайлбар{withLabel ? ` — ${VALUATION_SECTION_LABELS[sectionKey]}` : ""}
-      </p>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        rows={value ? 3 : 2}
-        placeholder="Excel-д тайлбар байхгүй — шаардлагатай бол энд бичнэ үү"
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-[#02c0ce] disabled:opacity-60 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
-      />
-    </div>
-  );
-}
 
 function Field({ label, value }: { label: string; value: string }) {
   if (!value) return null;

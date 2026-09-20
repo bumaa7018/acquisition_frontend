@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { logger } from "@/lib/logger";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
+import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -100,10 +101,8 @@ function HBar({
 const PAGE_SIZE = 20;
 
 const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_OPTIONS = Array.from(
-  { length: CURRENT_YEAR - 2000 + 1 },
-  (_, i) => CURRENT_YEAR - i,
-);
+// Оны сонголт — БҮХ дэлгэцэд нэг ижил муж (2010-оос хойш).
+const YEAR_OPTIONS: number[] = SHARED_YEAR_OPTIONS;
 
 const COMP_TYPE_LABELS: Record<string, string> = {
   "": "Нөхөн төлбөр (бүгд)",

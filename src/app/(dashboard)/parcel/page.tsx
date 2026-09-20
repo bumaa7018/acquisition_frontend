@@ -16,6 +16,7 @@ import {
   type SortState,
 } from "@/components/ui/sortable-table-head";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { YearMultiSelect } from "@/components/ui/year-multi-select";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
@@ -33,6 +34,8 @@ const EMPTY = {
   right_type: 0,
   landuse: "",
   status: 0,
+  // ОЛОН он сонгож болно (чөлөөлөлтийн эхэлсэн оноор шүүнэ).
+  years: [] as number[],
 };
 
 // Хүснэгтийн баганууд. `key` нь backend-ийн зөвшөөрөгдсөн эрэмбийн түлхүүр —
@@ -95,6 +98,7 @@ export default function ParcelListPage() {
         right_type: filter.right_type || undefined,
         landuse: filter.landuse || undefined,
         status: filter.status || undefined,
+        years: filter.years.length ? filter.years : undefined,
       }),
   });
 
@@ -106,7 +110,8 @@ export default function ParcelListPage() {
     draft.plan_code ||
     draft.right_type !== 0 ||
     draft.landuse ||
-    draft.status !== 0;
+    draft.status !== 0 ||
+    draft.years.length > 0;
 
   return (
     <div className="flex flex-col gap-5">
@@ -203,6 +208,12 @@ export default function ParcelListPage() {
               </option>
             ))}
           </select>
+
+          <YearMultiSelect
+            value={draft.years}
+            onChange={(years) => setDraft((f) => ({ ...f, years }))}
+            className="w-32"
+          />
 
           {/* Search button */}
           <button

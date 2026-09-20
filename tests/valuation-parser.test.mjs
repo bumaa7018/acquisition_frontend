@@ -315,3 +315,72 @@ test("шинэ загвар: мөр нэмэгдэхэд (багана тогт�
   );
   assert.deepEqual(v.notes, base.notes);
 });
+
+test("шинэ загвар: хүснэгтийн дугаар, нэр, дарааллыг хадгална", (t) => {
+  if (!fs.existsSync(SAMPLE_FULL)) {
+    t.skip("жишээ файл олдсонгүй — node scripts/gen-valuation-samples.mjs");
+    return;
+  }
+  const v = buildValuation(readWorkbook(SAMPLE_FULL));
+
+  // Дугаар ба "Хүснэгт-N" шошго Excel-ээс яг ирнэ
+  assert.equal(v.sections.property_desc.no, "3.1");
+  assert.equal(v.sections.property_desc.label, "Хүснэгт 1");
+  assert.equal(v.sections.land_valuation.no, "3.3");
+  assert.equal(v.sections.land_valuation.label, "Хүснэгт-3");
+  assert.equal(v.sections.land_valuation.title, "Газрын үнэлгээ");
+  assert.equal(v.sections.lost_income.no, "3.9");
+  assert.equal(v.sections.summary.no, "4.1");
+
+  // Дараалал нь Excel дэх байрлалаар (3.1 → 5.1)
+  const ordered = Object.entries(v.sections)
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([k]) => k);
+  assert.deepEqual(ordered, [
+    "property_desc",
+    "land_legal",
+    "land_valuation",
+    "building_spec",
+    "building_cost",
+    "other_assets",
+    "temporary_cost",
+    "clearance_cost",
+    "lost_income",
+    "summary",
+    "conclusion",
+    "certification",
+  ]);
+});
+
+test("хуучин загвар: хүснэгтийн мета мэдээлэл хоосон (задлалт хэвээр)", (t) => {
+  if (!fs.existsSync(FIXTURE)) {
+    t.skip("compensation.xlsx олдсонгүй");
+    return;
+  }
+  const v = buildValuation(readWorkbook(FIXTURE));
+  assert.equal(v.layout, "multi-sheet");
+  assert.deepEqual(v.sections, {});
+  assert.equal(v.land.basePriceM2, 175000);
+});
+
+test("шинэ загвар: нэг хөрөнгө хоёр хүснэгтээс ДАВХАРДАЖ орж ирэхгүй", (t) => {
+  if (!fs.existsSync(SAMPLE_FULL)) {
+    t.skip("жишээ файл олдсонгүй — node scripts/gen-valuation-samples.mjs");
+    return;
+  }
+  const wb = readWorkbook(SAMPLE_FULL);
+  const grid = wb["Sheet1"];
+
+  // 3.6 "Бусад эд хөрөнгө"-д байгаа нэрийг 3.1-ийнхээс БАГА зэрэг өөр бичвэл
+  // (зайны зөрүү) fuzzy тааруулалт ажиллаж, ДАХИН хөрөнгө үүсгэх ёсгүй.
+  const grown = grid.map((r) => r.slice());
+  const row = grown.find((r) => String(r[1] ?? "") === "Хашаа-болок" && r[6]);
+  assert.ok(row, "3.6 хүснэгтийн мөр олдох ёстой");
+  row[1] = "Хашаа - болок";
+
+  const v = buildValuation({ Sheet1: grown });
+  const names = v.assets.map((a) => a.name.replace(/\s+/g, "").toLowerCase());
+  const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+  assert.deepEqual(dupes, [], `давхардсан хөрөнгө: ${dupes.join(", ")}`);
+  assert.equal(v.assets.length, 19, "хөрөнгийн тоо хэвээр");
+});
