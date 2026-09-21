@@ -352,7 +352,7 @@ class ProfApiService {
   profUpsertAssetCalculations(
     acqId: string,
     assetId: string,
-    calculations: { calc_type_id: number; unit: string; value: number }[],
+    calculations: { calc_type_id: number; unit: string; value: number; group?: string }[],
   ): Promise<unknown> {
     return apiClient.post(
       `/prof/land-acquisitions/${acqId}/assets/${assetId}/calculations`,
@@ -387,6 +387,18 @@ class ProfApiService {
   profCreateCompensation(acqId: string, body: Partial<Compensation>): Promise<Compensation | undefined> {
     return apiClient
       .post<ApiResponse<Compensation>>(`/prof/land-acquisitions/${acqId}/compensations`, body)
+      .then(r => r.data.data)
+  }
+
+  // Олговрын дүн/тайлбарыг засах. Тооцооллын мөр өөрчлөгдөхөд хөрөнгийн
+  // олговрын дүн ЭНЭ дуудлагаар шинэчлэгдэнэ (эс бөгөөс нэгдсэн дүн зөрнө).
+  profUpdateCompensation(
+    acqId: string,
+    compId: string,
+    body: Partial<Compensation>,
+  ): Promise<Compensation | undefined> {
+    return apiClient
+      .put<ApiResponse<Compensation>>(`/prof/land-acquisitions/${acqId}/compensations/${compId}`, body)
       .then(r => r.data.data)
   }
 

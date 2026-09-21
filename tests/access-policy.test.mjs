@@ -287,7 +287,14 @@ test("external role-ууд зөвхөн зөвшөөрөгдсөн tab-ууды�
   assert.equal(canViewAcquisitionTabForActor(mika, "general"), true);
   assert.equal(canViewAcquisitionTabForActor(mika, "parcels"), true);
   assert.equal(canViewAcquisitionTabForActor(mika, "map"), false);
-  assert.equal(canViewAcquisitionTabForActor(finance, "financing"), false);
+  // САНХҮҮГИЙН мэргэжилтэн — "Санхүүжилт" таб нь түүний үндсэн ажил тул нээлттэй;
+  // бусад гадаад роль (МИКА, мэрг. байгууллага) хэвээр хаалттай.
+  assert.equal(canViewAcquisitionTabForActor(finance, "financing"), true);
+  assert.equal(canViewAcquisitionTabForActor(mika, "financing"), false);
+  assert.equal(
+    canViewAcquisitionTabForActor(primaryProfessional, "financing"),
+    false,
+  );
   assert.equal(canViewParcelTabForActor(finance, "general"), true);
   assert.equal(canViewParcelTabForActor(finance, "realEstate"), true);
   assert.equal(canViewParcelTabForActor(finance, "print"), false);

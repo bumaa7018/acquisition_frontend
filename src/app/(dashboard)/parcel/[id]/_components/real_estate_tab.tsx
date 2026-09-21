@@ -66,7 +66,6 @@ import { COMP_TYPE_LABELS, ASSET_TYPE_LABELS, INP } from "./constants";
 import {
   VSection,
   VNote,
-  VPhotoMark,
   VFileChip,
   VFootNote,
   VHeadRight,
@@ -88,8 +87,11 @@ import {
   type ValuationSectionKey,
 } from "@/lib/valuation-import";
 import { ValuationExcelImport } from "./valuation_excel_import";
-import { AssetPhotoUpload, photosToPdfFile } from "./asset_photo_upload";
-import { AssetPhotoView } from "./asset_photo_view";
+import {
+  BuildingCostEditModal,
+  BuildingSpecEditModal,
+} from "./building_edit_modals";
+import { recalcCostRow } from "@/lib/valuation-calc";
 import {
   ValuationSubmissionBar,
   ValuationTransitionModal,
@@ -212,6 +214,7 @@ function BuildingCostSection({
   label,
   activeId,
   onSelect,
+  onEdit,
 }: {
   acqId: string;
   assets: Asset[];
@@ -221,6 +224,7 @@ function BuildingCostSection({
   label?: string;
   activeId?: string | null;
   onSelect?: (id: string) => void;
+  onEdit?: (id: string) => void;
 }) {
   const results = useQueries({
     queries: assets.map((a) => ({
@@ -228,12 +232,12 @@ function BuildingCostSection({
       queryFn: () => listCalcs(acqId, a.id),
     })),
   });
+  // Багана (барилга) нь БҮХ утга нь 0 үед л хасагдана — тэр нь импортод үүссэн
+  // хоосон загвар. Дан ганц 0 утгатай МӨР хасагдахгүй: Excel дэх мөрийн
+  // дараалал хэвээр байх ёстой (эс бөгөөс бүлгийн rowspan тасалдана).
   const columns = assets
-    .map((asset, i) => ({
-      asset,
-      calcs: (results[i]?.data ?? []).filter((c) => Number(c.value) !== 0),
-    }))
-    .filter((x) => x.calcs.length > 0)
+    .map((asset, i) => ({ asset, calcs: results[i]?.data ?? [] }))
+    .filter((x) => x.calcs.some((c) => Number(c.value) !== 0))
     .map(({ asset, calcs }) => ({
       id: asset.id,
       name: asset.asset_name || "Барилга",
@@ -251,7 +255,7 @@ function BuildingCostSection({
 
   return (
     <VSection icon={Calculator} title={title} tone="sky" right={<VHeadRight label={label} />}>
-      <VBuildingCostTable columns={columns} activeId={activeId} onSelect={onSelect} />
+      <VBuildingCostTable columns={columns} activeId={activeId} onSelect={onSelect} onEdit={onEdit} />
       {note}
     </VSection>
   );
@@ -268,6 +272,7 @@ function BuildingSpecSection({
   label,
   activeId,
   onSelect,
+  onEdit,
 }: {
   acqId: string;
   assets: Asset[];
@@ -277,6 +282,7 @@ function BuildingSpecSection({
   label?: string;
   activeId?: string | null;
   onSelect?: (id: string) => void;
+  onEdit?: (id: string) => void;
 }) {
   const results = useQueries({
     queries: assets.map((a) => ({
@@ -303,7 +309,7 @@ function BuildingSpecSection({
 
   return (
     <VSection icon={Building2} title={title} tone="sky" right={<VHeadRight label={label} />}>
-      <VBuildingSpecTable columns={columns} activeId={activeId} onSelect={onSelect} />
+      <VBuildingSpecTable columns={columns} activeId={activeId} onSelect={onSelect} onEdit={onEdit} />
       {note}
     </VSection>
   );
@@ -410,7 +416,7 @@ export function RealEstateTab({
         upsertAssetCalculations: (
           a: string,
           id: string,
-          calcs: { calc_type_id: number; unit: string; value: number }[],
+          calcs: { calc_type_id: number; unit: string; value: number; group?: string }[],
         ) => profApi.profUpsertAssetCalculations(a, id, calcs),
         listAssetCalculations: (a: string, id: string) =>
           profApi.profListAssetCalculations(a, id),
@@ -418,6 +424,8 @@ export function RealEstateTab({
           profApi.profListAssetSpecs(a, id),
         createCompensation: (a: string, body: Partial<Compensation>) =>
           profApi.profCreateCompensation(a, body),
+        updateCompensation: (a: string, id: string, body: Partial<Compensation>) =>
+          profApi.profUpdateCompensation(a, id, body),
         deleteAsset: (a: string, id: string) => profApi.profDeleteAsset(a, id),
         deleteCompensation: (a: string, id: string) =>
           profApi.profDeleteCompensation(a, id),
@@ -501,7 +509,7 @@ export function RealEstateTab({
         upsertAssetCalculations: (
           a: string,
           id: string,
-          calcs: { calc_type_id: number; unit: string; value: number }[],
+          calcs: { calc_type_id: number; unit: string; value: number; group?: string }[],
         ) => landApi.upsertAssetCalculations(a, id, calcs),
         listAssetCalculations: (a: string, id: string) =>
           landApi.listAssetCalculations(a, id),
@@ -509,6 +517,8 @@ export function RealEstateTab({
           landApi.listAssetSpecs(a, id),
         createCompensation: (a: string, body: Partial<Compensation>) =>
           landApi.createCompensation(a, body),
+        updateCompensation: (a: string, id: string, body: Partial<Compensation>) =>
+          landApi.updateCompensation(a, id, body),
         deleteAsset: (a: string, id: string) =>
           landApi.deleteAsset(a, id).then(() => undefined),
         deleteCompensation: (a: string, id: string) =>
@@ -553,8 +563,6 @@ export function RealEstateTab({
   const [modalValuations, setModalValuations] = useState<ValuationForm[]>([
     { ...EMPTY_VALUATION },
   ]);
-  const [photos, setPhotos] = useState<File[]>([]);
-  const [photoError, setPhotoError] = useState(false);
   const isFinance = isFinanceSpecialist();
   const [approveModal, setApproveModal] = useState<{
     compId: string;
@@ -563,6 +571,10 @@ export function RealEstateTab({
   const [landValuationForm, setLandValuationForm] = useState({
     land_area_m2: "",
     base_price_per_m2: "",
+    // Хүснэгт-2 (Газрын эрх зүйн байдал)-ын ЦОРЫН ГАНЦ засагддаг талбар.
+    // Бусад мөр нь бүртгэлээс (нэгж талбарын дугаар, нийт хэмжээ) татагддаг
+    // тул гараар засагдахгүй.
+    ownership_cert_no: "",
   });
   const [landValuationEdited, setLandValuationEdited] = useState(false);
   const [landEditing, setLandEditing] = useState(false);
@@ -580,14 +592,17 @@ export function RealEstateTab({
     name?: string;
   } | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  // file — ЗААВАЛ БИШ хавсралт (зөвхөн буцаах үед асуугдана).
+  // file — ЗААВАЛ БИШ хавсралт (буцаах/цуцлах үед асуугдана).
+  // report/photos — ЗӨВХӨН илгээх үед: "Үнэлгээний тайлан" ба "Ажлын зураг".
+  // Эдгээр нь нэгж талбарын БАРИМТ болж хадгалагдана (илгээлтийн мөрөнд биш).
   const [subModal, setSubModal] = useState<{
     action: "submit" | "approve" | "return" | "cancel";
     note: string;
     file?: File | null;
+    report?: File | null;
+    photos?: File[];
   } | null>(null);
   const [subHistoryOpen, setSubHistoryOpen] = useState(false);
-  const reportFileRef = useRef<HTMLInputElement | null>(null);
 
   const { data: specTypes = [] } = useQuery({
     queryKey: ["asset-spec-types"],
@@ -818,23 +833,44 @@ export function RealEstateTab({
 
   const transitionMutation = useMutation({
     // file — буцаалтад заавал биш, цуцлалтад заавал PDF хавсралт.
-    mutationFn: ({
+    // report/photos — ИЛГЭЭХ үед: эхлээд нэгж талбарын БАРИМТ болгож
+    // хавсаргаад (Үнэлгээний тайлан / Ажлын зураг), дараа нь шилжилт хийнэ.
+    // Backend нь тэр хоёр баримт байгаа эсэхийг шалгаж байж илгээлтийг авна.
+    mutationFn: async ({
       action,
       note,
       file,
+      report,
+      photos,
     }: {
       action: "submit" | "approve" | "return" | "cancel";
       note: string;
       file?: File | null;
-    }) =>
-      svc.transitionValuationSubmission(
+      report?: File | null;
+      photos?: File[];
+    }) => {
+      if (action === "submit") {
+        if (report) {
+          await svc.uploadDocument(parcelId, report, reportDocType?.id, reportDocType?.name);
+          // Хуучин тайланг СОЛИНО — нэгж талбарт ганц баталгаажсан тайлан байна.
+          if (reportDoc) await svc.deleteDocument(parcelId, reportDoc.id);
+        }
+        for (const photo of photos ?? []) {
+          await svc.uploadDocument(parcelId, photo, workPhotoDocType?.id, workPhotoDocType?.name);
+        }
+        if (report || (photos?.length ?? 0) > 0) {
+          await queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+        }
+      }
+      return svc.transitionValuationSubmission(
         acqId,
         parcelId,
         action,
         note,
         activeType,
         file,
-      ),
+      );
+    },
     onSuccess: (_data, vars) => {
       toast.success(
         vars.action === "submit"
@@ -849,7 +885,7 @@ export function RealEstateTab({
       if (vars.action === "cancel") {
         setLandEditing(false);
         setLandValuationEdited(false);
-        setLandValuationForm({ land_area_m2: "", base_price_per_m2: "" });
+        setLandValuationForm({ land_area_m2: "", base_price_per_m2: "", ownership_cert_no: "" });
         queryClient.setQueryData(
           ["parcel-assets", acqId, effectiveParcelCode, activeType],
           (old: typeof assets | undefined) =>
@@ -926,6 +962,12 @@ export function RealEstateTab({
         .filter((d) => d.document_type_id === sourceDocType.id)
         .sort((a, b) => (a.uploaded_at < b.uploaded_at ? 1 : -1))[0]
     : undefined;
+  // "Ажлын зураг" — хээрийн ажлын зургууд. Хөрөнгө тус бүрийн зургийг
+  // СОЛЬСОН: илгээхэд тайлантай хамт заавал хавсаргана (backend мөн шалгана).
+  const workPhotoDocType = docTypes.find((t) => t.type === "work_photo");
+  const workPhotoDocs = workPhotoDocType
+    ? parcelDocs.filter((d) => d.document_type_id === workPhotoDocType.id)
+    : [];
   // Тайлан БҮРТГЭГДСЭН эсэх — backend-ийн цуцлалтын шалгалттай ИЖИЛ: шинэ
   // флоугийн parcel_document ЭСВЭЛ баталгаажсан олговрын valuation_report_url
   // (хуучин өгөгдөл) аль нэг нь хангалттай. Зөвхөн эхнийхийг шалгавал хуучин
@@ -933,41 +975,6 @@ export function RealEstateTab({
   const legacyReportComp = allComps.find(
     (c) => c.status === "approved" && !!c.valuation_report_url,
   );
-  const hasValuationReport = !!reportDoc || !!legacyReportComp;
-  const reportMutation = useMutation({
-    // Солих үед шинэ файлыг эхэлж амжилттай оруулсны ДАРАА хуучныг устгана —
-    // алдаа гарвал хуучин тайлан хэвээр үлдэнэ.
-    mutationFn: async ({
-      file,
-      replaceDocId,
-    }: {
-      file: File;
-      replaceDocId?: string;
-    }) => {
-      // Дэлгэцийн нэр нь хавсралтын төрлийн нэр; физик нэрийг backend
-      // <нэгж талбарын дугаар>_<төрлийн код>.<өргөтгөл> хэлбэрээр өгнө.
-      await svc.uploadDocument(
-        parcelId,
-        file,
-        reportDocType?.id,
-        reportDocType?.name,
-      );
-      if (replaceDocId) await svc.deleteDocument(parcelId, replaceDocId);
-    },
-    onSuccess: (_data, vars) => {
-      toast.success(
-        vars.replaceDocId
-          ? "Үнэлгээний тайлан солигдлоо"
-          : "Үнэлгээний тайлан хавсаргагдлаа",
-      );
-      queryClient.invalidateQueries({
-        queryKey: ["parcel-documents", parcelId],
-      });
-    },
-    onError: (err) =>
-      toast.error(getApiError(err, "Тайлан хавсаргахад алдаа гарлаа")),
-  });
-
   const upsertLandValuationMutation = useMutation({
     mutationFn: () =>
       svc.upsertLandValuation(acqId, {
@@ -975,6 +982,7 @@ export function RealEstateTab({
         valuation_type: activeType,
         land_area_m2: Number(landValuationForm.land_area_m2) || 0,
         base_price_per_m2: Number(landValuationForm.base_price_per_m2) || 0,
+        ownership_cert_no: landValuationForm.ownership_cert_no,
       }),
     onSuccess: () => {
       toast.success("Газрын үнэлгээ хадгалагдлаа");
@@ -998,7 +1006,7 @@ export function RealEstateTab({
       toast.success("Газрын үнэлгээ устгагдлаа");
       setLandEditing(false);
       setLandValuationEdited(false);
-      setLandValuationForm({ land_area_m2: "", base_price_per_m2: "" });
+      setLandValuationForm({ land_area_m2: "", base_price_per_m2: "", ownership_cert_no: "" });
       queryClient.invalidateQueries({
         queryKey: ["land-valuation", acqId, effectiveParcelCode, activeType],
       });
@@ -1019,9 +1027,10 @@ export function RealEstateTab({
         base_price_per_m2: landValuation.base_price_per_m2
           ? String(landValuation.base_price_per_m2)
           : "",
+        ownership_cert_no: landValuation.ownership_cert_no ?? "",
       });
     } else if (!landValuation && !landValuationEdited) {
-      setLandValuationForm({ land_area_m2: "", base_price_per_m2: "" });
+      setLandValuationForm({ land_area_m2: "", base_price_per_m2: "", ownership_cert_no: "" });
     }
   }, [landValuation, landValuationEdited]);
 
@@ -1031,8 +1040,6 @@ export function RealEstateTab({
     setSpecValues(emptySpecValues(specTypes));
     setCalcValues(emptyCalcValues(calcTypes));
     setModalValuations([{ ...EMPTY_VALUATION }]);
-    setPhotos([]);
-    setPhotoError(false);
   };
 
   const createAssetMutation = useMutation({
@@ -1094,14 +1101,6 @@ export function RealEstateTab({
           }),
         ),
       );
-
-      // Сонгосон зургуудыг НЭГ PDF болгож, тухайн ХӨРӨНГИЙН зураг болгон хавсаргана.
-      // (Өмнө нь нэгж талбарын баримт болж ордог байсан тул хөрөнгө "зураггүй"
-      // хэвээр үлдэж, илгээх шатанд саатуулдаг байв.)
-      if (photos.length > 0) {
-        const pdf = await photosToPdfFile(photos, form.asset_name || form.asset_number || created.id);
-        await svc.uploadAssetPhoto(acqId, created.id, pdf);
-      }
 
       return created;
     },
@@ -1288,14 +1287,6 @@ export function RealEstateTab({
     valStatus,
     isLocked,
   );
-  // Үнэлгээний тайлан хавсаргах — ЗӨВХӨН баталгаажсан (сонгогдсон) урсгал дээр:
-  // дотоод ажилтан эсвэл тухайн урсгалын эзэн мэргэжлийн байгууллага хавсаргана.
-  const canUploadReport =
-    !isLocked &&
-    isCurrentApprovedValuation &&
-    (isInternalActor ||
-      (isProfOrg &&
-        canEditValuationSubTab(activeSubTab, parcelData, acquisition)));
   const orgDisplayName = (id: string) =>
     valuationOrgLabel(valuationOrgs.find((x) => x.id === id));
   const currentIndependentOrgId =
@@ -1305,10 +1296,20 @@ export function RealEstateTab({
     parcelData?.independent_org_name ||
     orgDisplayName(currentIndependentOrgId) ||
     "—";
+  // Дээд мөрийн дүнгүүд — доорх "Нэгтгэл" хүснэгттэй ЯГ ижил задаргаа:
+  // газар / үл хөдлөх / эд хөрөнгө-зардал, эцэст нь НЭГТГЭЛ дүн (тодруулсан).
   const summaryItems: { label: string; value: number; Icon: LucideIcon }[] = [
     { label: "Газрын үнэлгээ", value: landTotalValue, Icon: Calculator },
-    { label: "Хөрөнгийн үнэлгээ", value: totals.assetTotal, Icon: Building2 },
-    { label: "Нэгдсэн дүн", value: grandTotalValue, Icon: CircleDollarSign },
+    {
+      label: "Үл хөдлөх хөрөнгө",
+      value: sumCompensations(realStateRows.flatMap((r) => r.compensations)),
+      Icon: Building2,
+    },
+    {
+      label: "Эд хөрөнгө, зардал",
+      value: sumCompensations(propertyRows.flatMap((r) => r.compensations)),
+      Icon: Boxes,
+    },
   ];
 
   // Excel-ийн 3.6–3.9 хүснэгтүүд. Импортын үед зардлын мөрүүд нь "эд хөрөнгө"
@@ -1340,7 +1341,6 @@ export function RealEstateTab({
     qty: row.asset.area_m2 || null,
     total: row.total,
     description: row.asset.description || "",
-    hasPhoto: !!row.asset.photo_pdf_url,
   }));
 
   // Баруун талын дэлгэрэнгүйд харуулах сонгосон хөрөнгө
@@ -1370,33 +1370,6 @@ export function RealEstateTab({
   const assetEditDirty =
     !!modalAsset && JSON.stringify(assetEditForm) !== JSON.stringify(assetFormOf(modalAsset));
 
-  /**
-   * Жагсаалтын "Зураг" нүд. Зураггүй мөр дээр ЗУРАГ ОРУУЛАХ товч шууд гарна —
-   * үнэлгээ илгээхэд хөрөнгө бүр зурагтай байх ёстой тул хэрэглэгч дэлгэрэнгүй
-   * рүү орохгүйгээр эндээс нөхнө.
-   */
-  const photoCell = (assetId: string) => {
-    const asset = [...realStateRows, ...propertyRows].find((r) => r.asset.id === assetId)?.asset;
-    if (!asset) return null;
-    if (asset.photo_pdf_url) return <VPhotoMark has href={asset.photo_pdf_url} />;
-    if (!canEditCurrent) return <VPhotoMark />;
-    return (
-      <AssetPhotoUpload
-        acqId={acqId}
-        asset={asset}
-        canEdit
-        hideView
-        label="Зураг оруулах"
-        uploadFn={svc.uploadAssetPhoto}
-        onDone={() =>
-          queryClient.invalidateQueries({
-            queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
-          })
-        }
-      />
-    );
-  };
-
   /** Хүснэгтийн мөрөөс: дэлгэрэнгүйг баруун талд нээх, эсвэл засах попап дуудах. */
   const openAsset = (id: string, edit = false) => {
     setExpandedAssetId(id);
@@ -1407,25 +1380,82 @@ export function RealEstateTab({
     }
   };
 
+  // Хүснэгт-4/5 нь БАГАНААР барилгаа илэрхийлдэг тул засах попап нь тухайн
+  // барилгын id-гаар нээгдэнэ (мөрийн харандаа биш, баганын толгойн товч).
+  const [costEditId, setCostEditId] = useState<string | null>(null);
+  const [specEditId, setSpecEditId] = useState<string | null>(null);
+  const invalidateValuationData = () => {
+    queryClient.invalidateQueries({
+      queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["compensations", acqId, effectiveParcelCode, activeType],
+    });
+    queryClient.invalidateQueries({ queryKey: ["asset-calcs", acqId] });
+    queryClient.invalidateQueries({ queryKey: ["asset-specs", acqId] });
+  };
+
   const updateAssetMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!assetModal) throw new Error("Хөрөнгө сонгогдоогүй байна");
-      return svc.updateAsset(acqId, assetModal, {
+      const qty = Number(assetEditForm.area_m2) || 0;
+      const price = Number(assetEditForm.unit_price) || 0;
+      const updated = await svc.updateAsset(acqId, assetModal, {
         asset_name: assetEditForm.asset_name,
         unit: assetEditForm.unit,
-        area_m2: Number(assetEditForm.area_m2) || 0,
-        unit_price: Number(assetEditForm.unit_price) || 0,
+        area_m2: qty,
+        unit_price: price,
         owner_name: assetEditForm.owner_name,
         asset_number: assetEditForm.asset_number,
         description: assetEditForm.description,
       });
+      // НИЙТ ҮНЭ = тоо хэмжээ × нэгж үнэ. Энэ дүн нь нөхөх олговрын мөрөнд
+      // хадгалагддаг тул хамт шинэчлэхгүй бол хүснэгтийн "Нийт үнэ", хэсгийн
+      // нийлбэр, "Нэгдсэн дүн" гурав хуучин тоогоо хадгална.
+      // ҮЛ ХӨДЛӨХ хөрөнгө энд ОРОХГҮЙ: түүний дүн Хүснэгт-5-ын өртгийн
+      // гинжээс (нөхөн орлуулах өртөг) гардаг.
+      const row = [...realStateRows, ...propertyRows].find(
+        (r) => r.asset.id === assetModal,
+      );
+      if (row && row.asset.asset_type !== "real_state") {
+        const { total } = recalcCostRow({
+          qty,
+          unitPrice: price,
+          total: null,
+          changed: "unitPrice",
+        });
+        if (total != null && total > 0) {
+          const target = row.compensations[0];
+          if (target) {
+            await svc.updateCompensation(acqId, target.id, {
+              target_type: "asset",
+              parcel_id: effectiveParcelCode,
+              asset_id: row.asset.id,
+              compensation_type: target.compensation_type,
+              coverage_percent: target.coverage_percent,
+              amount: total,
+              note: target.note,
+            });
+          } else {
+            await svc.createCompensation(acqId, {
+              target_type: "asset",
+              valuation_type: activeType,
+              parcel_id: effectiveParcelCode,
+              asset_id: row.asset.id,
+              compensation_type: "cash",
+              coverage_percent: 100,
+              amount: total,
+              note: "Нийт үнэ (тоо хэмжээ × нэгж үнэ)",
+            });
+          }
+        }
+      }
+      return updated;
     },
     onSuccess: () => {
       toast.success("Хөрөнгийн мэдээлэл шинэчлэгдлээ");
       setAssetModal(null);
-      queryClient.invalidateQueries({
-        queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
-      });
+      invalidateValuationData();
     },
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
@@ -1496,127 +1526,36 @@ export function RealEstateTab({
         canCancel={canCancelValuation}
         pending={transitionMutation.isPending}
         onAction={(action) => {
-          // Илгээхийн өмнө "Үл хөдлөх" төрлийн хөрөнгө бүр зурагтай эсэхийг шалгана
-          // (backend мөн адил шалгаж 422 буцаана).
-          if (action === "submit") {
-            // 3.1 хүснэгтийн БҮХ хөрөнгө зурагтай байх ёстой (үл хөдлөх, эд хөрөнгө аль аль нь)
-            const missingPhotos = parcelAssets.filter((a) => !a.photo_pdf_url);
-            if (missingPhotos.length > 0) {
-              toast.error("Зураг оруулаагүй хөрөнгө байна", {
-                description:
-                  missingPhotos
-                    .map(
-                      (a) => a.asset_name || a.asset_number || "Нэргүй хөрөнгө",
-                    )
-                    .join(", ") +
-                  " — илгээхийн өмнө хөрөнгө бүрт зураг хавсаргана уу.",
-              });
-              return;
-            }
-          }
-          // Хүчингүй болгоход БАТАЛГААЖСАН ТАЙЛАН шаардахгүй: тайлан нь нэгж
-          // талбарыг "Чөлөөлсөн" болгоход хэрэгтэй. Хүчингүй болгоход зөвхөн
-          // ҮНДЭСЛЭЛИЙН файл (цонх дотор заавал) хавсаргагдана.
-          setSubModal({ action, note: "", file: null });
+          // ИЛГЭЭХ: баталгаажсан тайлан ба ажлын зургийг цонхон дотор нэхнэ
+          // (хөрөнгө тус бүрийн зураг шаардахаа больсон — backend мөн адил).
+          // Хүчингүй болгоход зөвхөн ҮНДЭСЛЭЛИЙН файл хавсаргагдана.
+          setSubModal({ action, note: "", file: null, report: null, photos: [] });
         }}
         onHistory={() => setSubHistoryOpen(true)}
       />
 
-      {/* Үнэлгээний тайлан — нэгж талбарт ГАНЦ тайлан. Зөвхөн баталгаажсан урсгал
-          дээр харагдаж, "Чөлөөлсөн" болгохын өмнө заавал хавсаргагдсан байх ёстой. */}
-      {isCurrentApprovedValuation && (
-        <div className="ap-card overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3.5 dark:border-[#37394d]">
-            <div className="flex items-center gap-2">
-              <Paperclip className="h-4 w-4 text-[#02c0ce]" />
-              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                Үнэлгээний тайлан
-              </p>
-            </div>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500">
-              Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө БАТАЛГААЖСАН ТАЙЛАН (PDF)
-              хавсаргасан байх шаардлагатай
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <FileText
-                className={`h-4 w-4 shrink-0 ${hasValuationReport ? "text-emerald-500" : "text-slate-300 dark:text-slate-600"}`}
-              />
-              {/* ХУУЧИН флоугийн тайланг (олговрын мөр дээрх) мөн ХАРУУЛНА —
-                  эс бөгөөс тайлантай байхад "хавсаргаагүй" гэж харагдаад,
-                  цуцлалт нь гүйцэтгэгдэх нь ойлгомжгүй болно. */}
-              {reportDoc || legacyReportComp ? (
-                <a
-                  href={
-                    reportDoc?.file_url ??
-                    legacyReportComp?.valuation_report_url
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-[#02c0ce] hover:underline"
-                >
-                  <span className="truncate">
-                    {reportDoc?.name ||
-                      legacyReportComp?.valuation_report_name ||
-                      "Үнэлгээний тайлан"}
-                  </span>
-                  <CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                </a>
-              ) : (
-                <p className="text-[13px] text-slate-400">
-                  Тайлан хавсаргаагүй байна
-                </p>
-              )}
-            </div>
-            {canUploadReport && !!reportDocType && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  className="hidden"
-                  ref={reportFileRef}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    e.target.value = "";
-                    if (file.type !== "application/pdf") {
-                      toast.error("Зөвхөн PDF файл оруулна уу");
-                      return;
-                    }
-                    if (reportDoc) {
-                      // Солихын өмнө баталгаажуулна — хуучин тайлан устана
-                      setPendingConfirm({
-                        title: "Үнэлгээний тайлан солих уу?",
-                        description: `"${reportDoc.name}" файл шинэ "${file.name}" файлаар солигдож, хуучин нь устана.`,
-                        confirmLabel: "Солих",
-                        confirmColor: "#02c0ce",
-                        onConfirm: () =>
-                          reportMutation.mutate({
-                            file,
-                            replaceDocId: reportDoc.id,
-                          }),
-                      });
-                    } else {
-                      reportMutation.mutate({ file });
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => reportFileRef.current?.click()}
-                  disabled={reportMutation.isPending}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 text-[12px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-60"
-                >
-                  {reportMutation.isPending ? (
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  ) : (
-                    <Upload className="h-3.5 w-3.5" />
-                  )}
-                  {reportDoc ? "Тайлан солих" : "Тайлан хавсаргах"}
-                </button>
-              </div>
-            )}
-          </div>
+      {/* ҮНЭЛГЭЭНИЙ ФАЙЛУУД — тайлан ба эх хүснэгт нэг мөрөнд, татах товчтой.
+          Тайланг ИЛГЭЭХ цонхноос хавсаргадаг тул энд зөвхөн ХАРАХ/ТАТАХ. */}
+      {(reportDoc || legacyReportComp || sourceDoc) && (
+        <div className="ap-card flex flex-wrap items-center gap-2 px-4 py-3">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Үнэлгээний файлууд
+          </span>
+          {(reportDoc || legacyReportComp) && (
+            <VFileChip
+              label="Үнэлгээний тайлан"
+              name={reportDoc?.name || legacyReportComp?.valuation_report_name}
+              href={reportDoc?.file_url ?? legacyReportComp?.valuation_report_url}
+              tone="emerald"
+            />
+          )}
+          {sourceDoc && (
+            <VFileChip
+              label="Үнэлгээний хүснэгт"
+              name={sourceDoc.name}
+              href={sourceDoc.file_url}
+            />
+          )}
         </div>
       )}
 
@@ -1705,7 +1644,7 @@ export function RealEstateTab({
         </div>
       )}
 
-      <div className="ap-card grid grid-cols-3 divide-x divide-slate-100 overflow-hidden dark:divide-[#37394d]">
+      <div className="ap-card grid grid-cols-2 divide-x divide-y divide-slate-100 overflow-hidden dark:divide-[#37394d] sm:grid-cols-4 sm:divide-y-0">
         {summaryItems.map(({ label, value, Icon }) => (
           <div
             key={label}
@@ -1722,38 +1661,19 @@ export function RealEstateTab({
             </div>
           </div>
         ))}
-      </div>
-
-      {/* ТАЙЛАН — нэгдсэн дүнгийн дараа. Илгээхэд хавсаргасан тайлан ба
-          баталгаажсаны дараах тайланг нэг мөрөнд, өргөтгөл/татах дүрстэй.
-          ЗӨВХӨН ОДООГИЙН үнэлгээний файл: reportDoc/sourceDoc нь parcel_document
-          дээр байгаа мөрүүд, draft_report нь энэ илгээлтийнх. Үнэлгээ цуцлахад
-          гурвуулаа snapshot руу шилжиж энэ талбараас арилдаг (000039). */}
-      {(submission?.draft_report_url || reportDoc || sourceDoc) && (
-        <div className="ap-card flex flex-wrap items-center gap-2 px-4 py-3">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            Тайлан
-          </span>
-          {submission?.draft_report_url && (
-            <VFileChip
-              label="Тайлан"
-              name={submission.draft_report_name}
-              href={submission.draft_report_url}
-            />
-          )}
-          {reportDoc && (
-            <VFileChip
-              label="Баталгаажсан тайлан"
-              name={reportDoc.name}
-              href={reportDoc.file_url}
-              tone="emerald"
-            />
-          )}
-          {sourceDoc && (
-            <VFileChip label="Үнэлгээний хүснэгт" name={sourceDoc.name} href={sourceDoc.file_url} />
-          )}
+        {/* НЭГТГЭЛ — хамгийн ард, бусдаас ялгарах өнгөтэй. */}
+        <div className="flex min-w-0 items-center gap-3 bg-[#02c0ce]/8 px-4 py-3 dark:bg-[#02c0ce]/12">
+          <CircleDollarSign className="h-4 w-4 shrink-0 text-[#02c0ce]" />
+          <div className="min-w-0">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[#02c0ce]">
+              Нэгдсэн дүн
+            </p>
+            <p className="truncate text-[15px] font-bold tabular-nums text-[#02c0ce]">
+              {money(grandTotalValue)}
+            </p>
+          </div>
         </div>
-      )}
+      </div>
 
       {assetsLoading ? (
         <div className="space-y-3 animate-pulse">
@@ -1782,7 +1702,25 @@ export function RealEstateTab({
               <VKeyValueTable
                 rows={[
                   ["Нэгж талбарын дугаар", effectiveParcelCode || parcelId],
-                  ["Гэрчилгээний дугаар", landValuation?.ownership_cert_no || "—"],
+                  [
+                    "Гэрчилгээний дугаар",
+                    canEditCurrent && landEditing ? (
+                      <input
+                        value={landValuationForm.ownership_cert_no}
+                        onChange={(e) => {
+                          setLandValuationEdited(true);
+                          setLandValuationForm((f) => ({
+                            ...f,
+                            ownership_cert_no: e.target.value,
+                          }));
+                        }}
+                        placeholder="Гэрчилгээний дугаар"
+                        className={`${INP} w-48`}
+                      />
+                    ) : (
+                      landValuation?.ownership_cert_no || "—"
+                    ),
+                  ],
                   [
                     "Нэгж талбарын нийт хэмжээ",
                     parcelData?.area_m2 ? formatArea(parcelData.area_m2) : "—",
@@ -1864,6 +1802,7 @@ export function RealEstateTab({
                             base_price_per_m2: landValuation?.base_price_per_m2
                               ? String(landValuation.base_price_per_m2)
                               : "",
+                            ownership_cert_no: landValuation?.ownership_cert_no ?? "",
                           });
                         }}
                         disabled={upsertLandValuationMutation.isPending}
@@ -1951,22 +1890,27 @@ export function RealEstateTab({
               <VAssetsTable
                 rows={assetTableRows}
                 activeId={expandedAssetId}
-                showPhoto
-                renderPhoto={(row) => photoCell(row.id)}
                 onRowClick={(row) => openAsset(row.id)}
-                renderActions={(row) => (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openAsset(row.id, true);
-                    }}
-                    title="Засах"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                )}
+                // ЗАСАХ товч нь зөвхөн ИЛГЭЭГЭЭГҮЙ/БУЦААГДСАН төлөвт гарна:
+                // илгээсэн үнэлгээг санхүү хянаж байгаа тул тоо өөрчлөгдөж
+                // болохгүй (backend мөн ижил дүрмээр хаана).
+                renderActions={
+                  canEditCurrent
+                    ? (row) => (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openAsset(row.id, true);
+                          }}
+                          title="Засах"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )
+                    : undefined
+                }
               />
               <VNote
                 sectionKey="property_desc"
@@ -1984,6 +1928,7 @@ export function RealEstateTab({
                 acqId={acqId}
                 assets={realStateRows.map((r) => r.asset)}
                 listSpecs={svc.listAssetSpecs}
+                onEdit={canEditCurrent ? setSpecEditId : undefined}
                 activeId={expandedAssetId}
                 onSelect={(id) => setExpandedAssetId(expandedAssetId === id ? null : id)}
                 title={head("building_spec").title}
@@ -2007,6 +1952,7 @@ export function RealEstateTab({
                 acqId={acqId}
                 assets={realStateRows.map((r) => r.asset)}
                 listCalcs={svc.listAssetCalculations}
+                onEdit={canEditCurrent ? setCostEditId : undefined}
                 activeId={expandedAssetId}
                 onSelect={(id) => setExpandedAssetId(expandedAssetId === id ? null : id)}
                 title={head("building_cost").title}
@@ -2051,25 +1997,26 @@ export function RealEstateTab({
                       qty: r.asset.area_m2 || null,
                       unitPrice: r.asset.unit_price || null,
                       total: r.total,
-                      hasPhoto: !!r.asset.photo_pdf_url,
                     }))}
                     activeId={expandedAssetId}
-                    showPhoto
-                    renderPhoto={(row) => photoCell(row.id)}
                     onRowClick={(row) => openAsset(row.id)}
-                    renderActions={(row) => (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openAsset(row.id, true);
-                        }}
-                        title="Засах"
-                        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    renderActions={
+                      canEditCurrent
+                        ? (row) => (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openAsset(row.id, true);
+                              }}
+                              title="Засах"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-400 dark:hover:bg-[#252630]"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )
+                        : undefined
+                    }
                   />
                   <VNote
                     sectionKey={key}
@@ -2132,6 +2079,55 @@ export function RealEstateTab({
           </div>
           {/* ── Баруун багана: тоон мэдээлэл, үйлдэл, дэлгэрэнгүй ── */}
           <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
+            {/* АЖЛЫН ЗУРАГ — хээрийн ажлын зургууд баруун баганад. Зураг нь
+                `/api/files/...` гарцаар (cookie-гоор эрх шалгагдана) тарагддаг
+                тул <img> шууд ажиллана; дарвал бүтэн хэмжээгээр нээнэ. */}
+            {workPhotoDocs.length > 0 && (
+              <div className="ap-card overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-[#37394d]">
+                  <Camera className="h-4 w-4 text-slate-400" />
+                  <p className="text-[12px] font-semibold text-slate-700 dark:text-white">
+                    Ажлын зураг
+                  </p>
+                  <span className="ml-auto text-[11px] tabular-nums text-slate-400">
+                    {workPhotoDocs.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 px-4 py-3">
+                  {workPhotoDocs.map((doc) => {
+                    const isImage =
+                      (doc.file_type ?? "").startsWith("image/") ||
+                      /\.(jpe?g|png)$/i.test(doc.name ?? "");
+                    return (
+                      <a
+                        key={doc.id}
+                        href={doc.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={doc.name}
+                        className="group relative block h-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-white/[0.08] dark:bg-[#252630]"
+                      >
+                        {isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={doc.file_url}
+                            alt={doc.name}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
+                            <FileText className="h-5 w-5" />
+                            <span className="px-1 text-[10px]">PDF</span>
+                          </span>
+                        )}
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Үйлдэл — Excel импорт, хөрөнгө нэмэх (баруун баганад, босоо байрлалтай) */}
             <div className="ap-card overflow-hidden">
               <div className="flex flex-col gap-3 px-4 py-3.5">
@@ -2225,32 +2221,6 @@ export function RealEstateTab({
                   </button>
                 }
               >
-                {/* Зураг — сонгосон мөрийн зургууд ЭНД шууд харагдана (дарж томруулна) */}
-                <div className="border-b border-slate-100 dark:border-[#37394d]">
-                  <AssetPhotoView
-                    url={selectedAssetRow.asset.photo_pdf_url}
-                    name={selectedAssetRow.asset.asset_name}
-                  />
-                  <div className="flex items-center justify-between gap-2 px-4 py-2">
-                    <span className="text-[11px] text-slate-400">
-                      {selectedAssetRow.asset.photo_pdf_url
-                        ? "Хөрөнгийн зураг"
-                        : "Зураг заавал шаардлагатай"}
-                    </span>
-                    <AssetPhotoUpload
-                      acqId={acqId}
-                      asset={selectedAssetRow.asset}
-                      canEdit={canEditCurrent}
-                      uploadFn={svc.uploadAssetPhoto}
-                      onDone={() =>
-                        queryClient.invalidateQueries({
-                          queryKey: ["parcel-assets", acqId, effectiveParcelCode, activeType],
-                        })
-                      }
-                    />
-                  </div>
-                </div>
-
                 {/* Хөрөнгийн мэдээлэл — АНХНААСАА зөвхөн ХАРАХ. Засах нь хүснэгтийн
                     арын баганын "Засах" товчоор нээгдэнэ. */}
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 px-4 py-3 text-[12px]">
@@ -2711,93 +2681,6 @@ export function RealEstateTab({
               )}
 
               {/* Зургийн upload хэсэг */}
-              <div
-                className={`mt-4 overflow-hidden rounded-lg border ${photoError ? "border-red-400" : "border-slate-200 dark:border-white/[0.08]"}`}
-              >
-                <div className="flex items-center justify-between bg-slate-50/80 px-4 py-3 dark:bg-[#1a1d20]">
-                  <div className="flex items-center gap-2">
-                    <Camera className="h-4 w-4 text-slate-400" />
-                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
-                      Зурагнууд
-                      <span className="ml-1 text-red-500">*</span>
-                    </p>
-                    {photoError && (
-                      <span className="text-[11px] text-red-500">
-                        — дор хаяж 1 зураг оруулна уу
-                      </span>
-                    )}
-                  </div>
-                  <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-300 dark:hover:bg-[#252630]">
-                    <ImagePlus className="h-3.5 w-3.5" />
-                    Зураг нэмэх
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        if (files.length > 0) {
-                          setPhotos((prev) => [...prev, ...files]);
-                          setPhotoError(false);
-                        }
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-                {photos.length === 0 ? (
-                  <label className="flex cursor-pointer flex-col items-center justify-center gap-2 px-4 py-8 text-slate-400 hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
-                    <Camera className="h-8 w-8 opacity-40" />
-                    <p className="text-[12px]">Зураг сонгохын тулд дарна уу</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files ?? []);
-                        if (files.length > 0) {
-                          setPhotos(files);
-                          setPhotoError(false);
-                        }
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                ) : (
-                  <div className="flex flex-wrap gap-2 px-4 py-3">
-                    {photos.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="group relative h-20 w-20 overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="h-full w-full object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPhotos((prev) =>
-                              prev.filter((_, i) => i !== idx),
-                            )
-                          }
-                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        <p className="absolute bottom-0 left-0 right-0 truncate bg-slate-900/50 px-1 py-0.5 text-[9px] text-white">
-                          {file.name}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 dark:border-white/[0.08]">
                 <div className="flex items-center justify-between bg-slate-50/80 px-4 py-3 dark:bg-[#1a1d20]">
                   <div className="flex items-center gap-2">
@@ -2968,13 +2851,7 @@ export function RealEstateTab({
                 Болих
               </button>
               <button
-                onClick={() => {
-                  if (photos.length === 0) {
-                    setPhotoError(true);
-                    return;
-                  }
-                  createAssetMutation.mutate();
-                }}
+                onClick={() => createAssetMutation.mutate()}
                 disabled={createAssetMutation.isPending}
                 className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#02c0ce] px-5 text-[13px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
               >
@@ -3086,6 +2963,44 @@ export function RealEstateTab({
           </div>
         </div>
       )}
+
+      {/* Хүснэгт-5 (өртгийн тооцоолол) засах — утга солиход бүрэн/элэгдэл/нөхөн
+          орлуулах өртөг ба хөрөнгийн олговрын дүн хамт дахин бодогдоно. */}
+      {costEditId &&
+        (() => {
+          const row = realStateRows.find((r) => r.asset.id === costEditId);
+          if (!row) return null;
+          return (
+            <BuildingCostEditModal
+              acqId={acqId}
+              asset={row.asset}
+              calcTypes={calcTypes}
+              compensations={row.compensations}
+              parcelCode={effectiveParcelCode}
+              valuationType={activeType}
+              svc={svc}
+              onClose={() => setCostEditId(null)}
+              onSaved={invalidateValuationData}
+            />
+          );
+        })()}
+
+      {/* Хүснэгт-4 (барилгын тодорхойлолт) засах. */}
+      {specEditId &&
+        (() => {
+          const row = realStateRows.find((r) => r.asset.id === specEditId);
+          if (!row) return null;
+          return (
+            <BuildingSpecEditModal
+              acqId={acqId}
+              asset={row.asset}
+              specTypes={specTypes}
+              svc={svc}
+              onClose={() => setSpecEditId(null)}
+              onSaved={invalidateValuationData}
+            />
+          );
+        })()}
 
       {/* Үнэлгээ (нөхөн олговор) нэмэх попап — ТУСДАА үйлдэл тул дэлгэрэнгүй
           самбарт биш, хүснэгтийн дээрх товчоор нээгдэнэ. */}
@@ -3449,14 +3364,23 @@ export function RealEstateTab({
           action={subModal.action}
           note={subModal.note}
           file={subModal.file}
+          submitFiles={{
+            report: subModal.report ?? null,
+            photos: subModal.photos ?? [],
+            hasReport: !!reportDoc,
+            hasPhotos: workPhotoDocs.length > 0,
+          }}
           pending={transitionMutation.isPending}
           onNote={(v) => setSubModal((m) => (m ? { ...m, note: v } : m))}
           onFile={(f) => setSubModal((m) => (m ? { ...m, file: f } : m))}
+          onSubmitFiles={(patch) => setSubModal((m) => (m ? { ...m, ...patch } : m))}
           onConfirm={() =>
             transitionMutation.mutate({
               action: subModal.action,
               note: subModal.note,
               file: subModal.file,
+              report: subModal.report,
+              photos: subModal.photos,
             })
           }
           onClose={() => setSubModal(null)}

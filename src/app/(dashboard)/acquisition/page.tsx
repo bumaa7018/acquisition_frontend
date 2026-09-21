@@ -466,6 +466,8 @@ const EMPTY_DRAFT = {
   planCode: "",
   acqId: "",
   acqName: "",
+  // Нэгж талбарын дугаар — тухайн талбар багтсан чөлөөлөлтийг олоход.
+  parcelId: "",
   status: 0,
   genCat: 0,
   subCat: 0,
@@ -557,7 +559,7 @@ export default function LandPage() {
   }
 
   const hasFilter = !!(
-    draft.planCode || draft.acqName || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.years.length > 0 || draft.au2Code
+    draft.planCode || draft.acqName || draft.parcelId || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.years.length > 0 || draft.au2Code
   );
 
   const { data: rawData, isLoading } = useQuery({
@@ -570,6 +572,7 @@ export default function LandPage() {
         order: sort?.dir,
         plan_code: filter.planCode || undefined,
         acquisition_name: filter.acqName || undefined,
+        parcel_id: filter.parcelId.trim() || undefined,
         status: onlyFieldSurvey ? ACQ_STATUS.FIELD_SURVEY : filter.status || undefined,
         general_category_id: filter.genCat || undefined,
         sub_category_id: filter.subCat || undefined,
@@ -648,6 +651,14 @@ export default function LandPage() {
             onSelect={(id, label) => setDraft(d => ({ ...d, acqId: id, acqName: label }))}
             onClear={() => setDraft(d => ({ ...d, acqId: "", acqName: "" }))}
             className="flex-1 min-w-0"
+          />
+          {/* Нэгж талбарын дугаараар хайх — "энэ талбар аль чөлөөлөлтөд байгаа
+              вэ?" гэсэн асуултад шууд хариулна (хэсэгчилсэн тохироо). */}
+          <input
+            value={draft.parcelId}
+            onChange={(e) => setDraft(d => ({ ...d, parcelId: e.target.value }))}
+            placeholder="Нэгж талбарын дугаар"
+            className="flex-1 min-w-0 h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-all"
           />
           <select
             value={draft.genCat}

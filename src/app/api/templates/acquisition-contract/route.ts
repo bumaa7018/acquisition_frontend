@@ -26,7 +26,7 @@ function resolveTemplateFilename(value: unknown): string {
 
 // Go backend-ийн parcel document upload-той ижил дээд хэмжээ (upload_validation.go
 // maxDocumentUploadSize) — гар аргаар шууд route руу хавсаргасан асар том файлаас хамгаална.
-const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 
 function safeFilePart(value: unknown): string {
   return String(value || "gereee").replace(/[\\/:*?"<>|]+/g, "_");
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
     if (attachment.size > MAX_ATTACHMENT_SIZE) {
-      return new Response(JSON.stringify({ error: "Хавсралт хэт том байна (50MB хүртэл)" }), {
+      return new Response(JSON.stringify({ error: "Хавсралт хэт том байна (20MB хүртэл)" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });

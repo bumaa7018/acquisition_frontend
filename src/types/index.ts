@@ -1613,6 +1613,8 @@ export interface ParcelPayment {
 export interface LandAcquisitionFilter {
   plan_code?: string;
   acquisition_name?: string;
+  /** Нэгж талбарын дугаар — тухайн талбар багтсан чөлөөлөлтүүдийг олно. */
+  parcel_id?: string;
   status?: number;
   /** Сум/дүүргийн код — чөлөөлөлтийн хилээр тодорхойлогдож
    *  land_acquisition_au-д хадгалагдсан утгаар шүүнэ. */

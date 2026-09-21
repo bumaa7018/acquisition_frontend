@@ -801,6 +801,7 @@ export const landApi = {
     const p = new URLSearchParams()
     if (filter?.plan_code)           p.set('plan_code', filter.plan_code)
     if (filter?.acquisition_name)    p.set('acquisition_name', filter.acquisition_name)
+    if (filter?.parcel_id)           p.set('parcel_id', filter.parcel_id)
     if (filter?.status)              p.set('status', String(filter.status))
     if (filter?.au2_code)            p.set('au2_code', filter.au2_code)
     if (filter?.au3_code)            p.set('au3_code', filter.au3_code)
@@ -890,7 +891,9 @@ export const landApi = {
     api.post(`/land-acquisitions/${acqId}/assets/${assetId}/specs`, { specs }),
   listAssetCalculations: (acqId: string, assetId: string) =>
     api.get<ApiResponse<AssetCalculation[]>>(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`).then(r => r.data.data ?? []),
-  upsertAssetCalculations: (acqId: string, assetId: string, calculations: { calc_type_id: number; unit: string; value: number }[]) =>
+  // `group` — Excel дэх мөрийн бүлэг (Итгэлцүүр г.м). Хоосон илгээвэл
+  // хадгалагдсан бүлэг хэвээр үлдэнэ (зөвхөн тоо засахад алдагдахгүй).
+  upsertAssetCalculations: (acqId: string, assetId: string, calculations: { calc_type_id: number; unit: string; value: number; group?: string }[]) =>
     api.post(`/land-acquisitions/${acqId}/assets/${assetId}/calculations`, { calculations }),
   getLandValuation: (acqId: string, parcelId: string, valuationType?: string) =>
     api.get<ApiResponse<LandValuation | null>>(`/land-acquisitions/${acqId}/land-valuation`, { params: { parcel_id: parcelId, valuation_type: valuationType } }).then(r => r.data.data ?? null),

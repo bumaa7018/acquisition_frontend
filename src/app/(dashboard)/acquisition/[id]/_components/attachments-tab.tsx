@@ -67,7 +67,7 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
     const f = e.target.files?.[0];
     if (!f) return;
     if (f.type !== "application/pdf") { toast.error("PDF файл оруулна уу"); e.target.value = ""; return; }
-    if (f.size > 50 * 1024 * 1024) { toast.error("Файлын хэмжээ 50MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
+    if (f.size > 20 * 1024 * 1024) { toast.error("Файлын хэмжээ 20MB-аас хэтрэхгүй байх ёстой"); e.target.value = ""; return; }
     setSelectedFile(f);
     const t = docTypes.find(x => x.id === documentTypeId);
     setFileName(t ? t.name : f.name.replace(/\.pdf$/i, ""));
@@ -89,7 +89,7 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <div>
             <p className="text-[13px] font-semibold text-slate-700 dark:text-white">Баримт бичгүүд</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 50MB</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Зөвхөн PDF · Дээд хэмжээ 20MB</p>
           </div>
           {canEdit && (
             <button

@@ -111,10 +111,10 @@ export function EstimatedValueDialog({ data, pending, onClose, onSave }: {
                   disabled={pending}
                   onChange={(e) => {
                     const picked = e.target.files?.[0] ?? null;
-                    // 50MB — backend-ийн хязгаартай ижил (илүүг сервер хаяна).
-                    if (picked && picked.size > 50 * 1024 * 1024) {
+                    // 20MB — backend-ийн хязгаартай ижил (илүүг сервер хаяна).
+                    if (picked && picked.size > 20 * 1024 * 1024) {
                       setFile(null);
-                      setFileError("Файл 50MB-аас их байна.");
+                      setFileError("Файл 20MB-аас их байна.");
                       e.target.value = "";
                       return;
                     }

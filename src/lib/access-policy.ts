@@ -188,6 +188,10 @@ export function canViewAcquisitionTabForActor(
   tab: AcquisitionTabKey,
 ): boolean {
   if (!isExternalSpecialActor(actor)) return true;
+  // САНХҮҮГИЙН мэргэжилтэн — "Санхүүжилт" табыг нэмж харна: санхүүжилтийн
+  // эх үүсвэр, захирамжийн төсөв, олговрын гүйцэтгэлийн үзүүлэлт нь түүний
+  // үндсэн ажил (бусад гадаад роль хэвээр хаалттай).
+  if (tab === "financing") return isFinanceSpecialistActor(actor);
   return tab === "general" || tab === "parcels";
 }
 

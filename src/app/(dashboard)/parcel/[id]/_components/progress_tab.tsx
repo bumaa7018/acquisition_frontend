@@ -441,11 +441,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                   accept="application/pdf"
                   onChange={(e) => {
                     const picked = e.target.files?.[0] ?? null;
-                    // 50MB — backend-ийн хязгаартай ижил.
-                    if (picked && picked.size > 50 * 1024 * 1024) {
+                    // 20MB — backend-ийн хязгаартай ижил.
+                    if (picked && picked.size > 20 * 1024 * 1024) {
                       setStatusFile(null);
                       setStatusFileName("");
-                      setFileError("Файл 50MB-аас их байна.");
+                      setFileError("Файл 20MB-аас их байна.");
                       e.target.value = "";
                       return;
                     }

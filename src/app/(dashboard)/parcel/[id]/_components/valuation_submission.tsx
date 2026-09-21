@@ -54,7 +54,6 @@ import {
   VCostTable,
   VSummaryTable,
   V_COST_GROUPS,
-  VPhotoMark,
   VFileChip,
   sectionHeading,
 } from "./valuation_view";
@@ -277,13 +276,113 @@ const ACTION_META: Record<
   },
 };
 
+/** Файлын дээд хэмжээ — backend-ийн upload_validation.go-той ИЖИЛ (20MB). */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+export const MAX_UPLOAD_LABEL = "20MB";
+
+/** Илгээх цонхны нэг файлын мөр (тайлан / ажлын зураг). */
+function SubmitFilePicker({
+  label,
+  hint,
+  accept,
+  multiple,
+  files,
+  attached,
+  pending,
+  onPick,
+}: {
+  label: string;
+  hint: string;
+  accept: string;
+  multiple?: boolean;
+  files: File[];
+  /** Нэгж талбарт аль хэдийн хавсаргасан — шинээр сонгох шаардлагагүй. */
+  attached: boolean;
+  pending: boolean;
+  onPick: (files: File[]) => void;
+}) {
+  const [error, setError] = useState("");
+  const satisfied = attached || files.length > 0;
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-semibold text-slate-500">
+        {label}{" "}
+        {satisfied ? (
+          <span className="font-normal text-emerald-600">
+            {files.length > 0 ? `(${files.length} файл сонгосон)` : "(хавсаргасан)"}
+          </span>
+        ) : (
+          <span className="text-rose-500">*</span>
+        )}
+      </label>
+      {files.length > 0 && (
+        <ul className="mb-1.5 space-y-1">
+          {files.map((f, i) => (
+            <li
+              key={`${f.name}-${i}`}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 dark:border-white/[0.08] dark:bg-[#252630]"
+            >
+              <Paperclip className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+              <span className="min-w-0 flex-1 truncate text-[12px] text-slate-700 dark:text-slate-200" title={f.name}>
+                {f.name}
+              </span>
+              <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
+                {(f.size / 1024).toFixed(0)} KB
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[12px] text-slate-500 transition-colors hover:border-[#02c0ce] hover:text-[#02c0ce] dark:border-white/[0.12] dark:text-slate-400">
+        <Paperclip className="h-3.5 w-3.5" />
+        {files.length > 0 ? "Дахин сонгох" : attached ? "Солих файл сонгох" : "Файл сонгох"}
+        <input
+          type="file"
+          accept={accept}
+          multiple={multiple}
+          className="hidden"
+          disabled={pending}
+          onChange={(e) => {
+            const list = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            const tooBig = list.find((f) => f.size > MAX_UPLOAD_BYTES);
+            if (tooBig) {
+              setError(`"${tooBig.name}" — ${MAX_UPLOAD_LABEL}-аас хэтэрлээ.`);
+              return;
+            }
+            setError("");
+            onPick(list);
+          }}
+        />
+      </label>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+        {hint} Дээд хэмжээ {MAX_UPLOAD_LABEL}.
+      </p>
+      {error && <p className="mt-1 text-[11px] font-semibold text-rose-500">{error}</p>}
+    </div>
+  );
+}
+
+/** ИЛГЭЭХ үед заавал хавсаргах хоёр баримт. */
+export interface ValuationSubmitFiles {
+  /** "Үнэлгээний тайлан" (PDF/Word). */
+  report: File | null;
+  /** "Ажлын зураг" — хээрийн ажлын зургууд (JPEG/PNG/PDF, олноор). */
+  photos: File[];
+  /** Нэгж талбарын хавсралтад аль хэдийн байгаа эсэх (дахин нэхэхгүй). */
+  hasReport: boolean;
+  hasPhotos: boolean;
+}
+
 export function ValuationTransitionModal({
   action,
   note,
   file,
+  submitFiles,
   pending,
   onNote,
   onFile,
+  onSubmitFiles,
   onConfirm,
   onClose,
 }: {
@@ -291,21 +390,29 @@ export function ValuationTransitionModal({
   note: string;
   /** Буцаах үед заавал биш, цуцлах үед заавал PDF хавсралт. */
   file?: File | null;
+  /** ЗӨВХӨН илгээх үед: баталгаажсан тайлан + ажлын зураг. */
+  submitFiles?: ValuationSubmitFiles;
   pending: boolean;
   onNote: (v: string) => void;
   onFile?: (f: File | null) => void;
+  onSubmitFiles?: (patch: Partial<ValuationSubmitFiles>) => void;
   onConfirm: () => void;
   onClose: () => void;
 }) {
   const meta = ACTION_META[action];
-  // Хавсралт: ИЛГЭЭХ үед = баталгаажаагүй үнэлгээний тайлан (PDF/Word, ЗААВАЛ),
-  // буцаах үед = үндэслэлийн PDF (заавал биш), цуцлах үед = PDF (заавал).
+  // Хавсралт: буцаах үед = үндэслэлийн PDF (заавал биш), цуцлах үед = PDF (заавал).
+  // ИЛГЭЭХ үед энэ блок ХЭРЭГЛЭГДЭХГҮЙ — доорх тусдаа хоёр файл нэхнэ.
+  const isSubmit = action === "submit";
   const allowAttachment =
-    (action === "submit" || action === "return" || action === "cancel") && !!onFile;
-  const attachmentRequired = action === "cancel" || action === "submit";
-  const isDraftReport = action === "submit";
+    (action === "return" || action === "cancel") && !!onFile;
+  const attachmentRequired = action === "cancel";
+  const isDraftReport = false;
   const noteEmpty = note.trim().length === 0;
-  const attachmentMissing = attachmentRequired && !file;
+  const submitMissing =
+    isSubmit &&
+    (!(submitFiles?.hasReport || submitFiles?.report) ||
+      !(submitFiles?.hasPhotos || (submitFiles?.photos.length ?? 0) > 0));
+  const attachmentMissing = (attachmentRequired && !file) || submitMissing;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 px-4 py-6 backdrop-blur-sm"
@@ -345,6 +452,33 @@ export function ValuationTransitionModal({
             placeholder="Шилжилтийн тайлбар бичнэ үү…"
             className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-[13px] outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
           />
+
+          {/* ИЛГЭЭХ — ХОЁР баримт заавал: "Үнэлгээний тайлан" ба "Ажлын зураг".
+              Аль хэдийн хавсаргасан бол дахин нэхэхгүй, солих боломжтой.
+              Хоёулаа нэгж талбарын БАРИМТ БИЧИГ-т хадгалагдана. */}
+          {isSubmit && submitFiles && (
+            <div className="mt-3 space-y-3">
+              <SubmitFilePicker
+                label="Үнэлгээний тайлан"
+                hint="PDF эсвэл Word (.docx). Баримт бичигт «Үнэлгээний тайлан» төрлөөр хадгалагдана — нэгж талбарыг «Чөлөөлсөн» болгоход мөн энэ шаардагдана."
+                accept="application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                files={submitFiles.report ? [submitFiles.report] : []}
+                attached={submitFiles.hasReport}
+                pending={pending}
+                onPick={(list) => onSubmitFiles?.({ report: list[0] ?? null })}
+              />
+              <SubmitFilePicker
+                label="Ажлын зураг"
+                hint="Хээрийн ажлын зургууд (JPEG/PNG/PDF). Олноор сонгож болно."
+                accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf"
+                multiple
+                files={submitFiles.photos}
+                attached={submitFiles.hasPhotos}
+                pending={pending}
+                onPick={(list) => onSubmitFiles?.({ photos: list })}
+              />
+            </div>
+          )}
 
           {allowAttachment && (
             <div className="mt-3">
@@ -596,7 +730,7 @@ function SnapshotDetailModal({
     ...(snapshot.report_url
       ? [
           {
-            label: "Баталгаажсан тайлан",
+            label: "Үнэлгээний тайлан",
             name: snapshot.report_name,
             href: snapshot.report_url,
             tone: "emerald" as const,
@@ -619,8 +753,11 @@ function SnapshotDetailModal({
           label: f.label,
           name: f.name,
           href: f.url,
-          tone:
-            f.label === "Баталгаажсан тайлан" ? ("emerald" as const) : undefined,
+          // Хуучин snapshot-д шошго нь "Баталгаажсан тайлан" гэж хадгалагдсан
+          // байж болно (нэр солигдохоос өмнөх) — хоёуланг нь таниулна.
+          tone: /тайлан$/i.test(f.label) && !/хүснэгт/i.test(f.label)
+            ? ("emerald" as const)
+            : undefined,
         }))
       : legacyFiles
   ).filter(
@@ -640,6 +777,9 @@ function SnapshotDetailModal({
         { label: "Талбай", value: formatArea(Number(a.area_m2 ?? 0)) },
       ],
     }));
+  // Багана (барилга) нь БҮХ утга нь 0 үед л хасагдана — тэр нь импортод үүссэн
+  // хоосон загвар. Дан ганц 0 утгатай МӨР хасагдахгүй: Excel-ийн мөрийн
+  // дараалал хэвээр үлдэх ёстой (эс бөгөөс бүлгийн rowspan тасалдана).
   const snapshotCostColumns = snapshot.assets
     .filter((a) => a.asset_type === "real_state" && (a.calculations ?? []).some((c) => Number(c.value) !== 0))
     .map((a) => ({
@@ -648,7 +788,6 @@ function SnapshotDetailModal({
       items: [
         { label: "Барилгын талбай", group: "", unit: "м²", value: Number(a.area_m2 ?? 0) || null },
         ...(a.calculations ?? [])
-          .filter((c) => Number(c.value) !== 0)
           .map((c) => ({
             label:
               c.calc_name ||
@@ -802,13 +941,7 @@ function SnapshotDetailModal({
                 qty: row.asset.area_m2 || null,
                 total: row.total,
                 description: row.asset.description || "",
-                hasPhoto: !!row.asset.photo_pdf_url,
               }))}
-              showPhoto
-              renderPhoto={(row) => {
-                const a = assets.find((x) => x.id === row.id);
-                return <VPhotoMark has={!!a?.photo_pdf_url} href={a?.photo_pdf_url} />;
-              }}
               emptyText="Хөрөнгө бүртгэгдээгүй"
             />
           </VSection>
@@ -861,13 +994,7 @@ function SnapshotDetailModal({
                     qty: r.asset.area_m2 || null,
                     unitPrice: r.asset.unit_price || null,
                     total: r.total,
-                    hasPhoto: !!r.asset.photo_pdf_url,
                   }))}
-                  showPhoto
-                  renderPhoto={(row) => {
-                    const a = assets.find((x) => x.id === row.id);
-                    return <VPhotoMark has={!!a?.photo_pdf_url} href={a?.photo_pdf_url} />;
-                  }}
                 />
               </VSection>
             ),

@@ -136,7 +136,11 @@ function mapBuildingCalcs(
       if (best && best.s >= 0.6) match = best.t;
     }
 
-    if (match) out.push({ calc_type_id: match.id, unit: match.default_unit, value: it.value });
+    // БҮЛЭГ (Итгэлцүүр г.м) нь мөртэй хамт ЯВНА — төрөлтэй таарсан үед ч.
+    // Лавлахын `asset_calc_type.grp` нь ихэнх төрөлд хоосон тул зөвхөн түүнд
+    // найдвал нэг бүлгийн мөрүүд тасалдаж, хүснэгт Excel-ээс зөрдөг.
+    if (match)
+      out.push({ calc_type_id: match.id, group: it.group, unit: match.default_unit, value: it.value });
     // Тохирох төрөлгүй бол нэрээр нь илгээж, backend автоматаар calc type (бүлэгтэй) үүсгэнэ
     else out.push({ name: it.label, group: it.group, unit: it.unit, value: it.value });
   }

@@ -239,36 +239,6 @@ export function VHeadRight({ label, extra }: { label?: string; extra?: ReactNode
   );
 }
 
-/**
- * Зураг хавсаргасан эсэх тэмдэглэгээ. Үнэлгээ илгээхэд хөрөнгө БҮР зурагтай
- * байх шаардлагатай тул жагсаалтаас шууд харагдаж байх ёстой.
- */
-export function VPhotoMark({ has, href }: { has?: boolean; href?: string }) {
-  // Зурагтай бол ХАРАХ товч (файлыг шинэ цонхонд нээнэ), эс бөгөөс анхааруулга.
-  if (has) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        onClick={(e) => e.stopPropagation()}
-        title="Зургийг харах"
-        className="inline-flex h-7 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300"
-      >
-        <Eye className="h-3 w-3" /> Харах
-      </a>
-    );
-  }
-  return (
-    <span
-      title="Зураг оруулаагүй — илгээхийн өмнө заавал хавсаргана"
-      className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"
-    >
-      <ImageOff className="h-3 w-3" /> Зураггүй
-    </span>
-  );
-}
-
 /** Файлын нэрээс өргөтгөл ("PDF", "DOCX", "XLSX"). */
 export function vFileExt(name?: string): string {
   const ext = (name ?? "").split(".").pop() ?? "";
@@ -394,8 +364,6 @@ export interface VAssetRow {
   total: number | null;
   description?: string;
   badge?: ReactNode;
-  /** Зураг хавсаргасан эсэх — хүснэгтээс шууд харагдана (илгээхэд ЗААВАЛ). */
-  hasPhoto?: boolean;
 }
 
 const KIND_TEXT: Record<string, string> = {
@@ -411,8 +379,6 @@ export function VAssetsTable({
   renderKind,
   renderQty,
   renderActions,
-  showPhoto,
-  renderPhoto,
   emptyText = "Хөрөнгө бүртгэгдээгүй",
 }: {
   rows: VAssetRow[];
@@ -421,14 +387,10 @@ export function VAssetsTable({
   renderKind?: (row: VAssetRow, index: number) => ReactNode;
   renderQty?: (row: VAssetRow, index: number) => ReactNode;
   renderActions?: (row: VAssetRow, index: number) => ReactNode;
-  /** Зураг хавсаргасан эсэхийг арын баганад харуулах (бүртгэлийн дэлгэц). */
-  showPhoto?: boolean;
-  /** Зургийн нүдийг дарж бичих (жишээ нь зураггүй үед "Зураг оруулах" товч). */
-  renderPhoto?: (row: VAssetRow, index: number) => ReactNode;
   emptyText?: string;
 }) {
   const withActions = !!renderActions;
-  const extraCols = (showPhoto ? 1 : 0) + (withActions ? 1 : 0);
+  const extraCols = withActions ? 1 : 0;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]">
@@ -440,7 +402,6 @@ export function VAssetsTable({
             <th className={V_TH}>Хэмжих нэгж</th>
             <th className={`${V_TH} text-right`}>Хүчин чадал</th>
             <th className={V_TH}>Тодорхойлолт</th>
-            {showPhoto && <th className={`${V_TH} w-24`}>Зураг</th>}
             {withActions && <th className={`${V_TH} w-8`} />}
           </tr>
         </thead>
@@ -472,11 +433,6 @@ export function VAssetsTable({
                 {row.description || "—"}
                 {row.badge}
               </td>
-              {showPhoto && (
-                <td className={V_TD} onClick={(e) => e.stopPropagation()}>
-                  {renderPhoto ? renderPhoto(row, i) : <VPhotoMark has={row.hasPhoto} />}
-                </td>
-              )}
               {withActions && <td className={`${V_TD} text-right`}>{renderActions?.(row, i)}</td>}
             </tr>
           ))}
@@ -493,15 +449,39 @@ export function VAssetsTable({
   );
 }
 
+/**
+ * Багана (барилга) тус бүрийн ЗАСАХ товч — Хүснэгт-4/5 нь мөр биш БАГАНААР
+ * барилгаа илэрхийлдэг тул засах үйлдэл толгой дээр байрлана (бусад хүснэгтэд
+ * сүүлийн баганад байдагтай ижил утгатай).
+ */
+function VColumnEditButton({ id, onEdit }: { id: string; onEdit: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      title="Засах"
+      onClick={(e) => {
+        e.stopPropagation();
+        onEdit(id);
+      }}
+      className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-[#02c0ce] dark:hover:bg-[#252630]"
+    >
+      <Pencil className="h-3 w-3" />
+    </button>
+  );
+}
+
 /** Барилгын тодорхойлолт (Хүснэгт-4) — барилга бүр багана. */
 export function VBuildingSpecTable({
   columns,
   activeId,
   onSelect,
+  onEdit,
 }: {
   columns: { id?: string; name: string; items: { label: string; value: string }[] }[];
   activeId?: string | null;
   onSelect?: (id: string) => void;
+  /** Багана (барилга) тус бүрийг засах — толгой дээрх харандаа товч. */
+  onEdit?: (id: string) => void;
 }) {
   const labels: string[] = [];
   for (const c of columns) for (const it of c.items) if (!labels.includes(it.label)) labels.push(it.label);
@@ -519,7 +499,10 @@ export function VBuildingSpecTable({
                   c.id && activeId === c.id ? "text-[#02c0ce]" : ""
                 }`}
               >
-                {c.name}
+                <span className="inline-flex items-center gap-1">
+                  {c.name}
+                  {c.id && onEdit && <VColumnEditButton id={c.id} onEdit={onEdit} />}
+                </span>
               </th>
             ))}
           </tr>
@@ -554,10 +537,13 @@ export function VBuildingCostTable({
   columns,
   activeId,
   onSelect,
+  onEdit,
 }: {
   columns: { id?: string; name: string; items: VCostApproachItem[] }[];
   activeId?: string | null;
   onSelect?: (id: string) => void;
+  /** Багана (барилга) тус бүрийг засах — толгой дээрх харандаа товч. */
+  onEdit?: (id: string) => void;
 }) {
   const rowDefs: { label: string; unit: string; group: string }[] = [];
   const seen = new Set<string>();
@@ -601,7 +587,10 @@ export function VBuildingCostTable({
                   c.id && activeId === c.id ? "text-[#02c0ce]" : ""
                 }`}
               >
-                {c.name}
+                <span className="inline-flex items-center gap-1">
+                  {c.name}
+                  {c.id && onEdit && <VColumnEditButton id={c.id} onEdit={onEdit} />}
+                </span>
               </th>
             ))}
           </tr>
@@ -650,7 +639,6 @@ export interface VCostRow {
   qty: number | null;
   unitPrice: number | null;
   total: number | null;
-  hasPhoto?: boolean;
 }
 
 /** Бусад эд хөрөнгө / зардлын хүснэгт (Хүснэгт-6 … 9). */
@@ -662,8 +650,6 @@ export function VCostTable({
   renderUnitPrice,
   renderTotal,
   renderActions,
-  showPhoto,
-  renderPhoto,
   emptyText = "Мөр бүртгэгдээгүй",
 }: {
   rows: VCostRow[];
@@ -673,12 +659,10 @@ export function VCostTable({
   renderUnitPrice?: (row: VCostRow, index: number) => ReactNode;
   renderTotal?: (row: VCostRow, index: number) => ReactNode;
   renderActions?: (row: VCostRow, index: number) => ReactNode;
-  showPhoto?: boolean;
-  renderPhoto?: (row: VCostRow, index: number) => ReactNode;
   emptyText?: string;
 }) {
   const withActions = !!renderActions;
-  const extraCols = (showPhoto ? 1 : 0) + (withActions ? 1 : 0);
+  const extraCols = withActions ? 1 : 0;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[12px]">
@@ -690,7 +674,6 @@ export function VCostTable({
             <th className={`${V_TH} text-right`}>Тоо хэмжээ</th>
             <th className={`${V_TH} text-right`}>Нэгж үнэ</th>
             <th className={`${V_TH} text-right`}>Нийт үнэ</th>
-            {showPhoto && <th className={`${V_TH} w-24`}>Зураг</th>}
             {withActions && <th className={`${V_TH} w-8`} />}
           </tr>
         </thead>
@@ -719,11 +702,6 @@ export function VCostTable({
               <td className={`${V_TD_NUM} font-semibold`}>
                 {renderTotal ? renderTotal(row, i) : vMoney(row.total)}
               </td>
-              {showPhoto && (
-                <td className={V_TD} onClick={(e) => e.stopPropagation()}>
-                  {renderPhoto ? renderPhoto(row, i) : <VPhotoMark has={row.hasPhoto} />}
-                </td>
-              )}
               {withActions && <td className={`${V_TD} text-right`}>{renderActions?.(row, i)}</td>}
             </tr>
           ))}

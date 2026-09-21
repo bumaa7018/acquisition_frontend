@@ -145,8 +145,8 @@ export function DocumentsTab({
       e.target.value = "";
       return;
     }
-    if (f.size > 50 * 1024 * 1024) {
-      toast.error("50MB хэтэрлээ");
+    if (f.size > 20 * 1024 * 1024) {
+      toast.error("20MB хэтэрлээ");
       e.target.value = "";
       return;
     }
@@ -203,7 +203,7 @@ export function DocumentsTab({
                 Баримт бичгүүд
               </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Зөвхөн PDF · Дээд хэмжээ 50MB
+                Зөвхөн PDF · Дээд хэмжээ 20MB
               </p>
             </div>
             {!isLocked && (

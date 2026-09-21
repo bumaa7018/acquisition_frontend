@@ -1,12 +1,18 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, ReceiptText } from "lucide-react";
-import { landApi } from "@/lib/api";
+import { Plus, Trash2, Pencil, ReceiptText, Gavel } from "lucide-react";
+import { landApi, decisionDraftApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { isSeniorSpecialist } from "./shared";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { FinancingSummary, money, type FinancingStats } from "./financing-summary";
+import {
+  DECISION_DRAFT_STATUS_CONFIRMED,
+  DECISION_DRAFT_STATUS_LABELS,
+  DECISION_DRAFT_STATUS_STYLES,
+} from "@/types";
 
 export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
@@ -24,7 +30,163 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
     queryKey: ["land", id],
     queryFn: () => landApi.getById(id),
   });
-  const sources = acq?.funding_sources ?? [];
+  const sources = useMemo(() => acq?.funding_sources ?? [], [acq]);
+
+  // ── ЗАХИРАМЖААС уншсан санхүүжилт ────────────────────────────────────────
+  // Санхүүжилтийн ТӨРӨЛ (төсөв) нь захирамжийн төсөл дээр тодорхойлогддог;
+  // захирамж бүр өөрийн эх үүсвэрүүдтэй холбогддог тул энэ табын мэдээллийн
+  // эх сурвалж нь захирамж.
+  const { data: decrees, isLoading: decreesLoading } = useQuery({
+    queryKey: ["acq-decision-drafts", id],
+    queryFn: () => decisionDraftApi.list({ acquisition_id: id, page_size: 100 }),
+  });
+  const decreeList = useMemo(() => decrees?.data ?? [], [decrees]);
+
+  // ── График/тоон үзүүлэлтийн өгөгдөл ─────────────────────────────────────
+  const { data: parcels, isLoading: parcelsLoading } = useQuery({
+    queryKey: ["acq-parcels-all", id],
+    queryFn: () => landApi.getParcels(id, { page: 1, page_size: 1000 }),
+  });
+  const { data: comps, isLoading: compsLoading } = useQuery({
+    queryKey: ["acq-compensations", id],
+    queryFn: () => landApi.listCompensations(id),
+  });
+  const { data: assetsPage, isLoading: assetsLoading } = useQuery({
+    queryKey: ["acq-assets-all", id],
+    queryFn: () => landApi.getAssets(id, { page: 1, page_size: 1000 }),
+  });
+
+  // ЗАХИРАМЖ ХОЛБОГДСОН нэгж талбарууд — "Олгогдсон" шатны хэмжүүр.
+  // Захирамжийн дугаартай, БАТАЛГААЖСАН төслүүдийн холбоос бүрийг цуглуулна
+  // (нэг чөлөөлөлтөд ихэвчлэн хэдхэн захирамж байдаг тул зэрэг дуудна).
+  const confirmedDecrees = useMemo(
+    () =>
+      decreeList.filter(
+        (d) => d.status === DECISION_DRAFT_STATUS_CONFIRMED && !!d.decree_number?.trim(),
+      ),
+    [decreeList],
+  );
+  const { data: decreeParcels, isLoading: decreeParcelsLoading } = useQuery({
+    queryKey: ["acq-decree-parcels", id, confirmedDecrees.map((d) => d.id).join(",")],
+    enabled: confirmedDecrees.length > 0,
+    queryFn: async () => {
+      const lists = await Promise.all(
+        confirmedDecrees.map((d) => decisionDraftApi.listParcels(d.id)),
+      );
+      return lists.flat();
+    },
+  });
+
+  const stats: FinancingStats = useMemo(() => {
+    const parcelRows = parcels?.data ?? [];
+    const compRows = comps ?? [];
+    const assetType = new Map(
+      (assetsPage?.data ?? []).map((a) => [a.id, a.asset_type]),
+    );
+    let landAmount = 0;
+    let realStateAmount = 0;
+    let propertyAmount = 0;
+    let pendingAmount = 0;
+    let grantedAmount = 0;
+    // ОЛГОГДСОН — ЗАХИРАМЖ холбогдсон нэгж талбар: захирамжийн дугаартай,
+    // баталгаажсан төсөлд холбогдсон бол уг талбарын олговор шийдвэрлэгдсэн
+    // гэж үзнэ. (`parcel.compensation_paid` туг нь зөвхөн хуучин импортоос
+    // тавигддаг тул ашиглахгүй; `compensation_grant` нь мөнгөн дүнд хэрэглэгдэнэ.)
+    const decreeLinkedParcels = new Set(
+      (decreeParcels ?? []).filter((link) => !link.removed_at).map((link) => link.parcel_id),
+    );
+    const grantedParcels = new Set<string>();
+    for (const c of compRows) {
+      const amount = Number(c.amount) || 0;
+      const grantAmount = Number(c.grant?.amount) || 0;
+      if (grantAmount > 0) {
+        grantedAmount += grantAmount;
+        if (c.parcel_id) grantedParcels.add(c.parcel_id);
+      }
+      if (c.status !== "approved") {
+        pendingAmount += amount;
+        continue;
+      }
+      // Газрын үнэлгээ нь нэгж талбарын түвшний мөр (хөрөнгөгүй).
+      if (!c.asset_id) landAmount += amount;
+      else if (assetType.get(c.asset_id) === "real_state") realStateAmount += amount;
+      else propertyAmount += amount;
+    }
+    // Санхүүжилтийн ТӨРӨЛ: захирамжийн төсвөөр, байхгүй бол эх үүсвэрийн төрлөөр.
+    const byType = new Map<string, number>();
+    for (const d of decreeList) {
+      const key = d.budget_name?.trim() || "Тодорхойгүй";
+      const amount = (d.funding_local_amount ?? 0) + (d.funding_international_amount ?? 0);
+      if (amount > 0) byType.set(key, (byType.get(key) ?? 0) + amount);
+    }
+    if (byType.size === 0) {
+      for (const src of sources) {
+        const key = src.source_type?.trim() || "Тодорхойгүй";
+        byType.set(key, (byType.get(key) ?? 0) + (src.amount ?? 0));
+      }
+    }
+    // ── НЭГЖ ТАЛБАРЫН ГҮЙЦЭТГЭЛ — дөрвөн ТАСАРХАЙ шат.
+    // Нэгж талбар бүр ЗӨВХӨН нэг шатанд тоологдоно (хамгийн ахисан шатаараа):
+    // олгогдсон → үнэлгээ баталгаажсан → хүлээгдэж буй → үнэлгээ хийгээгүй.
+    // Шат бүр өөрийн МӨНГӨН дүнтэй: карт дээр тоо ба дүн хоёулаа харагдана.
+    const approvedParcels = new Set(
+      compRows.filter((c) => c.status === "approved").map((c) => c.parcel_id),
+    );
+    // Нэгж талбар бүрийн үнэлгээний дүн ба олгосон дүн.
+    const parcelAmount = new Map<string, number>();
+    const parcelGrant = new Map<string, number>();
+    for (const c of compRows) {
+      if (!c.parcel_id) continue;
+      parcelAmount.set(c.parcel_id, (parcelAmount.get(c.parcel_id) ?? 0) + (Number(c.amount) || 0));
+      const g = Number(c.grant?.amount) || 0;
+      if (g > 0) parcelGrant.set(c.parcel_id, (parcelGrant.get(c.parcel_id) ?? 0) + g);
+    }
+    const stage = {
+      granted: { count: 0, amount: 0 },
+      approved: { count: 0, amount: 0 },
+      submitted: { count: 0, amount: 0 },
+      pending: { count: 0, amount: 0 },
+    };
+    for (const p of parcelRows) {
+      const statuses = p.valuation_statuses;
+      const statusList = Array.isArray(statuses)
+        ? statuses.map((row) => row.status)
+        : Object.values(statuses ?? {});
+      const amount = parcelAmount.get(p.parcel_id) ?? 0;
+      if (decreeLinkedParcels.has(p.parcel_id)) {
+        stage.granted.count++;
+        // Дүн нь олгосон бичилт байвал түүгээр, эс бөгөөс тухайн талбарын
+        // баталгаажсан үнэлгээний дүнгээр (захирамжаар шийдвэрлэгдсэн дүн).
+        stage.granted.amount += parcelGrant.get(p.parcel_id) ?? amount;
+      } else if (approvedParcels.has(p.parcel_id) || statusList.includes("approved")) {
+        stage.approved.count++;
+        stage.approved.amount += amount;
+      } else if (statusList.includes("submitted")) {
+        stage.submitted.count++;
+        stage.submitted.amount += amount;
+      } else {
+        stage.pending.count++;
+        stage.pending.amount += amount;
+      }
+    }
+    const parcelTotal = parcels?.total ?? parcelRows.length;
+    return {
+      parcelTotal,
+      parcelPaid: stage.granted.count,
+      parcelApproved: approvedParcels.size,
+      // Нийт үнэлгээний дүн — бүх олговрын мөрийн нийлбэр (төлөвөөс үл хамааран).
+      totalAmount: compRows.reduce((sum, c) => sum + (Number(c.amount) || 0), 0),
+      stages: stage,
+      landAmount,
+      realStateAmount,
+      propertyAmount,
+      pendingAmount,
+      grantedAmount,
+      fundingByType: Array.from(byType, ([name, value]) => ({ name, value })).sort(
+        (a, b) => b.value - a.value,
+      ),
+    };
+  }, [parcels, comps, assetsPage, decreeList, decreeParcels, sources]);
 
   const closeForm = () => { setShowForm(false); setEditId(null); setForm(EMPTY_FORM); };
 
@@ -62,7 +224,96 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
 
   return (
     <>
-    <div className="flex flex-col gap-5">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="flex min-w-0 flex-col gap-4">
+      {/* ЗАХИРАМЖИЙН ТӨСЛҮҮД — энэ чөлөөлөлтөд ХОЛБОГДСОН төслүүд.
+          Санхүүжилтийн ТӨРӨЛ (төсөв) нь захирамжийн төсөл дээр
+          тодорхойлогддог тул энэ табын санхүүжилтийн эх сурвалж мөн ЭНЭ. */}
+      <div className="ap-card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-[#37394d]">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            Захирамжийн төслүүд
+          </p>
+          <span className="text-[11px] text-slate-400">
+            {decreeList.length.toLocaleString()} төсөл
+          </span>
+        </div>
+        {decreesLoading ? (
+          <div className="space-y-3 p-5">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-12 animate-pulse rounded bg-slate-100 dark:bg-[#252630]" />
+            ))}
+          </div>
+        ) : decreeList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-slate-400 dark:text-slate-500">
+            <Gavel className="mb-2 h-7 w-7 opacity-30" />
+            <p className="text-[13px]">Холбогдсон захирамжийн төсөл алга</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/50 dark:border-[#37394d] dark:bg-[#1a1d20]">
+                  {["Захирамжийн төсөл", "Төлөв", "Санхүүжилтийн төрөл", "Эх үүсвэр", "Дотоод", "Гадаад"].map((h) => (
+                    <th
+                      key={h}
+                      className="whitespace-nowrap px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-[#37394d]">
+                {decreeList.map((d) => (
+                  <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630]">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-slate-700 dark:text-slate-200">
+                        {d.proposal_no || d.decree_number || "—"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        {d.decree_number ? `Захирамж ${d.decree_number} · ` : ""}
+                        {d.work_type_name || "—"} · {d.parcel_count?.toLocaleString() ?? 0} нэгж талбар
+                      </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                        style={{
+                          color: DECISION_DRAFT_STATUS_STYLES[d.status]?.color,
+                          background: DECISION_DRAFT_STATUS_STYLES[d.status]?.bg,
+                        }}
+                      >
+                        {DECISION_DRAFT_STATUS_LABELS[d.status] ?? "—"}
+                      </span>
+                      {d.decision_date && (
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          {new Date(d.decision_date).toLocaleDateString("mn-MN")}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded-full bg-[#02c0ce]/10 px-2.5 py-1 text-[11px] font-semibold text-[#02c0ce]">
+                        {d.budget_name || "Тодорхойгүй"}
+                      </span>
+                    </td>
+                    <td className="max-w-[200px] truncate px-4 py-3 text-slate-600 dark:text-slate-300">
+                      {d.funding_source_names || "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                      {d.funding_local_amount ? money(d.funding_local_amount) : "—"}
+                    </td>
+                    <td className="px-4 py-3 tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                      {d.funding_international_amount ? money(d.funding_international_amount) : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="ap-card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-[#37394d]">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -230,6 +481,20 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
           </div>
         )}
       </div>
+      </div>
+
+      {/* БАРУУН — тоон үзүүлэлт ба графикууд. */}
+      <FinancingSummary
+        stats={stats}
+        loading={
+          isLoading ||
+          parcelsLoading ||
+          compsLoading ||
+          assetsLoading ||
+          decreesLoading ||
+          decreeParcelsLoading
+        }
+      />
     </div>
     <ConfirmDialog
       open={!!pendingConfirm}
