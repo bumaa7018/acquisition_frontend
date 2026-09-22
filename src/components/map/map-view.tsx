@@ -168,6 +168,14 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const layerDefsRef = useRef(layerDefs)
   layerDefsRef.current = layerDefs
 
+  // Самбарын шүүлтийн СҮҮЛИЙН утга — давхарга асаахад зумлах эсэх, хүрээг
+  // ямар шүүлтээр олохыг handleToggle эндээс уншина (шүүлтийн эффект шинэчилнэ).
+  const scopeRef = useRef<{ active: boolean; acqCql: string; parcelCql: string }>({
+    active: false,
+    acqCql: '',
+    parcelCql: '',
+  })
+
   const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') => {
     // Давхаргын өөрийн opacity-г эрхэмлэнэ (нэгж талбарууд = 1, ингэснээр
     // SLD-ийн fill-opacity нь зурган дээр яг тэр хэмжээгээрээ гарна). Заагаагүй
@@ -369,6 +377,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     const acqCql    = buildAcqCql(acquisitionIds)
     const parcelCql = buildParcelStatusCql(acquisitionIds, years, employeeId)
     const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
+    scopeRef.current = { active: hasFilter, acqCql, parcelCql }
 
     const getCql = (id: string): string => {
       if (isParcelStatusLayer(id))
@@ -476,12 +485,20 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       const def = layerDefsRef.current.find(d => d.id === id)
       // Улс даяарын давхарга руу ЗУМЛАХГҮЙ (layer-config-ийн fitOnEnable-ийг үз):
       // WFS-ээр олон МБ татаж, зэрэг явж буй API дуудлагыг timeout-д унагаадаг.
-      if (next.visible && def && olMap.current && shouldFitOnEnable(id)) {
+      // Самбарын шүүлтээр хязгаарлагддаг давхарга (нэгж талбарын төлөв,
+      // төлөвлөгөөний хил): шүүлт идэвхтэй бол зураг аль хэдийн сонголтондоо
+      // багтсан тул ДАХИН ЗУМЛАХГҮЙ. Өмнө нь зөвхөн `status=N`-ээр зумладаг
+      // байсан тул сонгосон төлөвлөгөөнөөс Монгол даяар холдож, "Нэгж талбарын
+      // хил" бүлгийг дарахад төлөв бүрээр ээлжлэн ойртож/холдож байв.
+      const scope = scopeRef.current
+      const filtered = isAcquisitionFiltered(id)
+      if (next.visible && def && olMap.current && shouldFitOnEnable(id) && !(filtered && scope.active)) {
+        const scopeCql = !filtered ? '' : isParcelStatusLayer(id) ? scope.parcelCql : scope.acqCql
         void fitLayerToMap({
           map: olMap.current,
           wfsUrl: GS_WFS,
           layerId: geoServerName(def.id),
-          cqlFilter: def.cql,
+          cqlFilter: combineCql(def.cql, scopeCql) || undefined,
           padding: [64, 64, 64, 64],
         })
       }
