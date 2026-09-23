@@ -15,6 +15,7 @@ import {
   canViewAcquisitionTab,
   hasRole,
   isExternalSpecialRole,
+  isFinanceSpecialist,
   shouldUseProfessionalOrgApi,
 } from "@/lib/role-utils";
 import type { AcquisitionTabKey } from "@/lib/access-policy";
@@ -82,6 +83,7 @@ export default function AcquisitionDetailPage() {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [reportLoading, setReportLoading] = useState(false);
   const isExternal = isExternalSpecialRole();
+  const isFinance = isFinanceSpecialist();
   const useProfApi = shouldUseProfessionalOrgApi();
 
   function handleTabClick(key: Tab) {
@@ -161,8 +163,11 @@ export default function AcquisitionDetailPage() {
   const isBeforeFieldStage =
     acq != null && acq.status < ACQ_STATUS.FIELD_SURVEY;
 
-  // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгуулгуудын хандалтыг хаана
-  if (isExternal && isAcqLocked)
+  // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүйд гадаад байгууллагуудын хандалтыг
+  // хаана. САНХҮҮГИЙН мэргэжилтэн үүнээс ЧӨЛӨӨЛӨГДӨНӨ: нөхөх олговрын хяналт,
+  // санхүүжилтийн тайлангаа баталгаажсан чөлөөлөлт дээр ч харна (зөвхөн харах —
+  // засах эрх нь `canEdit` дээр хаалттай хэвээр).
+  if (isExternal && !isFinance && isAcqLocked)
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">

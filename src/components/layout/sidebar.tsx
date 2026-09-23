@@ -15,6 +15,7 @@ import {
   canViewSettings,
   canViewDecisionDrafts,
   isSeniorSpecialist,
+  isFinanceSpecialist,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -55,7 +56,7 @@ const NAV_MAIN = [
   { href: "/acquisition", label: "Газар чөлөөлөлт", icon: FileText },
   { href: "/report", label: "Тайлан", icon: BarChart3 },
   { href: "/map", label: "Газрын зураг", icon: Map },
-  { href: "/parcel", label: "Нэгж талбарын түүх", icon: Grid2x2 },
+  { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
 ];
@@ -194,6 +195,7 @@ export function Sidebar() {
   const [ready, setReady] = useState(false);
   const [isExternal, setIsExternal] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
+  const [isFinance, setIsFinance] = useState(false);
   const [canViewConfig, setCanViewConfig] = useState(false);
   const [canViewHrNav, setCanViewHrNav] = useState(false);
   const [canViewAudit, setCanViewAudit] = useState(false);
@@ -219,6 +221,7 @@ export function Sidebar() {
     setUser(authStorage.getUser());
     setIsExternal(isExternalSpecialRole());
     setIsProfOrg(isProfessionalOrg());
+    setIsFinance(isFinanceSpecialist());
     setCanViewConfig(canViewSettings());
     setCanViewHrNav(canViewHr());
     setCanViewAudit(hasPermission("audit:read"));
@@ -318,7 +321,15 @@ export function Sidebar() {
                       { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
                       { href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText },
                     ]
-                  : NAV_MAIN.filter((item) => item.href === "/" || item.href === "/acquisition")
+                  : NAV_MAIN.filter(
+                      (item) =>
+                        item.href === "/" ||
+                        item.href === "/acquisition" ||
+                        // Санхүүгийн мэргэжилтэн — "Нэгж талбар" жагсаалтыг мөн
+                        // харна (доторх агуулга дотоод ажилтных ЯГ ИЖИЛ;
+                        // backend нь compensation:read-ээр уншуулна).
+                        (item.href === "/parcel" && isFinance),
+                    )
                 : mainNav
               ).map((item) => (
                 <NavItem

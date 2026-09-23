@@ -10,6 +10,7 @@ import {
   canViewUsers,
   hasPermission,
   isExternalSpecialRole,
+  isFinanceSpecialist,
   isProfessionalOrg,
   isSeniorSpecialist,
 } from "@/lib/role-utils";
@@ -86,6 +87,9 @@ export default function DashboardLayout({
       !isProfessionalOrg() &&
       (pathname === "/" ||
         pathname.startsWith("/acquisition") ||
+        // Санхүүгийн мэргэжилтэн — "Нэгж талбар" ЖАГСААЛТ (цэсэнд харагддаг)
+        // мөн нээлттэй. Бусад гадаад роль зөвхөн дэлгэрэнгүй рүү ханддаг.
+        (isFinanceSpecialist() && pathname === "/parcel") ||
         /^\/parcel\/[^/]+$/.test(pathname));
     if (!profOrgAllowed && !otherExternalAllowed) {
       router.replace(isProfessionalOrg() ? "/my_acquisitions" : "/acquisition");

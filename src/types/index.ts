@@ -1610,6 +1610,68 @@ export interface ParcelPayment {
   created_by: string;
 }
 
+/** Санхүүгийн хяналтын самбар — нэгтгэлийн НЭГ мөр (он / дүүрэг / хороо). */
+export interface FinanceBucket {
+  key: string;
+  name: string;
+  amount: number;
+  granted: number;
+  pending: number;
+  parcels: number;
+  /** Мөрийн тоо — төлөв/төсвийн задаргаанд чөлөөлөлтийн тоо. */
+  count: number;
+}
+
+/** Нэгж талбарын гүйцэтгэлийн НЭГ шат (тоо + мөнгөн дүн). */
+export interface FinanceStage {
+  count: number;
+  amount: number;
+}
+
+export interface FinanceDashboardData {
+  total_amount: number;
+  granted_amount: number;
+  pending_amount: number;
+  total_parcels: number;
+  by_year: FinanceBucket[];
+  by_district: FinanceBucket[];
+  by_khoroo: FinanceBucket[];
+  /** Үнэлгээний бүтэц — чөлөөлөлтийн "Санхүүжилт" табтай ижил задаргаа. */
+  land_amount: number;
+  real_state_amount: number;
+  property_amount: number;
+  /** Нэгж талбарын гүйцэтгэлийн дөрвөн тасархай шат. */
+  stage_granted: FinanceStage;
+  stage_approved: FinanceStage;
+  stage_submitted: FinanceStage;
+  stage_pending: FinanceStage;
+  funding_by_type: FinanceBucket[];
+  funding_total: number;
+  /** ЯВЖ БУЙ (баталгаажаагүй) чөлөөлөлтүүд — дүнгээр буурахаар. */
+  top_acquisitions: FinanceBucket[];
+  total_acquisitions: number;
+  /** Чөлөөлөлтийн төлөв ба захирамжийн төсвөөр задаргаа (картад). */
+  acquisition_status: FinanceBucket[];
+  acquisition_budgets: FinanceBucket[];
+  /** Шүүлтүүрийн сонголтууд (дүүрэг бүрэн, хороо нь сонгосон дүүргээр). */
+  district_options: FinanceOption[];
+  khoroo_options: FinanceOption[];
+  /** Шүүлтүүрт харуулах бүх он (шүүлтээс үл хамааран). */
+  years: number[];
+}
+
+export interface FinanceOption {
+  code: string;
+  name: string;
+}
+
+export interface FinanceDashboardFilter {
+  years?: number[];
+  au2_code?: string;
+  au3_code?: string;
+  acquisition_id?: string;
+}
+
 export interface LandAcquisitionFilter {
   plan_code?: string;
   acquisition_name?: string;

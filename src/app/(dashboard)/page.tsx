@@ -20,6 +20,7 @@ import {
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
+import { FinanceDashboard } from "@/components/dashboard/finance-dashboard";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
@@ -1057,12 +1058,15 @@ export default function DashboardPage() {
   const [roleReady, setRoleReady] = useState(false);
   const [isProfOrg, setIsProfOrg] = useState(false);
   const [isOtherExternal, setIsOtherExternal] = useState(false);
+  // Санхүүгийн мэргэжилтэн — ТУСДАА самбар (зөвхөн мөнгөн дүн/тоо, график).
+  const [isFinanceRole, setIsFinanceRole] = useState(false);
   // "Мэдээ татах" — ЗӨВХӨН ахлах мэргэжилтэнд. Энэ нь UI-ийн нуулт;
   // жинхэнэ хоригийг /api/report/gchh2 route нь `/users/me`-ээр шалгана.
   const [isSenior, setIsSenior] = useState(false);
   useEffect(() => {
     setIsProfOrg(isProfessionalOrg());
     setIsOtherExternal(isExternalSpecialRole() && !isProfessionalOrg());
+    setIsFinanceRole(isFinanceSpecialist());
     setIsSenior(isSeniorSpecialist());
     setRoleReady(true);
   }, []);
@@ -1335,6 +1339,7 @@ export default function DashboardPage() {
       </div>
     );
   }
+  if (isFinanceRole) return <FinanceDashboard />;
   if (isProfOrg || isOtherExternal) return <ExternalDashboard />;
 
   return (

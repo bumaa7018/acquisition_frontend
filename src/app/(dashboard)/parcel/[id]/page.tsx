@@ -30,6 +30,7 @@ import {
   canAccessParcel,
   canViewParcelTab,
   isExternalSpecialRole,
+  isFinanceSpecialist,
   shouldUseProfessionalOrgApi,
 } from "@/lib/role-utils";
 import { Users } from "lucide-react";
@@ -41,6 +42,7 @@ export default function ParcelDetailPage() {
   const [tab, setTab] = useState<Tab>("general");
   const [mounted, setMounted] = useState(false);
   const isExternal = isExternalSpecialRole();
+  const isFinance = isFinanceSpecialist();
   const useProfApi = shouldUseProfessionalOrgApi();
 
   React.useEffect(() => setMounted(true), []);
@@ -216,8 +218,13 @@ export default function ParcelDetailPage() {
     );
   }
 
-  // Баталгаажсан чөлөөлөлтийн нэгж талбарт бүх гадаад хэрэглэгчид хандах боломжгүй
-  if (isExternal && isAcqConfirmed && parcel && acquisition) {
+  // Баталгаажсан чөлөөлөлтийн нэгж талбарт гадаад хэрэглэгчид хандах боломжгүй.
+  //
+  // ОНЦГОЙ ТОХИОЛДОЛ: САНХҮҮГИЙН мэргэжилтэн БҮХ нэгж талбарыг ХАРНА
+  // (баталгаажсан чөлөөлөлтийнхийг ч) — тэд нөхөх олговрын хяналт хийдэг тул
+  // түүх нь хаагдах ёсгүй. Үйлдэл нь `isParcelLocked`/`isProgressLocked`-оор
+  // хаалттай хэвээр бөгөөд backend мөн бичих хүсэлтийг 423-аар няцаана.
+  if (isExternal && !isFinance && isAcqConfirmed && parcel && acquisition) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10">

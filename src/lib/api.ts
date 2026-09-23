@@ -65,6 +65,7 @@ import type {
   Organization, Department, Position, Person, Employee,
   ValuationOrg, ValuationOrgPayload,
   AuditLog,
+  FinanceDashboardData, FinanceDashboardFilter,
   Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, AcquisitionSocioSurvey, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
   ParcelEstimatedValueHistory,
@@ -1533,6 +1534,19 @@ export const dashboardApi = {
     if (filter?.au2_code)            params.set('au2_code', filter.au2_code)
     filter?.years?.forEach(y => params.append('year', String(y)))
     return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
+  },
+  // САНХҮҮГИЙН самбар — зөвхөн мөнгөн дүн/тоо (он, дүүрэг, хороогоор).
+  // Backend нь НЭГ асуулгаар нэгтгэдэг тул жагсаалт татах шаардлагагүй.
+  finance: (filter?: FinanceDashboardFilter): Promise<FinanceDashboardData> => {
+    const params = new URLSearchParams()
+    if (filter?.au2_code) params.set('au2_code', filter.au2_code)
+    if (filter?.au3_code) params.set('au3_code', filter.au3_code)
+    if (filter?.acquisition_id) params.set('acquisition_id', filter.acquisition_id)
+    filter?.years?.forEach(y => params.append('year', String(y)))
+    const suffix = params.toString()
+    return api
+      .get<ApiResponse<FinanceDashboardData>>(`/dashboard/finance${suffix ? `?${suffix}` : ''}`)
+      .then(r => r.data.data)
   },
 }
 
