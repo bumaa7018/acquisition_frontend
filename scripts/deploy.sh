@@ -62,6 +62,14 @@ echo "Docker image build хийж байна..."
 compose build ${BUILD_FLAGS:---pull}
 
 echo "Docker service-үүдийг шинээр асааж байна..."
-compose up -d --remove-orphans
+# Recreate үед Docker заримдаа хуучин container-ийг зогсоож амжаагүй байхад
+# устгах гэж оролдоод "container is running" гэж унадаг. Тэгвэл хуучныг нь
+# зогсоож/устгаад НЭГ удаа дахин оролдоно (image аль хэдийн build хийгдсэн).
+if ! compose up -d --remove-orphans; then
+  echo "Recreate амжилтгүй — хуучин container-уудыг зогсоож дахин оролдож байна..." >&2
+  compose stop --timeout 20 || true
+  compose rm -f -s || true
+  compose up -d --remove-orphans
+fi
 
 compose ps
