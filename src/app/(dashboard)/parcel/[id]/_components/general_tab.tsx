@@ -36,6 +36,7 @@ import {
   shouldUseProfessionalOrgApi,
 } from "@/lib/role-utils";
 import { layerTextToWkt } from "@/lib/geometry-utils";
+import { Switch } from "@/components/ui/switch";
 import { logger } from "@/lib/logger";
 import { EstimatedValueDialog } from "./estimated_value_dialog";
 import { EstimatedValueHistoryDialog } from "./estimated_value_history_dialog";
@@ -601,6 +602,8 @@ export function GeneralTab({
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmCountdown, setConfirmCountdown] = useState(10);
+  // Давхардсан нэгж талбаруудыг "Байршил"-ын газрын зураг дээр давхцуулж харуулах эсэх.
+  const [showOverlaps, setShowOverlaps] = useState(false);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -985,13 +988,41 @@ export function GeneralTab({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Байршил
             </p>
+            {overlaps.length > 0 && (
+              <label className="ml-auto flex cursor-pointer items-center gap-2 text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                <span>Давхардсан нэгж талбар ({overlaps.length})</span>
+                <Switch
+                  checked={showOverlaps}
+                  onCheckedChange={setShowOverlaps}
+                  className="data-[state=checked]:bg-red-500"
+                />
+              </label>
+            )}
           </div>
           <ParcelMap
             parcelId={data.parcel_id}
             acquisitionId={acqId}
             geometryWkt={data.geometry_wkt}
             statusId={data.status_id ?? data.status}
+            overlaps={overlaps}
+            showOverlaps={showOverlaps}
           />
+          {showOverlaps && overlaps.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-5 py-2 text-[11.5px] text-slate-500 dark:border-[#37394d] dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm border-2 border-[#22c55e] bg-[#22c55e]/35" />
+                Энэ нэгж талбар
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm border-2 border-dashed border-[#f97316] bg-[#f97316]/15" />
+                Давхцаж буй нэгж талбар
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-[#dc2626]/70" />
+                Давхцах хэсэг
+              </span>
+            </div>
+          )}
           <div className="border-t border-slate-100 px-5 py-4 dark:border-[#37394d]">
             <div className="mb-3 flex items-center gap-2">
               <Activity className="h-3.5 w-3.5 text-[#10b981]" />

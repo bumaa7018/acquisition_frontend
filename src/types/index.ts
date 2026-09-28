@@ -600,6 +600,10 @@ export interface ParcelOverlap {
   other_status_id: number;
   other_status_name: string;
   detected_at: string;
+  /** Давхцаж байгаа нэгж талбарын хил (WKT, EPSG:4326) */
+  other_geometry_wkt?: string;
+  /** Хоёр талбарын огтлолцох хэсэг (WKT, EPSG:4326) */
+  overlap_geometry_wkt?: string;
 }
 
 export interface StatusOption {

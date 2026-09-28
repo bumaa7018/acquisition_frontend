@@ -11,7 +11,8 @@ import XYZ from "ol/source/XYZ";
 import { defaults as defaultControls } from "ol/control/defaults";
 import { fromLonLat } from "ol/proj";
 import WKT from "ol/format/WKT";
-import { Fill, Stroke, Style } from "ol/style";
+import { Fill, Stroke, Style, Text } from "ol/style";
+import { createEmpty, extend, isEmpty } from "ol/extent";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import LayerPanel, { type LayerConfig } from "./layer-panel";
@@ -31,7 +32,7 @@ import {
   type MapLayerDef,
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
-import { PARCEL_STATUS_STYLES } from "@/types";
+import { PARCEL_STATUS_STYLES, type ParcelOverlap } from "@/types";
 import { useParcelStatusColors } from "./use-parcel-status-layers";
 import { logger } from "@/lib/logger";
 
@@ -94,19 +95,59 @@ const VECTOR_STYLES: Record<string, Style | ((f: { get: (k: string) => unknown }
   }),
 };
 
+/**
+ * Давхардсан нэгж талбарын давхарга: нөгөө талбарын хил (тасархай улбар шар)
+ * + огтлолцох хэсэг (улаан). Энэ талбар (ногоон, zIndex 50)-ын ДЭЭР зурагдана —
+ * давхцах хэсэг нь ногоон талбарын дотор тод харагдах ёстой.
+ */
+const OVERLAP_Z = 60;
+const OVERLAP_PART_Z = 70;
+
+function overlapParcelStyle(feature: { get: (k: string) => unknown }): Style {
+  return new Style({
+    stroke: new Stroke({ color: "#f97316", width: 2.5, lineDash: [8, 5] }),
+    fill:   new Fill({ color: "rgba(249,115,22,0.15)" }),
+    text: new Text({
+      text: String(feature.get("code") ?? ""),
+      font: "600 12px ui-monospace, monospace",
+      fill: new Fill({ color: "#9a3412" }),
+      stroke: new Stroke({ color: "#ffffff", width: 3 }),
+      overflow: true,
+    }),
+  });
+}
+
+const OVERLAP_PART_STYLE = new Style({
+  stroke: new Stroke({ color: "#b91c1c", width: 1.5 }),
+  fill:   new Fill({ color: "rgba(220,38,38,0.7)" }),
+});
+
 interface Props {
   parcelId: string;
   acquisitionId?: string;
   geometryWkt?: string | null;
   statusId?: number | null;
+  /** Энэ талбартай давхцаж буй нэгж талбарууд (геометртэй) */
+  overlaps?: ParcelOverlap[];
+  /** true бол `overlaps`-ийг газрын зураг дээр давхцуулж зурна */
+  showOverlaps?: boolean;
 }
 
-export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Props) {
+export function ParcelMap({
+  parcelId,
+  acquisitionId,
+  geometryWkt,
+  statusId,
+  overlaps,
+  showOverlaps = false,
+}: Props) {
   const mapRef       = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const olMap        = useRef<OLMap | null>(null);
   const wmsLayers    = useRef<Record<string, ImageLayer<ImageWMS>>>({});
   const vectorLayers = useRef<Record<string, VectorLayer<VectorSource>>>({});
+  const overlapLayer     = useRef<VectorLayer<VectorSource> | null>(null);
+  const overlapPartLayer = useRef<VectorLayer<VectorSource> | null>(null);
 
   // Төлөвийн өнгө бүртгэлээс. Ирэхэд вектор давхаргыг дахин зуруулна —
   // эс бөгөөс анхны зурагдсан өнгө нь өгөгдмөлөөрөө үлдэнэ.
@@ -209,6 +250,22 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
     });
     vectorLayers.current = vRecord;
 
+    // Давхардлын давхаргууд — самбарт харагдахгүй, `showOverlaps`-оор удирдагдана.
+    const ovLayer = new VectorLayer({
+      source: new VectorSource(),
+      visible: false,
+      zIndex: OVERLAP_Z,
+      style: overlapParcelStyle,
+    });
+    const ovPartLayer = new VectorLayer({
+      source: new VectorSource(),
+      visible: false,
+      zIndex: OVERLAP_PART_Z,
+      style: OVERLAP_PART_STYLE,
+    });
+    overlapLayer.current = ovLayer;
+    overlapPartLayer.current = ovPartLayer;
+
     const map = new OLMap({
       target: mapRef.current,
       // OL-ийн өгөгдмөл +/- товчийг нуув (map-view/acquisition-map-тай ижил).
@@ -218,6 +275,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
         createBasemapLayer(),
         ...WMS_LAYER_DEFS.map((d) => wmsRecord[d.id]),
         ...VECTOR_LAYER_DEFS.map((d) => vRecord[d.id]),
+        ovLayer,
+        ovPartLayer,
       ],
       view: new View({
         center: fromLonLat([104.9, 47.9]),
@@ -237,6 +296,8 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       map.setTarget(undefined);
       olMap.current = null;
       vectorLayers.current = {};
+      overlapLayer.current = null;
+      overlapPartLayer.current = null;
     };
   }, [acqCql, acquisitionId, parcelCql, parcelId]);
 
@@ -283,6 +344,63 @@ export function ParcelMap({ parcelId, acquisitionId, geometryWkt, statusId }: Pr
       }
     }
   }, [geometryWkt, statusId]);
+
+  // Давхардсан нэгж талбаруудын геометрийг давхаргад ачаална. Агуулгаар нь
+  // (WKT) харьцуулна — эцэг компонент рендер бүрт шинэ массив дамжуулж болно.
+  const overlapKey = (overlaps ?? [])
+    .map((o) => `${o.other_parcel_uuid}|${o.other_geometry_wkt ?? ""}|${o.overlap_geometry_wkt ?? ""}`)
+    .join(";");
+  const overlapsRef = useRef(overlaps);
+  overlapsRef.current = overlaps;
+  useEffect(() => {
+    const ovSrc = overlapLayer.current?.getSource();
+    const partSrc = overlapPartLayer.current?.getSource();
+    if (!ovSrc || !partSrc) return;
+
+    const read = (wkt?: string) => {
+      const w = wkt?.trim();
+      if (!w) return null;
+      try {
+        return wktFormat.current.readFeature(w, {
+          dataProjection: "EPSG:4326",
+          featureProjection: "EPSG:3857",
+        });
+      } catch (err) {
+        logger.warn("overlap wkt parse failed", { error: String(err) });
+        return null;
+      }
+    };
+
+    ovSrc.clear();
+    partSrc.clear();
+    (overlapsRef.current ?? []).forEach((o) => {
+      const other = read(o.other_geometry_wkt);
+      if (other) {
+        other.set("code", o.other_parcel_id);
+        ovSrc.addFeature(other);
+      }
+      const part = read(o.overlap_geometry_wkt);
+      if (part) partSrc.addFeature(part);
+    });
+  }, [overlapKey, parcelId]);
+
+  // Асаахад энэ талбар + давхцаж буй бүх талбарыг багтаан зумлана,
+  // унтраахад энэ талбар руу буцна. Анхны ачааллын зумыг геометрийн effect хийнэ.
+  const prevShowOverlaps = useRef(showOverlaps);
+  useEffect(() => {
+    overlapLayer.current?.setVisible(showOverlaps);
+    overlapPartLayer.current?.setVisible(showOverlaps);
+    if (prevShowOverlaps.current === showOverlaps) return;
+    prevShowOverlaps.current = showOverlaps;
+
+    const map = olMap.current;
+    const parcelExtent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
+    if (!map || !parcelExtent || isEmpty(parcelExtent)) return;
+    const extent = extend(createEmpty(), parcelExtent);
+    const ovExtent = overlapLayer.current?.getSource()?.getExtent();
+    if (showOverlaps && ovExtent && !isEmpty(ovExtent)) extend(extent, ovExtent);
+    map.getView().fit(extent, { padding: [60, 60, 60, 60], duration: 600 });
+  }, [showOverlaps]);
 
   // Fullscreen горим сольсны дараа OL-д контейнерийн шинэ хэмжээг мэдэгдэнэ (өөрөө анзаардаггүй)
   useEffect(() => {

@@ -41,6 +41,14 @@ const TOOLTIP_STYLE = {
 const SELECT_CLS =
   "h-9 min-w-40 rounded-lg border border-slate-200 bg-white px-3 text-[12px] text-slate-700 outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200";
 
+/** Чөлөөлөлтийн төлөвийн өнгө (1 Шинэ, 2 Хээрийн судалгаа, 3 Баталгаажсан, 4 Цуцлагдсан). */
+const ACQ_STATUS_COLORS: Record<string, string> = {
+  "1": "#6366f1",
+  "2": "#f59e0b",
+  "3": "#10b981",
+  "4": "#94a3b8",
+};
+
 const COLORS = {
   amount: "#02c0ce",
   granted: "#10b981",
@@ -59,6 +67,145 @@ function billions(value: number): string {
   return `${(value / 1_000_000_000).toFixed(1)} тэрбум₮`;
 }
 
+/** Чартын өнгөний дараалал (төсөв, эх үүсвэр г.м. олон утгатай задаргаанд). */
+const PALETTE = ["#02c0ce", "#6366f1", "#10b981", "#f59e0b", "#f43f5e", "#0ea5e9"];
+
+/**
+ * Дугуй (donut) чарт + баруун талдаа задаргаа.
+ *
+ * Карт өрөх оронд НЭГ зурагт: төвд нийт тоо, тойрогт хувь хэмжээ, хажууд нь
+ * мөр бүрийн тоо/дүн. Ингэснээр аль төлөв давамгайлж байгаа нь шууд харагдана.
+ */
+function DonutCard({
+  title,
+  rows,
+  centerValue,
+  centerLabel,
+  emptyText,
+}: {
+  /** Section дотор хэрэглэхэд гарчиг нь дээр нь байдаг тул заавал биш. */
+  title?: string;
+  rows: { name: string; value: number; color: string; hint?: string }[];
+  centerValue: string;
+  centerLabel: string;
+  emptyText: string;
+}) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const shown = rows.filter((row) => row.value > 0);
+  return (
+    <div className={title ? "ap-card px-4 py-3" : ""}>
+      {title && (
+        <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+          {title}
+        </p>
+      )}
+      {total === 0 ? (
+        <p className="py-14 text-center text-[12px] text-slate-400">{emptyText}</p>
+      ) : (
+        <div className="flex items-center gap-3">
+          <div className="relative h-[168px] w-[168px] shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={shown} dataKey="value" nameKey="name" innerRadius={52} outerRadius={76} paddingAngle={2}>
+                  {shown.map((row) => (
+                    <Cell key={row.name} fill={row.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value, name) =>
+                    `${Number(value ?? 0).toLocaleString()} (${((Number(value ?? 0) / total) * 100).toFixed(1)}%) · ${name}`
+                  }
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            {/* Төвийн НИЙТ утга — чартын гол мессеж. */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[17px] font-bold tabular-nums text-slate-800 dark:text-white">
+                {centerValue}
+              </span>
+              <span className="text-[10px] text-slate-400">{centerLabel}</span>
+            </div>
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            {rows.map((row) => (
+              <div key={row.name} className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600 dark:text-slate-300">
+                  {row.name}
+                </span>
+                <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: row.color }}>
+                  {row.value.toLocaleString()}
+                </span>
+                {row.hint && (
+                  <span className="w-20 shrink-0 text-right text-[10px] tabular-nums text-slate-400">
+                    {row.hint}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Өнгөөр ялгасан жижиг карт: гарчиг · том утга · дэд мөр. */
+function MiniCard({
+  label,
+  value,
+  sub,
+  color,
+  title,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+  title?: string;
+}) {
+  return (
+    <div
+      className="flex min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-100 bg-slate-50/40 px-3.5 py-3 dark:border-[#37394d] dark:bg-white/[0.02]"
+      style={{ borderLeft: `3px solid ${color}` }}
+    >
+      <p className="truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="truncate text-[20px] font-bold leading-none tabular-nums" style={{ color }} title={title}>
+        {value}
+      </p>
+      {sub && <p className="truncate text-[11px] tabular-nums text-slate-400">{sub}</p>}
+    </div>
+  );
+}
+
+/**
+ * БҮЛЭГ — зүүн талд өнгөөр ялгасан картууд, баруун талд харгалзах чарт.
+ * Карт нь ТОО, чарт нь ХАРЬЦААГ хэлнэ: хоёулаа нэг хайрцагт байх тул ямар
+ * тоо ямар зурагт хамаарах нь эргэлзээгүй.
+ */
+function Section({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="ap-card px-5 py-4">
+      <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* auto-rows-min — карт нь чартын өндрөөр СУНАХГҮЙ (текст дээд буланд
+            наалдаж, доор нь хоосон зай үлдэхээс сэргийлнэ). */}
+        <div className="grid auto-rows-min grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
+        {right}
+      </div>
+    </div>
+  );
+}
+
 function Tile({
   label,
   value,
@@ -73,18 +220,20 @@ function Tile({
   tone: string;
 }) {
   return (
-    <div className="ap-card flex items-center gap-3 px-4 py-3">
+    <div
+      className="ap-card flex items-center gap-3.5 border-l-4 px-5 py-4"
+      style={{ borderLeftColor: tone }}
+    >
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
         style={{ background: `${tone}1a`, color: tone }}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          {label}
-        </p>
-        <p className="truncate text-[16px] font-bold tabular-nums text-slate-800 dark:text-white">
+        <p className="truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+        {/* Утгыг ӨӨРИЙН өнгөөр — бүх карт ижил харагдахаас сэргийлнэ. */}
+        <p className="truncate text-[22px] font-bold leading-tight tabular-nums" style={{ color: tone }}>
           {value}
         </p>
         {hint && <p className="truncate text-[11px] tabular-nums text-slate-400">{hint}</p>}
@@ -186,7 +335,6 @@ export function FinanceDashboard() {
     { name: "Үнэлгээ хийгээгүй", count: data?.stage_pending.count ?? 0, amount: data?.stage_pending.amount ?? 0, color: COLORS.muted },
   ];
   const stageTotal = stageRows.reduce((sum, row) => sum + row.count, 0);
-  const stagePct = (v: number) => (stageTotal > 0 ? (v / stageTotal) * 100 : 0);
   const structureRows = [
     { name: "Газрын үнэлгээ", value: data?.land_amount ?? 0, color: COLORS.amount },
     { name: "Үл хөдлөх", value: data?.real_state_amount ?? 0, color: COLORS.parcels },
@@ -205,8 +353,8 @@ export function FinanceDashboard() {
   const districtChartHeight = Math.max(200, districtChart.length * 28 + 24);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-[18px] font-bold text-slate-800 dark:text-white">
             Санхүүгийн хяналтын самбар
@@ -252,96 +400,14 @@ export function FinanceDashboard() {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="h-20 animate-pulse rounded-xl bg-slate-100 dark:bg-[#252630]" />
           ))}
         </div>
       ) : (
         <>
-          {/* ЧӨЛӨӨЛӨЛТИЙН МЭДЭЭЛЭЛ — нийт, төлөвөөр ба захирамжийн төсвөөр. */}
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <div className="ap-card px-4 py-3">
-              <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                Нийт чөлөөлөлт
-              </p>
-              <p className="text-[20px] font-bold tabular-nums text-slate-800 dark:text-white">
-                {(data?.total_acquisitions ?? 0).toLocaleString()}
-              </p>
-              <p className="truncate text-[11px] tabular-nums text-slate-400" title={money(totalAmount)}>
-                {billions(totalAmount)}
-              </p>
-            </div>
-            {statusCards.map((row) => (
-              <div key={row.key} className="ap-card px-4 py-3">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  {row.name}
-                </p>
-                <p className="flex items-baseline gap-1.5">
-                  <span className="text-[20px] font-bold tabular-nums text-slate-800 dark:text-white">
-                    {row.count.toLocaleString()}
-                  </span>
-                  <span className="text-[11px] tabular-nums text-slate-400">
-                    {row.parcels.toLocaleString()} т.
-                  </span>
-                </p>
-                <p className="truncate text-[11px] tabular-nums text-slate-400" title={money(row.amount)}>
-                  {billions(row.amount)}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {budgetCards.length > 0 && (
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              {budgetCards.map((row) => (
-                <div key={row.key} className="ap-card px-4 py-3">
-                  <p className="mb-0.5 inline-flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: COLORS.parcels }} />
-                    Төсөв: {row.name}
-                  </p>
-                  <p className="flex items-baseline gap-1.5">
-                    <span className="text-[18px] font-bold tabular-nums text-slate-800 dark:text-white">
-                      {billions(row.amount)}
-                    </span>
-                    <span className="text-[11px] tabular-nums text-slate-400">
-                      {row.count.toLocaleString()} чөлөөлөлт
-                    </span>
-                  </p>
-                  <p className="truncate text-[11px] tabular-nums text-slate-400" title={money(row.granted)}>
-                    Олгосон: {billions(row.granted)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ҮНЭЛГЭЭНИЙ АНГИЛАЛ — чөлөөлөлтийн "Санхүүжилт" табтай ижил. */}
-          <div className="ap-card grid grid-cols-1 divide-y divide-slate-100 overflow-hidden dark:divide-[#37394d] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            {[
-              { label: "Газрын үнэлгээ", value: data?.land_amount ?? 0, color: COLORS.amount },
-              { label: "Үл хөдлөх хөрөнгө", value: data?.real_state_amount ?? 0, color: COLORS.parcels },
-              { label: "Эд хөрөнгө, зардал", value: data?.property_amount ?? 0, color: COLORS.property },
-            ].map((row) => (
-              <div key={row.label} className="min-w-0 px-4 py-3">
-                <p className="mb-1 inline-flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: row.color }} />
-                  {row.label}
-                </p>
-                <p
-                  className="truncate text-[15px] font-bold tabular-nums text-slate-800 dark:text-white"
-                  title={money(row.value)}
-                >
-                  {billions(row.value)}
-                </p>
-                <p className="truncate text-[11px] tabular-nums text-slate-400">
-                  {totalAmount > 0 ? `${Math.round((row.value / totalAmount) * 100)}%` : "—"}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Tile
               label="Нийт үнэлгээний дүн"
               value={billions(totalAmount)}
@@ -376,59 +442,152 @@ export function FinanceDashboard() {
             />
           </div>
 
-          {/* НЭГЖ ТАЛБАРЫН ГҮЙЦЭТГЭЛ — дөрвөн тасархай шат (тоо + дүн + хувь). */}
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {stageRows.map((row) => (
-              <div key={row.name} className="ap-card flex items-start gap-3 px-4 py-3">
-                <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    {row.name}
-                  </p>
-                  <p className="flex items-baseline gap-1.5">
-                    <span className="text-[18px] font-bold tabular-nums text-slate-800 dark:text-white">
-                      {row.count.toLocaleString()}
-                    </span>
-                    <span className="text-[11px] font-semibold tabular-nums" style={{ color: row.color }}>
-                      {stagePct(row.count).toFixed(1)}%
-                    </span>
-                  </p>
-                  <p className="truncate text-[11px] tabular-nums text-slate-500 dark:text-slate-400" title={money(row.amount)}>
-                    {billions(row.amount)}
-                  </p>
-                </div>
-              </div>
+          {/* ЧӨЛӨӨЛӨЛТ — төлөв бүрийн КАРТ + харьцааны ДОНАТ нэг хайрцагт. */}
+          <Section
+            title="Чөлөөлөлт төлөвөөр"
+            right={
+              <DonutCard
+                rows={statusCards.map((row) => ({
+                  name: row.name,
+                  value: row.count,
+                  color: ACQ_STATUS_COLORS[row.key] ?? COLORS.muted,
+                }))}
+                centerValue={(data?.total_acquisitions ?? 0).toLocaleString()}
+                centerLabel="чөлөөлөлт"
+                emptyText="Чөлөөлөлт алга"
+              />
+            }
+          >
+            <MiniCard
+              label="Нийт чөлөөлөлт"
+              value={(data?.total_acquisitions ?? 0).toLocaleString()}
+              sub={billions(totalAmount)}
+              color={COLORS.amount}
+              title={money(totalAmount)}
+            />
+            {statusCards.map((row) => (
+              <MiniCard
+                key={row.key}
+                label={row.name}
+                value={row.count.toLocaleString()}
+                sub={`${row.parcels.toLocaleString()} талбар · ${billions(row.amount)}`}
+                color={ACQ_STATUS_COLORS[row.key] ?? COLORS.muted}
+                title={money(row.amount)}
+              />
             ))}
-          </div>
+          </Section>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* ҮНЭЛГЭЭНИЙ БҮТЭЦ */}
-            <div className="ap-card px-4 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  Үнэлгээний бүтэц
-                </p>
-                <p className="text-[12px] font-bold tabular-nums text-slate-700 dark:text-slate-200" title={money(totalAmount)}>
-                  {billions(totalAmount)}
-                </p>
-              </div>
-              {structureRows.length === 0 ? (
-                <p className="py-10 text-center text-[12px] text-slate-400">Баталгаажсан үнэлгээ алга</p>
-              ) : (
-                <div className="h-[150px]">
+          {/* НЭГЖ ТАЛБАРЫН ГҮЙЦЭТГЭЛ — шат бүрийн карт + донат. */}
+          <Section
+            title="Нэгж талбарын гүйцэтгэл"
+            right={
+              <DonutCard
+                rows={stageRows.map((row) => ({
+                  name: row.name,
+                  value: row.count,
+                  color: row.color,
+                }))}
+                centerValue={stageTotal.toLocaleString()}
+                centerLabel="нэгж талбар"
+                emptyText="Нэгж талбар алга"
+              />
+            }
+          >
+            {stageRows.map((row) => (
+              <MiniCard
+                key={row.name}
+                label={row.name}
+                value={row.count.toLocaleString()}
+                sub={`${stageTotal > 0 ? ((row.count / stageTotal) * 100).toFixed(1) : "0.0"}% · ${billions(row.amount)}`}
+                color={row.color}
+                title={money(row.amount)}
+              />
+            ))}
+          </Section>
+
+          {/* ЗАХИРАМЖИЙН ТӨСӨВ — карт + хэвтээ багана. */}
+          {budgetCards.length > 0 && (
+            <Section
+              title="Захирамжийн төсвөөр"
+              right={
+                <div style={{ height: Math.max(180, budgetCards.length * 32 + 24) }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={structureRows} layout="vertical" margin={{ top: 4, bottom: 4, left: 4, right: 92 }} barCategoryGap="14%">
+                    <BarChart
+                      data={budgetCards.map((row) => ({ name: row.name, value: row.amount }))}
+                      layout="vertical"
+                      margin={{ left: 4, right: 72 }}
+                    >
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={92}
+                        tick={{ fontSize: 10, fill: "#94a3b8" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        formatter={(value) => money(Number(value ?? 0))}
+                      />
+                      <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={14}>
+                        {budgetCards.map((row, i) => (
+                          <Cell key={row.key} fill={PALETTE[i % PALETTE.length]} />
+                        ))}
+                        <LabelList
+                          dataKey="value"
+                          position="right"
+                          formatter={(value: unknown) => billions(Number(value ?? 0))}
+                          style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
+                        />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              }
+            >
+              {budgetCards.map((row, i) => (
+                <MiniCard
+                  key={row.key}
+                  label={row.name}
+                  value={billions(row.amount)}
+                  sub={`${row.count.toLocaleString()} чөлөөлөлт · олгосон ${billions(row.granted)}`}
+                  color={PALETTE[i % PALETTE.length]}
+                  title={money(row.amount)}
+                />
+              ))}
+            </Section>
+          )}
+
+          {/* ҮНЭЛГЭЭНИЙ АНГИЛАЛ — карт + хэвтээ багана (нэг хайрцагт). */}
+          <Section
+            title="Үнэлгээний бүтэц"
+            right={
+              structureRows.length === 0 ? undefined : (
+                <div style={{ height: 180 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={structureRows}
+                      layout="vertical"
+                      margin={{ top: 4, bottom: 4, left: 4, right: 72 }}
+                      barCategoryGap="14%"
+                    >
                       <XAxis type="number" hide domain={[0, "dataMax"]} />
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={116}
-                        tick={{ fontSize: 11, fill: "#94a3b8" }}
+                        width={96}
+                        tick={{ fontSize: 10, fill: "#94a3b8" }}
                         axisLine={false}
                         tickLine={false}
                       />
-                      <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} contentStyle={TOOLTIP_STYLE} formatter={(value) => money(Number(value ?? 0))} />
-                      <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={26}>
+                      <Tooltip
+                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
+                        contentStyle={TOOLTIP_STYLE}
+                        formatter={(value) => money(Number(value ?? 0))}
+                      />
+                      <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={22}>
                         {structureRows.map((row) => (
                           <Cell key={row.name} fill={row.color} />
                         ))}
@@ -436,19 +595,43 @@ export function FinanceDashboard() {
                           dataKey="value"
                           position="right"
                           formatter={(value: unknown) => billions(Number(value ?? 0))}
-                          style={{ fill: "#64748b", fontSize: 11, fontWeight: 600 }}
+                          style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
                         />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              )}
-            </div>
+              )
+            }
+          >
+            <MiniCard
+              label="Газрын үнэлгээ"
+              value={billions(data?.land_amount ?? 0)}
+              sub={totalAmount > 0 ? `${Math.round(((data?.land_amount ?? 0) / totalAmount) * 100)}%` : undefined}
+              color={COLORS.amount}
+              title={money(data?.land_amount ?? 0)}
+            />
+            <MiniCard
+              label="Үл хөдлөх хөрөнгө"
+              value={billions(data?.real_state_amount ?? 0)}
+              sub={totalAmount > 0 ? `${Math.round(((data?.real_state_amount ?? 0) / totalAmount) * 100)}%` : undefined}
+              color={COLORS.parcels}
+              title={money(data?.real_state_amount ?? 0)}
+            />
+            <MiniCard
+              label="Эд хөрөнгө, зардал"
+              value={billions(data?.property_amount ?? 0)}
+              sub={totalAmount > 0 ? `${Math.round(((data?.property_amount ?? 0) / totalAmount) * 100)}%` : undefined}
+              color={COLORS.property}
+              title={money(data?.property_amount ?? 0)}
+            />
+          </Section>
 
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {/* САНХҮҮЖИЛТИЙН ТӨРЛӨӨР */}
-            <div className="ap-card px-4 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <div className="ap-card px-5 py-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
                   Санхүүжилтийн төрлөөр
                 </p>
                 <p className="text-[12px] font-bold tabular-nums text-slate-700 dark:text-slate-200" title={money(data?.funding_total ?? 0)}>
@@ -460,7 +643,7 @@ export function FinanceDashboard() {
                   Санхүүжилтийн эх үүсвэр бүртгэгдээгүй
                 </p>
               ) : (
-                <div className="h-[150px]">
+                <div className="h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie data={fundingTypes} dataKey="amount" nameKey="name" innerRadius={38} outerRadius={62} paddingAngle={3}>
@@ -478,8 +661,8 @@ export function FinanceDashboard() {
           </div>
 
           {/* ОНООР — дүнгийн явц (баталгаажсан / олгосон / хүлээгдэж буй). */}
-          <div className="ap-card px-4 py-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="ap-card px-5 py-4">
+            <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
               Оноор
             </p>
             {yearChart.length === 0 ? (
@@ -511,9 +694,9 @@ export function FinanceDashboard() {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {/* ДҮҮРЭГ/СУМААР — дарж шүүлт болгоно. */}
-            <div className="ap-card px-4 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <div className="ap-card px-5 py-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
                   Дүүрэг / сумаар
                 </p>
                 <p className="text-[11px] text-slate-400">{byDistrict.length} нэгж</p>
@@ -564,9 +747,9 @@ export function FinanceDashboard() {
             </div>
 
             {/* ЧӨЛӨӨЛӨЛТӨӨР — хамгийн их дүнтэй 10 чөлөөлөлт. */}
-            <div className="ap-card px-4 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <div className="ap-card px-5 py-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
                   Явж буй чөлөөлөлтүүд
                 </p>
                 <p className="text-[11px] text-slate-400">
