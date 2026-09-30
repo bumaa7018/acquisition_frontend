@@ -30,6 +30,7 @@ import {
   actorHasPermission,
   hasAccessRole,
   isAdminActor,
+  canImportLegacyDataForActor,
   isExternalSpecialActor,
   isFinanceSpecialistActor,
   isMikaActor,
@@ -117,6 +118,11 @@ export function isSeniorSpecialist(): boolean {
 // Админ role
 export function isAdmin(): boolean {
   return isAdminActor(getCurrentActor());
+}
+
+// Хуучин мэдээллийн импорт
+export function canImportLegacyData(): boolean {
+  return canImportLegacyDataForActor(getCurrentActor());
 }
 
 // Any of the special external roles that can only access acquisition menu

@@ -118,6 +118,17 @@ export function isAdminActor(actor: AccessActor): boolean {
   return hasAccessRole(actor, ACCESS_ROLE_CODES.ADMIN, "Админ");
 }
 
+/**
+ * Хуучин мэдээллийн импорт (`/legacy_import`). Системийн хүснэгтүүдэд
+ * (чөлөөлөлт, нэгж талбар, нөхөх олговор) бөөнөөр бичдэг тул ЗӨВХӨН админ.
+ * Server талд `/api/legacy-import` proxy нь ижил ролийг backend-ээр шалгана.
+ */
+export const LEGACY_IMPORT_ROLES = [ACCESS_ROLE_CODES.ADMIN, "Админ"];
+
+export function canImportLegacyDataForActor(actor: AccessActor): boolean {
+  return isAdminActor(actor);
+}
+
 export function canCancelValuationForActor(
   actor: AccessActor,
   acquisition: AccessAcquisition | null | undefined,

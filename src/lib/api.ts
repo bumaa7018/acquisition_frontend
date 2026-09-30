@@ -1492,6 +1492,24 @@ export interface ValuationTypeStat {
   amount:         number
 }
 
+export interface DashboardDecisions {
+  total:      number
+  confirmed:  number  // Баталгаажсан
+  confirming: number  // Баталгаажуулах
+  reviewing:  number  // Хянагдаж буй
+  draft:      number  // Төсөл
+}
+
+export interface DashboardCompensation {
+  total:      number
+  /** Захирамж гарсан (Баталгаажсан / Баталгаажуулах) нэгж талбар. */
+  issued:     number
+  /** Захирамжгүй, үнэлгээ баталгаажсан. */
+  approved:   number
+  /** Захирамжгүй, үнэлгээ баталгаажаагүй. */
+  unapproved: number
+}
+
 export interface DashboardData {
   acquisitions:         LandAcquisition[]
   parcel_statuses:      ParcelStatus[]
@@ -1499,8 +1517,13 @@ export interface DashboardData {
   freed_parcels:        number
   freed_area_m2:        number
   plan_area_m2:         number
+  /** Баталгаажсан захирамжийн тоо (decisions.confirmed). */
   total_orders:         number
   total_compensation:   number
+  /** Dashboard-ын чөлөөлөлтүүдээр хайсан захирамжийн төсөл — явцаар. */
+  decisions?:           DashboardDecisions
+  /** Нөхөх олговрын задаргаа. */
+  compensation?:        DashboardCompensation
   status_breakdown:     ParcelStatusStat[]
   timeline:             TimelinePoint[]
   valuation_statuses?:  ValuationStatusStat[]

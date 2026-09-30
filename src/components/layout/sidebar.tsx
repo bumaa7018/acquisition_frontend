@@ -16,6 +16,7 @@ import {
   canViewDecisionDrafts,
   isSeniorSpecialist,
   isFinanceSpecialist,
+  canImportLegacyData,
 } from "@/lib/role-utils";
 import {
   LayoutDashboard,
@@ -48,6 +49,7 @@ import {
   Gavel,
   Hammer,
   Wallet,
+  FileUp,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -59,6 +61,9 @@ const NAV_MAIN = [
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
+  // Хуучин мэдээллийн импорт — ЗӨВХӨН админ (proxy ба импортын үйлчилгээ
+  // backend-ээр дахин шалгана).
+  { href: "/legacy_import", label: "Хуучин мэдээлэл оруулах", icon: FileUp },
 ];
 
 // Хэрэглэгч/ролийн цэс нь эрхээр шүүгдэнэ (доорх canViewUsers/canViewRoles).
@@ -70,6 +75,7 @@ const NAV_ADMIN = [
 const NAV_AUDIT = [
   { href: "/audit_logs", label: "Үйлдлийн лог", icon: History },
 ];
+
 
 const NAV_CONFIG = [
   {
@@ -202,7 +208,7 @@ export function Sidebar() {
   const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
   // Захирамжийн төсөл — decision:read эрхтэй ажилтанд л харагдана.
   const [mainNav, setMainNav] = useState<typeof NAV_MAIN>(
-    NAV_MAIN.filter((item) => item.href !== "/decision_draft"),
+    NAV_MAIN.filter((item) => item.href !== "/decision_draft" && item.href !== "/legacy_import"),
   );
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG, ...NAV_HR].map((i) => i.href);
@@ -238,11 +244,13 @@ export function Sidebar() {
     // Тайлан нь БҮХ чөлөөлөлтийг хуваарилалт үл харгалзан нэгтгэдэг тул
     // backend дээр ахлах мэргэжилтнээр хязгаарлагдсан — цэсийг мөн тэгш байлгана.
     const showReport = isSeniorSpecialist();
+    const showImport = canImportLegacyData();
     setMainNav(
       NAV_MAIN.filter(
         (item) =>
           (item.href !== "/decision_draft" || showDecision) &&
-          (item.href !== "/report" || showReport),
+          (item.href !== "/report" || showReport) &&
+          (item.href !== "/legacy_import" || showImport),
       ),
     );
     setReady(true);

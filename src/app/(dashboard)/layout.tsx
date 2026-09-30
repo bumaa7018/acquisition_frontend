@@ -13,6 +13,7 @@ import {
   isFinanceSpecialist,
   isProfessionalOrg,
   isSeniorSpecialist,
+  canImportLegacyData,
 } from "@/lib/role-utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
@@ -35,6 +36,7 @@ const ROUTE_GUARDS: { match: (p: string) => boolean; allow: () => boolean }[] = 
   { match: (p) => p.startsWith("/users"), allow: canViewUsers },
   { match: (p) => p.startsWith("/roles"), allow: canViewRoles },
   { match: (p) => p.startsWith("/audit_logs"), allow: () => hasPermission("audit:read") },
+  { match: (p) => p.startsWith("/legacy_import"), allow: canImportLegacyData },
   // Тайлан нь БҮХ чөлөөлөлтийг нэгтгэдэг тул backend дээр ахлах мэргэжилтнээр
   // хязгаарлагдсан (`/report/download`, `/report/summary`) — UI мөн тэгнэ.
   { match: (p) => p.startsWith("/report"), allow: isSeniorSpecialist },

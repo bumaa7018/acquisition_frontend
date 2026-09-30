@@ -31,7 +31,6 @@ import {
   Map as MapIcon,
   Layers,
   FileText,
-  Banknote,
   CheckCircle2,
   Clock3,
   RotateCcw,
@@ -1202,8 +1201,11 @@ export default function DashboardPage() {
   const freedParcels     = dashData?.freed_parcels   ?? 0;
   const freedAreaHa      = (dashData?.freed_area_m2  ?? 0) / 10_000;
   const planAreaHa       = (dashData?.plan_area_m2   ?? 0) / 10_000;
-  const totalOrders      = dashData?.total_orders    ?? 0;
-  const totalCompensation = (dashData?.total_compensation ?? 0) / 1_000_000_000;
+  const decisions        = dashData?.decisions;
+  const totalOrders      = decisions?.confirmed ?? dashData?.total_orders ?? 0;
+  const compensation     = dashData?.compensation;
+  const billion          = (v: number | undefined) => (v ?? 0) / 1_000_000_000;
+  const totalCompensation = billion(compensation?.total ?? dashData?.total_compensation);
 
   /* Төлөвийн ӨНГӨ нь `parcel_status` бүртгэлээс. Дашбоардын хариунд
      бүртгэл аль хэдийн ирдэг тул НЭМЭЛТ дуудлага үүсэхгүй. Задаргааны
@@ -1506,52 +1508,69 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── 4 stat cards ──────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        {[
+      {/* ── Stat cards — xl: 12 багана (хил 2, нэгж талбар 2, захирамж 3,
+             олговор 5). Задаргаатай картууд задаргааг БАРУУН талд харуулна
+             (карт доош сунгахгүй). ─────────────────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-12 gap-4">
+        {([
           {
             label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
             sub: "нийт талбай",
             value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
-            pct: 100,
             color: "#02c0ce",
             icon: MapIcon,
             bg: "#02c0ce18",
+            span: "xl:col-span-2",
           },
           {
             label: "НЭГЖ ТАЛБАР",
             sub: "нийт тоо",
             value: isLoading ? null : totalParcels,
-            pct: 100,
             color: "#777edd",
             icon: Layers,
             bg: "#777edd18",
+            span: "xl:col-span-2",
           },
           {
-            label: "НИЙТ ЗАХИРАМЖ",
-            sub: "чөлөөлөлтийн тоо",
+            label: "ЗАХИРАМЖ",
+            sub: <><span className="font-semibold text-[#0acf97]">Баталгаажсан</span> · нийт {decisions?.total ?? 0}</>,
+            // Баруун талын явцын нэрстэй ижил хэмжээтэй.
+            subClass: "text-[11px] text-slate-500 dark:text-slate-400",
             value: isLoading ? null : totalOrders,
-            pct: 100,
             color: "#f9bc0b",
-            icon: FileText,
-            bg: "#f9bc0b18",
+            span: "col-span-2 xl:col-span-3",
+            details: decisions ? [
+              { label: "Баталгаажуулах", value: String(decisions.confirming), color: "#f9bc0b" },
+              { label: "Хянагдаж буй", value: String(decisions.reviewing), color: "#777edd" },
+              { label: "Төсөл", value: String(decisions.draft), color: "#94a3b8" },
+            ] : undefined,
           },
           {
             label: "НИЙТ НӨХӨХ ОЛГОВОР",
             sub: "тэрбум ₮",
             value: isLoading ? null : `${totalCompensation.toFixed(2)} тэр`,
-            pct: 100,
             color: "#0acf97",
-            icon: Banknote,
-            bg: "#0acf9718",
+            span: "col-span-2 xl:col-span-5",
+            details: compensation ? [
+              { label: "Захирамж гарсан", value: `${billion(compensation.issued).toFixed(2)} тэр`, color: "#0acf97",
+                pct: compensation.total ? (compensation.issued / compensation.total) * 100 : 0 },
+              { label: "Захирамжгүй · үнэлгээ баталгаажсан", value: `${billion(compensation.approved).toFixed(2)} тэр`, color: "#0f9ed5",
+                pct: compensation.total ? (compensation.approved / compensation.total) * 100 : 0 },
+              { label: "Захирамжгүй · баталгаажаагүй", value: `${billion(compensation.unapproved).toFixed(2)} тэр`, color: "#f9bc0b",
+                pct: compensation.total ? (compensation.unapproved / compensation.total) * 100 : 0 },
+            ] : undefined,
           },
-        ].map((s) => {
+        ] as {
+          label: string; sub: React.ReactNode; subClass?: string; value: string | number | null; color: string; span: string;
+          icon?: typeof MapIcon; bg?: string;
+          details?: { label: string; value: string; color: string; pct?: number }[];
+        }[]).map((s) => {
           const Icon = s.icon;
           return (
-            <div key={s.label} className="ap-card relative overflow-hidden p-5">
+            <div key={s.label} className={`ap-card relative overflow-hidden p-5 ${s.span}`}>
               <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: s.color }} />
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 shrink-0">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
                     {s.label}
                   </p>
@@ -1560,11 +1579,33 @@ export default function DashboardPage() {
                       {s.value === null ? <Skel w="w-16" /> : s.value}
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{s.sub}</p>
+                  <p className={`mt-1 whitespace-nowrap ${s.subClass ?? "text-[10px] text-slate-400 dark:text-slate-500"}`}>{s.sub}</p>
                 </div>
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: s.bg }}>
-                  <Icon className="h-5 w-5" style={{ color: s.color }} />
-                </div>
+                {Icon && (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: s.bg }}>
+                    <Icon className="h-5 w-5" style={{ color: s.color }} />
+                  </div>
+                )}
+                {s.details && !isLoading && (
+                  <ul className="min-w-0 flex-1 space-y-1 border-l border-slate-100 pl-4 dark:border-white/[0.06]">
+                    {s.details.map((d) => (
+                      <li key={d.label} className="text-[11px] leading-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
+                            <span className="truncate" title={d.label}>{d.label}</span>
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{d.value}</span>
+                        </div>
+                        {d.pct !== undefined && (
+                          <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                            <div className="h-full rounded-full" style={{ width: `${Math.min(100, d.pct)}%`, background: d.color }} />
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           );
