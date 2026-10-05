@@ -342,9 +342,10 @@ export function AcquisitionMap({
   const cqlByKey = useMemo<Record<CqlKey, string>>(
     () => ({
       acquisition: acqFilter,
-      // plan_code байхгүй бол ХООСОН биш "__none__" — хоосон CQL нь GeoServer-т
-      // "шүүлтгүй" гэсэн утгатай тул бүх чөлөөлөлтийн хил зурагдах байсан.
-      plan: `plan_code = '${(planCode ?? "").replace(/'/g, "''") || "__none__"}'`,
+      // plan_code байхгүй (хуучин мэдээллийн импорт — төлөвлөгөөгүй) бол ӨӨРИЙН
+      // хилээр (acquisition_id) — эс бөгөөс хил DB-д байсан ч зурагдахгүй.
+      // Хоосон CQL нь GeoServer-т "шүүлтгүй" тул бүх чөлөөлөлтийн хил зурагдах байсан.
+      plan: planCode?.trim() ? `plan_code = '${planCode.trim().replace(/'/g, "''")}'` : acqFilter,
       au1: buildCodeCql(auCodes.au1, "code"),
       au2: buildCodeCql(auCodes.au2, "code"),
       au3: buildCodeCql(auCodes.au3, "code"),

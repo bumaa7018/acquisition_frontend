@@ -2,39 +2,80 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, FileSpreadsheet, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { canImportLegacyData } from "@/lib/role-utils";
-import { legacyImportApi, type ImportState } from "@/lib/legacy-import/api";
+import { legacyImportApi, type ImportMode, type ImportState } from "@/lib/legacy-import/api";
 import { BoundaryStep } from "./_components/boundary-step";
 import { ParcelStep } from "./_components/parcel-step";
 import { ReportStep } from "./_components/report-step";
 import { SummaryStep } from "./_components/summary-step";
+import { ValuationStep } from "./_components/valuation-step";
+import { ProjectsStep } from "./_components/projects-step";
 import { RollbackDialog } from "./_components/rollback-dialog";
-import { primaryButton, secondaryButton, td, th, theadClass } from "./_components/shared";
+import { GusJobBanner, primaryButton, secondaryButton, td, th, theadClass } from "./_components/shared";
 
-const STEPS = [
-  { key: "boundary", label: "Чөлөөлөлтийн хил" },
-  { key: "parcels", label: "Нэгж талбар" },
-  { key: "reports", label: "Үнэлгээ" },
-  { key: "summary", label: "Нэгтгэл ба оруулах" },
-] as const;
-type StepKey = (typeof STEPS)[number]["key"];
+type StepKey = "boundary" | "parcels" | "reports" | "projects" | "summary";
+
+/** Горим бүрийн алхам: бүтэн — хил → нэгж талбар → үнэлгээ; зөвхөн үнэлгээ — эксэл (+ заавал биш мэдээлэл, хил). */
+const STEPS: Record<ImportMode, { key: StepKey; label: string }[]> = {
+  full: [
+    { key: "boundary", label: "Чөлөөлөлтийн хил" },
+    { key: "parcels", label: "Нэгж талбар" },
+    { key: "reports", label: "Үнэлгээ" },
+    { key: "summary", label: "Нэгтгэл ба оруулах" },
+  ],
+  valuation: [
+    { key: "reports", label: "Үнэлгээний эксэл" },
+    { key: "projects", label: "Чөлөөлөлтийн мэдээлэл ба хил" },
+    { key: "summary", label: "Нэгтгэл ба оруулах" },
+  ],
+};
+
+const MODE_LABEL: Record<ImportMode, string> = { full: "Бүтэн", valuation: "Зөвхөн үнэлгээ" };
+
+const modeOf = (state: ImportState | undefined): ImportMode => state?.session.mode ?? "full";
 
 const STATUS_LABEL: Record<ImportState["session"]["status"], string> = {
   draft: "Ноорог", committing: "Оруулж байна", committed: "Оруулсан", failed: "Амжилтгүй", rolled_back: "Устгасан",
 };
 
-/** Алхам бүр өмнөх алхам нь алдаагүй бол нээгдэнэ. */
+/**
+ * ГУС-ын шалгалт (нэгж талбар / үнэлгээ) явж байгаа эсвэл тасарсан. Тасарсан
+ * ажил нь харгалзах шалгалт ДУУСААГҮЙ үед л — файлыг дахин оруулсны дараа
+ * санах ойд үлдсэн хуучин алдаа алхмыг хаах ёсгүй.
+ */
+const gusJob = (state: ImportState | undefined) => {
+  const job = state?.job;
+  if (!state || !job || job.kind === "commit" || job.state === "done") return null;
+  if (job.state === "failed") {
+    const view = job.kind === "parcels" ? state.parcels : state.reports;
+    if (!view || view.gusDone) return null;
+  }
+  return job;
+};
+
+/** Үнэлгээний ГУС-ын шалгалт дуусаагүй (оруулаагүй бол саад биш). */
+const reportsPending = (state: ImportState) => Boolean(state.reports && !state.reports.gusDone);
+
+/**
+ * Алхам бүр өмнөх алхам нь алдаагүй, ГУС-ын шалгалт нь ДУУССАН бол нээгдэнэ —
+ * дуусаагүй байхад цааш явбал нэгтгэл, тохиргоо дутуу мэдээлэл дээр хийгдэнэ.
+ */
 function reachable(state: ImportState | undefined, step: StepKey): boolean {
   if (!state) return step === "boundary";
   if (state.session.status === "committed" || state.session.status === "rolled_back") return true;
+  if (modeOf(state) === "valuation") {
+    if (step === "reports") return true;
+    return Boolean(state.reports?.canProceed) && !reportsPending(state) && !gusJob(state);
+  }
   if (step === "boundary") return true;
   if (!state.boundary?.canProceed) return false;
   if (step === "parcels") return true;
   if (!state.parcels?.canProceed || !state.parcels.gusDone) return false;
-  return true;
+  if (step === "reports") return true;
+  return !reportsPending(state) && !gusJob(state);
 }
 
 function LegacyImportPage() {
@@ -80,6 +121,9 @@ function LegacyImportPage() {
     if (p.job?.state === "running" || p.status === "committing") {
       queryClient.setQueryData<ImportState>(stateKey, { ...state, job: p.job, session: { ...state.session, status: p.status } });
     } else {
+      if (p.job?.state === "done" && p.job.kind !== "commit" && state.job?.state === "running") {
+        toast.success("ГУС-аас татаж дууслаа — дараагийн алхам руу шилжиж болно");
+      }
       queryClient.invalidateQueries({ queryKey: stateKey });
     }
   }, [progress.data]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -89,7 +133,9 @@ function LegacyImportPage() {
     if (!state) return;
     setStep((current) => {
       if (current !== "boundary") return current;
-      if (state.session.status === "committed" || state.session.status === "rolled_back" || state.reports) return "summary";
+      if (state.session.status === "committed" || state.session.status === "rolled_back") return "summary";
+      if (state.reports) return reachable(state, "summary") ? "summary" : "reports";
+      if (modeOf(state) === "valuation") return "reports";
       if (state.parcels) return "reports";
       if (state.boundary?.canProceed) return "parcels";
       return "boundary";
@@ -99,10 +145,10 @@ function LegacyImportPage() {
   const setState = (next: ImportState) => queryClient.setQueryData(["legacy-import", "session", sessionID], next);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["legacy-import", "session", sessionID] });
 
-  const start = async () => {
+  const start = async (mode: ImportMode) => {
     setCreating(true);
     try {
-      const { id } = await legacyImportApi.create();
+      const { id } = await legacyImportApi.create(mode);
       setStep("boundary");
       router.push(`/legacy_import?session=${id}`);
     } catch (err) {
@@ -127,6 +173,8 @@ function LegacyImportPage() {
   }
 
   const locked = state?.session.status === "committed" || state?.session.status === "committing" || state?.session.status === "rolled_back";
+  const steps = STEPS[modeOf(state)];
+  const nextStep = steps[steps.findIndex((s) => s.key === step) + 1];
 
   return (
     <div className="flex flex-col gap-5">
@@ -146,9 +194,16 @@ function LegacyImportPage() {
         <div className="ap-card space-y-3 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Импортууд</h2>
-            <button className={primaryButton} onClick={start} disabled={creating}>
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Шинэ импорт
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button className={secondaryButton} onClick={() => start("valuation")} disabled={creating}
+                title="Зөвхөн үнэлгээний эксэл — хил, нэгж талбарын файлгүй (архивын адил)">
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Зөвхөн үнэлгээ
+              </button>
+              <button className={primaryButton} onClick={() => start("full")} disabled={creating}
+                title="Чөлөөлөлтийн хил + нэгж талбар + үнэлгээ">
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Шинэ импорт
+              </button>
+            </div>
           </div>
           {sessions.isLoading && <p className="text-[12px] text-slate-500">Уншиж байна…</p>}
           {sessions.error && <p className="text-[12px] text-[#f8285a]">{(sessions.error as Error).message}</p>}
@@ -160,6 +215,7 @@ function LegacyImportPage() {
                   <tr>
                     <th className={th}>Огноо</th>
                     <th className={th}>Хэрэглэгч</th>
+                    <th className={th}>Горим</th>
                     <th className={th}>Төлөв</th>
                     <th className={th}>Чөлөөлөлт</th>
                     <th className={th}>Нэгж талбар</th>
@@ -172,6 +228,7 @@ function LegacyImportPage() {
                     <tr key={s.id} className="border-b border-slate-50 dark:border-white/[0.04]">
                       <td className={td}>{new Date(s.updatedAt).toLocaleString("mn-MN")}</td>
                       <td className={td}>{s.createdBy}</td>
+                      <td className={td}>{MODE_LABEL[s.mode ?? "full"]}</td>
                       <td className={td}>
                         {STATUS_LABEL[s.status]}
                         {s.rollback && (
@@ -181,7 +238,7 @@ function LegacyImportPage() {
                         )}
                       </td>
                       <td className={td}>{s.acquisitions}</td>
-                      <td className={td}>{s.parcels}</td>
+                      <td className={td}>{s.mode === "valuation" ? "—" : s.parcels}</td>
                       <td className={td}>{s.reportRows}</td>
                       <td className={td}>
                         <div className="flex items-center justify-end gap-2">
@@ -234,12 +291,16 @@ function LegacyImportPage() {
       {sessionID && state && (
         <>
           <ol className="ap-card flex flex-wrap gap-2 p-3">
-            {STEPS.map((s, index) => {
+            {modeOf(state) === "valuation" && (
+              <li className="flex items-center px-2 text-[12px] font-semibold text-[#02c0ce]">Зөвхөн үнэлгээ:</li>
+            )}
+            {steps.map((s, index) => {
               const open = reachable(state, s.key);
               const done =
                 (s.key === "boundary" && state.boundary?.canProceed) ||
                 (s.key === "parcels" && state.parcels?.canProceed && state.parcels.gusDone) ||
                 (s.key === "reports" && state.reports?.canProceed && state.reports.gusDone) ||
+                (s.key === "projects" && (state.reports?.projects ?? []).some((p) => p.hasInfo || p.areaM2 !== null)) ||
                 (s.key === "summary" && state.session.status === "committed");
               return (
                 <li key={s.key}>
@@ -265,19 +326,32 @@ function LegacyImportPage() {
             })}
           </ol>
 
+          {gusJob(state) && <GusJobBanner job={gusJob(state)!} />}
+
           {step === "boundary" && <BoundaryStep state={state} onUpdated={setState} locked={locked} />}
           {step === "parcels" && <ParcelStep state={state} onUpdated={setState} locked={locked} />}
-          {step === "reports" && <ReportStep state={state} onUpdated={setState} locked={locked} />}
+          {step === "reports" && (modeOf(state) === "valuation"
+            ? <ValuationStep state={state} onUpdated={setState} locked={locked} />
+            : <ReportStep state={state} onUpdated={setState} locked={locked} />)}
+          {step === "projects" && <ProjectsStep state={state} onUpdated={setState} locked={locked} />}
           {step === "summary" && <SummaryStep state={state} onCommitted={refresh} />}
 
-          {step !== "summary" && (
-            <div className="flex justify-end">
+          {nextStep && (
+            <div className="flex items-center justify-end gap-3">
+              {!reachable(state, nextStep.key) && state.job?.state === "running" && state.job.kind !== "commit" && (
+                <span className="text-[12px] text-slate-500">ГУС-аас татаж дуусахыг хүлээнэ үү</span>
+              )}
+              {!reachable(state, nextStep.key) && !gusJob(state) && reportsPending(state) && (
+                <span className="text-[12px] text-[#f8285a]">ГУС-ын шалгалт дуусаагүй — үнэлгээний файлаа «Дахин шалгах»-аар дахин оруулна уу</span>
+              )}
               <button
                 className={primaryButton}
-                disabled={!reachable(state, STEPS[STEPS.findIndex((s) => s.key === step) + 1]!.key)}
-                onClick={() => setStep(STEPS[STEPS.findIndex((s) => s.key === step) + 1]!.key)}
+                disabled={!reachable(state, nextStep.key)}
+                onClick={() => setStep(nextStep.key)}
               >
-                Дараагийн алхам →
+                {step === "projects" && !(state.reports?.projects ?? []).some((p) => p.hasInfo || p.areaM2 !== null)
+                  ? "Алгасах →"
+                  : "Дараагийн алхам →"}
               </button>
             </div>
           )}

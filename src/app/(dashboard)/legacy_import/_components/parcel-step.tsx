@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fmt, legacyImportApi, type ImportState, type ParcelRow } from "@/lib/legacy-import/api";
 import {
-  FileDrop, FileResults, IssueCell, JobProgress, Stat, StepStatus, firstError, primaryButton, td, th, theadClass, worst,
+  FileDrop, FileResults, IssueCell, Stat, StepStatus, firstError, primaryButton, td, th, theadClass, worst,
   ReadOnlyNotice,
 } from "./shared";
 
@@ -95,10 +95,6 @@ export function ParcelStep({
             {busy ? "Уншиж байна…" : view ? "Дахин шалгах" : "Оруулж шалгах"}
           </button>
         </div>
-        {running && <JobProgress label="ГУС-аас нэгж талбар шалгаж байна" done={state.job!.done} total={state.job!.total} />}
-        {state.job?.kind === "parcels" && state.job.state === "failed" && (
-          <p className="text-[12px] text-[#f8285a]">ГУС-ын шалгалт тасарлаа: {state.job.error}</p>
-        )}
       </div>
       )}
 

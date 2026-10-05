@@ -5,13 +5,13 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fmt, legacyImportApi, type ImportState, type ReportRow } from "@/lib/legacy-import/api";
 import {
-  FileDrop, FileResults, IssueCell, JobProgress, Stat, StepStatus, firstError, primaryButton, td, th, theadClass,
+  FileDrop, FileResults, IssueCell, Stat, StepStatus, firstError, primaryButton, td, th, theadClass,
   ReadOnlyNotice,
 } from "./shared";
 
 type Filter = "diff" | "missing" | "area" | "all";
 
-const MATCH_LABEL: Record<ReportRow["match"], string> = {
+const MATCH_LABEL: Partial<Record<ReportRow["match"], string>> = {
   staged: "нэгж талбарын файлд",
   db: "санд бүртгэлтэй",
   gus: "ГУС-аас шинээр",
@@ -84,7 +84,6 @@ export function ReportStep({
             {busy ? "Уншиж байна…" : view ? "Дахин шалгах" : "Оруулж шалгах"}
           </button>
         </div>
-        {running && <JobProgress label="Нэгж талбарын файлд байхгүй мөрүүдийг ГУС-аас шалгаж байна" done={state.job!.done} total={state.job!.total} />}
       </div>
       )}
 

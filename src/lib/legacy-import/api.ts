@@ -90,15 +90,68 @@ export interface ReportRow {
   totalAmount: number;
   affectedAreaM2: number | null;
   shpAreaM2: number | null;
-  match: "staged" | "db" | "gus" | "missing" | "pending";
+  /** full: staged|db|gus|missing|pending; valuation: gus|excel|failed|synthetic|db|no_project|pending */
+  match: "staged" | "db" | "gus" | "missing" | "pending" | "excel" | "failed" | "synthetic" | "no_project";
   gusOrigin: "info" | "ub" | null;
   issues: Issue[];
+  /** «Зөвхөн үнэлгээ»: төсөл (чөлөөлөлт), системд бүртгэгдэх дугаар. */
+  project?: string;
+  assignedID?: string;
+  idKind?: "real" | "duplicate" | "synthetic";
+}
+
+/** «Зөвхөн үнэлгээ» горимын нэг төсөл = нэг чөлөөлөлт (хилгүй). */
+export interface ValuationProject {
+  name: string;
+  variants: string[];
+  rows: number;
+  parcels: number;
+  amount: number;
+  constructionType: string;
+  category: { general: string; sub?: string };
+  categoryMatched: boolean;
+  /** Category-ийн ID (сонгох талбарын утга); санд алга бол null. */
+  categoryIds: CategoryChoice | null;
+  /** Гараар сонгосон (бүтээн байгуулалтын төрлөөс биш). */
+  categoryChosen: boolean;
+  /** Чөлөөлөлтийн мэдээлэл бөглөсөн эсэх. */
+  hasInfo: boolean;
+  /** Хилийн shapefile-аас; хилгүй бол null. */
+  areaM2: number | null;
+  existing: boolean;
+  issues: Issue[];
+}
+
+/** Ангилал — acquisition_category-ийн ID (мөр). sub хоосон = дэд ангилалгүй. */
+export interface CategoryChoice {
+  general: string;
+  sub: string;
+}
+
+/** Чөлөөлөлтийн «Төслийн мэдээлэл» — бүгд заавал биш. Огноо: YYYY-MM-DD. */
+export interface AcquisitionInfo {
+  implementingOrg: string;
+  responsibleOrg: string;
+  reason: string;
+  startDate: string;
+  endDate: string;
+  nithDecreeNumber: string;
+  groupListNumber: string;
+}
+
+/** «Зөвхөн үнэлгээ»: төсөл бүрийн гараар тохируулсан мэдээлэл. */
+export interface ProjectSettings {
+  /** Байхгүй бол бүтээн байгуулалтын төрлөөс автоматаар. */
+  category?: CategoryChoice;
+  info: AcquisitionInfo;
+  boundary?: { file: string; wkt: string; areaM2: number; issues: Issue[] };
 }
 
 export interface ReportView {
   files: FileInfo[];
   rows: ReportRow[];
   parcelsWithoutReport: { parcelID: string; file: string }[];
+  projects?: ValuationProject[];
   stats: {
     rows: number;
     staged: number;
@@ -113,6 +166,10 @@ export interface ReportView {
     areaDiffs: number;
     balanced: number;
     duplicates: number;
+    /** «Зөвхөн үнэлгээ» */
+    excel?: number;
+    synthetic?: number;
+    projects?: number;
   };
   errors: number;
   warnings: number;
@@ -170,6 +227,8 @@ export interface ImportState {
     createdAt: string;
     updatedAt: string;
     status: "draft" | "committing" | "committed" | "failed" | "rolled_back";
+    /** full — хил + нэгж талбар + үнэлгээ; valuation — зөвхөн үнэлгээний эксэл */
+    mode: ImportMode;
     category: { general: string; sub: string } | null;
     rollback?: RollbackResult;
   };
@@ -181,7 +240,11 @@ export interface ImportState {
   job: Job | null;
   /** «Устгах»-ын түүх. */
   rollbackLog: RollbackLogEntry[] | null;
+  /** «Зөвхөн үнэлгээ»: төслийн нэр → гараар тохируулсан мэдээлэл. */
+  projectSettings: Record<string, ProjectSettings> | null;
 }
+
+export type ImportMode = "full" | "valuation";
 
 export interface SessionListItem {
   id: string;
@@ -189,6 +252,7 @@ export interface SessionListItem {
   createdAt: string;
   updatedAt: string;
   status: ImportState["session"]["status"];
+  mode: ImportMode;
   acquisitions: number;
   parcels: number;
   reportRows: number;
@@ -281,7 +345,7 @@ function upload(path: string, files: File[], fields: Record<string, string> = {}
 export const legacyImportApi = {
   categories: () => call<Category[]>(api.get("/legacy-import/categories")),
   sessions: () => call<SessionListItem[]>(api.get("/legacy-import/sessions")),
-  create: () => call<{ id: string }>(api.post("/legacy-import/sessions")),
+  create: (mode: ImportMode) => call<{ id: string }>(api.post("/legacy-import/sessions", { mode })),
   // silent — дэлгэцийн бүтэн loader-гүй (давтан шинэчлэлт).
   get: (id: string, silent = false) => call<ImportState>(api.get(`/legacy-import/sessions/${id}`, { _silent: silent })),
   /** Арын ажлын явц — хөнгөн, loader-гүй; ажил явж байх үед давтан дуудна. */
@@ -294,6 +358,13 @@ export const legacyImportApi = {
     upload(`sessions/${id}/boundary`, files, { category, subCategory }),
   parcels: (id: string, files: File[]) => upload(`sessions/${id}/parcels`, files),
   reports: (id: string, files: File[]) => upload(`sessions/${id}/reports`, files),
+  /** «Зөвхөн үнэлгээ»: ангилал ба/эсвэл мэдээлэл. category.general = "" → автомат руу буцна. */
+  updateProject: (id: string, body: { name: string; category?: CategoryChoice; info?: AcquisitionInfo }) =>
+    call<ImportState>(api.put(`/legacy-import/sessions/${id}/projects`, body)),
+  projectBoundary: (id: string, project: string, files: File[]) =>
+    upload(`sessions/${id}/project-boundary`, files, { project }),
+  removeProjectBoundary: (id: string, project: string) =>
+    call<ImportState>(api.delete(`/legacy-import/sessions/${id}/project-boundary`, { params: { project } })),
   commit: (id: string) => call<{ id: string; status: string }>(api.post(`/legacy-import/sessions/${id}/commit`)),
   rollbackPreview: (id: string) => call<RollbackPreview>(api.get(`/legacy-import/sessions/${id}/rollback`)),
   // confirm — импортын дугаар: санамсаргүй дуудлагаас хамгаална.

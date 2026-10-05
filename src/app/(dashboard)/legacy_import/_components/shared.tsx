@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Eye, Info, UploadCloud, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, Info, Loader2, UploadCloud, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FileInfo, Issue } from "@/lib/legacy-import/api";
 
@@ -193,6 +193,47 @@ export function JobProgress({ label, done, total }: { label: string; done: numbe
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/[0.08]">
         <div className="h-full bg-[#02c0ce] transition-all" style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+/**
+ * ГУС-ын шалгалт явж байна / тасарсан — алхмын жагсаалтын доор ТОД харуулна.
+ * Дуусах хүртэл дараагийн алхам нээгдэхгүй.
+ */
+export function GusJobBanner({ job }: { job: { kind: string; state: string; done: number; total: number; error?: string } }) {
+  const what = job.kind === "parcels" ? "Нэгж талбарыг" : "Үнэлгээний нэгж талбарыг";
+  if (job.state === "failed") {
+    return (
+      <div className="ap-card flex items-start gap-3 border-l-4 border-[#f8285a] p-4">
+        <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#f8285a]" />
+        <div className="text-[13px]">
+          <p className="font-semibold text-slate-800 dark:text-white">{what} ГУС-аас шалгах ажил тасарлаа</p>
+          <p className="text-slate-500 dark:text-slate-400">
+            {job.error ? `${job.error}. ` : ""}Файлаа «Дахин шалгах»-аар дахин оруулна уу — дуусах хүртэл дараагийн алхам нээгдэхгүй.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const pct = job.total > 0 ? Math.round((job.done * 100) / job.total) : 0;
+  return (
+    <div className="ap-card space-y-2 border-l-4 border-[#02c0ce] p-4" role="status" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-[#02c0ce]" />
+          <p className="text-[14px] font-semibold text-slate-800 dark:text-white">{what} ГУС-аас татаж байна…</p>
+        </div>
+        <span className="text-[13px] font-semibold tabular-nums text-[#02c0ce]">
+          {job.total > 0 ? `${job.done} / ${job.total} · ${pct}%` : "эхэлж байна…"}
+        </span>
+      </div>
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/[0.08]">
+        <div className="h-full bg-[#02c0ce] transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-[12px] text-slate-500 dark:text-slate-400">
+        Дуусахыг хүлээнэ үү — дараагийн алхам дуусмагц нээгдэнэ. Хуудсаа хаасан ч ажил сервер дээр үргэлжилнэ.
+      </p>
     </div>
   );
 }

@@ -94,18 +94,25 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
     );
   }
 
+  const valuationOnly = state.session.mode === "valuation";
+  const parcelCount = valuationOnly
+    ? summary.acquisitions.reduce((sum, a) => sum + a.parcels, 0)
+    : summary.parcels?.total ?? 0;
+
   return (
     <div className="space-y-4">
       <div className="ap-card space-y-3 p-4">
-        <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Оруулах чөлөөлөлтүүд</h2>
+        <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">
+          Оруулах чөлөөлөлтүүд{valuationOnly && <span className="ml-1 text-[12px] font-normal text-slate-500">(зөвхөн үнэлгээ — хил заавал биш)</span>}
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left">
             <thead className={theadClass}>
               <tr>
                 <th className={th}>Чөлөөлөлтийн нэр</th>
-                <th className={th}>Талбай (м²)</th>
+                <th className={th}>{valuationOnly ? "Хилийн талбай (м²)" : "Талбай (м²)"}</th>
                 <th className={th}>Нэгж талбар</th>
-                <th className={th}>Хилийн гадна</th>
+                {!valuationOnly && <th className={th}>Хилийн гадна</th>}
                 <th className={th}>Үнэлгээний мөр</th>
               </tr>
             </thead>
@@ -116,9 +123,9 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
                     <b>{a.name || a.planParcelID}</b>
                     {a.existing && <span className="ml-1 text-[11px] text-sky-600">(шинэчлэгдэнэ)</span>}
                   </td>
-                  <td className={td}>{fmt(a.areaM2)}</td>
+                  <td className={td}>{valuationOnly && a.areaM2 === null ? <span className="text-slate-400">хилгүй</span> : fmt(a.areaM2)}</td>
                   <td className={td}>{fmt(a.parcels)}</td>
-                  <td className={td}>{a.outside ? <span className="text-[#f8285a]">{a.outside}</span> : 0}</td>
+                  {!valuationOnly && <td className={td}>{a.outside ? <span className="text-[#f8285a]">{a.outside}</span> : 0}</td>}
                   <td className={td}>{fmt(a.reportRows)}</td>
                 </tr>
               ))}
@@ -130,7 +137,16 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="ap-card space-y-3 p-4">
           <h3 className="text-[14px] font-semibold text-slate-800 dark:text-white">Нэгж талбар</h3>
-          {summary.parcels ? (
+          {valuationOnly && summary.reports ? (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <Stat label="Бүртгэгдэх" value={fmt(parcelCount)} />
+              <Stat label="ГУС-аас" value={fmt(summary.reports.gus)} tone="good" />
+              <Stat label="ГУС-д олдоогүй" value={fmt(summary.reports.excel ?? 0)} tone={summary.reports.excel ? "warn" : "default"} />
+              <Stat label="Зөвхөн data_ub" value={fmt(summary.reports.gusFromUb)} tone={summary.reports.gusFromUb ? "warn" : "default"} />
+              <Stat label="Дугааргүй / давхардсан" value={`${fmt(summary.reports.synthetic ?? 0)} / ${fmt(summary.reports.duplicates)}`} />
+              <Stat label="Санд байгаа (орохгүй)" value={fmt(summary.reports.db)} />
+            </div>
+          ) : summary.parcels ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Stat label="Нийт" value={fmt(summary.parcels.total)} />
               <Stat label="Хилийн гадна" value={fmt(summary.parcels.outside)} tone={summary.parcels.outside ? "bad" : "good"} />
@@ -148,11 +164,18 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Stat label="Мөр" value={fmt(summary.reports.rows)} />
               <Stat label="Нийт дүн (₮)" value={fmt(summary.reports.totalAmount)} />
-              <Stat label="Олдоогүй нэгж талбар" value={fmt(summary.reports.missing)} tone={summary.reports.missing ? "bad" : "good"}
-                hint={`${fmt(summary.reports.missingAmount)}₮`} />
-              <Stat label="ГУС-аас шинээр" value={fmt(summary.reports.gus)} />
-              <Stat label="Үнэлгээгүй нэгж талбар" value={fmt(summary.reports.withoutReport)} tone={summary.reports.withoutReport ? "warn" : "good"} />
-              <Stat label="Талбайн зөрүү" value={fmt(summary.reports.areaDiffs)} tone={summary.reports.areaDiffs ? "warn" : "good"} />
+              {valuationOnly ? (
+                <Stat label="Орохгүй мөр" value={fmt(summary.reports.db + summary.reports.missing)}
+                  tone={summary.reports.db + summary.reports.missing ? "bad" : "good"} hint={`${fmt(summary.reports.missingAmount)}₮`} />
+              ) : (
+                <>
+                  <Stat label="Олдоогүй нэгж талбар" value={fmt(summary.reports.missing)} tone={summary.reports.missing ? "bad" : "good"}
+                    hint={`${fmt(summary.reports.missingAmount)}₮`} />
+                  <Stat label="ГУС-аас шинээр" value={fmt(summary.reports.gus)} />
+                  <Stat label="Үнэлгээгүй нэгж талбар" value={fmt(summary.reports.withoutReport)} tone={summary.reports.withoutReport ? "warn" : "good"} />
+                  <Stat label="Талбайн зөрүү" value={fmt(summary.reports.areaDiffs)} tone={summary.reports.areaDiffs ? "warn" : "good"} />
+                </>
+              )}
             </div>
           ) : <p className="text-[12px] text-slate-500">Оруулаагүй — зөвхөн чөлөөлөлт, нэгж талбар орно</p>}
         </div>
@@ -191,7 +214,7 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
       <ConfirmDialog
         open={confirm}
         title="Өгөгдлийн санд оруулах уу?"
-        description={`${summary.acquisitions.length} чөлөөлөлт, ${summary.parcels?.total ?? 0} нэгж талбар, ${summary.reports?.rows ?? 0} үнэлгээний мөрийг системд бүртгэнэ.`}
+        description={`${summary.acquisitions.length} чөлөөлөлт, ${parcelCount} нэгж талбар, ${summary.reports?.rows ?? 0} үнэлгээний мөрийг системд бүртгэнэ.`}
         confirmLabel="Оруулах"
         confirmColor="#02c0ce"
         onConfirm={commit}
