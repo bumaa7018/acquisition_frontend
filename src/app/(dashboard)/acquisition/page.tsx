@@ -602,8 +602,8 @@ export default function LandPage() {
   const HEADERS: SortColumn[] = [
     { label: "Төлөвлөгөө", key: "plan_code" },
     { label: "Чөлөөлөлтийн нэр", key: "acquisition_name" },
-    { label: "Ерөнхий ангилал", key: "general_category" },
-    { label: "Дэд ангилал", key: "sub_category" },
+    // Ерөнхий ба дэд ангилал НЭГ баганад (дээр ерөнхий, доор дэд) — эрэмбэ ерөнхийгөөр.
+    { label: "Ангилал", key: "general_category" },
     { label: "Статус", key: "status" },
     { label: "Талбай", key: "area_m2" },
     { label: "Эхлэх", key: "start_date" },
@@ -754,7 +754,7 @@ export default function LandPage() {
               ) : !displayData.length ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={HEADERS.length}
                     className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                   >
                     <FileText className="mx-auto mb-2 h-8 w-8 opacity-30" />
@@ -814,21 +814,23 @@ export default function LandPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 align-top text-[12px] text-slate-600 dark:text-slate-300">
-                        <span
-                          title={land.general_category_name || undefined}
-                          className="block min-w-[120px] max-w-[200px] break-words leading-snug"
-                        >
-                          {land.general_category_name || "—"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 align-top text-[12px] text-slate-600 dark:text-slate-300">
-                        <span
-                          title={land.sub_category_name || undefined}
-                          className="block min-w-[120px] max-w-[200px] break-words leading-snug"
-                        >
-                          {land.sub_category_name || "—"}
-                        </span>
+                      <td className="px-5 py-3.5 align-top">
+                        <div className="min-w-[140px] max-w-[220px]">
+                          <p
+                            title={land.general_category_name || undefined}
+                            className="text-[12px] text-slate-600 dark:text-slate-300 break-words leading-snug"
+                          >
+                            {land.general_category_name || "—"}
+                          </p>
+                          {land.sub_category_name && (
+                            <p
+                              title={land.sub_category_name}
+                              className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500 break-words leading-snug"
+                            >
+                              {land.sub_category_name}
+                            </p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <span

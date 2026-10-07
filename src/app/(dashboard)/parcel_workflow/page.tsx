@@ -1,12 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parcelWorkflowApi, parcelStatusApi } from "@/lib/api";
+import { parcelWorkflowApi, parcelStatusApi, documentTypeApi } from "@/lib/api";
+import { sortDocumentTypes } from "@/lib/document-types";
 import { getApiError } from "@/lib/utils";
-import { ArrowRight, GitBranch, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, GitBranch, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelWorkflow } from "@/types";
 import { getParcelStatusStyle } from "@/types";
+import { DocumentTypeChecklist } from "./_components/document-type-checklist";
 
 const inputCls =
   "h-9 w-full rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -38,6 +40,17 @@ export default function ParcelWorkflowPage() {
   const [fromStatusId, setFromStatusId] = useState<string>("");
   const [toStatusId, setToStatusId] = useState<string>("");
   const [sortOrder, setSortOrder] = useState<string>("0");
+  // Шилжилтэд ЗААВАЛ байх хавсралт — нэмэх маягт ба засаж буй шилжилт.
+  const [newDocs, setNewDocs] = useState<number[]>([]);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDocs, setEditDocs] = useState<number[]>([]);
+
+  const { data: docTypes = [] } = useQuery({
+    queryKey: ["document-types", "parcel"],
+    queryFn: () => documentTypeApi.list("parcel"),
+    staleTime: 60_000,
+  });
+  const sortedDocTypes = useMemo(() => sortDocumentTypes(docTypes), [docTypes]);
 
   const { data: workflows = [], isLoading } = useQuery({
     queryKey: ["parcel-workflow"],
@@ -55,6 +68,7 @@ export default function ParcelWorkflowPage() {
         from_status_id: fromStatusId ? Number(fromStatusId) : null,
         to_status_id: Number(toStatusId),
         sort_order: sortOrder ? Number(sortOrder) : 0,
+        document_type_ids: newDocs,
       }),
     onSuccess: () => {
       toast.success("Шилжилт нэмэгдлээ");
@@ -62,6 +76,7 @@ export default function ParcelWorkflowPage() {
       setFromStatusId("");
       setToStatusId("");
       setSortOrder("0");
+      setNewDocs([]);
     },
     onError: (err) => toast.error(getApiError(err, "Нэмэхэд алдаа гарлаа")),
   });
@@ -74,6 +89,21 @@ export default function ParcelWorkflowPage() {
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
+
+  const saveDocsMutation = useMutation({
+    mutationFn: ({ id, ids }: { id: number; ids: number[] }) => parcelWorkflowApi.setRequiredDocuments(id, ids),
+    onSuccess: () => {
+      toast.success("Заавал хавсралт хадгалагдлаа");
+      queryClient.invalidateQueries({ queryKey: ["parcel-workflow"] });
+      setEditingId(null);
+    },
+    onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
+  });
+
+  const startEdit = (w: ParcelWorkflow) => {
+    setEditDocs((w.required_documents ?? []).map((d) => d.document_type_id));
+    setEditingId(w.id);
+  };
 
   const handleCreate = () => {
     if (!toStatusId) {
@@ -155,6 +185,15 @@ export default function ParcelWorkflowPage() {
           </div>
 
           <div>
+            <label className={labelCls}>Заавал хавсралт</label>
+            <DocumentTypeChecklist types={sortedDocTypes} value={newDocs} onChange={setNewDocs}
+              disabled={createMutation.isPending} />
+            <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">
+              Энэ шилжилтийг хийхийн өмнө нэгж талбарт орсон байх ёстой хавсралт (заавал биш)
+            </p>
+          </div>
+
+          <div>
             <label className={labelCls}>Эрэмбэ</label>
             <input
               type="number"
@@ -215,26 +254,82 @@ export default function ParcelWorkflowPage() {
                       </span>
                     </div>
                     <div className="ml-4 space-y-1.5">
-                      {items.map((w) => (
-                        <div
-                          key={w.id}
-                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 dark:border-[#37394d] px-3 py-2 bg-slate-50/50 dark:bg-[#1a1d20]"
-                        >
-                          <StatusBadge name={w.to_status_name} id={w.to_status_id} />
-                          <div className="flex items-center gap-2 ml-auto">
-                            <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                              #{w.sort_order}
-                            </span>
-                            <button
-                              onClick={() => deleteMutation.mutate(w.id)}
-                              disabled={deleteMutation.isPending}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                      {items.map((w) => {
+                        const docs = sortDocumentTypes(
+                          (w.required_documents ?? []).map((d) => ({ ...d, type: d.document_type_code, name: d.document_type_name })),
+                        );
+                        const isEditing = editingId === w.id;
+                        return (
+                          <div
+                            key={w.id}
+                            className="rounded-lg border border-slate-100 dark:border-[#37394d] px-3 py-2 bg-slate-50/50 dark:bg-[#1a1d20]"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <StatusBadge name={w.to_status_name} id={w.to_status_id} />
+                              <div className="flex items-center gap-2 ml-auto">
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                                  #{w.sort_order}
+                                </span>
+                                <button
+                                  onClick={() => startEdit(w)}
+                                  disabled={editingId !== null}
+                                  title="Заавал хавсралт засах"
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-[#02c0ce] hover:bg-[#02c0ce]/10 disabled:opacity-40 transition-colors"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => deleteMutation.mutate(w.id)}
+                                  disabled={deleteMutation.isPending}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            {/* Энэ шилжилтэд ЗААВАЛ байх хавсралт */}
+                            {!isEditing && (
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                <Paperclip className="h-3 w-3 shrink-0 text-slate-400" />
+                                {docs.length === 0 ? (
+                                  <span className="text-[11.5px] text-slate-400 dark:text-slate-500">Заавал хавсралтгүй</span>
+                                ) : (
+                                  docs.map((d) => (
+                                    <span
+                                      key={d.document_type_id}
+                                      className="rounded-md bg-[#02c0ce]/10 px-2 py-0.5 text-[11.5px] font-medium text-[#02a3af] dark:text-[#3fd4df]"
+                                    >
+                                      {d.document_type_name}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                            {isEditing && (
+                              <div className="mt-2 space-y-2">
+                                <DocumentTypeChecklist types={sortedDocTypes} value={editDocs} onChange={setEditDocs}
+                                  disabled={saveDocsMutation.isPending} />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    disabled={saveDocsMutation.isPending}
+                                    className="h-8 rounded-lg border border-slate-200 px-3 text-[12.5px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-[#37394d] dark:text-slate-300 dark:hover:bg-[#252630]"
+                                  >
+                                    Болих
+                                  </button>
+                                  <button
+                                    onClick={() => saveDocsMutation.mutate({ id: w.id, ids: editDocs })}
+                                    disabled={saveDocsMutation.isPending}
+                                    className="h-8 rounded-lg bg-[#02c0ce] px-3 text-[12.5px] font-semibold text-white hover:bg-[#02c0ce]/90 disabled:opacity-50"
+                                  >
+                                    {saveDocsMutation.isPending ? "Хадгалж байна..." : "Хадгалах"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -243,6 +338,7 @@ export default function ParcelWorkflowPage() {
           )}
         </div>
       </div>
+
     </div>
   );
 }

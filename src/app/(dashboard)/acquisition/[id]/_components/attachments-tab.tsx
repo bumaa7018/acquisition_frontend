@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileText, Upload, Trash2, Download, Eye, X, Paperclip } from "lucide-react";
 import { landApi, documentTypeApi } from "@/lib/api";
+import { sortDocumentTypes } from "@/lib/document-types";
 import { formatDate, getApiError } from "@/lib/utils";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { documentLink } from "@/lib/document-url";
@@ -186,7 +187,7 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
                   <option value="">— Сонгох —</option>
-                  {docTypes.map(t => (
+                  {sortDocumentTypes(docTypes).map(t => (
                     <option key={t.id} value={t.id}>{t.name}</option>
                   ))}
                 </select>

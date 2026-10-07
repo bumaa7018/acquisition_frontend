@@ -71,7 +71,7 @@ import type {
   ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
-  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, BoundaryHistory, BoundaryPreview, FundingSource,
+  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, BoundaryHistory, BoundaryPreview, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
@@ -1289,6 +1289,19 @@ export const landApi = {
 }
 
 // ── Global Parcels ────────────────────────────────────
+/** «Нөхөх олговор олгосон баримт»-ын олголтын шат ба огноо. */
+export interface DocumentPaymentInput {
+  stage: "60" | "40" | "full";
+  /** YYYY-MM-DD */
+  date: string;
+}
+
+export function appendDocumentPayment(fd: FormData, payment?: DocumentPaymentInput) {
+  if (!payment) return
+  fd.append('payment_stage', payment.stage)
+  if (payment.date) fd.append('payment_date', payment.date)
+}
+
 export const parcelApi = {
   list: async (params?: ParcelListParams) => {
     const q = parcelListSearchParams(params)
@@ -1313,11 +1326,13 @@ export const parcelApi = {
     api.post(`/parcels/${id}/payments`, body).then(r => r.data),
   listDocuments: (id: string) =>
     api.get<ApiResponse<Document[]>>(`/parcels/${id}/documents`).then(r => r.data.data ?? []),
-  uploadDocument: (id: string, file: File, documentTypeId?: number, name?: string) => {
+  // payment — «Нөхөх олговор олгосон баримт»: шат (60 | 40 | full) ба олгосон огноо (YYYY-MM-DD).
+  uploadDocument: (id: string, file: File, documentTypeId?: number, name?: string, payment?: DocumentPaymentInput) => {
     const fd = new FormData()
     fd.append('file', file)
     if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
     if (name?.trim()) fd.append('name', name.trim())
+    appendDocumentPayment(fd, payment)
     return api.post<ApiResponse<Document>>(`/parcels/${id}/documents`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data)
@@ -1359,7 +1374,9 @@ export const parcelApi = {
   // болж бүртгэгдээд явцын түүхэнд холбоосоороо гарна.
   // fileName — хавсралтын ХАРАГДАХ нэр (хэрэглэгч засна). Хоосон бол backend
   // файлын нэрийг хэрэглэнэ.
-  updateStatus: (acqId: string, parcelId: string, statusId: number, reason?: string, file?: File | null, fileName?: string) => {
+  // documentTypeId — хавсралтын төрөл: явцад заавал хавсралт тохируулсан бол
+  // тэр төрлөөр бүртгэгдэж шаардлагыг хангана.
+  updateStatus: (acqId: string, parcelId: string, statusId: number, reason?: string, file?: File | null, fileName?: string, documentTypeId?: number) => {
     const url = `/land-acquisitions/${acqId}/parcels/${parcelId}/status`
     if (file) {
       const fd = new FormData()
@@ -1367,12 +1384,17 @@ export const parcelApi = {
       fd.append('reason', reason ?? "")
       fd.append('file', file)
       if (fileName?.trim()) fd.append('file_name', fileName.trim())
+      if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
       return api.patch(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
     }
     return api.patch(url, { status_id: statusId, reason: reason ?? "" })
   },
   listStatusHistory: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelStatusHistory[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-history`)
+      .then(r => r.data.data ?? []),
+  /** statusId руу шилжихэд шаардлагатай хавсралт бүр нэгж талбарт орсон эсэх. */
+  getStatusRequirements: (acqId: string, parcelId: string, statusId: number) =>
+    api.get<ApiResponse<ParcelStatusRequirement[]>>(`/land-acquisitions/${acqId}/parcels/${parcelId}/status-requirements`, { params: { status_id: statusId } })
       .then(r => r.data.data ?? []),
 }
 
@@ -1395,9 +1417,13 @@ export const settingsApi = {
 export const parcelWorkflowApi = {
   list: () =>
     api.get<ApiResponse<ParcelWorkflow[]>>('/parcel-workflow').then(r => r.data.data ?? []),
-  create: (body: { from_status_id: number | null; to_status_id: number; sort_order?: number }) =>
+  // document_type_ids — энэ шилжилтэд ЗААВАЛ байх хавсралт (заавал биш).
+  create: (body: { from_status_id: number | null; to_status_id: number; sort_order?: number; document_type_ids?: number[] }) =>
     api.post<{ code: number; data: ParcelWorkflow }>('/parcel-workflow', body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-workflow/${id}`),
+  /** Шилжилтийн заавал хавсралтыг БҮХЭЛД нь солино (хоосон = шаардлагагүй). */
+  setRequiredDocuments: (workflowId: number, documentTypeIds: number[]) =>
+    api.put(`/parcel-workflow/${workflowId}/required-documents`, { document_type_ids: documentTypeIds }),
 }
 
 // ── Report rows ───────────────────────────────────────

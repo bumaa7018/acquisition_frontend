@@ -3,7 +3,7 @@
 // Backend-д /prof prefix-тэй тусдаа route group байна —
 // JWT-ийн `valuation_org` claim + org_id-оор хамгаалагдана.
 
-import apiClient from '@/lib/api'
+import apiClient, { appendDocumentPayment, type DocumentPaymentInput } from '@/lib/api'
 import type {
   ApiResponse,
   PaginatedResponse,
@@ -245,11 +245,12 @@ class ProfApiService {
       .then(r => r.data.data ?? [])
   }
 
-  profUploadParcelDocument(parcelId: string, file: File, documentTypeId?: number, name?: string): Promise<Document | undefined> {
+  profUploadParcelDocument(parcelId: string, file: File, documentTypeId?: number, name?: string, payment?: DocumentPaymentInput): Promise<Document | undefined> {
     const fd = new FormData()
     fd.append('file', file)
     if (documentTypeId) fd.append('document_type_id', String(documentTypeId))
     if (name?.trim()) fd.append('name', name.trim())
+    appendDocumentPayment(fd, payment)
     return apiClient
       .post<ApiResponse<Document>>(`/prof/parcels/${parcelId}/documents`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' },

@@ -1,7 +1,15 @@
 "use client";
 import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parcelApi, documentTypeApi } from "@/lib/api";
+import { parcelApi, documentTypeApi, type DocumentPaymentInput } from "@/lib/api";
+import { sortDocumentTypes } from "@/lib/document-types";
+import {
+  COMPENSATION_RECEIPT_TYPE,
+  PAYMENT_STAGE_OPTIONS,
+  paymentStageLabel,
+  todayISO,
+  withPaymentSuffix,
+} from "@/lib/payment-stage";
 import { profApi } from "@/lib/prof-api";
 import { shouldUseProfessionalOrgApi } from "@/lib/role-utils";
 import { formatDate, getApiError } from "@/lib/utils";
@@ -59,6 +67,9 @@ export function DocumentsTab({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState("");
   const [documentTypeId, setDocumentTypeId] = useState<number | "">("");
+  // «Нөхөх олговор олгосон баримт» — олголтын шат ба огноо (өнөөдрөөр санал болгоно).
+  const [paymentStage, setPaymentStage] = useState<DocumentPaymentInput["stage"] | "">("");
+  const [paymentDate, setPaymentDate] = useState(todayISO());
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
 
   // parcel_document-д бүртгэгдсэн БҮХ файл энд харагдана (үнэлгээний эх Excel,
@@ -84,19 +95,22 @@ export function DocumentsTab({
       file,
       typeId,
       name,
+      payment,
     }: {
       file: File;
       typeId: number;
       name: string;
+      payment?: DocumentPaymentInput;
     }) =>
       useProfApi
-        ? profApi.profUploadParcelDocument(parcelId, file, typeId, name)
-        : parcelApi.uploadDocument(parcelId, file, typeId, name),
-    onSuccess: () => {
+        ? profApi.profUploadParcelDocument(parcelId, file, typeId, name, payment)
+        : parcelApi.uploadDocument(parcelId, file, typeId, name, payment),
+    onSuccess: (_doc, vars) => {
       toast.success("Баримт бичиг хавсаргагдлаа");
       queryClient.invalidateQueries({
         queryKey: ["parcel-documents", parcelId],
       });
+      if (vars.payment) invalidatePaymentProgress();
       closeModal();
     },
     onError: (err) =>
@@ -104,23 +118,37 @@ export function DocumentsTab({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (docId: string) =>
+    mutationFn: (doc: Document) =>
       useProfApi
-        ? profApi.profDeleteParcelDocument(parcelId, docId)
-        : parcelApi.deleteDocument(parcelId, docId).then(() => undefined),
-    onSuccess: () => {
+        ? profApi.profDeleteParcelDocument(parcelId, doc.id)
+        : parcelApi.deleteDocument(parcelId, doc.id).then(() => undefined),
+    onSuccess: (_res, doc) => {
       toast.success("Баримт бичиг устгагдлаа");
       queryClient.invalidateQueries({
         queryKey: ["parcel-documents", parcelId],
       });
+      if (doc.payment_stage) invalidatePaymentProgress();
     },
     onError: (err) => toast.error(getApiError(err, "Устгахад алдаа гарлаа")),
   });
+
+  // Олголтын гүйцэтгэл нэгж талбарт хадгалагддаг тул жагсаалт, дэлгэрэнгүй,
+  // эх хэвлэлийг шинэчилнэ.
+  function invalidatePaymentProgress() {
+    queryClient.invalidateQueries({ queryKey: ["parcel-full"] });
+    queryClient.invalidateQueries({ queryKey: ["land-parcels"] });
+    queryClient.invalidateQueries({ queryKey: ["global-parcels"] });
+  }
+
+  const isPaymentReceipt =
+    docTypes.find((x) => x.id === documentTypeId)?.type === COMPENSATION_RECEIPT_TYPE;
 
   function openModal() {
     setSelectedFile(null);
     setFileName("");
     setDocumentTypeId("");
+    setPaymentStage("");
+    setPaymentDate(todayISO());
     setModalOpen(true);
   }
 
@@ -129,6 +157,8 @@ export function DocumentsTab({
     setSelectedFile(null);
     setFileName("");
     setDocumentTypeId("");
+    setPaymentStage("");
+    setPaymentDate(todayISO());
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -167,10 +197,19 @@ export function DocumentsTab({
       toast.error("Файлын нэр оруулна уу");
       return;
     }
+    if (isPaymentReceipt && !paymentStage) {
+      toast.error("Олговрын олголтын шатыг (60%, 40%, бүрэн) сонгоно уу");
+      return;
+    }
+    if (isPaymentReceipt && !paymentDate) {
+      toast.error("Олгосон огноог оруулна уу");
+      return;
+    }
     uploadMutation.mutate({
       file: selectedFile,
       typeId: documentTypeId as number,
       name: fileName,
+      payment: isPaymentReceipt && paymentStage ? { stage: paymentStage, date: paymentDate } : undefined,
     });
   }
 
@@ -257,6 +296,11 @@ export function DocumentsTab({
                             {typeName} ·
                           </span>
                         )}
+                        {doc.payment_date && (
+                          <span className="mr-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                            {paymentStageLabel(doc.payment_stage ?? 0)} олгосон: {doc.payment_date} ·
+                          </span>
+                        )}
                         {formatSize(doc.size_bytes)} ·{" "}
                         {formatDate(doc.uploaded_at)}
                       </p>
@@ -281,9 +325,13 @@ export function DocumentsTab({
                           onClick={() =>
                             setPendingConfirm({
                               title: "Баримт бичиг устгах уу?",
+                              // Олговрын баримт устгахад нэгж талбарын олголтын гүйцэтгэл дагаж өөрчлөгдөнө.
+                              description: doc.payment_stage
+                                ? `Нэгж талбарын нөхөх олговрын олголтын гүйцэтгэлээс ${paymentStageLabel(doc.payment_stage)} хасагдана.`
+                                : undefined,
                               confirmLabel: "Устгах",
                               confirmColor: "#f1556c",
-                              onConfirm: () => deleteMutation.mutate(doc.id),
+                              onConfirm: () => deleteMutation.mutate(doc),
                             })
                           }
                           className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
@@ -456,13 +504,57 @@ export function DocumentsTab({
                   className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
                 >
                   <option value="">— Сонгох —</option>
-                  {docTypes.map((t) => (
+                  {sortDocumentTypes(docTypes).map((t) => (
                     <option key={t.id} value={t.id}>
                       {t.name}
                     </option>
                   ))}
                 </select>
               </div>
+
+              {/* «Нөхөх олговор олгосон баримт» — олголтын шат ба огноо */}
+              {isPaymentReceipt && (
+                <div className="space-y-3 rounded-lg border border-[#02c0ce]/25 bg-[#02c0ce]/[0.05] p-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                      Олголтын шат <span className="text-red-400">*</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {PAYMENT_STAGE_OPTIONS.map((o) => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => setPaymentStage(o.value)}
+                          className={`h-9 rounded-lg border text-[13px] font-semibold transition-colors ${
+                            paymentStage === o.value
+                              ? "border-[#02c0ce] bg-[#02c0ce] text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#252630] dark:text-slate-300"
+                          }`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">
+                      Олгосон огноо <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={paymentDate}
+                      max={todayISO()}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className="w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#252630] px-3 text-[13px] text-slate-700 dark:text-slate-200 outline-none focus:border-[#02c0ce] transition-colors"
+                    />
+                  </div>
+                  {paymentStage && fileName.trim() && (
+                    <p className="text-[11.5px] text-slate-500 dark:text-slate-400">
+                      Хадгалагдах нэр: <b className="text-slate-700 dark:text-slate-200">{withPaymentSuffix(fileName, paymentStage)}</b>
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* File picker */}
               <div className="space-y-1.5">

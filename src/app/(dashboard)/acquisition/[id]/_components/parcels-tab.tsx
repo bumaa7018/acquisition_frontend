@@ -1,4 +1,5 @@
 "use client";
+import { CompensationPaymentBadge } from "@/components/ui/compensation-payment-badge";
 import React, { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,7 +13,7 @@ import { toast } from "sonner";
 import { AlertCircle, Check, Download, Info, RefreshCw, X } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { formatArea, getApiError } from "@/lib/utils";
+import { getApiError } from "@/lib/utils";
 import { runSequentialWithDelay } from "@/lib/sequential-runner";
 import { canAccessParcel, getCurrentOrgId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
 import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
@@ -110,15 +111,21 @@ const COLUMNS: SortColumn[] = [
   { label: "" },
   { label: "Дугаар", key: "parcel_id" },
   { label: "Өмчлөгч, эзэмшигч", key: "holder" },
-  { label: "Баг", key: "au3_code" },
+  { label: "Хаяг", key: "au3_code" },
   { label: "Эрхийн төрөл", key: "right_type" },
   { label: "Газрын зориулалт", key: "landuse" },
-  { label: "Талбай", key: "area_m2" },
-  { label: "Давхцал", key: "acquisition_area_m2" },
-  { label: "Нөхөн төлбөр", key: "compensation" },
+  // Нөлөөлөлд өртсөн (давхцал) ба үндсэн талбай НЭГ баганад: «120/100».
+  { label: "Талбай", sublabel: "Нөлөөлөлд өртсөн/Үндсэн", key: "area_m2" },
+  // Олговрын дүн ба төлбөр олголтын хувь НЭГ баганад (дээр дүн, доор олголт).
+  { label: "Нөхөн төлбөр", sublabel: "Төлбөр олголт", key: "compensation" },
   { label: "Төлөв", key: "status_id" },
   { label: "" },
 ];
+
+/** Талбайн тоо (м² нэгжгүй) — «Талбай» баганын «нөлөөлөлд өртсөн/үндсэн». */
+function areaNumber(m2?: number | null): string {
+  return m2 == null ? "—" : m2.toLocaleString("mn-MN", { maximumFractionDigits: 2 });
+}
 
 function parcelListParams(
   filter: ParcelFilter,
@@ -578,7 +585,7 @@ export function ParcelsTab({
                 {visibleParcels.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={COLUMNS.length}
                       className="px-5 py-12 text-center text-[13px] text-slate-400 dark:text-slate-500"
                     >
                       Нэгж талбар олдсонгүй
@@ -648,7 +655,14 @@ export function ParcelsTab({
                           )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">
-                          {p.au3_code}
+                          {/* Хаяг — аймаг/хот, сум/дүүрэг, баг/хорооны НЭР (au1/au2/au3.name),
+                              дараа нь гудамж, хашаа. КОДЫГ харуулахгүй — хоосон хэсэг алгасагдана. */}
+                          <span className="block min-w-[140px] max-w-[240px] break-words leading-snug">
+                            {[p.au1_name, p.au2_name, p.au3_name, p.address_streetname, p.address_khashaa]
+                              .map((v) => v?.trim())
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                          </span>
                         </td>
                         <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
                           {RIGHT_TYPE_OPTIONS.find(
@@ -656,13 +670,15 @@ export function ParcelsTab({
                           )?.label || "—"}
                         </td>
                         <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
-                          {p.landuse || "—"}
+                          {/* Зориулалт — код | нэр (landuse_name). */}
+                          {[p.landuse, p.landuse_name].map((v) => v?.trim()).filter(Boolean).join(" | ") || "—"}
                         </td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                          {formatArea(p.area_m2)}
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                          {formatArea(p.acquisition_area_m2)}
+                        <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 whitespace-nowrap tabular-nums">
+                          <span className="font-semibold text-amber-500 dark:text-amber-400">
+                            {areaNumber(p.acquisition_area_m2)}
+                          </span>
+                          /{areaNumber(p.area_m2)}
+                          <span className="ml-0.5 text-slate-400 dark:text-slate-500">м²</span>
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex flex-col gap-1">
@@ -679,6 +695,9 @@ export function ParcelsTab({
                             {cashAmt === 0 && landGrantCount === 0 && (
                               <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
+                          </div>
+                          <div className="mt-1.5 border-t border-slate-100 pt-1.5 dark:border-white/[0.06]">
+                            <CompensationPaymentBadge info={p} />
                           </div>
                         </td>
                         <td className="px-4 py-2.5">

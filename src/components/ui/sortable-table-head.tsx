@@ -29,6 +29,8 @@ export function nextSortState(
  */
 export type SortColumn = {
   label: string;
+  /** Гарчгийн доор (шинэ мөрөнд) жижиг тайлбар — ж: «Үндсэн/Нөлөөлөлд өртсөн». */
+  sublabel?: string;
   key?: string;
   className?: string;
 };
@@ -58,6 +60,7 @@ export function SortableHeaderRow({
           return (
             <th key={i} className={cls}>
               {col.label}
+              {col.sublabel && <Sublabel text={col.sublabel} />}
             </th>
           );
         }
@@ -100,9 +103,18 @@ export function SortableHeaderRow({
                 }`}
               />
             </button>
+            {col.sublabel && <Sublabel text={col.sublabel} />}
           </th>
         );
       })}
     </tr>
+  );
+}
+
+function Sublabel({ text }: { text: string }) {
+  return (
+    <span className="block text-[10px] font-medium normal-case tracking-normal text-slate-400/80 dark:text-slate-500">
+      {text}
+    </span>
   );
 }

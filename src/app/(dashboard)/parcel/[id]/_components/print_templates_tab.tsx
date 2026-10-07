@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
 import * as XLSX from "xlsx";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +19,8 @@ import { formatArea } from "@/lib/utils";
 import type { Asset, Compensation, Document, LandAcquisition, LandValuation, ParcelFull } from "@/types";
 import { RIGHT_TYPE_LABELS } from "@/types";
 import { amountToMongolianWords } from "@/lib/mongolian-number";
+import type { PaymentPerformanceStage } from "@/lib/payment-performance";
+import { PaymentPerformanceDialog } from "./payment_performance_dialog";
 
 const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const MEETING_MINUTES_DOC_TYPE = "meeting_minutes";
@@ -35,6 +38,8 @@ interface PrintTemplate {
   isStaticFile?: boolean;
   // Хэвлэхийн өмнө "Хурлын тэмдэглэл" (docx) хавсралт шаардаж, түүнийг гэрээний ард нэгтгэнэ
   requiresMeetingMinutes?: boolean;
+  // «Төлбөрийн гүйцэтгэл» — гүйцэтгэлийн хувийг (60% / 40% / 100%) сонгуулж нийт үнэлгээг хувьлан бичнэ
+  isPaymentPerformance?: boolean;
 }
 
 function buildUrl(tpl: PrintTemplate, parcel?: ParcelFull): string {
@@ -77,6 +82,56 @@ function sumAmount(list: { amount: number }[]): number {
 }
 
 /**
+ * Сонгосон урсгалын БАТАЛГААЖСАН нөхөх олговор — газар / үл хөдлөх / эд
+ * хөрөнгөөр. Гэрээ болон «Төлбөрийн гүйцэтгэл»-ийн нийт үнэлгээ.
+ */
+function approvedCompensationTotals(assets: Asset[], compensations: Compensation[]) {
+  const realEstateIds = new Set(assets.filter((a) => a.asset_type === "real_state").map((a) => a.id));
+  const propertyIds = new Set(assets.filter((a) => a.asset_type === "property").map((a) => a.id));
+  const approved = compensations.filter((c) => c.status === "approved");
+  return {
+    land: sumAmount(approved.filter((c) => c.target_type === "parcel")),
+    realEstate: sumAmount(
+      approved.filter((c) => c.target_type === "asset" && c.asset_id && realEstateIds.has(c.asset_id)),
+    ),
+    property: sumAmount(
+      approved.filter((c) => c.target_type === "asset" && c.asset_id && propertyIds.has(c.asset_id)),
+    ),
+  };
+}
+
+const dotDate = (v?: string | null) => (v ? v.slice(0, 10).replace(/-/g, ".") : "");
+
+async function downloadPaymentPerformance(
+  stage: PaymentPerformanceStage,
+  parcel: ParcelFull | undefined,
+  acquisition: LandAcquisition | undefined,
+  totals: { land: number; realEstate: number; property: number },
+) {
+  const period = [dotDate(acquisition?.start_date), dotDate(acquisition?.end_date)].filter(Boolean).join("-");
+  const res = await fetch("/api/templates/payment-performance", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      stage,
+      ...totals,
+      paid60: !!parcel?.compensation_paid_60,
+      paid40: !!parcel?.compensation_paid_40,
+      paidFull: !!parcel?.compensation_paid_full,
+      acquisitionName: acquisition?.acquisition_name || "",
+      period,
+      date: dotDate(new Date().toISOString()),
+      parcelId: parcel?.parcel_id,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error || "Төлбөрийн гүйцэтгэл үүсгэхэд алдаа гарлаа");
+  }
+  triggerDownload(await res.blob(), `tulbur_guitsegel_${stage}_${parcel?.parcel_id || "template"}.xlsx`);
+}
+
+/**
  * Үндсэн эзэмшигч ХУУЛИЙН ЭТГЭЭД (байгууллага) эсэхийг тодорхойлно.
  *
  * Дүрэм (holder_tab.tsx-ийн `holderFullName`-тай ижил): хуулийн этгээд үед
@@ -114,10 +169,6 @@ function buildAcquisitionContractValues(
   const rightType = parcel ? RIGHT_TYPE_LABELS[parcel.right_type] || "" : "";
 
   const realEstateAssets = assets.filter((a) => a.asset_type === "real_state");
-  const propertyAssets = assets.filter((a) => a.asset_type === "property");
-  const realEstateIds = new Set(realEstateAssets.map((a) => a.id));
-  const propertyIds = new Set(propertyAssets.map((a) => a.id));
-
   const approved = compensations.filter((c) => c.status === "approved");
   const approvedByAsset = new Map<string, Compensation[]>();
   for (const c of approved) {
@@ -127,13 +178,11 @@ function buildAcquisitionContractValues(
     approvedByAsset.set(c.asset_id, list);
   }
 
-  const landCompTotal = sumAmount(approved.filter((c) => c.target_type === "parcel"));
-  const realEstateCompTotal = sumAmount(
-    approved.filter((c) => c.target_type === "asset" && c.asset_id && realEstateIds.has(c.asset_id)),
-  );
-  const propertyCompTotal = sumAmount(
-    approved.filter((c) => c.target_type === "asset" && c.asset_id && propertyIds.has(c.asset_id)),
-  );
+  const {
+    land: landCompTotal,
+    realEstate: realEstateCompTotal,
+    property: propertyCompTotal,
+  } = approvedCompensationTotals(assets, compensations);
   const totalCompensation = landCompTotal + realEstateCompTotal + propertyCompTotal;
 
   const propertyNames = realEstateAssets.map((a) => a.asset_name).filter(Boolean).join(", ");
@@ -470,7 +519,7 @@ const TEMPLATES: PrintTemplate[] = [
     description: "Төлбөрийн гүйцэтгэлийн Excel маягт",
     filename: "tulbur_guitsegel.xlsx",
     isExcel: true,
-    isStaticFile: true,
+    isPaymentPerformance: true,
   },
 ];
 
@@ -516,6 +565,7 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
   });
 
   const meetingMinutesAttachment = findMeetingMinutesDocxAttachment(docs, docTypes);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   // Иргэн бол "Урьдчилан мэдэгдэх хуудас", хуулийн этгээд бол түүний
   // БАЙГУУЛЛАГЫН хувилбарыг л харуулна (нөгөөг нь нуух).
@@ -564,7 +614,9 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
             </div>
             <button
               onClick={() =>
-                tpl.requiresMeetingMinutes
+                tpl.isPaymentPerformance
+                  ? setPaymentDialogOpen(true)
+                  : tpl.requiresMeetingMinutes
                   ? downloadAcquisitionContract({
                       template: tpl.filename,
                       parcel,
@@ -598,6 +650,19 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
           </div>
         ))}
       </div>
+      {paymentDialogOpen && (
+        <PaymentPerformanceDialog
+          parcel={parcel}
+          totals={approvedCompensationTotals(assets, compensations)}
+          onClose={() => setPaymentDialogOpen(false)}
+          onDownload={(stage) =>
+            downloadPaymentPerformance(stage, parcel, acquisition, approvedCompensationTotals(assets, compensations)).catch((err) => {
+              toast.error(err instanceof Error ? err.message : "Төлбөрийн гүйцэтгэл татахад алдаа гарлаа");
+              throw err;
+            })
+          }
+        />
+      )}
     </div>
   );
 }

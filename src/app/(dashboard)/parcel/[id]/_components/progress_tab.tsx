@@ -1,10 +1,13 @@
 "use client";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { parcelApi, landApi, documentTypeApi } from "@/lib/api";
+import { parcelApi, landApi } from "@/lib/api";
+import { documentAcceptFor } from "@/lib/document-types";
+import { COMPENSATION_RECEIPT_TYPE, PAYMENT_STAGE_OPTIONS, todayISO } from "@/lib/payment-stage";
+import type { DocumentPaymentInput } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
-import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip } from "lucide-react";
+import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
 
@@ -41,29 +44,9 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
     ? allComps.filter((c) => c.parcel_id === parcelCode && c.valuation_type === (selectedType ?? "asset"))
     : [];
   // «Чөлөөлсөн» болгох нөхцөл — backend-ийн UpdateParcelStatus шалгалттай ижил:
-  // сонгосон урсгалд зөвшөөрөгдсөн олговортой БА үнэлгээний тайлантай байх.
-  // Тайлан нь ШИНЭ флоу («Хөрөнгийн үнэлгээний тайлан» төрөлт parcel document,
-  // Үл хөдлөх табаас хавсаргадаг) эсвэл ХУУЧИН флоу (олговрын
-  // valuation_report_url) аль нэгээр нь бүртгэгдсэн байж болно.
-  const { data: docTypes = [] } = useQuery({
-    queryKey: ["document-types", "parcel"],
-    queryFn: () => documentTypeApi.list("parcel"),
-    staleTime: Infinity,
-    enabled: !!parcelId,
-  });
-  const reportTypeId = docTypes.find((t) => t.type === "valuation_report")?.id;
-  const { data: parcelDocs = [] } = useQuery({
-    queryKey: ["parcel-documents", parcelId],
-    queryFn: () => parcelApi.listDocuments(parcelId),
-    enabled: !!parcelId,
-  });
-  const hasReportDoc =
-    !!reportTypeId && parcelDocs.some((d) => d.document_type_id === reportTypeId);
+  // сонгосон урсгалд зөвшөөрөгдсөн олговортой байх. Үнэлгээний ТАЙЛАН нь
+  // «Нэгж ажлын урсгал»-ын заавал хавсралтаар (доорх requirements) шалгагдана.
   const hasApprovedComp = parcelComps.some((c) => c.status === "approved");
-  const hasApprovedReport =
-    hasApprovedComp &&
-    (hasReportDoc ||
-      parcelComps.some((c) => c.status === "approved" && !!c.valuation_report_url));
 
   const { data: availableStatuses = [] } = useQuery({
     queryKey: ["parcel-available-statuses", acqId, parcelId],
@@ -93,6 +76,50 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
   // анхны нэрээрээ хадгалагдана — зөвхөн жагсаалт/түүхэнд харагдах нэр өөрчлөгдөнө.
   const [statusFileName, setStatusFileName] = useState("");
   const [fileError, setFileError] = useState("");
+
+  // ЗААВАЛ ХАВСРАЛТ — «Нэгж ажлын урсгал»-д тухайн явцад тохируулсан
+  // хавсралтын төрөл бүр нэгж талбарт байх ёстой (backend ч 422 буцаана).
+  // Орсон бол ногоон, байхгүй бол эндээс шууд нэгж талбарын баримт болгон оруулна.
+  const requirementsKey = ["parcel-status-requirements", acqId, parcelId, selected?.id];
+  const { data: requirements = [], isFetching: requirementsLoading, isError: requirementsError } = useQuery({
+    queryKey: requirementsKey,
+    queryFn: () => parcelApi.getStatusRequirements(acqId, parcelId, selected!.id),
+    enabled: modal === "confirming" && !!selected,
+  });
+  const missingRequirements = requirements.filter((r) => !r.present);
+  const [uploadingType, setUploadingType] = useState<number | null>(null);
+  // «Нөхөх олговор олгосон баримт» — олголтын шат ба огноо (хавсралтын табтай ижил).
+  const [receiptStage, setReceiptStage] = useState<DocumentPaymentInput["stage"] | "">("");
+  const [receiptDate, setReceiptDate] = useState(todayISO());
+  async function uploadRequirement(documentTypeId: number, typeCode: string, file: File) {
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("Файл 20MB-аас их байна.");
+      return;
+    }
+    const isReceipt = typeCode === COMPENSATION_RECEIPT_TYPE;
+    if (isReceipt && (!receiptStage || !receiptDate)) {
+      toast.error("Олговрын олголтын шат (60%, 40%, бүрэн) ба огноог сонгоно уу");
+      return;
+    }
+    setUploadingType(documentTypeId);
+    try {
+      await parcelApi.uploadDocument(parcelId, file, documentTypeId, undefined,
+        isReceipt && receiptStage ? { stage: receiptStage, date: receiptDate } : undefined);
+      toast.success("Хавсралт орлоо");
+      await queryClient.invalidateQueries({ queryKey: requirementsKey });
+      queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      if (isReceipt) {
+        // Олголтын гүйцэтгэл нэгж талбарт хадгалагддаг — жагсаалт, дэлгэрэнгүйг шинэчилнэ.
+        queryClient.invalidateQueries({ queryKey: ["parcel-full"] });
+        queryClient.invalidateQueries({ queryKey: ["land-parcels"] });
+        queryClient.invalidateQueries({ queryKey: ["global-parcels"] });
+      }
+    } catch (err) {
+      toast.error(getApiError(err, "Хавсралт оруулахад алдаа гарлаа"));
+    } finally {
+      setUploadingType(null);
+    }
+  }
   const updateStatusMutation = useMutation({
     mutationFn: (statusId: number) => parcelApi.updateStatus(acqId, parcelId, statusId, statusReason.trim(), statusFile, statusFileName),
     onSuccess: () => {
@@ -102,6 +129,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
       queryClient.invalidateQueries({ queryKey: ["parcel-status-history", acqId, parcelId] });
       // Хавсралт нь баримт болж нэмэгдсэн тул "Хавсралт" хэсгийг ч шинэчилнэ.
       queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+      queryClient.invalidateQueries({ queryKey: ["parcel-status-requirements", acqId, parcelId] });
       closeModal();
     },
     onError: (err) => toast.error(getApiError(err, "Статус солиход алдаа гарлаа")),
@@ -119,6 +147,8 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
     setStatusFile(null);
     setStatusFileName("");
     setFileError("");
+    setReceiptStage("");
+    setReceiptDate(todayISO());
   }
 
   function handleSelectStatus(s: ParcelStatus) {
@@ -149,10 +179,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
   const reasonRequired =
     selected?.name === "Нөлөөлөгдсөн гарсан" || selected?.name === "Татгалзсан";
   const reasonMissing = reasonRequired && !statusReason.trim();
-  // "Татгалзсан" нь нэгж талбарыг чөлөөлөлтөөс ГАРГАДАГ эцсийн шийдвэр тул
-  // гэрчлэх баримт (өргөдөл, шийдвэр, тэмдэглэл) заавал.
-  const fileRequired = selected?.name === "Татгалзсан";
-  const fileMissing = fileRequired && !statusFile;
+  const requirementsBlocking = requirementsLoading || requirementsError || missingRequirements.length > 0;
 
   return (
     <>
@@ -431,10 +458,119 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 )}
               </div>
 
-              {/* ХАВСРАЛТ — Татгалзсан үед заавал, бусад төлөвт заавал бус */}
+              {/* ЗААВАЛ ХАВСРАЛТ — «Нэгж ажлын урсгал»-ын тохиргоогоор */}
+              {requirementsError && (
+                <p className="mx-5 mb-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-600 dark:border-red-800/40 dark:bg-red-900/15 dark:text-red-400">
+                  Заавал хавсралтыг шалгаж чадсангүй — цонхоо хаагаад дахин оролдоно уу.
+                </p>
+              )}
+              {(requirementsLoading || requirements.length > 0) && (
+                <div className="px-5 pb-4">
+                  <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    Заавал хавсралт <span className="text-red-400">*</span>
+                  </label>
+                  {requirementsLoading && requirements.length === 0 ? (
+                    <p className="flex items-center gap-1.5 text-[12px] text-slate-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Шалгаж байна...
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {requirements.map((r) =>
+                        r.present ? (
+                          <div
+                            key={r.document_type_id}
+                            className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10"
+                          >
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            <div className="min-w-0">
+                              <p className="text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300">{r.document_type_name}</p>
+                              {r.document_url ? (
+                                <a href={r.document_url} target="_blank" rel="noreferrer"
+                                  className="block truncate text-[11px] text-emerald-700/80 underline-offset-2 hover:underline dark:text-emerald-300/80">
+                                  {r.document_name || "Орсон"}
+                                </a>
+                              ) : (
+                                <p className="truncate text-[11px] text-emerald-700/80 dark:text-emerald-300/80">{r.document_name || "Орсон"}</p>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            key={r.document_type_id}
+                            className="rounded-xl border border-red-200 bg-red-50/60 px-3 py-2 dark:border-red-800/40 dark:bg-red-900/15"
+                          >
+                            <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-red-600 dark:text-red-400">
+                              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                              {r.document_type_name}
+                            </p>
+                            {r.document_type_code === COMPENSATION_RECEIPT_TYPE && (
+                              <div className="mt-1.5 space-y-1.5">
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {PAYMENT_STAGE_OPTIONS.map((o) => (
+                                    <button
+                                      key={o.value}
+                                      type="button"
+                                      onClick={() => setReceiptStage(o.value)}
+                                      className={`h-8 rounded-lg border text-[12px] font-semibold transition-colors ${
+                                        receiptStage === o.value
+                                          ? "border-[#02c0ce] bg-[#02c0ce] text-white"
+                                          : "border-slate-200 bg-white text-slate-600 hover:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#252630] dark:text-slate-300"
+                                      }`}
+                                    >
+                                      {o.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <label className="flex items-center gap-2 text-[11.5px] text-slate-500 dark:text-slate-400">
+                                  Олгосон огноо
+                                  <input
+                                    type="date"
+                                    value={receiptDate}
+                                    max={todayISO()}
+                                    onChange={(e) => setReceiptDate(e.target.value)}
+                                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-700 outline-none focus:border-[#02c0ce] dark:border-white/[0.08] dark:bg-[#252630] dark:text-slate-200"
+                                  />
+                                </label>
+                              </div>
+                            )}
+                            <label
+                              className={`mt-1.5 inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-[#02c0ce]/10 px-3 py-1.5 text-[12px] font-semibold text-[#02c0ce] hover:bg-[#02c0ce]/20 ${
+                                uploadingType !== null ||
+                                (r.document_type_code === COMPENSATION_RECEIPT_TYPE && !receiptStage)
+                                  ? "pointer-events-none opacity-50"
+                                  : ""
+                              }`}
+                            >
+                              {uploadingType === r.document_type_id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Upload className="h-3.5 w-3.5" />
+                              )}
+                              {uploadingType === r.document_type_id ? "Оруулж байна..." : "Хавсралт оруулах"}
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept={documentAcceptFor(r.document_type_code)}
+                                disabled={uploadingType !== null}
+                                onChange={(e) => {
+                                  const picked = e.target.files?.[0];
+                                  e.target.value = "";
+                                  if (picked) void uploadRequirement(r.document_type_id, r.document_type_code, picked);
+                                }}
+                              />
+                            </label>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ХАВСРАЛТ — заавал бус (заавал хавсралтыг дээрх хэсгээс оруулна) */}
               <div className="px-5 pb-4">
                 <label className="mb-1 block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                  Хавсралт {fileRequired && <span className="text-red-400">*</span>}
+                  Хавсралт
                 </label>
                 <input
                   type="file"
@@ -474,11 +610,8 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                     </p>
                   </div>
                 )}
-                <p className={`mt-1 text-[11px] ${fileError || fileMissing ? "text-red-400" : "text-slate-400"}`}>
-                  {fileError
-                    || (fileMissing
-                      ? "Татгалзсан төлөвт шилжихэд баримт заавал хавсаргана"
-                      : "PDF. Хавсралт нь нэгж талбарын баримт болж бүртгэгдэнэ.")}
+                <p className={`mt-1 text-[11px] ${fileError ? "text-red-400" : "text-slate-400"}`}>
+                  {fileError || "PDF. Хавсралт нь нэгж талбарын баримт болж бүртгэгдэнэ."}
                 </p>
               </div>
 
@@ -492,12 +625,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </div>
               )}
 
-              {selected.name === RELEASED_STATUS_NAME && !hasApprovedReport && (
+              {selected.name === RELEASED_STATUS_NAME && !hasApprovedComp && (
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
-                    Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө нөхөн төлбөр зөвшөөрөгдсөн бөгөөд
-                    үнэлгээний тайлан (Үл хөдлөх таб эсвэл олговрын хавсралт) хавсаргасан байх шаардлагатай.
+                    Нэгж талбарыг &ldquo;Чөлөөлсөн&rdquo; болгохын өмнө нөхөн төлбөр зөвшөөрөгдсөн байх шаардлагатай.
                   </p>
                 </div>
               )}
@@ -515,10 +647,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                   disabled={
                     updateStatusMutation.isPending ||
                     reasonMissing ||
-                    fileMissing ||
+                    requirementsBlocking ||
+                    uploadingType !== null ||
                     !!fileError ||
                     blocksForUnapprovedCompensation ||
-                    (selected.name === RELEASED_STATUS_NAME && !hasApprovedReport)
+                    (selected.name === RELEASED_STATUS_NAME && !hasApprovedComp)
                   }
                   className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

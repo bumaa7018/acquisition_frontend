@@ -100,12 +100,12 @@ const NAV_CONFIG = [
   },
   {
     href: "/parcel_workflow",
-    label: "Нэгж ажлын урсгал",
+    label: "Нэгж талбарын урсгал",
     icon: GitBranch,
   },
   {
     href: "/acquisition_workflow",
-    label: "Чөлөөлөлтийн ажлын урсгал",
+    label: "Чөлөөлөлтийн урсгал",
     icon: SlidersHorizontal,
   },
   {

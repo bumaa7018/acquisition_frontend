@@ -1,4 +1,5 @@
 "use client";
+import { CompensationPaymentBadge } from "@/components/ui/compensation-payment-badge";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { parcelApi } from "@/lib/api";
@@ -48,7 +49,8 @@ const COLUMNS: SortColumn[] = [
   { label: "Эрхийн төрөл", key: "right_type" },
   { label: "Газрын зориулалт", key: "landuse" },
   { label: "Талбай", key: "area_m2" },
-  { label: "Нөхөн төлбөр", key: "compensation" },
+  // Олговрын дүн ба төлбөр олголтын хувь НЭГ баганад (дээр дүн, доор олголт).
+  { label: "Нөхөн төлбөр", sublabel: "Төлбөр олголт", key: "compensation" },
   { label: "Төлөв", key: "status_id" },
   { label: "" },
 ];
@@ -328,6 +330,9 @@ export default function ParcelListPage() {
                           {cashAmt === 0 && landGrantCount === 0 && (
                             <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                           )}
+                        </div>
+                        <div className="mt-1.5 border-t border-slate-100 pt-1.5 dark:border-white/[0.06]">
+                          <CompensationPaymentBadge info={p} />
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top">

@@ -546,12 +546,35 @@ export function getParcelStatusStyle(
 /** Өнгө тохируулаагүй ШИНЭ төлөвт санал болгох өгөгдмөл (саарал). */
 export const PARCEL_STATUS_FALLBACK_COLOR = "#94a3b8";
 
-export interface Parcel {
+/**
+ * Нөхөх олговрын олголтын гүйцэтгэл — «Нөхөх олговор олгосон баримт»-аас
+ * (60% / 40% / бүрэн). Огноо нь YYYY-MM-DD; олгоогүй бол null.
+ */
+export interface CompensationPaymentInfo {
+  compensation_paid_60?: boolean;
+  compensation_paid_40?: boolean;
+  compensation_paid_full?: boolean;
+  compensation_paid_60_at?: string | null;
+  compensation_paid_40_at?: string | null;
+  compensation_paid_full_at?: string | null;
+  /** 0 | 40 | 60 | 100 */
+  compensation_paid_percent?: number;
+}
+
+export interface Parcel extends CompensationPaymentInfo {
   id: string;
   parcel_id: string;
   au1_code: string;
   au2_code: string;
   au3_code: string;
+  /** Засаг захиргааны нэгжийн нэр (au1/au2/au3) — жагсаалтын «Хаяг». */
+  au1_name?: string;
+  au2_name?: string;
+  au3_name?: string;
+  landuse_name?: string;
+  /** Гудамж, хашаа — жагсаалтын «Хаяг»-т залгана. */
+  address_streetname?: string;
+  address_khashaa?: string;
   right_type: number;
   status: number;
   status_name: string;
@@ -675,6 +698,9 @@ export interface Document {
    * document_type_id-тай ХАМААРАЛГҮЙ — дугаарлалт нь огт өөр.
    */
   source_doc_code?: string;
+  /** «Нөхөх олговор олгосон баримт»: 60 | 40 | 100 (бүрэн), олгосон огноо (YYYY-MM-DD). */
+  payment_stage?: number;
+  payment_date?: string;
 }
 
 /**
@@ -1075,6 +1101,24 @@ export const VALUATION_TYPE_LABELS: Record<ValuationType, string> = {
   mika: "МИКА үнэлгээ",
 };
 
+/** Ажлын урсгалын шилжилтэд ЗААВАЛ байх хавсралтын төрөл. */
+export interface WorkflowRequiredDocument {
+  document_type_id: number;
+  document_type_code: string;
+  document_type_name: string;
+}
+
+/** Тухайн нэгж талбарт шаардлагатай хавсралт орсон эсэх (явц солих цонх). */
+export interface ParcelStatusRequirement {
+  document_type_id: number;
+  document_type_code: string;
+  document_type_name: string;
+  present: boolean;
+  /** Орсон (хамгийн сүүлийн) баримтын нэр, холбоос; байхгүй бол хоосон. */
+  document_name: string;
+  document_url: string;
+}
+
 export interface ParcelWorkflow {
   id: number;
   from_status_id: number | null;
@@ -1082,6 +1126,8 @@ export interface ParcelWorkflow {
   from_status_name: string;
   to_status_name: string;
   sort_order: number;
+  /** Энэ шилжилтэд ЗААВАЛ байх хавсралт (хоосон = шаардлагагүй). */
+  required_documents: WorkflowRequiredDocument[];
 }
 
 export interface AcquisitionWorkflow {
@@ -1254,7 +1300,7 @@ export interface RepresentativeInput {
   note: string;
 }
 
-export interface GlobalParcel {
+export interface GlobalParcel extends CompensationPaymentInfo {
   id: string;
   parcel_id: string;
   au1_code: string;
