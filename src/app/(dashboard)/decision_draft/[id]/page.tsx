@@ -375,7 +375,7 @@ export default function DecisionDraftDetailPage() {
             <table className="min-w-full text-[13px]">
               <thead>
                 <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                  {["Явцын төрөл", "Хэнд", "Огноо", "Тайлбар"].map((h) => (
+                  {["Явцын төрөл", "Хянагдаж буй газар", "Огноо", "Тайлбар"].map((h) => (
                     <th
                       key={h}
                       className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
@@ -504,8 +504,8 @@ export default function DecisionDraftDetailPage() {
                           )}
                         </span>
                       </td>
-                      <td className="px-4 py-3 max-w-[180px]">
-                        <p className="text-slate-600 dark:text-slate-300 truncate">
+                      <td className="px-4 py-3">
+                        <p className="min-w-[160px] max-w-[260px] text-slate-600 dark:text-slate-300 whitespace-normal break-words">
                           {p.acquisition_name || "—"}
                         </p>
                       </td>
@@ -518,7 +518,7 @@ export default function DecisionDraftDetailPage() {
                       <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">
                         {formatMoney(p.compensation_amount)}
                       </td>
-                      <td className="px-4 py-3 max-w-[220px]">
+                      <td className="px-4 py-3">
                         {fundingEditRow === p.id ? (
                           <select
                             autoFocus
@@ -541,8 +541,8 @@ export default function DecisionDraftDetailPage() {
                             ))}
                           </select>
                         ) : (
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate text-slate-600 dark:text-slate-300">
+                          <div className="flex min-w-[180px] max-w-[280px] items-start gap-1.5">
+                            <span className="min-w-0 whitespace-normal break-words text-slate-600 dark:text-slate-300">
                               {p.funding_organization
                                 ? `${p.funding_organization} — ${p.funding_source_type}`
                                 : "—"}

@@ -311,7 +311,7 @@ export function PaymentTab({
                     <td className="px-4 py-3 text-[12px] font-mono text-slate-400">{i + 1}</td>
                     <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{p.amount.toLocaleString()} {p.currency}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{p.paid_at ? formatDate(p.paid_at) : "—"}</td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-[200px] truncate">{p.note || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300 min-w-[200px] whitespace-normal break-words">{p.note || "—"}</td>
                     <td className="px-4 py-3 text-slate-500 whitespace-nowrap">{p.created_by}</td>
                   </tr>
                 ))}

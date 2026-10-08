@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Check, ChevronDown, Plus, Search, X, Wallet } from "lucide-react";
 import { decisionDraftApi, fundingSourceOptionApi } from "@/lib/api";
 import { formatBillion, formatMoneyExact, getApiError } from "@/lib/utils";
+import { AmountHint } from "@/components/ui/amount-hint";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { DecisionDraftFundingLink, FundingSourceOption } from "@/types";
 
@@ -249,7 +250,7 @@ export function FundingSourcesCard({
                               <span className="block truncate text-[13px] font-semibold text-[#02c0ce]">
                                 Шинээр бүртгээд холбох
                               </span>
-                              <span className="block truncate text-[12px] text-slate-600 dark:text-slate-300">
+                              <span className="block whitespace-normal break-words text-[12px] text-slate-600 dark:text-slate-300">
                                 {sourceTextTrimmed}
                               </span>
                             </span>
@@ -279,8 +280,8 @@ export function FundingSourcesCard({
                                   {(isSelected || isAdded) && <Check className="h-3.5 w-3.5" />}
                                 </span>
                                 <span className="min-w-0">
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                                  <span className="flex min-w-0 items-start gap-2">
+                                    <span className="min-w-0 whitespace-normal break-words text-[13px] font-medium text-slate-700 dark:text-slate-200">
                                       {label}
                                     </span>
                                     {isAdded && (
@@ -290,7 +291,7 @@ export function FundingSourcesCard({
                                     )}
                                   </span>
                                   {(fs.acquisition_name || fs.plan_code) && (
-                                    <span className="block truncate text-[11px] text-slate-400 dark:text-slate-500">
+                                    <span className="block whitespace-normal break-words text-[11px] text-slate-400 dark:text-slate-500">
                                       {fs.acquisition_name || fs.plan_code}
                                     </span>
                                   )}
@@ -415,28 +416,33 @@ export function FundingSourcesCard({
                     className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                   >
                     <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
-                      {f.organization_name}
+                      <p className="min-w-[160px] max-w-[300px] whitespace-normal break-words">{f.organization_name}</p>
                     </td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
-                      {f.source_type || "—"}
+                      <p className="min-w-[120px] max-w-[240px] whitespace-normal break-words">{f.source_type || "—"}</p>
                     </td>
                     <td
                       className="px-4 py-3 tabular-nums text-slate-600 dark:text-slate-300 whitespace-nowrap"
                       title={f.amount != null ? formatMoneyExact(f.amount) : undefined}
                     >
-                      {f.amount == null
-                        ? "—"
-                        : currency === "MNT"
-                          ? formatBillion(f.amount)
-                          : `${Number(f.amount).toLocaleString()} ${currency}`}
+                      {f.amount == null ? (
+                        "—"
+                      ) : currency === "MNT" ? (
+                        <>
+                          {formatBillion(f.amount)}
+                          <AmountHint value={f.amount} className="ml-1" />
+                        </>
+                      ) : (
+                        `${Number(f.amount).toLocaleString()} ${currency}`
+                      )}
                     </td>
-                    <td className="px-4 py-3 max-w-[180px]">
-                      <p className="text-slate-500 dark:text-slate-400 truncate">
+                    <td className="px-4 py-3">
+                      <p className="min-w-[160px] max-w-[260px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
                         {f.acquisition_name || "—"}
                       </p>
                     </td>
-                    <td className="px-4 py-3 max-w-[160px]">
-                      <p className="text-slate-500 dark:text-slate-400 truncate">
+                    <td className="px-4 py-3">
+                      <p className="min-w-[140px] max-w-[260px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
                         {f.note || "—"}
                       </p>
                     </td>

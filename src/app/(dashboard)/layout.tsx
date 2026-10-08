@@ -60,6 +60,7 @@ const ROUTE_GUARDS: { match: (p: string) => boolean; allow: () => boolean }[] = 
         "/asset_calc_type",
         "/decision_work_type",
         "/decision_budget",
+        "/decision_review_unit",
       ].some((r) => p.startsWith(r)),
     allow: canViewSettings,
   },

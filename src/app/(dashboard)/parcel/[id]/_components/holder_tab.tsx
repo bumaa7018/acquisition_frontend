@@ -110,11 +110,11 @@ function UbegOwnershipCard({
             {ordered.map(([date, rows]) => (
               <div key={date || "no-date"}>
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-[#252630] dark:text-slate-300">
+                  <span className="shrink-0 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:bg-[#252630] dark:text-slate-300">
                     {formatUbegDate(date)}
                   </span>
                   {/* Бүлгийн үйлчилгээ/өмчлөлийн хэлбэр мөр бүрт ижил ирдэг */}
-                  <span className="min-w-0 truncate text-[11px] text-slate-400 dark:text-slate-500" title={rows[0].service_name}>
+                  <span className="min-w-0 break-words text-[11px] text-slate-400 dark:text-slate-500" title={rows[0].service_name}>
                     {rows[0].service_name || "—"}
                   </span>
                 </div>

@@ -184,6 +184,34 @@ test("санхүү баталгаажсан үнэлгээг цуцлахын т
   );
 });
 
+// «Нэгж талбарын төлөв»-ийн is_valuation_stage тохиргоо нэрээс ДАВУУ;
+// тохиргоо ирээгүй бол өмнөх шигээ нэрээр шийднэ.
+test("үнэлгээний шатыг төлөвийн тохиргоогоор шийднэ, тохиргоогүй бол нэрээр", () => {
+  const offByRule = { ...evaluationParcel, is_valuation_stage: false };
+  const onByRule = { ...waitingParcel, is_valuation_stage: true };
+  for (const actor of [mika, primaryProfessional]) {
+    assert.equal(canAccessParcelForActor(actor, offByRule, acquisition), false);
+    assert.equal(canAccessParcelForActor(actor, onByRule, acquisition), true);
+    assert.equal(canAccessParcelForActor(actor, evaluationParcel, acquisition), true);
+    assert.equal(
+      canAccessParcelForActor(actor, { ...evaluationParcel, is_valuation_stage: null }, acquisition),
+      true,
+    );
+  }
+  assert.equal(canEditValuationSubTabForActor(mika, "mika", offByRule, acquisition), false);
+  assert.equal(canEditValuationSubTabForActor(mika, "mika", onByRule, acquisition), true);
+  assert.equal(
+    canEditValuationSubTabForActor(primaryProfessional, "asset", offByRule, acquisition),
+    false,
+  );
+  assert.equal(
+    canEditValuationSubTabForActor(primaryProfessional, "asset", onByRule, acquisition),
+    true,
+  );
+  // Санхүү төлөвөөс үл хамааран нээнэ — хэвээр.
+  assert.equal(canAccessParcelForActor(finance, offByRule, acquisition), true);
+});
+
 test("мэргэжлийн байгууллага зөвхөн өөрт холбогдсон чөлөөлөлтийг харна", () => {
   assert.equal(
     canAccessAcquisitionForActor(primaryProfessional, acquisition),

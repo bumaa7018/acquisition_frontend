@@ -429,7 +429,7 @@ export function VAssetsTable({
               <td className={`${V_TD_NUM} text-slate-500`}>
                 {renderQty ? renderQty(row, i) : vNum(row.qty)}
               </td>
-              <td className={`${V_TD} max-w-[220px] truncate text-slate-400`} title={row.description}>
+              <td className={`${V_TD} min-w-[160px] whitespace-normal break-words text-slate-400`} title={row.description}>
                 {row.description || "—"}
                 {row.badge}
               </td>

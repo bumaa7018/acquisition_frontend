@@ -46,7 +46,17 @@ export type AccessAcquisition = {
 export type AccessParcel = {
   status_name?: string | null;
   independent_org_id?: string | null;
+  /**
+   * Төлөв нь «Үнэлгээний шат» (parcel_status.is_valuation_stage) эсэх —
+   * бүртгэлийн тохиргооноос. Өгөөгүй бол өмнөх шиг НЭРЭЭР ("Үнэлгээ хийх").
+   */
+  is_valuation_stage?: boolean | null;
 };
+
+function isValuationStage(parcel?: AccessParcel | null): boolean {
+  if (parcel?.is_valuation_stage != null) return parcel.is_valuation_stage;
+  return parcel?.status_name === EVALUATION_STATUS_NAME;
+}
 
 // Чөлөөлөлтийн дэлгэрэнгүйн табууд — acquisition/[id]/page.tsx-ийн Tab-тай ижил
 export type AcquisitionTabKey =
@@ -181,7 +191,7 @@ export function canAccessParcelForActor(
 ): boolean {
   if (!isExternalSpecialActor(actor)) return true;
   if (isFinanceSpecialistActor(actor)) return true;
-  if (parcel?.status_name !== EVALUATION_STATUS_NAME) return false;
+  if (!parcel || !isValuationStage(parcel)) return false;
 
   if (isProfessionalOrgActor(actor)) {
     if (!actor.orgId) return false;
@@ -265,7 +275,7 @@ export function canEditValuationSubTabForActor(
   parcel?: AccessParcel | null,
   acquisition?: AccessAcquisition | null,
 ): boolean {
-  if (parcel?.status_name !== EVALUATION_STATUS_NAME) return false;
+  if (!parcel || !isValuationStage(parcel)) return false;
 
   if (subTab === "asset") {
     return (

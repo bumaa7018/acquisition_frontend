@@ -605,7 +605,7 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5 truncate">{tpl.description}</p>
+              <p className="text-[11px] text-slate-400 mt-0.5 break-words">{tpl.description}</p>
               {tpl.requiresMeetingMinutes && !meetingMinutesAttachment && (
                 <p className="text-[11px] text-red-500 mt-0.5">
                   Эхлээд &ldquo;Баримт бичиг&rdquo; табаас &ldquo;Хурлын тэмдэглэл&rdquo; (DOCX) хавсаргана уу

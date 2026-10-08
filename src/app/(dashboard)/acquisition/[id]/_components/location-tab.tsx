@@ -384,10 +384,7 @@ export function LocationTab({
                       <div key={img.id} className="p-3">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
-                            <p
-                              title={img.original_name}
-                              className="truncate text-[12px] font-medium text-slate-700 dark:text-slate-200"
-                            >
+                            <p className="whitespace-normal break-words text-[12px] font-medium text-slate-700 dark:text-slate-200">
                               {img.original_name}
                             </p>
                             <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">

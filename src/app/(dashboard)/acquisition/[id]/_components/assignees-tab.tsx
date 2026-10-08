@@ -267,7 +267,7 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                             <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
                               {userDisplayName(u)}
                             </p>
-                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
                               {userPosition(u) || u.email}
                             </p>
                           </div>
@@ -312,7 +312,7 @@ export function AssigneesTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                           <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
                             {userDisplayName(u)}
                           </p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
                             {userPosition(u) || u.email}
                           </p>
                         </div>

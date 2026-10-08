@@ -5,16 +5,16 @@ import { toast } from "sonner";
 import { Search, X, Link2 } from "lucide-react";
 import { decisionDraftApi, parcelApi } from "@/lib/api";
 import { getApiError, formatArea } from "@/lib/utils";
+import { useParcelStatusNamesWithRule } from "@/lib/use-parcel-status-rules";
 import type { DecisionDraftFundingLink } from "@/types";
 
-// parcel_status.id = 5 → "Чөлөөлсөн"
-const PARCEL_STATUS_RELEASED = 5;
 
 /**
  * Нэгж талбарыг захирамжид холбох модал.
  *
- * Зөвхөн "Чөлөөлсөн" (status = 5) төлөвтэй нэгж талбар л хайлтад орно —
- * backend мөн адил шалгадаг (domain.ErrParcelNotReleased). Аль хэдийн өөр
+ * Зөвхөн «Захирамжид холбогдоно» (is_released — «Нэгж талбарын
+ * төлөв» тохиргоо) төлөвтэй нэгж талбар л хайлтад орно — backend мөн адил шалгадаг
+ * (domain.ErrParcelNotReleased). Аль хэдийн өөр
  * захирамжид холбогдсон талбарыг backend татгалзана.
  */
 export function LinkParcelDialog({
@@ -30,6 +30,10 @@ export function LinkParcelDialog({
   onLinked: () => void;
 }) {
   const [term, setTerm] = useState("");
+  const linkableNames = useParcelStatusNamesWithRule("is_released", ["Чөлөөлсөн"]);
+  const linkableLabel = linkableNames.length
+    ? linkableNames.map((n) => `"${n}"`).join(", ")
+    : "захирамжид холбогдох";
   const [query, setQuery] = useState("");
   // Ганц эх үүсвэртэй бол урьдчилан сонгоно (нэмэлт алхам үүсгэхгүй)
   const [fundingLinkId, setFundingLinkId] = useState(
@@ -46,7 +50,9 @@ export function LinkParcelDialog({
           page: 1,
           page_size: 50,
           parcel_id: query,
-          status_id: PARCEL_STATUS_RELEASED,
+          // «Захирамжид холбогдоно» (is_released) төлөвүүд — «Нэгж
+          // талбарын төлөв» тохиргооноос (өмнө status_id=5 хатуу).
+          released_only: true,
           unlinked_only: true,
         })
         .then((r) => r.data ?? []),
@@ -75,7 +81,7 @@ export function LinkParcelDialog({
               Нэгж талбар холбох
             </h2>
             <p className="text-[12px] text-slate-400 dark:text-slate-500 mt-0.5">
-              Зөвхөн &quot;Чөлөөлсөн&quot; төлөвтэй нэгж талбар холбогдоно
+              Зөвхөн {linkableLabel} төлөвтэй нэгж талбар холбогдоно
             </p>
           </div>
           <button
@@ -142,7 +148,7 @@ export function LinkParcelDialog({
             </div>
           ) : !data?.length ? (
             <p className="py-12 text-center text-[13px] text-slate-400 dark:text-slate-500">
-              Чөлөөлсөн төлөвтэй нэгж талбар олдсонгүй
+              {linkableLabel} төлөвтэй нэгж талбар олдсонгүй
             </p>
           ) : (
             <table className="w-full text-[13px]">
@@ -164,8 +170,8 @@ export function LinkParcelDialog({
                     <td className="px-4 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                       {p.parcel_id}
                     </td>
-                    <td className="px-4 py-3 max-w-[200px]">
-                      <p className="text-slate-600 dark:text-slate-300 truncate">
+                    <td className="px-4 py-3">
+                      <p className="min-w-[160px] max-w-[260px] text-slate-600 dark:text-slate-300 whitespace-normal break-words">
                         {p.acquisition_name || "—"}
                       </p>
                     </td>

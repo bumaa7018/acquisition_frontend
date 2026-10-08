@@ -1,9 +1,9 @@
 "use client";
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X, AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
-import { decisionDraftApi } from "@/lib/api";
+import { decisionDraftApi, decisionReviewUnitApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import {
   DECISION_DRAFT_PROGRESS_CONFIRMING,
@@ -25,7 +25,12 @@ export function ConfirmDecisionDialog({
   onConfirmed: () => void;
 }) {
   const [mode, setMode] = useState<"reviewing" | "confirming">("reviewing");
-  const [recipient, setRecipient] = useState("");
+  // «Хянагдаж буй газар» — Тохиргоо › Төсөл хянах нэгж
+  const [reviewUnitId, setReviewUnitId] = useState("");
+  const { data: reviewUnits = [], isLoading: unitsLoading } = useQuery({
+    queryKey: ["decision-review-units"],
+    queryFn: () => decisionReviewUnitApi.list(),
+  });
   const [progressDate, setProgressDate] = useState("");
   const [note, setNote] = useState("");
   const [decreeNumber, setDecreeNumber] = useState("");
@@ -35,7 +40,7 @@ export function ConfirmDecisionDialog({
     mutationFn: () =>
       decisionDraftApi.addProgress(draftId, {
         progress_type: DECISION_DRAFT_PROGRESS_REVIEWING,
-        recipient: recipient.trim(),
+        review_unit_id: Number(reviewUnitId),
         progress_date: progressDate,
         note: note.trim(),
       }),
@@ -67,7 +72,7 @@ export function ConfirmDecisionDialog({
 
   const isReviewing = mode === DECISION_DRAFT_PROGRESS_REVIEWING;
   const isValid = isReviewing
-    ? recipient.trim() !== "" && progressDate !== ""
+    ? reviewUnitId !== "" && progressDate !== ""
     : decreeNumber.trim() !== "" && decisionDate !== "";
 
   function handleSave() {
@@ -124,14 +129,25 @@ export function ConfirmDecisionDialog({
           {isReviewing ? (
             <>
               <div>
-                <label className={lbl}>Хэнд *</label>
-                <input
+                <label className={lbl}>Хянагдаж буй газар *</label>
+                <select
                   autoFocus
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="Хянагч, хэлтэс, байгууллага"
+                  value={reviewUnitId}
+                  onChange={(e) => setReviewUnitId(e.target.value)}
                   className={inp}
-                />
+                >
+                  <option value="">{unitsLoading ? "Ачаалж байна..." : "— Сонгох —"}</option>
+                  {reviewUnits.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+                {!unitsLoading && reviewUnits.length === 0 && (
+                  <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                    Сонголт алга — Тохиргоо › Захирамжийн төсөл › Төсөл хянах нэгж хэсэгт нэмнэ үү.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={lbl}>Огноо *</label>

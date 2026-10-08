@@ -111,9 +111,9 @@ import {
 } from "@/lib/role-utils";
 import {
   canCancelValuationForActor,
-  EVALUATION_STATUS_NAME,
   type ValuationSubTabKey,
 } from "@/lib/access-policy";
+import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import {
   assetValuationRows,
   parcelValuations,
@@ -623,6 +623,10 @@ export function RealEstateTab({
   });
 
   const effectiveParcelCode = parcelData?.parcel_id ?? parcelCode;
+  // Хандах эрхэд «Үнэлгээний шат»-ыг төлөвийн ТОХИРГООНООС (өмнө нэрээр).
+  const statusRules = useParcelStatusRules();
+  const parcelIsValuationStage = statusRules(parcelData?.status_id ?? parcelData?.status).is_valuation_stage;
+  const accessParcel = parcelData ? { ...parcelData, is_valuation_stage: parcelIsValuationStage } : parcelData;
 
   const { data: acquisition } = useQuery({
     queryKey: ["land", acqId],
@@ -651,7 +655,7 @@ export function RealEstateTab({
   const visibleSubTabs = isInternalActor
     ? subTabs
     : subTabs.filter((item) =>
-        canViewValuationSubTab(item.key, parcelData, acquisition),
+        canViewValuationSubTab(item.key, accessParcel, acquisition),
       );
   // Тухайн нэгж талбарын үндсэн (санхүү баталгаажуулсан) урсгал
   const selectedType = parcelData?.selected_valuation_type ?? null;
@@ -1264,13 +1268,13 @@ export function RealEstateTab({
   const canEditCurrent =
     !isLocked &&
     !selectedType &&
-    canEditValuationSubTab(activeSubTab, parcelData, acquisition) &&
+    canEditValuationSubTab(activeSubTab, accessParcel, acquisition) &&
     valStatusEditable;
   // Илгээх — идэвхтэй урсгалыг засах эрхтэй хэрэглэгч (таб бүрийн эзэн) төлөв засагдах үед.
   const canSubmitValuation =
     !isLocked &&
     !selectedType &&
-    canEditValuationSubTab(activeSubTab, parcelData, acquisition) &&
+    canEditValuationSubTab(activeSubTab, accessParcel, acquisition) &&
     valStatusEditable;
   // Баталгаажуулах/Буцаах — санхүүгийн мэргэжилтэн, идэвхтэй урсгал Илгээсэн төлөвтэй
   // бөгөөд үнэлгээний мэдээлэл (хөрөнгө/олговор/газрын үнэлгээ) орсон үед.
@@ -1572,7 +1576,7 @@ export function RealEstateTab({
             </div>
             {/* Холбох/солих/салгах — зөвхөн "Үнэлгээ хийх" явцтай, үнэлгээ баталгаажаагүй үед */}
             {!isExternal &&
-              parcelData?.status_name === EVALUATION_STATUS_NAME &&
+              parcelIsValuationStage &&
               !selectedType && (
                 <div className="flex items-center gap-2">
                   <select
@@ -2283,7 +2287,7 @@ export function RealEstateTab({
                         className="flex items-start justify-between gap-2 border-b border-slate-50 px-4 py-2.5 last:border-0 dark:border-[#37394d]"
                       >
                         <div className="min-w-0">
-                          <p className="truncate text-[12px] text-slate-700 dark:text-slate-200">
+                          <p className="break-words text-[12px] text-slate-700 dark:text-slate-200">
                             {detailLabel(comp)}
                           </p>
                           <p className="mt-0.5 text-[10px] text-slate-400">
@@ -2386,7 +2390,7 @@ export function RealEstateTab({
                     className="flex items-center justify-between gap-2 border-b border-slate-50 px-4 py-2.5 text-[12px] last:border-0 dark:border-[#37394d]"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-slate-700 dark:text-slate-200">{detailLabel(comp)}</p>
+                      <p className="break-words text-slate-700 dark:text-slate-200">{detailLabel(comp)}</p>
                       <p className="text-[10px] text-slate-400">
                         {COMP_TYPE_LABELS[comp.compensation_type] ?? comp.compensation_type} ·{" "}
                         {comp.coverage_percent}%
@@ -2417,8 +2421,8 @@ export function RealEstateTab({
                       .filter(([, v]) => !!v)
                       .map(([label, value]) => (
                         <div key={label} className="flex justify-between gap-2">
-                          <span className="text-slate-400">{label}</span>
-                          <span className="truncate text-right text-slate-700 dark:text-slate-200" title={value as string}>
+                          <span className="shrink-0 text-slate-400">{label}</span>
+                          <span className="min-w-0 break-words text-right text-slate-700 dark:text-slate-200" title={value as string}>
                             {value}
                           </span>
                         </div>

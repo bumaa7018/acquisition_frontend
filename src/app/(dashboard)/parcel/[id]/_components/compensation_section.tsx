@@ -539,7 +539,7 @@ export function CompensationSection({
                     <td className="px-4 py-2.5 font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{p.amount.toLocaleString()}</td>
                     <td className="px-4 py-2.5 text-slate-500">{p.currency}</td>
                     <td className="px-4 py-2.5 text-slate-500 whitespace-nowrap">{p.paid_at ? formatDate(p.paid_at) : "—"}</td>
-                    <td className="px-4 py-2.5 text-slate-500 max-w-[200px] truncate">{p.note || "—"}</td>
+                    <td className="px-4 py-2.5 text-slate-500 min-w-[200px] whitespace-normal break-words">{p.note || "—"}</td>
                   </tr>
                 ))}
               </tbody>

@@ -29,6 +29,7 @@ import { dashboardApi } from "@/lib/api";
 import type { FinanceBucket } from "@/types";
 import { YearMultiSelect } from "@/components/ui/year-multi-select";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
+import { AbbrevAmount } from "@/components/ui/amount-hint";
 
 const TOOLTIP_STYLE = {
   background: "#1e1f27",
@@ -131,7 +132,7 @@ function DonutCard({
             {rows.map((row) => (
               <div key={row.name} className="flex items-center gap-2.5">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-                <span className="min-w-0 flex-1 truncate text-[11px] text-slate-600 dark:text-slate-300">
+                <span className="min-w-0 flex-1 whitespace-normal break-words text-[11px] text-slate-600 dark:text-slate-300">
                   {row.name}
                 </span>
                 <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: row.color }}>
@@ -160,8 +161,8 @@ function MiniCard({
   title,
 }: {
   label: string;
-  value: string;
-  sub?: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
   color: string;
   title?: string;
 }) {
@@ -170,11 +171,11 @@ function MiniCard({
       className="flex min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-100 bg-slate-50/40 px-3.5 py-3 dark:border-[#37394d] dark:bg-white/[0.02]"
       style={{ borderLeft: `3px solid ${color}` }}
     >
-      <p className="truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="truncate text-[20px] font-bold leading-none tabular-nums" style={{ color }} title={title}>
+      <p className="whitespace-normal break-words text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="break-words text-[20px] font-bold leading-none tabular-nums" style={{ color }} title={title}>
         {value}
       </p>
-      {sub && <p className="truncate text-[11px] tabular-nums text-slate-400">{sub}</p>}
+      {sub && <p className="whitespace-normal break-words text-[11px] tabular-nums text-slate-400">{sub}</p>}
     </div>
   );
 }
@@ -214,8 +215,8 @@ function Tile({
   tone,
 }: {
   label: string;
-  value: string;
-  hint?: string;
+  value: React.ReactNode;
+  hint?: React.ReactNode;
   Icon: typeof Banknote;
   tone: string;
 }) {
@@ -231,12 +232,12 @@ function Tile({
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+        <p className="whitespace-normal break-words text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
         {/* Утгыг ӨӨРИЙН өнгөөр — бүх карт ижил харагдахаас сэргийлнэ. */}
-        <p className="truncate text-[22px] font-bold leading-tight tabular-nums" style={{ color: tone }}>
+        <p className="break-words text-[22px] font-bold leading-tight tabular-nums" style={{ color: tone }}>
           {value}
         </p>
-        {hint && <p className="truncate text-[11px] tabular-nums text-slate-400">{hint}</p>}
+        {hint && <p className="whitespace-normal break-words text-[11px] tabular-nums text-slate-400">{hint}</p>}
       </div>
     </div>
   );
@@ -265,30 +266,41 @@ function BucketList({
         const share = total > 0 ? (row.amount / total) * 100 : 0;
         const active = activeKey === row.key;
         return (
-          <button
+          <div
             key={row.key}
-            type="button"
+            role={onPick ? "button" : undefined}
+            tabIndex={onPick ? 0 : undefined}
             onClick={onPick ? () => onPick(active ? "" : row.key) : undefined}
+            onKeyDown={
+              onPick
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onPick(active ? "" : row.key);
+                    }
+                  }
+                : undefined
+            }
             className={`flex w-full items-center gap-3 px-1 py-1.5 text-left transition-colors ${
-              onPick ? "hover:bg-slate-50 dark:hover:bg-[#252630]" : "cursor-default"
+              onPick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252630]" : "cursor-default"
             } ${active ? "bg-[#02c0ce]/8" : ""}`}
           >
-            <span className="min-w-0 flex-1 truncate text-[12px] text-slate-600 dark:text-slate-300">
+            <span className="min-w-0 flex-1 whitespace-normal break-words text-[12px] text-slate-600 dark:text-slate-300">
               {row.name}
             </span>
             <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
               {row.parcels.toLocaleString()} т.
             </span>
             <span
-              className="w-24 shrink-0 text-right text-[12px] font-bold tabular-nums text-slate-800 dark:text-white"
+              className="w-28 shrink-0 whitespace-nowrap text-right text-[12px] font-bold tabular-nums text-slate-800 dark:text-white"
               title={money(row.amount)}
             >
-              {billions(row.amount)}
+              <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
             </span>
             <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
               {share.toFixed(1)}%
             </span>
-          </button>
+          </div>
         );
       })}
     </div>
@@ -410,14 +422,14 @@ export function FinanceDashboard() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Tile
               label="Нийт үнэлгээний дүн"
-              value={billions(totalAmount)}
+              value={<AbbrevAmount value={totalAmount}>{billions(totalAmount)}</AbbrevAmount>}
               hint={money(totalAmount)}
               Icon={Landmark}
               tone={COLORS.amount}
             />
             <Tile
               label="Олгосон дүн"
-              value={billions(data?.granted_amount ?? 0)}
+              value={<AbbrevAmount value={data?.granted_amount ?? 0}>{billions(data?.granted_amount ?? 0)}</AbbrevAmount>}
               hint={
                 totalAmount > 0
                   ? `${Math.round(((data?.granted_amount ?? 0) / totalAmount) * 100)}% гүйцэтгэл`
@@ -428,7 +440,7 @@ export function FinanceDashboard() {
             />
             <Tile
               label="Хүлээгдэж буй дүн"
-              value={billions(data?.pending_amount ?? 0)}
+              value={<AbbrevAmount value={data?.pending_amount ?? 0}>{billions(data?.pending_amount ?? 0)}</AbbrevAmount>}
               hint={money(data?.pending_amount ?? 0)}
               Icon={Hourglass}
               tone={COLORS.pending}
@@ -461,7 +473,7 @@ export function FinanceDashboard() {
             <MiniCard
               label="Нийт чөлөөлөлт"
               value={(data?.total_acquisitions ?? 0).toLocaleString()}
-              sub={billions(totalAmount)}
+              sub={<AbbrevAmount value={totalAmount}>{billions(totalAmount)}</AbbrevAmount>}
               color={COLORS.amount}
               title={money(totalAmount)}
             />
@@ -470,7 +482,12 @@ export function FinanceDashboard() {
                 key={row.key}
                 label={row.name}
                 value={row.count.toLocaleString()}
-                sub={`${row.parcels.toLocaleString()} талбар · ${billions(row.amount)}`}
+                sub={
+                  <>
+                    {row.parcels.toLocaleString()} талбар ·{" "}
+                    <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
+                  </>
+                }
                 color={ACQ_STATUS_COLORS[row.key] ?? COLORS.muted}
                 title={money(row.amount)}
               />
@@ -498,7 +515,12 @@ export function FinanceDashboard() {
                 key={row.name}
                 label={row.name}
                 value={row.count.toLocaleString()}
-                sub={`${stageTotal > 0 ? ((row.count / stageTotal) * 100).toFixed(1) : "0.0"}% · ${billions(row.amount)}`}
+                sub={
+                  <>
+                    {stageTotal > 0 ? ((row.count / stageTotal) * 100).toFixed(1) : "0.0"}% ·{" "}
+                    <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
+                  </>
+                }
                 color={row.color}
                 title={money(row.amount)}
               />
@@ -551,8 +573,13 @@ export function FinanceDashboard() {
                 <MiniCard
                   key={row.key}
                   label={row.name}
-                  value={billions(row.amount)}
-                  sub={`${row.count.toLocaleString()} чөлөөлөлт · олгосон ${billions(row.granted)}`}
+                  value={<AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>}
+                  sub={
+                    <>
+                      {row.count.toLocaleString()} чөлөөлөлт · олгосон{" "}
+                      <AbbrevAmount value={row.granted}>{billions(row.granted)}</AbbrevAmount>
+                    </>
+                  }
                   color={PALETTE[i % PALETTE.length]}
                   title={money(row.amount)}
                 />
@@ -606,21 +633,21 @@ export function FinanceDashboard() {
           >
             <MiniCard
               label="Газрын үнэлгээ"
-              value={billions(data?.land_amount ?? 0)}
+              value={<AbbrevAmount value={data?.land_amount ?? 0}>{billions(data?.land_amount ?? 0)}</AbbrevAmount>}
               sub={totalAmount > 0 ? `${Math.round(((data?.land_amount ?? 0) / totalAmount) * 100)}%` : undefined}
               color={COLORS.amount}
               title={money(data?.land_amount ?? 0)}
             />
             <MiniCard
               label="Үл хөдлөх хөрөнгө"
-              value={billions(data?.real_state_amount ?? 0)}
+              value={<AbbrevAmount value={data?.real_state_amount ?? 0}>{billions(data?.real_state_amount ?? 0)}</AbbrevAmount>}
               sub={totalAmount > 0 ? `${Math.round(((data?.real_state_amount ?? 0) / totalAmount) * 100)}%` : undefined}
               color={COLORS.parcels}
               title={money(data?.real_state_amount ?? 0)}
             />
             <MiniCard
               label="Эд хөрөнгө, зардал"
-              value={billions(data?.property_amount ?? 0)}
+              value={<AbbrevAmount value={data?.property_amount ?? 0}>{billions(data?.property_amount ?? 0)}</AbbrevAmount>}
               sub={totalAmount > 0 ? `${Math.round(((data?.property_amount ?? 0) / totalAmount) * 100)}%` : undefined}
               color={COLORS.property}
               title={money(data?.property_amount ?? 0)}
@@ -635,7 +662,7 @@ export function FinanceDashboard() {
                   Санхүүжилтийн төрлөөр
                 </p>
                 <p className="text-[12px] font-bold tabular-nums text-slate-700 dark:text-slate-200" title={money(data?.funding_total ?? 0)}>
-                  {billions(data?.funding_total ?? 0)}
+                  <AbbrevAmount value={data?.funding_total ?? 0}>{billions(data?.funding_total ?? 0)}</AbbrevAmount>
                 </p>
               </div>
               {fundingTypes.length === 0 ? (

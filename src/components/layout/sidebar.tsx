@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,6 +31,7 @@ import {
   ChevronRight,
   Receipt,
   Layers,
+  Building,
   User,
   Grid2x2,
   BarChart3,
@@ -77,58 +79,45 @@ const NAV_AUDIT = [
 ];
 
 
-const NAV_CONFIG = [
+// Тохиргоо — ижил төрлийн цэсийг бүлэглэнэ (sidebar-т бүлгийн гарчигтай).
+const NAV_CONFIG_GROUPS = [
   {
-    href: "/acquisition_category",
-    label: "Чөлөөлөлтийн ангилал",
-    icon: FolderOpen,
+    label: "Ерөнхий",
+    items: [{ href: "/document_type", label: "Хавсралтын төрөл", icon: FileText }],
   },
   {
-    href: "/acquisition_progress_status",
-    label: "Чөлөөлөлтийн явцын статус",
-    icon: ClipboardList,
+    label: "Чөлөөлөлт",
+    items: [
+      { href: "/acquisition_category", label: "Чөлөөлөлтийн ангилал", icon: FolderOpen },
+      { href: "/acquisition_progress_status", label: "Чөлөөлөлтийн явцын статус", icon: ClipboardList },
+      { href: "/acquisition_workflow", label: "Чөлөөлөлтийн урсгал", icon: SlidersHorizontal },
+    ],
   },
   {
-    href: "/parcel_status",
-    label: "Нэгж талбарын статус",
-    icon: Grid2x2,
+    label: "Нэгж талбар",
+    items: [
+      { href: "/parcel_status", label: "Нэгж талбарын статус", icon: Grid2x2 },
+      { href: "/parcel_workflow", label: "Нэгж талбарын урсгал", icon: GitBranch },
+    ],
   },
   {
-    href: "/document_type",
-    label: "Баримт бичгийн төрөл",
-    icon: FileText,
+    label: "Үнэлгээ",
+    items: [
+      { href: "/asset_spec_type", label: "Байгууламжийн чанарын төрөл", icon: Layers },
+      { href: "/asset_calc_type", label: "Байгууламжийн тооцооллын төрөл", icon: Calculator },
+    ],
   },
   {
-    href: "/parcel_workflow",
-    label: "Нэгж талбарын урсгал",
-    icon: GitBranch,
-  },
-  {
-    href: "/acquisition_workflow",
-    label: "Чөлөөлөлтийн урсгал",
-    icon: SlidersHorizontal,
-  },
-  {
-    href: "/asset_spec_type",
-    label: "Байгууламжийн чанарын төрөл",
-    icon: Layers,
-  },
-  {
-    href: "/asset_calc_type",
-    label: "Байгууламжийн тооцооллын төрөл",
-    icon: Calculator,
-  },
-  {
-    href: "/decision_work_type",
-    label: "Ажлын төрөл",
-    icon: Hammer,
-  },
-  {
-    href: "/decision_budget",
-    label: "Төсөв",
-    icon: Wallet,
+    label: "Захирамжийн төсөл",
+    items: [
+      { href: "/decision_work_type", label: "Ажлын төрөл", icon: Hammer },
+      { href: "/decision_budget", label: "Төсөв", icon: Wallet },
+      { href: "/decision_review_unit", label: "Төсөл хянах нэгж", icon: Building },
+    ],
   },
 ];
+
+const NAV_CONFIG = NAV_CONFIG_GROUPS.flatMap((g) => g.items);
 
 const NAV_HR = [
   { href: "/person", label: "Иргэн, хуулийн этгээд", icon: IdCard },
@@ -291,16 +280,20 @@ export function Sidebar() {
       <div
         className={cn(
           "flex items-center h-[85px] border-b border-slate-100 dark:border-[#37394d] shrink-0 overflow-hidden transition-all duration-300",
-          collapsed ? "justify-center px-0" : "gap-3 px-5",
+          collapsed ? "justify-center px-0" : "gap-3 px-4",
         )}
       >
-        <div className="relative h-8 w-8 shrink-0 flex items-center justify-center">
-          <div className="absolute inset-0 rotate-45 rounded-[6px] bg-[#02c0ce]" />
-          <Layers className="relative z-10 h-4 w-4 text-white" />
+        {/* Цагаан дэвсгэр — dark горимд лого (хар хөх) харагдана */}
+        <div className="h-10 w-10 shrink-0 rounded-lg bg-white p-0.5">
+          <Image src="/logo.png" alt="Лого" width={40} height={40} priority className="h-full w-full object-contain" />
         </div>
         {!collapsed && (
-          <span className="text-[15px] font-bold text-slate-800 dark:text-white tracking-tight whitespace-nowrap">
-            Газрын Систем
+          // Урт нэр — 2 мөрөнд. Nunito Sans 12px bold-оор эхний мөр ≈145px,
+          // текстэд үлдэх зай ≈155px (w-60 − px-4 − лого 40 − gap-3).
+          <span className="min-w-0 whitespace-nowrap text-[12px] font-bold leading-snug text-slate-800 dark:text-white tracking-tight">
+            Нийслэлийн газар зохион
+            <br />
+            байгуулалтын алба
           </span>
         )}
       </div>
@@ -489,14 +482,23 @@ export function Sidebar() {
                     >
                       <div className="overflow-hidden">
                         <nav className="space-y-0.5">
-                          {NAV_CONFIG.map((item) => (
-                            <NavItem
-                              key={item.href}
-                              {...item}
-                              active={isActive(item.href)}
-                              collapsed={collapsed}
-                              indent
-                            />
+                          {NAV_CONFIG_GROUPS.map((group) => (
+                            <div key={group.label} className="pt-1.5 first:pt-0.5">
+                              {!collapsed && (
+                                <p className="pb-0.5 pl-6 pr-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400/80 dark:text-[#6c7a8d]">
+                                  {group.label}
+                                </p>
+                              )}
+                              {group.items.map((item) => (
+                                <NavItem
+                                  key={item.href}
+                                  {...item}
+                                  active={isActive(item.href)}
+                                  collapsed={collapsed}
+                                  indent
+                                />
+                              ))}
+                            </div>
                           ))}
                         </nav>
                       </div>

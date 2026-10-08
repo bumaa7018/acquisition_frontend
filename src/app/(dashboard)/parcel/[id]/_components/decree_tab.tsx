@@ -96,7 +96,7 @@ export function DecreeTab({ parcelId }: { parcelId: string }) {
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {d.decision_date ? formatDate(d.decision_date) : "—"}
                   </td>
-                  <td className="px-4 py-3 max-w-[160px] text-slate-600 dark:text-slate-300 truncate">
+                  <td className="px-4 py-3 min-w-[160px] text-slate-600 dark:text-slate-300 whitespace-normal break-words">
                     {d.location || "—"}
                   </td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300 tabular-nums">
@@ -112,12 +112,12 @@ export function DecreeTab({ parcelId }: { parcelId: string }) {
                       {DECISION_DRAFT_STATUS_LABELS[status] ?? "—"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 max-w-[180px]">
-                    <p className="text-slate-700 dark:text-slate-200 font-medium truncate">
+                  <td className="px-4 py-3 min-w-[180px]">
+                    <p className="text-slate-700 dark:text-slate-200 font-medium whitespace-normal break-words">
                       {d.current_progress_type_name || "Төсөл"}
                     </p>
                     {(d.current_progress_recipient || d.current_progress_date) && (
-                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 whitespace-normal break-words">
                         {d.current_progress_recipient || "—"}
                         {d.current_progress_date ? ` · ${formatDate(d.current_progress_date)}` : ""}
                       </p>

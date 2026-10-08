@@ -297,8 +297,8 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                         {d.budget_name || "Тодорхойгүй"}
                       </span>
                     </td>
-                    <td className="max-w-[200px] truncate px-4 py-3 text-slate-600 dark:text-slate-300">
-                      {d.funding_source_names || "—"}
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                      <p className="min-w-[160px] max-w-[260px] whitespace-normal break-words">{d.funding_source_names || "—"}</p>
                     </td>
                     <td className="px-4 py-3 tabular-nums font-semibold text-slate-700 dark:text-slate-200">
                       {d.funding_local_amount ? money(d.funding_local_amount) : "—"}
@@ -433,7 +433,9 @@ export function FinancingTab({ id, canEdit }: { id: string; canEdit: boolean }) 
                     <td className="px-4 py-3 tabular-nums font-semibold text-slate-700 dark:text-slate-200">
                       {src.amount != null ? `${src.amount.toLocaleString()} ${src.currency ?? "MNT"}` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{src.note || "—"}</td>
+                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                      <p className="min-w-[140px] max-w-[260px] whitespace-normal break-words">{src.note || "—"}</p>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       {isSenior && (
                         <div className="inline-flex items-center gap-1">

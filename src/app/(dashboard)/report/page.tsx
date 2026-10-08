@@ -29,6 +29,7 @@ import { logger } from "@/lib/logger";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
+import { AbbrevAmount, AmountHint } from "@/components/ui/amount-hint";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -77,7 +78,7 @@ function HBar({
   return (
     <div className="flex items-center gap-2" title={label}>
       <span
-        className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 text-right leading-tight truncate"
+        className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 text-right leading-tight whitespace-normal break-words"
         style={{ width: 86 }}
       >
         {label}
@@ -974,6 +975,7 @@ export default function ReportPage() {
           <div className="flex-1 flex flex-col justify-center">
             <span className="text-[24px] font-black tabular-nums leading-none text-slate-800 dark:text-white block">
               {summaryLoading ? "…" : (stats.totalComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 3 })} тэрбум ₮
+              {!summaryLoading && <AmountHint value={stats.totalComp} className="ml-1" />}
             </span>
             <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
               {summaryLoading ? "…" : `${formatMoney(stats.totalComp)} ₮`}
@@ -981,21 +983,39 @@ export default function ReportPage() {
           </div>
           <div className="grid grid-cols-3 gap-x-2 mt-3 pt-3 border-t border-slate-100 dark:border-[#37394d]">
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Газар</p>
-              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
-                {summaryLoading ? "…" : (stats.landComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">Газар</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 break-words">
+                {summaryLoading ? (
+                  "…"
+                ) : (
+                  <AbbrevAmount value={stats.landComp} className="flex-wrap">
+                    {(stats.landComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+                  </AbbrevAmount>
+                )}
               </p>
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Үл хөдлөх</p>
-              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
-                {summaryLoading ? "…" : (stats.realStateComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">Үл хөдлөх</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 break-words">
+                {summaryLoading ? (
+                  "…"
+                ) : (
+                  <AbbrevAmount value={stats.realStateComp} className="flex-wrap">
+                    {(stats.realStateComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+                  </AbbrevAmount>
+                )}
               </p>
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">Эд хөрөнгө</p>
-              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 truncate">
-                {summaryLoading ? "…" : (stats.propertyComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">Эд хөрөнгө</p>
+              <p className="text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200 break-words">
+                {summaryLoading ? (
+                  "…"
+                ) : (
+                  <AbbrevAmount value={stats.propertyComp} className="flex-wrap">
+                    {(stats.propertyComp / 1_000_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 })}
+                  </AbbrevAmount>
+                )}
               </p>
             </div>
           </div>
@@ -1206,11 +1226,11 @@ export default function ReportPage() {
                       <td className="px-3 py-3.5 text-slate-400 tabular-nums">
                         {rowNum}
                       </td>
-                      <td className="px-3 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 max-w-[140px]">
-                        <span className="truncate block">{constructionType || "—"}</span>
+                      <td className="px-3 py-3.5 text-[12px] text-slate-600 dark:text-slate-300 min-w-[140px]">
+                        <span className="block whitespace-normal break-words">{constructionType || "—"}</span>
                       </td>
                       <td className="px-3 py-3.5">
-                        <p className="text-slate-700 dark:text-slate-200 truncate max-w-[200px]">
+                        <p className="text-slate-700 dark:text-slate-200 min-w-[180px] whitespace-normal break-words">
                           {p.acquisition_name}
                         </p>
                       </td>
@@ -1219,8 +1239,7 @@ export default function ReportPage() {
                       </td>
                       <td className="px-3 py-3.5">
                         <p
-                          className="text-slate-700 dark:text-slate-200 truncate max-w-[220px]"
-                          title={holderFull}
+                          className="text-slate-700 dark:text-slate-200 min-w-[180px] whitespace-normal break-words"
                         >
                           {holderFull || "—"}
                         </p>

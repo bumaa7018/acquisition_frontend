@@ -96,7 +96,7 @@ export function SortableHeaderRow({
                 active ? "text-[#02c0ce] dark:text-[#02c0ce]" : ""
               }`}
             >
-              <span className="truncate">{col.label}</span>
+              <span className="whitespace-normal break-words">{col.label}</span>
               <Icon
                 className={`h-3 w-3 shrink-0 transition-opacity ${
                   active ? "opacity-100" : "opacity-30 group-hover:opacity-70"

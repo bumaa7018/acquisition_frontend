@@ -161,7 +161,7 @@ export default function PrintMapDialog({
   const [parcelsAreaM2, setParcelsAreaM2] = useState(0);
 
   useEffect(() => {
-    void loadImage("/org-logo.svg").then((img) => {
+    void loadImage("/logo.png").then((img) => {
       logoRef.current = img;
     });
   }, []);

@@ -7,13 +7,12 @@ import { COMPENSATION_RECEIPT_TYPE, PAYMENT_STAGE_OPTIONS, todayISO } from "@/li
 import type { DocumentPaymentInput } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
+import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
 
 type ModalState = "closed" | "picking" | "confirming";
-const EVALUATION_STATUS_NAME = "Үнэлгээ хийх";
-const RELEASED_STATUS_NAME = "Чөлөөлсөн";
 
 export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStage = false }: {
   acqId: string;
@@ -168,16 +167,18 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
   // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС. Хатуу хүснэгтэд зөвхөн
   // анхны 6 төлөв байдаг тул шинэ төлөв саарлаар харагддаг байв.
   const statusStyle = useParcelStatusStyle();
+  const statusRules = useParcelStatusRules();
 
   const currentStatusId = parcelFull?.status_id ?? parcelFull?.status;
   const currentStatusName = parcelFull?.status_name;
   const currentStyle = statusStyle(currentStatusId, currentStatusName);
+  // Төлөвийн дүрэм «Нэгж талбарын төлөв» тохиргооноос (өмнө НЭРЭЭР шалгадаг байв).
+  const selectedRules = statusRules(selected?.id);
   const isMovingFromEvaluationToReleased =
-    currentStatusName === EVALUATION_STATUS_NAME && selected?.name === RELEASED_STATUS_NAME;
+    statusRules(currentStatusId).is_valuation_stage && selectedRules.is_released;
   const blocksForUnapprovedCompensation = isMovingFromEvaluationToReleased && !compApproved;
   // Эцсийн СӨРӨГ хоёр төлөвт шалтгаан заавал.
-  const reasonRequired =
-    selected?.name === "Нөлөөлөгдсөн гарсан" || selected?.name === "Татгалзсан";
+  const reasonRequired = selectedRules.requires_reason;
   const reasonMissing = reasonRequired && !statusReason.trim();
   const requirementsBlocking = requirementsLoading || requirementsError || missingRequirements.length > 0;
 
@@ -305,7 +306,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                             className="mt-2 inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#02c0ce] ring-1 ring-slate-200 hover:bg-[#02c0ce]/5 dark:bg-[#1e1f27] dark:ring-white/[0.08]"
                           >
                             <Paperclip className="h-3 w-3 shrink-0" />
-                            <span className="truncate">{h.attachment_name || "Хавсралт"}</span>
+                            <span className="min-w-0 break-words">{h.attachment_name || "Хавсралт"}</span>
                           </a>
                         )}
                       </div>
@@ -486,11 +487,11 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                               <p className="text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300">{r.document_type_name}</p>
                               {r.document_url ? (
                                 <a href={r.document_url} target="_blank" rel="noreferrer"
-                                  className="block truncate text-[11px] text-emerald-700/80 underline-offset-2 hover:underline dark:text-emerald-300/80">
+                                  className="block break-words text-[11px] text-emerald-700/80 underline-offset-2 hover:underline dark:text-emerald-300/80">
                                   {r.document_name || "Орсон"}
                                 </a>
                               ) : (
-                                <p className="truncate text-[11px] text-emerald-700/80 dark:text-emerald-300/80">{r.document_name || "Орсон"}</p>
+                                <p className="break-words text-[11px] text-emerald-700/80 dark:text-emerald-300/80">{r.document_name || "Орсон"}</p>
                               )}
                             </div>
                           </div>
@@ -625,7 +626,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </div>
               )}
 
-              {selected.name === RELEASED_STATUS_NAME && !hasApprovedComp && (
+              {selectedRules.is_released && !hasApprovedComp && (
                 <div className="mx-5 mb-4 rounded-xl border border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/15 px-4 py-3 flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                   <p className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
@@ -651,7 +652,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                     uploadingType !== null ||
                     !!fileError ||
                     blocksForUnapprovedCompensation ||
-                    (selected.name === RELEASED_STATUS_NAME && !hasApprovedComp)
+                    (selectedRules.is_released && !hasApprovedComp)
                   }
                   className="flex-1 rounded-xl py-2.5 text-[13px] font-semibold bg-[#02c0ce] text-white hover:bg-[#02c0ce]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >

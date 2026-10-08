@@ -39,7 +39,7 @@ export function RejectedList({ parcels }: Props) {
                 <span className="text-[11px] text-slate-400">{p.area_m2.toLocaleString()} м²</span>
               </div>
               {p.note && (
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug line-clamp-2">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug whitespace-normal break-words">
                   {p.note}
                 </p>
               )}

@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { Banknote, Hourglass, Landmark, MapPinned } from "lucide-react";
+import { AmountHint } from "@/components/ui/amount-hint";
 
 const TOOLTIP_STYLE = {
   background: "#1e1f27",
@@ -106,7 +107,7 @@ function StageTile({
     <div className="ap-card flex items-start gap-3 px-4 py-3">
       <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tone }} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        <p className="break-words text-[10px] font-semibold uppercase tracking-wider text-slate-400">
           {label}
         </p>
         <p className="flex items-baseline gap-1.5">
@@ -119,8 +120,9 @@ function StageTile({
             </span>
           )}
         </p>
-        <p className="truncate text-[11px] tabular-nums text-slate-500 dark:text-slate-400" title={money(amount)}>
+        <p className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400" title={money(amount)}>
           {billions(amount)}
+          <AmountHint value={amount} className="ml-1" />
         </p>
       </div>
     </div>
@@ -186,17 +188,18 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
           { label: "Эд хөрөнгө, зардал", value: stats.propertyAmount, color: CHART_COLORS.property },
         ].map((row) => (
           <div key={row.label} className="min-w-0 px-4 py-3">
-            <p className="mb-1 inline-flex items-center gap-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: row.color }} />
-              {row.label}
+            <p className="mb-1 flex items-start gap-1.5 break-words text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ background: row.color }} />
+              <span className="min-w-0">{row.label}</span>
             </p>
             <p
-              className="truncate text-[15px] font-bold tabular-nums text-slate-800 dark:text-white"
+              className="text-[15px] font-bold tabular-nums text-slate-800 dark:text-white"
               title={money(row.value)}
             >
               {billions(row.value)}
+              <AmountHint value={row.value} className="ml-1" />
             </p>
-            <p className="truncate text-[11px] tabular-nums text-slate-400">
+            <p className="text-[11px] tabular-nums text-slate-400">
               {approvedTotal > 0 ? `${Math.round((row.value / approvedTotal) * 100)}%` : "—"}
             </p>
           </div>
@@ -274,9 +277,9 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
             <div className="mt-1 divide-y divide-slate-100 dark:divide-[#37394d]">
               {stageRows.map((row) => (
                 <div key={row.name} className="flex items-center gap-3 py-1.5">
-                  <span className="inline-flex min-w-0 flex-1 items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-                    <span className="truncate">{row.name}</span>
+                  <span className="inline-flex min-w-0 flex-1 items-start gap-2 text-[12px] text-slate-600 dark:text-slate-300">
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                    <span className="min-w-0 break-words">{row.name}</span>
                   </span>
                   <span className="w-14 shrink-0 text-right text-[12px] tabular-nums text-slate-500">
                     {row.value.toLocaleString()}
@@ -304,6 +307,7 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
             title={money(approvedTotal)}
           >
             {billions(approvedTotal)}
+            <AmountHint value={approvedTotal} className="ml-1" />
           </p>
         </div>
         {amountChart.length === 0 ? (
@@ -349,9 +353,9 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
             <div className="mt-1 divide-y divide-slate-100 dark:divide-[#37394d]">
               {amountChart.map((row) => (
                 <div key={row.name} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="inline-flex min-w-0 items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-                    <span className="truncate">{row.name}</span>
+                  <span className="inline-flex min-w-0 items-start gap-2 text-[12px] text-slate-600 dark:text-slate-300">
+                    <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                    <span className="min-w-0 break-words">{row.name}</span>
                   </span>
                   <span className="flex shrink-0 items-baseline gap-2">
                     <span
@@ -359,6 +363,7 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
                       title={money(row.value)}
                     >
                       {billions(row.value)}
+                      <AmountHint value={row.value} className="ml-1" />
                     </span>
                     <span className="w-10 text-right text-[11px] tabular-nums text-slate-400">
                       {approvedTotal > 0 ? `${Math.round((row.value / approvedTotal) * 100)}%` : "—"}
@@ -373,6 +378,7 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
                   title={money(approvedTotal)}
                 >
                   {billions(approvedTotal)}
+                  <AmountHint value={approvedTotal} className="ml-1" />
                 </span>
               </div>
             </div>

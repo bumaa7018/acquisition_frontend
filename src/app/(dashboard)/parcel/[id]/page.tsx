@@ -1,4 +1,5 @@
 "use client";
+import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import React, { useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -86,23 +87,19 @@ export default function ParcelDetailPage() {
     },
   });
 
-  const PARCEL_FINAL_STATUSES = [
-    "Чөлөөлсөн",
-    "Татгалзсан",
-    "Нөлөөллөөс гарсан",
-  ];
-  // Татгалзсан төлөвтэй ч бусад төлөв рүү шилжих боломжтой байх ёстой тул
-  // энэ төлвийг явцын (status) хаалтаас чөлөөлнө — бусад таб хаалттай хэвээр.
-  const PROGRESS_FINAL_STATUSES = ["Чөлөөлсөн", "Нөлөөллөөс гарсан"];
+  // Түгжээ нь «Нэгж талбарын төлөв»-ийн ДҮРМЭЭС (parcel_status): «Эцсийн
+  // төлөв» — мэдээллийн табууд; «Явц түгжих» — явцын таб (Татгалзсан нь
+  // эцсийн боловч буцааж шилжих боломжтой тул явц түгжихгүй). Өмнө НЭРЭЭР
+  // шалгадаг байсан ба «Нөлөөлөгдсөн гарсан»-ыг буруу нэрээр бичсэн тул тэр
+  // төлөвт түгжигддэггүй байв.
+  const statusRules = useParcelStatusRules();
+  const parcelRules = statusRules(parcel?.status_id ?? parcel?.status);
   const isAcqConfirmed = acquisition?.status === ACQ_STATUS.CONFIRMED;
 
   const isBeforeFieldStage =
     acquisition != null && acquisition.status < ACQ_STATUS.FIELD_SURVEY;
-  const isParcelLocked =
-    isAcqConfirmed || PARCEL_FINAL_STATUSES.includes(parcel?.status_name ?? "");
-  const isProgressLocked =
-    isAcqConfirmed ||
-    PROGRESS_FINAL_STATUSES.includes(parcel?.status_name ?? "");
+  const isParcelLocked = isAcqConfirmed || parcelRules.is_final;
+  const isProgressLocked = isAcqConfirmed || parcelRules.locks_progress;
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     {
@@ -193,6 +190,7 @@ export default function ParcelDetailPage() {
       parcel.status_name,
       acquisition.professional_org_id,
       parcel.independent_org_id,
+      parcelRules.is_valuation_stage,
     )
   ) {
     return (

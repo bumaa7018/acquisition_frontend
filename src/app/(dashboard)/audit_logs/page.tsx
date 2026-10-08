@@ -255,12 +255,12 @@ export default function AuditLogsPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="font-medium">{label(RESOURCE_LABELS, log.resource_type)}</div>
-                      <div className="mt-0.5 max-w-[220px] truncate font-mono text-[11px] text-slate-400" title={log.resource_id}>
+                      <div className="mt-0.5 min-w-[140px] max-w-[220px] whitespace-normal break-all font-mono text-[11px] text-slate-400">
                         {log.resource_id || "-"}
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="max-w-[260px] truncate font-mono text-[11px] text-slate-500 dark:text-slate-400" title={JSON.stringify(log.details ?? {})}>
+                      <div className="min-w-[220px] max-w-[420px] whitespace-normal break-all font-mono text-[11px] text-slate-500 dark:text-slate-400">
                         {JSON.stringify(log.details ?? {})}
                       </div>
                     </td>

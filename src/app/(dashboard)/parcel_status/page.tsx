@@ -5,7 +5,7 @@ import { parcelStatusApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { Grid2x2, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ParcelStatus } from "@/types";
+import type { ParcelStatus, ParcelStatusRules } from "@/types";
 import { getParcelStatusStyle, PARCEL_STATUS_FALLBACK_COLOR } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
@@ -14,10 +14,61 @@ function isHexColor(v: string) {
   return /^#[0-9a-fA-F]{6}$/.test(v);
 }
 
+/**
+ * Төлөвийн ДҮРЭМ — өмнө кодонд төлөвийн нэр/дугаараар хатуу бичигдсэн байсан.
+ * Өгөгдмөл нь seed 000049 (өмнөх дүрэмтэй ижил).
+ */
+const RULE_DEFS: { key: keyof ParcelStatusRules; label: string; hint: string }[] = [
+  {
+    key: "is_final",
+    label: "Эцсийн төлөв",
+    hint: "Нэгж талбарын мэдээлэл, эзэмшигч, хавсралт, санхүүгийн засвар түгжигдэнэ. Чөлөөлөлтийг баталгаажуулахад бүх нэгж талбар ийм төлөвтэй байх ёстой.",
+  },
+  {
+    key: "locks_progress",
+    label: "Явц түгжих",
+    hint: "Энэ төлөвөөс цааш явц солихгүй.",
+  },
+  {
+    key: "is_valuation_stage",
+    label: "Үнэлгээний шат",
+    hint: "Мэргэжлийн байгууллага, МИКА нэгж талбарыг харж, үнэлгээ засна. Байгууллагад мэдэгдэл явна.",
+  },
+  {
+    key: "is_released",
+    label: "Захирамжид холбогдоно",
+    hint: "Захирамжийн төсөлд холбож болно. Шилжихэд батлагдсан нөхөх олговор шаардана. Чөлөөлөлт устгах, хил өөрчлөхийг хаана.",
+  },
+  {
+    key: "requires_reason",
+    label: "Шалтгаан заавал",
+    hint: "Энэ төлөвт шилжихэд шалтгаан бичнэ.",
+  },
+];
+
+const NO_RULES: ParcelStatusRules = {
+  is_final: false,
+  locks_progress: false,
+  is_valuation_stage: false,
+  is_released: false,
+  requires_reason: false,
+};
+
+function rulesOf(item?: ParcelStatus | null): ParcelStatusRules {
+  return {
+    is_final: !!item?.is_final,
+    locks_progress: !!item?.locks_progress,
+    is_valuation_stage: !!item?.is_valuation_stage,
+    is_released: !!item?.is_released,
+    requires_reason: !!item?.requires_reason,
+  };
+}
+
 export default function ParcelStatusPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<ParcelStatus | null>(null);
   const [form, setForm] = useState({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+  const [rules, setRules] = useState<ParcelStatusRules>(NO_RULES);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
 
@@ -33,6 +84,7 @@ export default function ParcelStatusPage() {
         name: form.name.trim(),
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
         color: form.color,
+        ...rules,
       }),
     onSuccess: () => {
       toast.success("Нэгж талбарын статус үүслээ");
@@ -50,6 +102,7 @@ export default function ParcelStatusPage() {
         name: form.name.trim() || undefined,
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
         color: form.color,
+        ...rules,
       }),
     onSuccess: () => {
       toast.success("Хадгалагдлаа");
@@ -77,12 +130,14 @@ export default function ParcelStatusPage() {
       sort_order: String(item.sort_order),
       color: item.color || PARCEL_STATUS_FALLBACK_COLOR,
     });
+    setRules(rulesOf(item));
     setShowCreate(false);
   };
 
   const openCreate = () => {
     setEditItem(null);
     setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+    setRules(NO_RULES);
     setShowCreate(true);
   };
 
@@ -186,6 +241,24 @@ export default function ParcelStatusPage() {
                 </p>
               </div>
             </div>
+            {/* ДҮРЭМ — нэгж талбарын засвар, явц, гадаад хандалт, чөлөөлөлтийг удирдана. */}
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 p-3 dark:border-white/[0.08]">
+              <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">Дүрэм</p>
+              {RULE_DEFS.map((d) => (
+                <label key={d.key} className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-[#02c0ce]"
+                    checked={rules[d.key]}
+                    onChange={(e) => setRules((cur) => ({ ...cur, [d.key]: e.target.checked }))}
+                  />
+                  <span>
+                    <span className="block text-[12.5px] font-medium text-slate-700 dark:text-slate-200">{d.label}</span>
+                    <span className="block text-[11px] leading-snug text-slate-400 dark:text-slate-500">{d.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={submit}
@@ -272,6 +345,19 @@ export default function ParcelStatusPage() {
                       <p className="text-[12px] text-slate-400 dark:text-slate-500">
                         Эрэмбэ: {item.sort_order}
                       </p>
+                      {RULE_DEFS.some((d) => item[d.key]) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {RULE_DEFS.filter((d) => item[d.key]).map((d) => (
+                            <span
+                              key={d.key}
+                              title={d.hint}
+                              className="rounded-md bg-[#02c0ce]/10 px-1.5 py-0.5 text-[10.5px] font-medium text-[#02a3af] dark:text-[#3fd4df]"
+                            >
+                              {d.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">

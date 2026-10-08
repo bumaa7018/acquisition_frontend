@@ -36,7 +36,7 @@ export default function DocumentTypePage() {
         description: form.description.trim() || undefined,
       }),
     onSuccess: () => {
-      toast.success("Баримт бичгийн төрөл үүслээ");
+      toast.success("Хавсралтын төрөл үүслээ");
       queryClient.invalidateQueries({ queryKey: ["document-types"] });
       setShowCreate(false);
       setForm({ type: "", name: "", description: "" });
@@ -103,7 +103,7 @@ export default function DocumentTypePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-            Баримт бичгийн төрөл
+            Хавсралтын төрөл
           </h1>
           <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
             Хавсаргах баримт бичгийн төрлүүдийн жагсаалт
@@ -169,7 +169,7 @@ export default function DocumentTypePage() {
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
           <p className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-            Баримт бичгийн төрлүүд
+            Хавсралтын төрлүүд
           </p>
         </div>
 
@@ -183,7 +183,7 @@ export default function DocumentTypePage() {
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="h-10 w-10 text-slate-300 dark:text-[#37394d] mb-3" />
             <p className="text-[13px] text-slate-400 dark:text-slate-500">
-              Баримт бичгийн төрөл олдсонгүй
+              Хавсралтын төрөл олдсонгүй
             </p>
             <button
               onClick={openCreate}
@@ -213,7 +213,7 @@ export default function DocumentTypePage() {
                       </span>
                     </div>
                     {item.description && (
-                      <p className="text-[12px] text-slate-400 dark:text-slate-500 truncate max-w-xs">
+                      <p className="text-[12px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">
                         {item.description}
                       </p>
                     )}

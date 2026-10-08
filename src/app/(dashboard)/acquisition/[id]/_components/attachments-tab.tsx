@@ -126,7 +126,7 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
                     <FileText className="h-4 w-4 text-red-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">{doc.name}</p>
+                    <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 whitespace-normal break-words">{doc.name}</p>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                       {typeName && <span className="text-[#02c0ce] mr-1.5">{typeName} ·</span>}
                       {formatSize(doc.size_bytes)} · {formatDate(doc.uploaded_at)}

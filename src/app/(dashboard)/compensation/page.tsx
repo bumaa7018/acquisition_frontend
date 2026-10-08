@@ -257,15 +257,17 @@ export default function CompensationsPage() {
                       </td>
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-slate-800 dark:text-white">{holderName}</p>
-                        <p className="text-[11px] text-slate-400 truncate max-w-[180px]">
+                        <p className="min-w-[160px] max-w-[280px] whitespace-normal break-words text-[11px] leading-snug text-slate-400">
                           {comp.acquisition_name}
                         </p>
                       </td>
                       <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                         {comp.holder_register_no || "—"}
                       </td>
-                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 max-w-[160px] truncate">
-                        {comp.acquisition_name || "—"}
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400">
+                        <p className="min-w-[160px] max-w-[320px] whitespace-normal break-words leading-snug">
+                          {comp.acquisition_name || "—"}
+                        </p>
                       </td>
                       <td className="px-5 py-3.5">
                         <span

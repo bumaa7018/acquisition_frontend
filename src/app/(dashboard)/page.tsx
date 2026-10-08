@@ -22,7 +22,8 @@ import { profApi } from "@/lib/prof-api";
 import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
 import { FinanceDashboard } from "@/components/dashboard/finance-dashboard";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
+import { cn, formatMoneyExact } from "@/lib/utils";
+import { AbbrevAmount } from "@/components/ui/amount-hint";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import type { ParcelStatus } from "@/types";
@@ -503,7 +504,7 @@ function PlanSelect({
                     <Highlight text={p.plan_code} query={query} />
                   </span>
                   {p.name && (
-                    <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                    <span className="ml-2 text-[11px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">
                       {p.name}
                     </span>
                   )}
@@ -650,7 +651,7 @@ function HBar({
   return (
     <div className="flex items-center gap-2">
       <span
-        className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 text-right leading-tight truncate"
+        className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 text-right leading-tight whitespace-normal break-words"
         style={{ width: 86 }}
       >
         {label}
@@ -783,6 +784,7 @@ function ExternalDashboard() {
     name: VALUATION_TYPE_LABELS[type.valuation_type] ?? type.valuation_type,
     count: type.count,
     amount: Math.round(type.amount / 1_000_000),
+    rawAmount: type.amount,
     color: VALUATION_TYPE_COLORS[index % VALUATION_TYPE_COLORS.length],
   }));
   const parcelStatusChart = statuses.slice(0, 6).map((status) => ({
@@ -908,7 +910,11 @@ function ExternalDashboard() {
           <div className="rounded-lg bg-slate-50 dark:bg-white/[0.03] px-3 py-3 mb-4">
             <p className="text-[11px] text-slate-400 dark:text-slate-500">Нийт дүн</p>
             <p className="mt-1 text-2xl font-black tabular-nums text-slate-800 dark:text-white">
-              {isLoading ? <Skel w="w-20" /> : `${moneyShort(totalCompensation)} ₮`}
+              {isLoading ? (
+                <Skel w="w-20" />
+              ) : (
+                <AbbrevAmount value={totalCompensation}>{`${moneyShort(totalCompensation)} ₮`}</AbbrevAmount>
+              )}
             </p>
             {isFinance && (
               <div className="mt-3">
@@ -933,7 +939,13 @@ function ExternalDashboard() {
                   <CartesianGrid vertical={false} stroke="#eef2f7" strokeDasharray="3 3" />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={EXTERNAL_TOOLTIP_STYLE} />
+                  <Tooltip
+                    contentStyle={EXTERNAL_TOOLTIP_STYLE}
+                    formatter={(value: unknown, name: unknown, item: { payload?: { rawAmount?: number } }) => [
+                      `${Number(value ?? 0).toLocaleString()} сая (${formatMoneyExact(item?.payload?.rawAmount)})`,
+                      String(name ?? ""),
+                    ]}
+                  />
                   <Bar dataKey="amount" name="Дүн (сая ₮)" radius={[5, 5, 0, 0]}>
                     {valuationTypeChart.map((entry) => (
                       <Cell key={entry.name} fill={entry.color} />
@@ -1011,7 +1023,7 @@ function ExternalDashboard() {
                       parcelCount={land.parcel_count}
                       finalCount={land.final_parcel_count}
                     />
-                    <span className="truncate">{land.acquisition_name || land.plan_code}</span>
+                    <span className="min-w-0 whitespace-normal break-words">{land.acquisition_name || land.plan_code}</span>
                   </p>
                   <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
                     {land.plan_code} · {land.parcel_count ?? 0} нэгж талбар
@@ -1548,22 +1560,26 @@ export default function DashboardPage() {
           {
             label: "НИЙТ НӨХӨХ ОЛГОВОР",
             sub: "тэрбум ₮",
-            value: isLoading ? null : `${totalCompensation.toFixed(2)} тэр`,
+            value: isLoading ? null : (
+              <AbbrevAmount value={compensation?.total ?? dashData?.total_compensation}>
+                {`${totalCompensation.toFixed(2)} тэр`}
+              </AbbrevAmount>
+            ),
             color: "#0acf97",
             span: "col-span-2 xl:col-span-5",
             details: compensation ? [
-              { label: "Захирамж гарсан", value: `${billion(compensation.issued).toFixed(2)} тэр`, color: "#0acf97",
+              { label: "Захирамж гарсан", value: <AbbrevAmount value={compensation.issued}>{`${billion(compensation.issued).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0acf97",
                 pct: compensation.total ? (compensation.issued / compensation.total) * 100 : 0 },
-              { label: "Захирамжгүй · үнэлгээ баталгаажсан", value: `${billion(compensation.approved).toFixed(2)} тэр`, color: "#0f9ed5",
+              { label: "Захирамжгүй · үнэлгээ баталгаажсан", value: <AbbrevAmount value={compensation.approved}>{`${billion(compensation.approved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0f9ed5",
                 pct: compensation.total ? (compensation.approved / compensation.total) * 100 : 0 },
-              { label: "Захирамжгүй · баталгаажаагүй", value: `${billion(compensation.unapproved).toFixed(2)} тэр`, color: "#f9bc0b",
+              { label: "Захирамжгүй · баталгаажаагүй", value: <AbbrevAmount value={compensation.unapproved}>{`${billion(compensation.unapproved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#f9bc0b",
                 pct: compensation.total ? (compensation.unapproved / compensation.total) * 100 : 0 },
             ] : undefined,
           },
         ] as {
-          label: string; sub: React.ReactNode; subClass?: string; value: string | number | null; color: string; span: string;
+          label: string; sub: React.ReactNode; subClass?: string; value: React.ReactNode; color: string; span: string;
           icon?: typeof MapIcon; bg?: string;
-          details?: { label: string; value: string; color: string; pct?: number }[];
+          details?: { label: string; value: React.ReactNode; color: string; pct?: number }[];
         }[]).map((s) => {
           const Icon = s.icon;
           return (
@@ -1593,7 +1609,7 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-1.5 text-slate-500 dark:text-slate-400">
                             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.color }} />
-                            <span className="truncate" title={d.label}>{d.label}</span>
+                            <span className="min-w-0 whitespace-normal break-words">{d.label}</span>
                           </span>
                           <span className="shrink-0 font-semibold tabular-nums text-slate-700 dark:text-slate-200">{d.value}</span>
                         </div>
@@ -1634,10 +1650,10 @@ export default function DashboardPage() {
           // ингэснээр газрын зураг дээш татагдаж илүү өндөр талбай эзэлнэ.
           <div key={s.label} className="ap-card px-4 py-2 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 truncate">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 whitespace-normal break-words">
                 {s.label}
               </p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{s.sub}</p>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 whitespace-normal break-words">{s.sub}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2.5">
               <span className="text-[20px] font-black tabular-nums leading-none" style={{ color: s.color }}>
@@ -1663,17 +1679,17 @@ export default function DashboardPage() {
           title="Эцсийн төлөвт (Нөлөөлөгдсөн гарсан · Татгалзсан · Чөлөөлсөн) шилжсэн нэгж талбарын хувь"
         >
           <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            <p className="whitespace-normal break-words text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
               Чөлөөлөлтийн гүйцэтгэл
             </p>
             {isLoading ? (
               <p className="text-[10px] text-slate-400">…</p>
             ) : perf.single ? (
-              <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">
+              <p className="whitespace-normal break-words text-[10px] text-slate-400 dark:text-slate-500">
                 {perf.single.acquisition_name || perf.single.plan_code}
               </p>
             ) : (
-              <p className="truncate text-[10px] text-slate-400 dark:text-slate-500">
+              <p className="whitespace-normal break-words text-[10px] text-slate-400 dark:text-slate-500">
                 <span className="font-bold text-[#0acf97]">{perf.full}</span> бүрэн ·{" "}
                 <span className="font-bold text-[#f9bc0b]">{perf.partial}</span> дутуу ·{" "}
                 <span className="font-bold text-[#94a3b8]">{perf.fresh}</span> шинэ
@@ -1756,7 +1772,7 @@ export default function DashboardPage() {
               <div className="space-y-2.5">
                 {STATUSES.map((s) => (
                   <div key={s.key} className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
                       <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: s.color }} />
                       {s.label}
                     </span>
@@ -1785,7 +1801,7 @@ export default function DashboardPage() {
                       className="h-2.5 w-2.5 shrink-0 rounded-sm"
                       style={{ background: s.color || PARCEL_STATUS_STYLES[s.id]?.color || "#94a3b8" }}
                     />
-                    <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate">{s.name}</span>
+                    <span className="min-w-0 text-[11px] text-slate-600 dark:text-slate-400 whitespace-normal break-words">{s.name}</span>
                   </div>
                 ))}
             </div>
@@ -1879,7 +1895,7 @@ export default function DashboardPage() {
                           parcelCount={acq.parcel_count}
                           finalCount={acq.final_parcel_count}
                         />
-                        <span className="truncate">{acq.acquisition_name || "—"}</span>
+                        <span className="min-w-0 whitespace-normal break-words">{acq.acquisition_name || "—"}</span>
                       </p>
                       <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                         {acq.plan_code} · {acq.parcel_count ?? 0} нэгж талбар

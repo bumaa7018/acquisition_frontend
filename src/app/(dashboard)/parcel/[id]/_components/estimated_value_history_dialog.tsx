@@ -121,7 +121,7 @@ export function EstimatedValueHistoryDialog({
                         className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#02c0ce] ring-1 ring-slate-200 hover:bg-[#02c0ce]/5 dark:bg-[#1e1f27] dark:ring-white/[0.08]"
                       >
                         <Paperclip className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{h.attachment_name || "Хавсралт"}</span>
+                        <span className="min-w-0 break-words">{h.attachment_name || "Хавсралт"}</span>
                       </a>
                     )}
 
@@ -130,7 +130,7 @@ export function EstimatedValueHistoryDialog({
                         <Clock className="h-3 w-3" />
                         {h.created_at ? formatDate(h.created_at) : "—"}
                       </span>
-                      {h.created_by && <span className="truncate">{h.created_by}</span>}
+                      {h.created_by && <span className="min-w-0 break-words">{h.created_by}</span>}
                     </div>
                   </div>
                 ))}

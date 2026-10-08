@@ -563,7 +563,7 @@ export function NoticeSection({
                         >
                           {item.channel === "email" ? "Имэйл" : "Е-Монголиа"}
                         </span>
-                        <span className="min-w-0 truncate text-[13px] font-medium text-slate-700 dark:text-slate-200">
+                        <span className="min-w-0 break-words text-[13px] font-medium text-slate-700 dark:text-slate-200">
                           {item.recipient}
                         </span>
                         <span className="text-[11.5px] text-slate-400 dark:text-slate-500">

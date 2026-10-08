@@ -29,7 +29,7 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-1.5">
       <span className="w-40 shrink-0 text-[11.5px] text-slate-500 dark:text-slate-400">{label}</span>
-      <span className="min-w-0 flex-1 text-[12.5px] font-medium text-slate-700 dark:text-slate-200">
+      <span className="min-w-0 flex-1 break-words text-[12.5px] font-medium text-slate-700 dark:text-slate-200">
         {value || "—"}
       </span>
     </div>

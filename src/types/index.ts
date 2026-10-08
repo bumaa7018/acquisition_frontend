@@ -495,6 +495,26 @@ export interface ParcelStatus {
    * тэр үед доорх хатуу хүснэгт/саарал өгөгдмөл рүү уначихна.
    */
   color?: string;
+  /** Төлөвийн дүрэм («Нэгж талбарын төлөв» тохиргоо). */
+  is_final?: boolean;
+  locks_progress?: boolean;
+  is_valuation_stage?: boolean;
+  is_released?: boolean;
+  requires_reason?: boolean;
+}
+
+/** Нэгж талбарын төлөвийн дүрэм — бүртгэлийн (parcel_status) тохиргоо. */
+export interface ParcelStatusRules {
+  /** Эцсийн: нэгж талбарын засвар түгжигдэнэ; чөлөөлөлт баталгаажуулахад шаардлагатай. */
+  is_final: boolean;
+  /** Энэ төлөвөөс цааш явц солихгүй. */
+  locks_progress: boolean;
+  /** Үнэлгээний шат: гадаад байгууллага харж, үнэлгээ засна. */
+  is_valuation_stage: boolean;
+  /** Захирамжид холбогдоно: захирамжийн төсөлд холбогдоно, батлагдсан олговор шаардана, чөлөөлөлт устгах / хил өөрчлөхийг хаана. */
+  is_released: boolean;
+  /** Энэ төлөвт шилжихэд шалтгаан заавал. */
+  requires_reason: boolean;
 }
 
 export const PARCEL_STATUS_STYLES: Record<
@@ -577,6 +597,8 @@ export interface Parcel extends CompensationPaymentInfo {
   address_khashaa?: string;
   right_type: number;
   status: number;
+  /** Жагсаалтын API төлөвийн дугаарыг ЭНЭ нэрээр буцаадаг (status биш). */
+  status_id?: number;
   status_name: string;
   landuse: string;
   area_m2: number;
@@ -1886,7 +1908,10 @@ export interface DecisionDraftProgressHistory {
   decision_draft_id: string;
   progress_type: string;
   progress_type_name: string;
+  /** «Хянагдаж буй газар»-ын нэр (хуучин бичлэгт чөлөөт текст). */
   recipient: string;
+  /** Төсөл хянах нэгж (decision_review_unit); хуучин бичлэгт null. */
+  review_unit_id?: number | null;
   progress_date: string;
   note: string;
   created_at: string;

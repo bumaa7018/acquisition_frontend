@@ -1,4 +1,5 @@
 "use client";
+import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import { CompensationPaymentBadge } from "@/components/ui/compensation-payment-badge";
 import React, { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -168,6 +169,8 @@ export function ParcelsTab({
   const queryClient = useQueryClient();
   // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
   const statusStyle = useParcelStatusStyle();
+  // «Үнэлгээний шат» — төлөвийн ТОХИРГООНООС (гадаад байгууллагын харагдах мөр).
+  const statusRules = useParcelStatusRules();
 
   const isExternal = isExternalSpecialRole();
   const isProfOrg = isProfessionalOrg();
@@ -377,6 +380,7 @@ export function ParcelsTab({
         parcel.status_name,
         acquisitionProfOrgId,
         parcel.independent_org_id,
+        statusRules(parcel.status_id ?? parcel.status).is_valuation_stage,
       )
     )
       return false;
@@ -629,11 +633,11 @@ export function ParcelsTab({
                         </td>
                         {/* Өмчлөгч/эзэмшигч — ҮНДСЭН хүсэлт гаргагч. Нэг нэгж
                             талбар дээр олон эзэмшигч байж болох тул үлдсэнийг
-                            "+N" гэж заана (жагсаалт нэг мөрөнд багтана). */}
+                            "+N" гэж заана; урт нэр мөр дамжин бүтнээрээ харагдана. */}
                         <td className="px-4 py-2.5 text-slate-600 dark:text-slate-300">
                           {p.holder_name ? (
-                            <span className="flex items-center gap-1.5">
-                              <span className="max-w-[180px] truncate" title={p.holder_name}>
+                            <span className="flex items-start gap-1.5">
+                              <span className="min-w-[120px] max-w-[220px] whitespace-normal break-words leading-snug">
                                 {p.holder_name}
                               </span>
                               {(p.holder_count ?? 0) > 1 && (

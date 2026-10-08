@@ -155,7 +155,7 @@ export default function FeaturePopup({
             <dl className="space-y-1.5 text-xs">
               {entries.map(([label, value]) => (
                 <div key={label} className="flex gap-2">
-                  <dt className="text-muted-foreground shrink-0 font-medium w-32 truncate">
+                  <dt className="text-muted-foreground shrink-0 font-medium w-32 break-words">
                     {label}
                   </dt>
                   <dd className="font-medium min-w-0 flex-1 break-words">{value}</dd>

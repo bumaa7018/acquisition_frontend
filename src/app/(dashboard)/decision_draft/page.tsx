@@ -23,6 +23,7 @@ import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { DecisionDraftForm, type DecisionDraftFormValue } from "./_components/decision_draft_form";
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { AmountHint } from "@/components/ui/amount-hint";
 
 const EMPTY_FILTER = {
   proposal_no: "",
@@ -402,6 +403,7 @@ export default function DecisionDraftListPage() {
               </div>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-white/[0.06] dark:text-slate-300">
                 Нийт {formatBillion(summaryTotals.budget)}
+                <AmountHint value={summaryTotals.budget} className="ml-1" />
               </span>
             </div>
 
@@ -455,9 +457,9 @@ export default function DecisionDraftListPage() {
                           </ResponsiveContainer>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
-                            <p className="truncate text-[13px] font-semibold text-slate-700 dark:text-slate-200" title={item.source}>
+                          <div className="flex min-w-0 items-start gap-2">
+                            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
+                            <p className="min-w-0 whitespace-normal break-words text-[13px] font-semibold leading-snug text-slate-700 dark:text-slate-200">
                               {item.source}
                             </p>
                           </div>
@@ -467,6 +469,7 @@ export default function DecisionDraftListPage() {
                             className="text-[13px] font-bold tabular-nums text-slate-800 dark:text-white"
                           >
                             {formatBillion(item.budget)}
+                            <AmountHint value={item.budget} className="ml-1" />
                           </p>
                           <p className="mt-1 text-[11px] text-slate-400 dark:text-slate-500">Ашигласан</p>
                           <p
@@ -475,6 +478,7 @@ export default function DecisionDraftListPage() {
                             style={{ color: accent }}
                           >
                             {formatBillion(item.used)}
+                            <AmountHint value={item.used} className="ml-1" />
                           </p>
                           <p className={`mt-1 text-[11px] font-semibold tabular-nums ${item.balance < 0 ? "text-rose-500" : "text-slate-400 dark:text-slate-500"}`}>
                             {item.budget > 0 ? `${usedPercent.toLocaleString("mn-MN")}% ашигласан` : "Төсөвгүй"}
@@ -522,7 +526,7 @@ export default function DecisionDraftListPage() {
                           className="min-w-[150px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider"
                           style={{ color: sourceColor(index) }}
                         >
-                          <p className="truncate" title={item.source}>{item.source}</p>
+                          <p className="whitespace-normal break-words">{item.source}</p>
                         </th>
                       ))}
                       <th className="min-w-[130px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-200">
@@ -569,7 +573,10 @@ export default function DecisionDraftListPage() {
                             }`}
                             title={formatMoneyExact(value)}
                           >
-                            {formatBillion(value)}
+                            <span className="whitespace-nowrap">
+                              {formatBillion(value)}
+                              <AmountHint value={value} className="ml-1" />
+                            </span>
                           </td>
                         ))}
                         <td
@@ -578,7 +585,10 @@ export default function DecisionDraftListPage() {
                           }`}
                           title={formatMoneyExact(row.total)}
                         >
-                          {formatBillion(row.total)}
+                          <span className="whitespace-nowrap">
+                            {formatBillion(row.total)}
+                            <AmountHint value={row.total} className="ml-1" />
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -737,18 +747,18 @@ export default function DecisionDraftListPage() {
                   return (
                     <tr key={d.id} className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors">
                       <td className="px-3 py-3 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
-                        <p className="truncate" title={d.proposal_no}>{d.proposal_no}</p>
+                        <p className="whitespace-normal break-words">{d.proposal_no}</p>
                       </td>
                       <td className="hidden px-3 py-3 font-mono text-xs text-slate-600 dark:text-slate-300 md:table-cell">
-                        <p className="truncate" title={d.decree_number}>{d.decree_number || "—"}</p>
+                        <p className="whitespace-normal break-words">{d.decree_number || "—"}</p>
                       </td>
                       <td className="hidden px-3 py-3 text-slate-500 dark:text-slate-400 xl:table-cell">
                         {d.decision_date ? formatDate(d.decision_date) : "—"}
                       </td>
                       <td className="hidden px-3 py-3 lg:table-cell">
-                        <p className="text-slate-600 dark:text-slate-300 truncate">{d.location || "—"}</p>
+                        <p className="text-slate-600 dark:text-slate-300 whitespace-normal break-words">{d.location || "—"}</p>
                         {d.acquisition_name && (
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 whitespace-normal break-words">
                             {d.acquisition_name}
                           </p>
                         )}
@@ -761,22 +771,22 @@ export default function DecisionDraftListPage() {
                           className="inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
                           style={{ color: sc.color, background: sc.bg }}
                         >
-                          <span className="truncate">{DECISION_DRAFT_STATUS_LABELS[d.status] ?? "—"}</span>
+                          <span className="whitespace-normal break-words leading-tight">{DECISION_DRAFT_STATUS_LABELS[d.status] ?? "—"}</span>
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <p className="text-slate-700 dark:text-slate-200 font-medium truncate">
+                        <p className="text-slate-700 dark:text-slate-200 font-medium whitespace-normal break-words">
                           {d.current_progress_type_name || "Төсөл"}
                         </p>
                         {(d.current_progress_recipient || d.current_progress_date) && (
-                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 whitespace-normal break-words">
                             {d.current_progress_recipient || "—"}
                             {d.current_progress_date ? ` · ${formatDate(d.current_progress_date)}` : ""}
                           </p>
                         )}
                       </td>
                       <td className="hidden px-3 py-3 xl:table-cell">
-                        <p className="text-slate-600 dark:text-slate-300 truncate" title={d.funding_source_names}>
+                        <p className="text-slate-600 dark:text-slate-300 whitespace-normal break-words">
                           {d.funding_source_names || "—"}
                         </p>
                         {d.funding_source_count > 1 && (
@@ -786,10 +796,10 @@ export default function DecisionDraftListPage() {
                         )}
                       </td>
                       <td className="hidden px-3 py-3 text-slate-600 dark:text-slate-300 2xl:table-cell">
-                        <p className="truncate">{d.work_type_name || "—"}</p>
+                        <p className="whitespace-normal break-words">{d.work_type_name || "—"}</p>
                       </td>
                       <td className="hidden px-3 py-3 text-slate-600 dark:text-slate-300 2xl:table-cell">
-                        <p className="truncate">{d.budget_name || "—"}</p>
+                        <p className="whitespace-normal break-words">{d.budget_name || "—"}</p>
                       </td>
                       <td className="hidden px-3 py-3 lg:table-cell">
                         <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-slate-100 dark:bg-[#252630] text-slate-600 dark:text-slate-300 tabular-nums">

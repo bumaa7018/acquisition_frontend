@@ -333,12 +333,15 @@ export function canAccessParcel(
   parcelStatusName: string | undefined,
   acquisitionProfOrgId?: string | null,
   parcelIndependentOrgId?: string | null,
+  /** «Үнэлгээний шат» (бүртгэлийн тохиргоо); өгөөгүй бол нэрээр. */
+  isValuationStage?: boolean,
 ): boolean {
   return canAccessParcelForActor(
     getCurrentActor(),
     {
       status_name: parcelStatusName,
       independent_org_id: parcelIndependentOrgId,
+      is_valuation_stage: isValuationStage,
     },
     { professional_org_id: acquisitionProfOrgId },
   );

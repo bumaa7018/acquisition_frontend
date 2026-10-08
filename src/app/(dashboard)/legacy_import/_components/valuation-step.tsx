@@ -193,7 +193,9 @@ export function ValuationStep({
                     <td className={cn(td, r.idKind && r.idKind !== "real" ? "font-semibold text-amber-600" : "")}>
                       {r.assignedID || "—"}
                     </td>
-                    <td className={cn(td, "max-w-[220px] truncate")} title={r.project}>{r.project || "—"}</td>
+                    <td className={td}>
+                      <div className="min-w-[200px] max-w-[320px] whitespace-normal break-words">{r.project || "—"}</div>
+                    </td>
                     <td className={td}>{fmt(r.totalAmount)}</td>
                     <td className={cn(td, "whitespace-nowrap", skipped(r) ? "text-[#f8285a]" : "")}>
                       {r.match === "gus" && r.gusOrigin === "ub" ? "data_ub" : MATCH_LABEL[r.match] ?? r.match}

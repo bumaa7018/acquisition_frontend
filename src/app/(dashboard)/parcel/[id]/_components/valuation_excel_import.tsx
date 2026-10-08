@@ -850,7 +850,7 @@ export function ValuationExcelImport({
                       <div className="grid gap-2 border-t border-slate-100 px-4 py-3 dark:border-[#37394d]">
                         {buildingAssets.map(({ a, i }) => (
                           <div key={i} className="flex items-center justify-between gap-3">
-                            <span className="truncate text-[12px] text-slate-500">
+                            <span className="min-w-0 break-words text-[12px] text-slate-500">
                               {a.name} — системд орох үнэлгээ
                             </span>
                             <input
@@ -1072,7 +1072,7 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <p className="text-[10px] uppercase tracking-wider text-slate-400">{label}</p>
-      <p className="truncate text-slate-700 dark:text-slate-200" title={value}>
+      <p className="break-words text-slate-700 dark:text-slate-200" title={value}>
         {value}
       </p>
     </div>

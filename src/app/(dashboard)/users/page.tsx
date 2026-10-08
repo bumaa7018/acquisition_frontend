@@ -200,7 +200,7 @@ function RolePicker({
             >
               {checked ? "✓" : ""}
             </span>
-            <span className="min-w-0 flex-1 truncate font-medium text-slate-700 dark:text-slate-200">
+            <span className="min-w-0 flex-1 whitespace-normal break-words font-medium leading-snug text-slate-700 dark:text-slate-200">
               {role.name}
             </span>
             {!grantable && (

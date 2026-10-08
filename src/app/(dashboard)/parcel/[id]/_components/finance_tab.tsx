@@ -406,7 +406,7 @@ export function FinanceTab({
                     }`}
                     title={f.factor_code}
                   >
-                    <span className="truncate text-slate-500 dark:text-slate-400">
+                    <span className="min-w-0 break-words text-slate-500 dark:text-slate-400">
                       {f.factor_name}
                     </span>
                     <span className="shrink-0 tabular-nums font-medium text-slate-700 dark:text-slate-200">

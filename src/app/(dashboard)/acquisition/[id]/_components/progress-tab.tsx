@@ -1,4 +1,5 @@
 "use client";
+import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,13 +9,6 @@ import { formatDate, getApiError } from "@/lib/utils";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import { STATUS_CFG } from "./shared";
 
-const FINAL_PARCEL_STATUS_IDS = new Set([3, 4, 5]);
-const FINAL_PARCEL_STATUS_NAMES = new Set([
-  "Чөлөөлсөн",
-  "Нөлөөллөөс гарсан",
-  "Нөлөөлөгдсөн гарсан",
-  "Татгалзсан",
-]);
 
 function AdvanceModal({
   id,
@@ -88,10 +82,11 @@ function AdvanceModal({
     queryFn: () => landApi.getParcels(id, { page: 1, page_size: 10000 }),
     enabled: needsDecree,
   });
+  // «Эцсийн төлөв» — «Нэгж талбарын төлөв» тохиргооноос (backend-ийн
+  // HasNonFinalParcels-тай ИЖИЛ шалгуур; өмнө дугаар/нэрээр).
+  const statusRules = useParcelStatusRules();
   const invalidParcels = (parcels?.data ?? []).filter(
-    (parcel) =>
-      !FINAL_PARCEL_STATUS_IDS.has(parcel.status) &&
-      !FINAL_PARCEL_STATUS_NAMES.has(parcel.status_name),
+    (parcel) => !statusRules(parcel.status_id ?? parcel.status).is_final,
   );
   const blocksForIncompleteParcelCheck =
     needsDecree &&
@@ -114,7 +109,7 @@ function AdvanceModal({
       return;
     }
     if (blocksForUnfinalizedParcels) {
-      toast.error("Бүх нэгж талбар Чөлөөлсөн, Нөлөөллөөс гарсан, Татгалзсан төлөвийн аль нэг болсон байх шаардлагатай.");
+      toast.error("Бүх нэгж талбар эцсийн төлөвт (жишээ нь Чөлөөлсөн, Нөлөөлөгдсөн гарсан, Татгалзсан) шилжсэн байх шаардлагатай.");
       return;
     }
     advanceMutation.mutate();
@@ -246,8 +241,8 @@ function AdvanceModal({
               <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
               <div className="text-[12px] text-red-600 dark:text-red-400 leading-relaxed">
                 <p>
-                  Чөлөөлөлтийг баталгаажуулахын өмнө бүх нэгж талбар <strong>Чөлөөлсөн</strong>,{" "}
-                  <strong>Нөлөөллөөс гарсан</strong>, <strong>Татгалзсан</strong> төлөвийн аль нэг болсон байх шаардлагатай.
+                  Чөлөөлөлтийг баталгаажуулахын өмнө бүх нэгж талбар <strong>эцсийн төлөвт</strong> (жишээ нь{" "}
+                  Чөлөөлсөн, Нөлөөлөгдсөн гарсан, Татгалзсан — «Нэгж талбарын төлөв» тохиргоо) шилжсэн байх шаардлагатай.
                 </p>
                 <p className="mt-1">
                   Одоогоор {invalidParcels.length} нэгж талбар өөр төлөвтэй байна.
@@ -440,8 +435,8 @@ export function ProgressTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                           {STATUS_LABELS[p.to_status] ?? p.to_status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300 max-w-[200px] truncate">
-                        {p.note || "—"}
+                      <td className="px-4 py-3 text-slate-600 dark:text-slate-300">
+                        <p className="min-w-[160px] max-w-[300px] whitespace-normal break-words">{p.note || "—"}</p>
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                         {p.changed_by}

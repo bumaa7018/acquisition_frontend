@@ -272,7 +272,7 @@ function CreateModal({ onClose }: CreateModalProps) {
                       {plan.parcel_id || plan.plan_code}
                     </p>
                     {plan.name && (
-                      <p className="text-[12px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                      <p className="text-[12px] text-slate-600 dark:text-slate-400 whitespace-normal break-words mt-0.5">
                         {plan.name}
                       </p>
                     )}

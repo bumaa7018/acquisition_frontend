@@ -11,7 +11,7 @@ export default function DecisionWorkTypePage() {
       queryKey="decision-work-types"
       api={decisionWorkTypeApi}
       icon={Hammer}
-      codeExample="road"
+      codeExample="10.2.1"
     />
   );
 }

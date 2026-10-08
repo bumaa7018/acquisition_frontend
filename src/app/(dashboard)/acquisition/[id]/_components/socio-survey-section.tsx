@@ -228,7 +228,7 @@ export function SocioSurveySection({
                 className="inline-flex items-center gap-1.5 text-[#02c0ce] hover:underline"
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{survey.file_name || "Судалгаа.pdf"}</span>
+                <span className="min-w-0 break-words">{survey.file_name || "Судалгаа.pdf"}</span>
                 {survey.size_bytes > 0 && (
                   <span className="shrink-0 text-[11px] text-slate-400">({formatSize(survey.size_bytes)})</span>
                 )}

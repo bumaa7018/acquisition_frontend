@@ -444,8 +444,8 @@ export default function AcquisitionCategoryPage() {
                       <FolderOpen className="h-4 w-4 text-[#02c0ce]" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-slate-800 dark:text-white">{cat.name}</p>
-                      <p className="truncate text-[11px] text-slate-400 dark:text-slate-500">
+                      <p className="whitespace-normal break-words text-[13px] font-semibold leading-snug text-slate-800 dark:text-white">{cat.name}</p>
+                      <p className="whitespace-normal break-words text-[11px] text-slate-400 dark:text-slate-500">
                         {cat.sub_count ?? 0} дэд ангилал
                         {(cat.acquisition_count ?? 0) > 0 && ` · ${cat.acquisition_count} чөлөөлөлт`}
                       </p>
@@ -479,7 +479,7 @@ export default function AcquisitionCategoryPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                   Ерөнхий ангилал
                 </p>
-                <p className="mt-0.5 truncate text-[15px] font-bold text-slate-800 dark:text-white">
+                <p className="mt-0.5 whitespace-normal break-words text-[15px] font-bold text-slate-800 dark:text-white">
                   {selected.name}
                 </p>
                 <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">

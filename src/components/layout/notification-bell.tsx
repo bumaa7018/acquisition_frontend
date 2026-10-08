@@ -171,11 +171,11 @@ export function NotificationBell() {
                     <Icon className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 leading-snug">
+                    <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 leading-snug break-words">
                       {n.title}
                     </p>
                     {n.body && (
-                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 leading-snug line-clamp-2">
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 leading-snug break-words">
                         {n.body}
                       </p>
                     )}

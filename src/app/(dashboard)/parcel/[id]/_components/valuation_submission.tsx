@@ -1017,7 +1017,7 @@ function SnapshotDetailModal({
                   className="flex items-center justify-between gap-2 border-b border-slate-50 px-4 py-2.5 text-[12px] last:border-0 dark:border-[#37394d]"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-slate-700 dark:text-slate-200">
+                    <p className="break-words text-slate-700 dark:text-slate-200">
                       {comp.note?.trim() || COMP_TYPE_LABELS[comp.compensation_type] || comp.compensation_type}
                     </p>
                     <p className="text-[10px] text-slate-400">
@@ -1197,7 +1197,7 @@ export function ValuationHistoryModal({
                         className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50 dark:bg-[#1e1f27] dark:text-red-400 dark:ring-red-500/30 dark:hover:bg-red-500/10"
                       >
                         <FileText className="h-3 w-3 shrink-0" />
-                        <span className="truncate">
+                        <span className="min-w-0 break-words">
                           {s.report_name || "Үнэлгээний тайлан"}
                         </span>
                       </a>
@@ -1251,7 +1251,7 @@ export function ValuationHistoryModal({
                         )}
                       </div>
                       {h.note && (
-                        <p className="mt-1.5 text-[12px] text-slate-600 dark:text-slate-300">
+                        <p className="mt-1.5 whitespace-pre-wrap break-words text-[12px] text-slate-600 dark:text-slate-300">
                           {h.note}
                         </p>
                       )}
@@ -1265,7 +1265,7 @@ export function ValuationHistoryModal({
                           className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#02c0ce] ring-1 ring-slate-200 hover:bg-[#02c0ce]/5 dark:bg-[#1e1f27] dark:ring-white/[0.08]"
                         >
                           <Paperclip className="h-3 w-3 shrink-0" />
-                          <span className="truncate">
+                          <span className="min-w-0 break-words">
                             {h.attachment_name || "Хавсралт"}
                           </span>
                         </a>

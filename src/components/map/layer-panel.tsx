@@ -207,7 +207,7 @@ export default function LayerPanel({
                     style={swatchStyle(layer.color, layer.hatch, layer.visible)}
                   />
                   <button
-                    className="flex-1 text-left text-[11.5px] font-medium truncate leading-tight"
+                    className="min-w-0 flex-1 text-left text-[11.5px] font-medium break-words leading-tight"
                     style={{ color: lblClr }}
                     onClick={() => onToggle(layer.id)}
                   >
@@ -260,7 +260,7 @@ export default function LayerPanel({
                     />
                     {/* Label — expand/collapse */}
                     <button
-                      className="flex-1 text-left text-[11.5px] font-semibold truncate leading-tight"
+                      className="min-w-0 flex-1 text-left text-[11.5px] font-semibold break-words leading-tight"
                       style={{ color: lblClr }}
                       onClick={() => toggleGroup(group.id)}
                     >
@@ -326,9 +326,8 @@ export default function LayerPanel({
                             }}
                           />
                           <span
-                            // Нэр урт бол таслагдана — бүтнээр нь hover-оор харуулна.
-                            title={child.label}
-                            className="flex-1 text-left text-[11px] font-medium truncate"
+                            // Урт нэр дараагийн мөрөнд шилжиж бүтнээрээ харагдана.
+                            className="min-w-0 flex-1 text-left text-[11px] font-medium break-words leading-tight"
                             style={{
                               color: child.visible
                                 ? dark

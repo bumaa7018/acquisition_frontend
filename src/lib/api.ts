@@ -71,7 +71,7 @@ import type {
   ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
-  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, BoundaryHistory, BoundaryPreview, FundingSource,
+  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, ParcelStatusRules, BoundaryHistory, BoundaryPreview, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
@@ -120,6 +120,8 @@ type ParcelListParams = {
   status?: number
   status_id?: number
   unlinked_only?: boolean
+  /** Зөвхөн «Захирамжид холбогдоно» (is_released) төлөвтэй. */
+  released_only?: boolean
   years?: number[]
   /** Эрэмбэлэх багана (backend-ийн зөвшөөрөгдсөн түлхүүр) ба чиглэл. */
   sort?: string
@@ -177,6 +179,7 @@ function parcelListSearchParams(params?: ParcelListParams): URLSearchParams {
   if (params.status != null) q.set('status', String(params.status))
   if (params.status_id != null) q.set('status_id', String(params.status_id))
   if (params.unlinked_only) q.set('unlinked_only', 'true')
+  if (params.released_only) q.set('released_only', 'true')
   if (params.sort) q.set('sort', params.sort)
   if (params.order) q.set('order', params.order)
   params.years?.forEach(year => q.append('year', String(year)))
@@ -244,6 +247,8 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
     if (params?.right_type && parcel.right_type !== params.right_type) return false
     if (params?.au3_code && parcel.au3_code !== params.au3_code) return false
     if (params?.status_id && parcel.status_id !== params.status_id) return false
+    // Нөөц зам (хуучин backend) төлөвийн тохиргоогүй — өмнөх шиг 5 = Чөлөөлсөн.
+    if (params?.released_only && parcel.status_id !== 5) return false
     return true
   })
 
@@ -1625,9 +1630,10 @@ export const documentTypeApi = {
 export const parcelStatusApi = {
   list: () =>
     api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data ?? []),
-  create: (body: { code: string; name: string; sort_order?: number; color?: string }) =>
+  // Төлөвийн дүрэм (is_final, locks_progress, …) — илгээгээгүй бол засварт ХЭВЭЭР.
+  create: (body: { code: string; name: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
     api.post<ApiResponse<ParcelStatus>>('/parcel-statuses', body).then(r => r.data.data),
-  update: (id: number, body: { code?: string; name?: string; sort_order?: number; color?: string }) =>
+  update: (id: number, body: { code?: string; name?: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
     api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
 }
@@ -1722,7 +1728,7 @@ export const decisionDraftApi = {
   // Явц нэмэх — захирамжийн дугаар/огноог бөглөж баталгаажуулна
   confirm: (id: string, body: { decree_number: string; decision_date: string; note: string }) =>
     api.post<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}/confirm`, body).then(r => r.data.data),
-  addProgress: (id: string, body: { progress_type: string; recipient: string; progress_date: string; note: string }) =>
+  addProgress: (id: string, body: { progress_type: string; review_unit_id: number; progress_date: string; note: string }) =>
     api.post<ApiResponse<DecisionDraftProgressHistory>>(`/decision-drafts/${id}/progress`, body).then(r => r.data.data),
   listProgressHistory: (id: string) =>
     api.get<ApiResponse<DecisionDraftProgressHistory[]>>(`/decision-drafts/${id}/progress-history`).then(r => r.data.data ?? []),
@@ -1779,7 +1785,7 @@ export const fundingSourceOptionApi = {
   }) => api.post<ApiResponse<FundingSourceOption>>('/funding-sources', body).then(r => r.data.data),
 }
 
-// Ажлын төрөл / Төсөв — parcelStatusApi-тай ижил хэв маяг
+// Ажлын төрөл / Төсөв / Төсөл хянах нэгж — parcelStatusApi-тай ижил хэв маяг
 function decisionOptionApi(path: string) {
   return {
     list: () => api.get<ApiResponse<DecisionOption[]>>(path).then(r => r.data.data ?? []),
@@ -1793,6 +1799,8 @@ function decisionOptionApi(path: string) {
 
 export const decisionWorkTypeApi = decisionOptionApi('/decision-work-types')
 export const decisionBudgetApi = decisionOptionApi('/decision-budgets')
+/** Төсөл хянах нэгж — «Хянагдаж буй» явцын «Хянагдаж буй газар». */
+export const decisionReviewUnitApi = decisionOptionApi('/decision-review-units')
 
 // ── Мэдэгдэл ────────────────────────────────────────
 // Бүх хүсэлт _silent — хонхны арын шинэчлэлт бүтэн дэлгэцийн

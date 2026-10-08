@@ -273,8 +273,8 @@ export default function RolesPage() {
                   >
                     <Shield className="mt-0.5 h-4 w-4 shrink-0 text-[#02c0ce]" />
                     <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold text-slate-700 dark:text-slate-100">{role.name}</span>
-                      <span className="block truncate text-[11px] text-slate-400 dark:text-slate-500">
+                      <span className="block whitespace-normal break-words text-[13px] font-semibold text-slate-700 dark:text-slate-100">{role.name}</span>
+                      <span className="block whitespace-normal break-words text-[11px] text-slate-400 dark:text-slate-500">
                         {role.menus?.length ?? 0} menu · {role.permissions?.length ?? 0} permission
                       </span>
                     </span>
@@ -313,10 +313,10 @@ export default function RolesPage() {
                     >
                       <MenuIcon className={`mt-0.5 h-4 w-4 shrink-0 ${assigned ? "text-emerald-500" : "text-slate-400"}`} />
                       <span className="min-w-0 flex-1">
-                        <span className={`block truncate text-[13px] font-semibold ${assigned ? "text-emerald-800 dark:text-emerald-100" : "text-slate-700 dark:text-slate-100"}`}>
+                        <span className={`block whitespace-normal break-words text-[13px] font-semibold ${assigned ? "text-emerald-800 dark:text-emerald-100" : "text-slate-700 dark:text-slate-100"}`}>
                           {menu.name}
                         </span>
-                        <span className="block truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">
+                        <span className="block whitespace-normal break-words font-mono text-[11px] text-slate-400 dark:text-slate-500">
                           {menu.code} · {(menu.permissions ?? []).length} permission
                         </span>
                       </span>
@@ -390,8 +390,8 @@ export default function RolesPage() {
                         } ${editable ? "hover:border-[#02c0ce]/40" : "cursor-not-allowed opacity-60"}`}
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-[12px] font-semibold text-slate-700 dark:text-slate-200">{ACTION_LABELS[action] ?? action}</span>
-                          <span className="block truncate font-mono text-[11px] text-slate-400 dark:text-slate-500">{perm.name}</span>
+                          <span className="block whitespace-normal break-words text-[12px] font-semibold text-slate-700 dark:text-slate-200">{ACTION_LABELS[action] ?? action}</span>
+                          <span className="block whitespace-normal break-words font-mono text-[11px] text-slate-400 dark:text-slate-500">{perm.name}</span>
                         </span>
                         {checked ? (
                           <span className="ml-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#02c0ce] text-white">

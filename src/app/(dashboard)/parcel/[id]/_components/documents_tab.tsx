@@ -287,7 +287,7 @@ export function DocumentsTab({
                       <FileText className="h-4 w-4 text-red-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
+                      <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 break-words">
                         {doc.name}
                       </p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
@@ -413,7 +413,7 @@ export function DocumentsTab({
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200 truncate">
+                                <p className="min-w-0 text-[13px] font-medium text-slate-700 dark:text-slate-200 break-words">
                                   {doc.name}
                                 </p>
                                 {doc.file_type && (
