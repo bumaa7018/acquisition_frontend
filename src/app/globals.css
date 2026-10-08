@@ -128,3 +128,121 @@
 .dark .ap-card {
   box-shadow: 0px 0px 35px 0px rgba(26, 27, 34, 0.5);
 }
+
+
+/* ── «Он цагийн зураг» (src/components/map/chronos) — design tokens ба хэв ── */
+.ch-root {
+  --ch-bg: #07090d;
+  --ch-floor: #0c1118;
+  --ch-floor-border: #1b2430;
+  --ch-grid: #121821;
+  --ch-text: #ece6d9;
+  --ch-sub: #a7afba;
+  --ch-weak: #8e97a3;
+  --ch-disabled: #6b7480;
+  --ch-accent: #f2a541;
+  --ch-accent-bg: #2a2216;
+  --ch-accent-text: #ffd9a0;
+  --ch-ramp-0: #2e5a88;
+  --ch-ramp-1: #3e9c8f;
+  --ch-ramp-2: #f2a541;
+  --ch-active-bg: #16302b;
+  --ch-active-text: #9fe3d6;
+  --ch-special-bg: #2a2216;
+  --ch-special-text: #ffd9a0;
+  --ch-planned-bg: #222833;
+  --ch-planned-text: #b8bfc9;
+  --ch-panel: rgba(18, 22, 28, 0.82);
+  --ch-panel-border: #222a35;
+
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--ch-bg);
+  color: var(--ch-text);
+  overflow: hidden;
+}
+
+.ch-panel {
+  background: var(--ch-panel);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--ch-panel-border);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+.ch-chip {
+  min-height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--ch-panel-border);
+  padding: 0 14px;
+  font-size: 13px;
+  color: var(--ch-sub);
+  transition: border-color 160ms, color 160ms, background 160ms;
+}
+.ch-chip[aria-pressed="true"] {
+  border-color: var(--ch-accent);
+  color: var(--ch-accent-text);
+  background: var(--ch-accent-bg);
+}
+
+.ch-icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--ch-panel-border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ch-text);
+}
+.ch-icon-button:hover {
+  border-color: var(--ch-weak);
+}
+.ch-icon-button:disabled {
+  color: var(--ch-disabled);
+  border-color: var(--ch-panel-border);
+}
+
+.ch-big-number {
+  font-size: clamp(44px, 6vw, 84px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.ch-ramp {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ch-ramp-0), var(--ch-ramp-1), var(--ch-ramp-2));
+}
+
+.ch-cta {
+  min-height: 44px;
+  border-radius: 10px;
+  background: var(--ch-accent);
+  color: #1a1206;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ch-slide-in {
+    animation: ch-slide-in-kf 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .ch-bar {
+    transition: height 320ms ease, width 420ms ease, transform 200ms ease, background 200ms ease;
+  }
+}
+
+@keyframes ch-slide-in-kf {
+  from {
+    transform: translateY(14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

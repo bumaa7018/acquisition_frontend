@@ -16,7 +16,7 @@ import WKT from "ol/format/WKT";
 import { Fill, Stroke, Style } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import { Box, Map as MapIcon } from "lucide-react";
+import { Box, History, Map as MapIcon } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
 import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
 import { landApi } from "@/lib/api";
@@ -34,7 +34,7 @@ import AcquisitionInfoModal, {
 import PrintMapDialog from "./print-map-dialog";
 import GusInfoModal, { type GusFeatureProps } from "./gus-info-modal";
 import { useFullscreen } from "./use-fullscreen";
-import { AcquisitionOverviewPanel, OVERVIEW_PANEL_SHIFT, useAcquisitionOverview } from "./acquisition-overview-panel";
+import { AcquisitionOverviewPanel, useAcquisitionOverview } from "./acquisition-overview-panel";
 import { useParcelStatusLayers } from "./use-parcel-status-layers";
 import {
   BASE_Z_INDEX,
@@ -58,6 +58,8 @@ import {
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
+import { ChronosView } from "./chronos/chronos-view";
+import { hasPermission, isExternalSpecialRole } from "@/lib/role-utils";
 import type { PrintOrientation } from "./print-map";
 
 const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
@@ -233,8 +235,12 @@ export function AcquisitionMap({
   const droneLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const wktFormat   = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
-  // Бүтэн дэлгэцээр харах үед зүүн талын хураангуй — тэр үед л татна.
-  const overview = useAcquisitionOverview(acquisitionId, isFullscreen);
+  // «Он цагийн зураг» — зөвхөн дотоод ажилтан (backend /dashboard/chronos-той ижил).
+  const [chronosOpen, setChronosOpen] = useState(false);
+  // Бүтэн дэлгэцийн хураангуй ба Он цагийн зурагын статистик — тэр үед л татна.
+  const overview = useAcquisitionOverview(acquisitionId, isFullscreen || chronosOpen);
+  const [canChronos, setCanChronos] = useState(false);
+  useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission("land:read")), []);
   // Давхарга дээр дарахад: нэгж талбар бол дэлгэрэнгүй цонх, бусад нь жижиг popup.
   const [popup, setPopup] = useState<{ layer: string; properties: Record<string, unknown>; position: { x: number; y: number } } | null>(null);
   const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null);
@@ -1034,7 +1040,7 @@ export function AcquisitionMap({
           >
             <div ref={mapRef} className="h-full w-full" />
             <LayerPanel layers={layers} groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]} onToggle={handleToggle} />
-            <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} shiftClass={isFullscreen ? OVERVIEW_PANEL_SHIFT : undefined} />
+            <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
             {isFullscreen && (
               <AcquisitionOverviewPanel
                 data={overview.data}
@@ -1076,7 +1082,7 @@ export function AcquisitionMap({
                 onClose={() => setGusInfo(null)}
               />
             )}
-            <div className={`absolute top-3 ${isFullscreen ? OVERVIEW_PANEL_SHIFT : "left-3"} z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
+            <div className={`absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
               <button
                 type="button"
                 onClick={() => void handleSelectMode("2d")}
@@ -1103,7 +1109,28 @@ export function AcquisitionMap({
                 <Box className="h-4 w-4" />
                 {loading3D ? "Ачаалж байна..." : "3D"}
               </button>
+              {canChronos && (
+                <button
+                  type="button"
+                  onClick={() => setChronosOpen(true)}
+                  title="Он цагийн зураг — чөлөөлөлтийг сараар (изометр)"
+                  className="flex h-full items-center gap-1.5 border-l border-slate-200 px-3 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+                >
+                  <History className="h-4 w-4" />
+                  Он цагийн зураг
+                </button>
+              )}
             </div>
+            {chronosOpen && (
+              <ChronosView
+                acquisitionIds={[acquisitionId]}
+                baseData={overview.data}
+                baseFinance={overview.finance}
+                title={acquisitionName || overview.data?.acquisitions?.[0]?.acquisition_name}
+                subtitle={planCode}
+                onClose={() => setChronosOpen(false)}
+              />
+            )}
           </div>
         </div>
       </div>

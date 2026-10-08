@@ -1592,6 +1592,19 @@ export const dashboardApi = {
     filter?.years?.forEach(y => params.append('year', String(y)))
     return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`, { _silent: opts?.silent }).then(r => r.data.data)
   },
+  /**
+   * «Он цагийн зураг» — цаг хугацааны изометр зургийн өгөгдөл (нэгж талбарын геометр 3857,
+   * чөлөөлсөн огноо, түүх, сараар чөлөөлсөн тоо). acquisitionIds хоосон = бүх чөлөөлөлт.
+   */
+  chronos: (acquisitionIds?: string[]): Promise<import('@/lib/chronos').ChronosData> => {
+    const params = new URLSearchParams()
+    acquisitionIds?.forEach(id => params.append('acquisition_id', id))
+    const suffix = params.toString()
+    return api
+      // Он цагийн зураг өөрийн loader-тэй — бүтэн дэлгэцийн блоклогч loader асаахгүй.
+      .get<ApiResponse<import('@/lib/chronos').ChronosData>>(`/dashboard/chronos${suffix ? `?${suffix}` : ''}`, { _silent: true })
+      .then(r => r.data.data)
+  },
   // САНХҮҮГИЙН самбар — зөвхөн мөнгөн дүн/тоо (он, дүүрэг, хороогоор).
   // Backend нь НЭГ асуулгаар нэгтгэдэг тул жагсаалт татах шаардлагагүй.
   finance: (filter?: FinanceDashboardFilter, opts?: { silent?: boolean }): Promise<FinanceDashboardData> => {

@@ -35,6 +35,12 @@ export function formatBillion(value?: number | null): string {
   })} тэрбум₮`;
 }
 
+/** Мөнгөн дүнг САЯАР: 12_350_000 → "12.4 сая₮" (нэг нэгж талбарын дүнд). */
+export function formatMillion(value?: number | null): string {
+  const amount = Number(value) || 0;
+  return `${(amount / 1_000_000).toLocaleString("mn-MN", { maximumFractionDigits: 1 })} сая₮`;
+}
+
 /** Бүтэн дүн (мянгатын тусгаарлагчтай) — тэрбумаар харуулсан дүнгийн тайлбарт. */
 export function formatMoneyExact(value?: number | null): string {
   return `${Math.round(Number(value) || 0).toLocaleString("mn-MN")}₮`;

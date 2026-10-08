@@ -1859,6 +1859,12 @@ export default function DashboardPage() {
                 employeeId={mapCommit.employeeId}
                 filterPending={false}
                 fullscreenOverlay={mapOverview}
+                chronosBase={{
+                  data: dashData,
+                  finance: financeFilter ? overviewFinance ?? null : null,
+                  title: perf.single?.acquisition_name || appliedFilter.acqName || `Нийт ${filteredAcqs.length} чөлөөлөлт`,
+                  subtitle: perf.single?.plan_code,
+                }}
               />
             )}
           </div>

@@ -12,7 +12,7 @@ import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent"
 import type { Coordinate } from "ol/coordinate";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import { Box, Map as MapIcon } from "lucide-react";
+import { Box, History, Map as MapIcon } from "lucide-react";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import { createBasemapLayer, watchBasemap } from './basemap'
@@ -24,7 +24,6 @@ import AcquisitionInfoModal, {
   type AcquisitionFeatureProps,
 } from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
-import { OVERVIEW_PANEL_SHIFT } from './acquisition-overview-panel'
 import { useFullscreen } from './use-fullscreen'
 import { useParcelStatusLayers } from './use-parcel-status-layers'
 import {
@@ -48,6 +47,10 @@ import {
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
+import { ChronosView } from './chronos/chronos-view'
+import type { DashboardData } from '@/lib/api'
+import type { FinanceDashboardData } from '@/types'
+import { hasPermission, isExternalSpecialRole } from '@/lib/role-utils'
 
 const STATIC_LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -118,10 +121,12 @@ interface MapViewProps {
   employeeId?: string
   /** Бүтэн дэлгэцээр харах үед зүүн талд гарах хураангуй (дашбоард). */
   fullscreenOverlay?: React.ReactNode
+  /** Он цагийн зурагын зүүн талын статистикт — бүтэн дэлгэцийн хураангуйн өгөгдөл. */
+  chronosBase?: { data?: DashboardData; finance?: FinanceDashboardData | null; title?: string; subtitle?: string }
 }
 
 
-export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, fullscreenOverlay }: MapViewProps) {
+export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, fullscreenOverlay, chronosBase }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const containerRef   = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
@@ -151,6 +156,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   } | null>(null)
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
+  // «Он цагийн зураг» — зөвхөн дотоод ажилтан (backend /dashboard/chronos-той ижил).
+  const [chronosOpen, setChronosOpen] = useState(false)
+  const [canChronos, setCanChronos] = useState(false)
+  useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission('land:read')), [])
 
   // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` бүртгэлээс (асинхрон).
   const { defs: statusLayerDefs } = useParcelStatusLayers()
@@ -527,7 +536,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]}
         onToggle={handleToggle}
       />
-      <div className={`absolute top-3 ${isFullscreen && fullscreenOverlay ? OVERVIEW_PANEL_SHIFT : "left-3"} z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
+      <div className={`absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
         <button
           type="button"
           onClick={() => void handleSelectMode("2d")}
@@ -553,8 +562,30 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           <Box className="h-4 w-4" />
           {loading3D ? "Ачаалж байна..." : "3D"}
         </button>
+        {canChronos && (
+          <button
+            type="button"
+            onClick={() => setChronosOpen(true)}
+            title="Он цагийн зураг — чөлөөлөлтийг сараар (изометр)"
+            className="flex h-full items-center gap-1.5 border-l border-slate-200 px-3 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+          >
+            <History className="h-4 w-4" />
+            Он цагийн зураг
+          </button>
+        )}
       </div>
-      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} shiftClass={isFullscreen && fullscreenOverlay ? OVERVIEW_PANEL_SHIFT : undefined} />
+      {chronosOpen && (
+        <ChronosView
+          // undefined = бүх чөлөөлөлт; «__none__» = шүүлтэд юу ч таараагүй.
+          acquisitionIds={acquisitionIds?.filter((id) => id !== '__none__')}
+          baseData={chronosBase?.data}
+          baseFinance={chronosBase?.finance}
+          title={chronosBase?.title}
+          subtitle={chronosBase?.subtitle}
+          onClose={() => setChronosOpen(false)}
+        />
+      )}
+      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
       {isFullscreen && fullscreenOverlay}
       {popup && (
         <FeaturePopup

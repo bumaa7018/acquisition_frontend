@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Nunito_Sans } from "next/font/google";
 import { Providers } from "@/components/layout/providers";
+// «Он цагийн зураг»-ын фонтууд — статикаар (динамик chunk-д CSS chunk үүсгэхгүйн тулд).
+import "@/lib/chronos-fonts";
 
 import "./globals.css";
 

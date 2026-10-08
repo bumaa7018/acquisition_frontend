@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChevronDown, ChevronUp, LayoutDashboard } from "lucide-react";
+import { BarChart3, LayoutDashboard, X } from "lucide-react";
 import { dashboardApi, type DashboardData } from "@/lib/api";
 import { getParcelStatusStyle, type FinanceDashboardData } from "@/types";
 import { monthlyTimeline } from "@/lib/timeline-months";
@@ -30,12 +30,6 @@ const VALUATION_TYPE_LABEL: Record<string, string> = {
   mika: "МИКА үнэлгээ",
 };
 
-/**
- * Самбар нээлттэй үед газрын зургийн зүүн булангийн товчнуудыг (2D/3D,
- * бүтэн дэлгэц) самбарын баруун тал руу шилжүүлэх зай: left-3 + 440px + 12px.
- */
-export const OVERVIEW_PANEL_SHIFT = "left-[464px]";
-
 const fmtDate = (d?: string) => (d ? d.slice(0, 10) : "");
 
 const pct = (part: number, total: number) => (total > 0 ? Math.round((part * 100) / total) : 0);
@@ -56,6 +50,8 @@ export function AcquisitionOverviewPanel({
   subtitle,
   years = [],
   showYears = false,
+  embedded = false,
+  onClose,
 }: {
   data?: DashboardData;
   /** Санхүүжилт — нэг чөлөөлөлт сонгосон үед (эрхгүй бол null). */
@@ -67,8 +63,16 @@ export function AcquisitionOverviewPanel({
   years?: number[];
   /** Сонгосон оныг толгойд ТОД тэмдгээр харуулах (дашбоардын шүүлт). */
   showYears?: boolean;
+  /**
+   * Он цагийн зураг дотор — «Статистик» товчгүй, эх элементийн хэмжээгээр (бүтэн өндөр),
+   * ✕ нь onClose-ийг дуудна.
+   */
+  embedded?: boolean;
+  onClose?: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Бүтэн дэлгэцэд орохтой зэрэг НЭЭЛТТЭЙ; ✕-ээр хаавал «Статистик» товчоор дахин нээнэ.
+  const [openState, setOpen] = useState(true);
+  const open = embedded || openState;
 
   const statuses = useMemo(() => {
     const colors = new Map((data?.parcel_statuses ?? []).map((s) => [s.id, s.color]));
@@ -123,9 +127,25 @@ export function AcquisitionOverviewPanel({
   const funding = (finance?.funding_by_type ?? []).filter((f) => f.amount > 0);
   const locations = (data?.locations ?? []).filter((l) => l.district);
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="absolute left-3 top-14 z-20 flex h-9 items-center gap-1.5 rounded-lg bg-white/90 px-3 text-[12px] font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-100 dark:bg-[#252630]/90 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+      >
+        <BarChart3 className="h-4 w-4 text-[#02c0ce]" /> Статистик
+      </button>
+    );
+  }
+
   return (
     <div
-      className={cn("absolute bottom-3 left-3 top-3 z-20 flex w-[440px] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white/95 shadow-xl backdrop-blur dark:border-[#37394d] dark:bg-[#1e1f27]/95", collapsed && "bottom-auto")}
+      // 2D/3D (дээд) ба бүтэн дэлгэцийн (доод) товчнуудын ХООРОНД — тэдгээрийг хөдөлгөхгүй.
+      className={cn(
+        "z-20 flex flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white/95 shadow-xl backdrop-blur dark:border-[#37394d] dark:bg-[#1e1f27]/95",
+        embedded ? "h-full w-full" : "absolute bottom-14 left-3 top-14 w-[440px] max-w-[calc(100%-1.5rem)]",
+      )}
       // Самбар дээрх товшилт/гүйлгэлт газрын зургийг хөдөлгөхгүй.
       onPointerDown={(e) => e.stopPropagation()}
       onWheel={(e) => e.stopPropagation()}
@@ -147,16 +167,16 @@ export function AcquisitionOverviewPanel({
         </div>
         <button
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          title={collapsed ? "Дэлгэх" : "Хураах"}
+          onClick={() => (embedded ? onClose?.() : setOpen(false))}
+          title="Хаах"
+          aria-label="Статистик хаах"
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-[#252630]"
         >
-          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          <X className="h-4 w-4" />
         </button>
       </div>
 
-      {!collapsed && (
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {loading && !data ? (
             <div className="space-y-2">
               {[0, 1, 2, 3].map((i) => (
@@ -381,8 +401,7 @@ export function AcquisitionOverviewPanel({
               </Section>
             </>
           )}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
