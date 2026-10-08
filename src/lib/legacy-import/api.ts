@@ -2,7 +2,7 @@
 // (government: internal/legacyimport). Файл шалгах, түр хүснэгт, ГУС дуудлага,
 // «Оруулах» бүгд BACKEND дээр; frontend зөвхөн дэлгэц. Төрлүүд нь
 // internal/legacyimport/types.go-той ИЖИЛ.
-import api from "@/lib/api";
+import api, { appendDocumentPayment, type DocumentPaymentInput } from "@/lib/api";
 
 export interface Issue {
   level: "error" | "warning" | "info";
@@ -342,8 +342,42 @@ function upload(path: string, files: File[], fields: Record<string, string> = {}
   return call<ImportState>(api.post(`/legacy-import/${path}`, form, { timeout: UPLOAD_TIMEOUT_MS }));
 }
 
+/** Хуучин хавсралт: PDF-ийн нэрээр (= нэгж талбарын дугаар) олдсон нэгж талбар. */
+export interface AttachmentParcel {
+  id: string;
+  acquisitionId: string;
+  acquisitionName: string;
+  planCode: string;
+  /** Өмнө оруулсан «Нөхөх олговор олгосон баримт»-ын тоо. */
+  receipts: number;
+}
+
+export interface AttachmentMatch {
+  parcelNumber: string;
+  /** null — ийм дугаартай нэгж талбар алга. */
+  parcel: AttachmentParcel | null;
+}
+
 export const legacyImportApi = {
   categories: () => call<Category[]>(api.get("/legacy-import/categories")),
+  /** Хавтсын PDF-ийн нэрийг (өргөтгөлгүй) нэгж талбарын дугаартай ЯГ тулгана. */
+  matchAttachments: (names: string[]) =>
+    call<AttachmentMatch[]>(api.post("/legacy-import/attachments/match", { names })),
+  /**
+   * Нэгж талбарт «Нөхөх олговор олгосон баримт» хуулах — баталгаажсан
+   * (түгжээтэй) чөлөөлөлтөд ч орно (зөвхөн админ). Loader/toast-гүй — явцыг дуудагч харуулна.
+   */
+  uploadAttachment: (parcelId: string, file: File, documentTypeId: number, payment: DocumentPaymentInput) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("document_type_id", String(documentTypeId));
+    appendDocumentPayment(fd, payment);
+    return call<unknown>(api.post(`/legacy-import/attachments/parcels/${parcelId}/documents`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: UPLOAD_TIMEOUT_MS,
+      _silent: true,
+    }));
+  },
   sessions: () => call<SessionListItem[]>(api.get("/legacy-import/sessions")),
   create: (mode: ImportMode) => call<{ id: string }>(api.post("/legacy-import/sessions", { mode })),
   // silent — дэлгэцийн бүтэн loader-гүй (давтан шинэчлэлт).

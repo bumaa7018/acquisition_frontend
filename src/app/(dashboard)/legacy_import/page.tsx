@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, FileSpreadsheet, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Eye, FileSpreadsheet, Loader2, Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { canImportLegacyData } from "@/lib/role-utils";
@@ -14,6 +14,7 @@ import { SummaryStep } from "./_components/summary-step";
 import { ValuationStep } from "./_components/valuation-step";
 import { ProjectsStep } from "./_components/projects-step";
 import { RollbackDialog } from "./_components/rollback-dialog";
+import { AttachmentsImport } from "./_components/attachments-import";
 import { GusJobBanner, primaryButton, secondaryButton, td, th, theadClass } from "./_components/shared";
 
 type StepKey = "boundary" | "parcels" | "reports" | "projects" | "summary";
@@ -87,6 +88,7 @@ function LegacyImportPage() {
   const [step, setStep] = useState<StepKey>("boundary");
   const [creating, setCreating] = useState(false);
   const [rollbackID, setRollbackID] = useState<string | null>(null);
+  const [showAttachments, setShowAttachments] = useState(false);
 
   useEffect(() => setAllowed(canImportLegacyData()), []);
 
@@ -190,11 +192,17 @@ function LegacyImportPage() {
         )}
       </div>
 
+      {!sessionID && showAttachments && <AttachmentsImport onClose={() => setShowAttachments(false)} />}
+
       {!sessionID && (
         <div className="ap-card space-y-3 p-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Импортууд</h2>
             <div className="flex flex-wrap items-center gap-2">
+              <button className={secondaryButton} onClick={() => setShowAttachments(true)} disabled={showAttachments}
+                title="Хавтасны PDF-ийг нэрээр нь (= нэгж талбарын дугаар) нэгж талбарт «Нөхөх олговор олгосон баримт» болгон хавсаргана">
+                <Paperclip className="h-4 w-4" /> Хавсралт оруулах
+              </button>
               <button className={secondaryButton} onClick={() => start("valuation")} disabled={creating}
                 title="Зөвхөн үнэлгээний эксэл — хил, нэгж талбарын файлгүй (архивын адил)">
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />} Зөвхөн үнэлгээ
