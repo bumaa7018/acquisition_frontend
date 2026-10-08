@@ -27,6 +27,7 @@ import { AbbrevAmount } from "@/components/ui/amount-hint";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
 import type { ParcelStatus } from "@/types";
+import { AcquisitionOverviewPanel } from "@/components/map/acquisition-overview-panel";
 import { monthlyTimeline } from "@/lib/timeline-months";
 import {
   Map as MapIcon,
@@ -1274,6 +1275,37 @@ export default function DashboardPage() {
 
   const maxCount = STATUSES.length > 0 ? Math.max(...STATUSES.map((s) => s.count)) : 1;
 
+  /* Газрын зургийг бүтэн дэлгэцээр харах үеийн зүүн талын хураангуй — дээрх
+     dashData-г ашиглана; санхүүжилтийг ГАНЦ чөлөөлөлт сонгосон үед л татна
+     (санхүүгийн API нь чөлөөлөлт/он/дүүргээр л шүүдэг). Эрхгүй бол нуугдана. */
+  const overviewAcqId = perf.single?.id ?? "";
+  const overviewYears = useMemo(() => appliedFilter.years.map(Number).filter(Boolean), [appliedFilter.years]);
+  // Санхүүгийн API нь чөлөөлөлт/он/дүүргээр л шүүдэг — бусад шүүлт (ангилал,
+  // ажилтан, төлөвлөгөө) хэрэглэсэн үед нийлбэр нь зөрөх тул татахгүй.
+  const financeFilter = overviewAcqId
+    ? { acquisition_id: overviewAcqId }
+    : !appliedFilter.acqId && !appliedFilter.planCode && !appliedFilter.genCatId && !appliedFilter.subCatId && !appliedFilter.employeeId
+      ? { years: overviewYears, au2_code: appliedFilter.au2Code || undefined }
+      : null;
+  const { data: overviewFinance } = useQuery({
+    queryKey: ["map-overview", "finance", financeFilter],
+    queryFn: () => dashboardApi.finance(financeFilter!, { silent: true }),
+    enabled: !!financeFilter,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const mapOverview = (
+    <AcquisitionOverviewPanel
+      data={dashData}
+      finance={financeFilter ? overviewFinance ?? null : null}
+      loading={isLoading}
+      title={perf.single?.acquisition_name || appliedFilter.acqName || `Нийт ${filteredAcqs.length} чөлөөлөлт`}
+      subtitle={perf.single?.plan_code}
+      years={overviewYears}
+      showYears
+    />
+  );
+
   /* Map: API дуусахад л шинэчлэгдэх committed state */
   const [mapCommit, setMapCommit] = useState<{
     key: number;
@@ -1570,9 +1602,9 @@ export default function DashboardPage() {
             details: compensation ? [
               { label: "Захирамж гарсан", value: <AbbrevAmount value={compensation.issued}>{`${billion(compensation.issued).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0acf97",
                 pct: compensation.total ? (compensation.issued / compensation.total) * 100 : 0 },
-              { label: "Захирамжгүй · үнэлгээ баталгаажсан", value: <AbbrevAmount value={compensation.approved}>{`${billion(compensation.approved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0f9ed5",
+              { label: "Төсөлд байгаа · үнэлгээ баталгаажсан", value: <AbbrevAmount value={compensation.approved}>{`${billion(compensation.approved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0f9ed5",
                 pct: compensation.total ? (compensation.approved / compensation.total) * 100 : 0 },
-              { label: "Захирамжгүй · баталгаажаагүй", value: <AbbrevAmount value={compensation.unapproved}>{`${billion(compensation.unapproved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#f9bc0b",
+              { label: "Үнэлгээ баталгаажаагүй", value: <AbbrevAmount value={compensation.unapproved}>{`${billion(compensation.unapproved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#f9bc0b",
                 pct: compensation.total ? (compensation.unapproved / compensation.total) * 100 : 0 },
             ] : undefined,
           },
@@ -1826,6 +1858,7 @@ export default function DashboardPage() {
                 au3Codes={mapCommit.au3Codes}
                 employeeId={mapCommit.employeeId}
                 filterPending={false}
+                fullscreenOverlay={mapOverview}
               />
             )}
           </div>

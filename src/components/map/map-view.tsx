@@ -24,6 +24,7 @@ import AcquisitionInfoModal, {
   type AcquisitionFeatureProps,
 } from './acquisition-info-modal'
 import FullscreenButton from './fullscreen-button'
+import { OVERVIEW_PANEL_SHIFT } from './acquisition-overview-panel'
 import { useFullscreen } from './use-fullscreen'
 import { useParcelStatusLayers } from './use-parcel-status-layers'
 import {
@@ -115,10 +116,12 @@ interface MapViewProps {
   au3Codes?: string[]
   filterPending?: boolean
   employeeId?: string
+  /** Бүтэн дэлгэцээр харах үед зүүн талд гарах хураангуй (дашбоард). */
+  fullscreenOverlay?: React.ReactNode
 }
 
 
-export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId }: MapViewProps) {
+export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, fullscreenOverlay }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const containerRef   = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
@@ -524,7 +527,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]}
         onToggle={handleToggle}
       />
-      <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
+      <div className={`absolute top-3 ${isFullscreen && fullscreenOverlay ? OVERVIEW_PANEL_SHIFT : "left-3"} z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
         <button
           type="button"
           onClick={() => void handleSelectMode("2d")}
@@ -551,7 +554,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           {loading3D ? "Ачаалж байна..." : "3D"}
         </button>
       </div>
-      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
+      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} shiftClass={isFullscreen && fullscreenOverlay ? OVERVIEW_PANEL_SHIFT : undefined} />
+      {isFullscreen && fullscreenOverlay}
       {popup && (
         <FeaturePopup
           layer={popup.layer}

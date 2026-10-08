@@ -34,6 +34,7 @@ import AcquisitionInfoModal, {
 import PrintMapDialog from "./print-map-dialog";
 import GusInfoModal, { type GusFeatureProps } from "./gus-info-modal";
 import { useFullscreen } from "./use-fullscreen";
+import { AcquisitionOverviewPanel, OVERVIEW_PANEL_SHIFT, useAcquisitionOverview } from "./acquisition-overview-panel";
 import { useParcelStatusLayers } from "./use-parcel-status-layers";
 import {
   BASE_Z_INDEX,
@@ -232,6 +233,8 @@ export function AcquisitionMap({
   const droneLayers = useRef<Record<string, TileLayer<XYZ>>>({});
   const wktFormat   = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
+  // Бүтэн дэлгэцээр харах үед зүүн талын хураангуй — тэр үед л татна.
+  const overview = useAcquisitionOverview(acquisitionId, isFullscreen);
   // Давхарга дээр дарахад: нэгж талбар бол дэлгэрэнгүй цонх, бусад нь жижиг popup.
   const [popup, setPopup] = useState<{ layer: string; properties: Record<string, unknown>; position: { x: number; y: number } } | null>(null);
   const [parcelInfo, setParcelInfo] = useState<{ acquisitionId: string; parcelUuid: string } | null>(null);
@@ -1031,7 +1034,16 @@ export function AcquisitionMap({
           >
             <div ref={mapRef} className="h-full w-full" />
             <LayerPanel layers={layers} groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]} onToggle={handleToggle} />
-            <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
+            <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} shiftClass={isFullscreen ? OVERVIEW_PANEL_SHIFT : undefined} />
+            {isFullscreen && (
+              <AcquisitionOverviewPanel
+                data={overview.data}
+                finance={overview.finance}
+                loading={overview.loading}
+                title={acquisitionName || overview.data?.acquisitions?.[0]?.acquisition_name || "Чөлөөлөлт"}
+                subtitle={planCode}
+              />
+            )}
             {mapMode === "2d" && <PrintButton onClick={() => setPrintOpen(true)} />}
             {popup && (
               <FeaturePopup
@@ -1064,7 +1076,7 @@ export function AcquisitionMap({
                 onClose={() => setGusInfo(null)}
               />
             )}
-            <div className="absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90">
+            <div className={`absolute top-3 ${isFullscreen ? OVERVIEW_PANEL_SHIFT : "left-3"} z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
               <button
                 type="button"
                 onClick={() => void handleSelectMode("2d")}

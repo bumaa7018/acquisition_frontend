@@ -1563,6 +1563,8 @@ export interface DashboardData {
   filtered_au1_codes:   string[]
   filtered_au2_codes:   string[]
   filtered_au3_codes:   string[]
+  /** Шүүгдсэн чөлөөлөлтүүдийн байршил — дүүрэг ба хороодын НЭР. */
+  locations?:           { district: string; khoroos: string[] }[]
 }
 
 export type DashboardFilter = {
@@ -1577,7 +1579,8 @@ export type DashboardFilter = {
 }
 
 export const dashboardApi = {
-  get: (filter?: DashboardFilter): Promise<DashboardData> => {
+  // silent — газрын зургийн самбар г.м. арын хүсэлт: loader/алдааны toast-гүй.
+  get: (filter?: DashboardFilter, opts?: { silent?: boolean }): Promise<DashboardData> => {
     const params = new URLSearchParams()
     if (filter?.acquisition_id)      params.set('acquisition_id', filter.acquisition_id)
     if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
@@ -1587,11 +1590,11 @@ export const dashboardApi = {
     if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)
     if (filter?.au2_code)            params.set('au2_code', filter.au2_code)
     filter?.years?.forEach(y => params.append('year', String(y)))
-    return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`).then(r => r.data.data)
+    return api.get<ApiResponse<DashboardData>>(`/dashboard?${params}`, { _silent: opts?.silent }).then(r => r.data.data)
   },
   // САНХҮҮГИЙН самбар — зөвхөн мөнгөн дүн/тоо (он, дүүрэг, хороогоор).
   // Backend нь НЭГ асуулгаар нэгтгэдэг тул жагсаалт татах шаардлагагүй.
-  finance: (filter?: FinanceDashboardFilter): Promise<FinanceDashboardData> => {
+  finance: (filter?: FinanceDashboardFilter, opts?: { silent?: boolean }): Promise<FinanceDashboardData> => {
     const params = new URLSearchParams()
     if (filter?.au2_code) params.set('au2_code', filter.au2_code)
     if (filter?.au3_code) params.set('au3_code', filter.au3_code)
@@ -1599,7 +1602,7 @@ export const dashboardApi = {
     filter?.years?.forEach(y => params.append('year', String(y)))
     const suffix = params.toString()
     return api
-      .get<ApiResponse<FinanceDashboardData>>(`/dashboard/finance${suffix ? `?${suffix}` : ''}`)
+      .get<ApiResponse<FinanceDashboardData>>(`/dashboard/finance${suffix ? `?${suffix}` : ''}`, { _silent: opts?.silent })
       .then(r => r.data.data)
   },
 }

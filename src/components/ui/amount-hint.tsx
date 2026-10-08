@@ -82,7 +82,8 @@ export function AmountHint({ value, className }: { value: number | null | undefi
           >
             {exact}
           </span>,
-          document.body,
+          // Бүтэн дэлгэцийн (газрын зураг) горимд зөвхөн тэр элемент харагддаг.
+          document.fullscreenElement ?? document.body,
         )}
     </span>
   );
