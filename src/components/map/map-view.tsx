@@ -14,6 +14,7 @@ import type { Coordinate } from "ol/coordinate";
 import "ol/ol.css";
 import { Box, ExternalLink, History, Map as MapIcon, Maximize, Minimize, X } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "next-themes";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import { createBasemapLayer, watchBasemap } from './basemap'
@@ -182,6 +183,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [canChronos, setCanChronos] = useState(false)
   useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission('land:read')), [])
   const [chronosBasemap, setChronosBasemap] = useState<ChronosBasemap>('dark')
+  // Газрын зураг (хиймэл дагуул биш) — theme-ээс: хар → Shades of Grey, цагаан → Masik WWW.
+  const { resolvedTheme } = useTheme()
+  const chronosMapMode: ChronosBasemap = resolvedTheme === 'dark' ? 'dark' : 'light'
+  const chronosBase: ChronosBasemap = chronosBasemap === 'imagery' ? 'imagery' : chronosMapMode
   const [chronosSelected, setChronosSelected] = useState<string | null>(null)
   const showChronos = chronosOn && !!chronos && canChronos
 
@@ -565,7 +570,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       {showChronos && chronos && (
         <ChronosOverlay
           chronos={chronos}
-          basemap={chronosBasemap}
+          basemap={chronosBase}
+          mapMode={chronosMapMode}
           onBasemap={setChronosBasemap}
           selected={chronosSelected}
           onSelect={setChronosSelected}
@@ -666,6 +672,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
 function ChronosOverlay({
   chronos,
   basemap,
+  mapMode,
   onBasemap,
   selected,
   onSelect,
@@ -674,6 +681,8 @@ function ChronosOverlay({
 }: {
   chronos: MapChronosProps
   basemap: ChronosBasemap
+  /** Theme-ийн газрын зураг — dark | light. */
+  mapMode: ChronosBasemap
   onBasemap: (b: ChronosBasemap) => void
   selected: string | null
   onSelect: (id: string | null) => void
@@ -763,7 +772,7 @@ function ChronosOverlay({
       {/* Зүүн доод — суурь зураг: жижиг урьдчилсан зурагтай, дарж сольно */}
       <div className={`absolute z-[6] flex gap-1.5 ${isFullscreen ? 'bottom-[158px] left-[482px]' : 'bottom-3 left-3'}`}
         role="group" aria-label="Суурь зураг">
-        {([['dark', 'Хар зураг'], ['imagery', 'Хиймэл дагуул']] as const).map(([v, label]) => (
+        {([[mapMode, mapMode === 'dark' ? 'Хар зураг' : 'Цагаан зураг'], ['imagery', 'Хиймэл дагуул']] as const).map(([v, label]) => (
           <button key={v} type="button" aria-pressed={basemap === v} onClick={() => onBasemap(v)} title={label}
             className={`group relative h-[52px] w-[52px] overflow-hidden rounded-lg border-2 shadow-lg transition-all ${
               basemap === v ? 'border-[#F2A541]' : 'border-white/30 opacity-80 hover:border-white/70 hover:opacity-100'}`}>

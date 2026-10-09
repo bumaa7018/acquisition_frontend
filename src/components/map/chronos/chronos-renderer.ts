@@ -26,19 +26,29 @@ import {
   tileZoom,
   unproject,
 } from "@/lib/chronos";
-import { SHADES_OF_GREY_TILES } from "@/lib/map-styles";
+import { MASIK_WWW_TILES, SHADES_OF_GREY_TILES } from "@/lib/map-styles";
 
-export type ChronosBasemap = "dark" | "imagery";
+/** dark/light — theme-ийн газрын зураг; imagery — хиймэл дагуул. */
+export type ChronosBasemap = "dark" | "light" | "imagery";
 
 /**
  * Хар газрын зураг — Snazzy Maps «Shades of Grey» загвартай Google tile (@2x):
  * зам, гудамж, нэр бүдэг саарлаар. Хиймэл дагуултай адил гадны tile (интернет).
  */
 export const DARK_MAP_TILES = SHADES_OF_GREY_TILES;
+/** Цагаан газрын зураг (цагаан theme) — Snazzy Maps «Masik WWW». */
+export const LIGHT_MAP_TILES = MASIK_WWW_TILES;
 export const DARK_MAP_MAX_ZOOM = 20;
 
+/** Суурь бүрийн дэвсгэр (tile ачаалагдахаас өмнө) ба хашааг тодруулах хаалт. */
+const BASE_BG: Record<ChronosBasemap, string> = { dark: "#07090D", light: "#E9E9E9", imagery: "#07090D" };
+const BASE_DIM: Record<ChronosBasemap, string | null> = {
+  dark: "rgba(7,9,13,0.12)",
+  light: null,
+  imagery: "rgba(7,9,13,0.28)",
+};
+
 const C = {
-  bg: "#07090D",
   floor: "#0C1118",
   floorBorder: "#1B2430",
   grid: "#121821",
@@ -98,6 +108,8 @@ export class ChronosRenderer {
   private tileUrls: string[] = [];
   private maxZoom = 20;
   private tiles = new Map<string, HTMLImageElement | null>();
+  /** Суурь солих бүрт нэмэгдэнэ — хуучин суурийн хоцорсон onload/onerror-ийг үл хэрэгсэнэ. */
+  private tileGen = 0;
   private selected: string | null = null;
   private hover: string | null = null;
   private raf = 0;
@@ -229,6 +241,12 @@ export class ChronosRenderer {
   }
 
   setBasemap(mode: ChronosBasemap, urls: string[], maxZoom: number) {
+    // Суурь солигдвол хуучин tile кэшийг хаяна — эс бөгөөс аль хэдийн
+    // ачаалсан tile үлдэж, шинэ зурагтай холилдоно (томруулах хүртэл).
+    if (mode !== this.basemap || urls.join() !== this.tileUrls.join()) {
+      this.tiles.clear();
+      this.tileGen++;
+    }
     this.basemap = mode;
     this.tileUrls = urls;
     this.maxZoom = maxZoom;
@@ -325,15 +343,18 @@ export class ChronosRenderer {
     const ctx = this.ctx;
     const dpr = this.dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = C.bg;
+    ctx.fillStyle = BASE_BG[this.basemap];
     ctx.fillRect(0, 0, this.w, this.h);
 
-    // Суурь — хар газрын зураг эсвэл хиймэл дагуул (хоёулаа tile).
+    // Суурь — хар/цагаан газрын зураг эсвэл хиймэл дагуул (бүгд tile).
     this.drawTiles();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // Хиймэл дагуул тод тул хашааг ялгахын тулд бүдэг хаалт.
-    ctx.fillStyle = this.basemap === "imagery" ? "rgba(7,9,13,0.28)" : "rgba(7,9,13,0.12)";
-    ctx.fillRect(0, 0, this.w, this.h);
+    const dim = BASE_DIM[this.basemap];
+    if (dim) {
+      ctx.fillStyle = dim;
+      ctx.fillRect(0, 0, this.w, this.h);
+    }
 
     const anim = !this.reducedMotion;
     for (const it of this.items) this.drawItem(it);
@@ -391,8 +412,13 @@ export class ChronosRenderer {
     const url = tpl.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y))
       .replace("{-y}", String(2 ** z - 1 - y));
     const img = new Image();
-    img.onload = () => (this.dirty = true);
-    img.onerror = () => this.tiles.set(key, null);
+    const gen = this.tileGen;
+    img.onload = () => {
+      if (gen === this.tileGen) this.dirty = true;
+    };
+    img.onerror = () => {
+      if (gen === this.tileGen) this.tiles.set(key, null);
+    };
     img.src = url;
     this.tiles.set(key, img);
     if (this.tiles.size > 600) {

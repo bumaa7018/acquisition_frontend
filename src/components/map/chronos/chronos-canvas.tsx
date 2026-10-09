@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChronosData } from "@/lib/chronos";
 import { DEFAULT_BASEMAP_MAX_ZOOM, DEFAULT_BASEMAP_URLS, getBasemapSetting, isBasemapActive } from "../basemap-config";
-import { ChronosRenderer, DARK_MAP_MAX_ZOOM, DARK_MAP_TILES, type ChronosBasemap } from "./chronos-renderer";
+import { ChronosRenderer, DARK_MAP_MAX_ZOOM, DARK_MAP_TILES, LIGHT_MAP_TILES, type ChronosBasemap } from "./chronos-renderer";
 
 /** Хиймэл дагуул — одоогийн суурь зургийн xyz тохиргоо, үгүй бол үндсэн. */
 function imageryTiles(): { urls: string[]; maxZoom: number } {
@@ -13,12 +13,18 @@ function imageryTiles(): { urls: string[]; maxZoom: number } {
   return { urls: [...DEFAULT_BASEMAP_URLS], maxZoom: DEFAULT_BASEMAP_MAX_ZOOM };
 }
 
+function basemapTiles(mode: ChronosBasemap): { urls: string[]; maxZoom: number } {
+  if (mode === "dark") return { urls: DARK_MAP_TILES, maxZoom: DARK_MAP_MAX_ZOOM };
+  if (mode === "light") return { urls: LIGHT_MAP_TILES, maxZoom: DARK_MAP_MAX_ZOOM };
+  return imageryTiles();
+}
+
 /**
  * Суурь зургийн жижиг урьдчилсан харагдац — Улаанбаатарын төвийн нэг tile
  * (z15). Сонголтын товчинд тухайн зураг ямар харагдахыг төсөөлүүлнэ.
  */
 export function basemapThumb(mode: ChronosBasemap): string {
-  const { urls } = mode === "dark" ? { urls: DARK_MAP_TILES } : imageryTiles();
+  const { urls } = basemapTiles(mode);
   const [z, x, y] = [15, 26115, 11399];
   return (urls[0] ?? "")
     .replace("{z}", String(z))
@@ -76,7 +82,7 @@ export function ChronosCanvas({
   }, [data, months, ready]);
   useEffect(() => rendererRef.current?.setAsOf(asOf), [asOf, data, months, ready]);
   useEffect(() => {
-    const { urls, maxZoom } = basemap === "dark" ? { urls: DARK_MAP_TILES, maxZoom: DARK_MAP_MAX_ZOOM } : imageryTiles();
+    const { urls, maxZoom } = basemapTiles(basemap);
     rendererRef.current?.setBasemap(basemap, urls, maxZoom);
   }, [basemap, ready]);
   useEffect(() => rendererRef.current?.setSelected(selected), [selected, ready]);
@@ -104,7 +110,7 @@ export function ChronosCanvas({
   };
 
   return (
-    <div ref={wrapRef} className="absolute inset-0 bg-[#07090D]">
+    <div ref={wrapRef} className={`absolute inset-0 ${basemap === "light" ? "bg-[#E9E9E9]" : "bg-[#07090D]"}`}>
       <canvas
         ref={canvasRef}
         className="h-full w-full touch-none"
