@@ -26,8 +26,16 @@ import {
   tileZoom,
   unproject,
 } from "@/lib/chronos";
+import { SHADES_OF_GREY_TILES } from "@/lib/map-styles";
 
 export type ChronosBasemap = "dark" | "imagery";
+
+/**
+ * Хар газрын зураг — Snazzy Maps «Shades of Grey» загвартай Google tile (@2x):
+ * зам, гудамж, нэр бүдэг саарлаар. Хиймэл дагуултай адил гадны tile (интернет).
+ */
+export const DARK_MAP_TILES = SHADES_OF_GREY_TILES;
+export const DARK_MAP_MAX_ZOOM = 20;
 
 const C = {
   bg: "#07090D",
@@ -320,15 +328,12 @@ export class ChronosRenderer {
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, this.w, this.h);
 
-    if (this.basemap === "imagery") this.drawTiles();
-    else this.drawGrid();
+    // Суурь — хар газрын зураг эсвэл хиймэл дагуул (хоёулаа tile).
+    this.drawTiles();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (this.basemap === "dark") this.drawFloor();
-    else {
-      // Блокуудыг тодруулах бүдэг хаалт.
-      ctx.fillStyle = "rgba(7,9,13,0.28)";
-      ctx.fillRect(0, 0, this.w, this.h);
-    }
+    // Хиймэл дагуул тод тул хашааг ялгахын тулд бүдэг хаалт.
+    ctx.fillStyle = this.basemap === "imagery" ? "rgba(7,9,13,0.28)" : "rgba(7,9,13,0.12)";
+    ctx.fillRect(0, 0, this.w, this.h);
 
     const anim = !this.reducedMotion;
     for (const it of this.items) this.drawItem(it);
@@ -349,54 +354,6 @@ export class ChronosRenderer {
       Math.max(...pts.map((p) => p[0])),
       Math.max(...pts.map((p) => p[1])),
     ];
-  }
-
-  private drawGrid() {
-    const ctx = this.ctx;
-    const [minx, miny, maxx, maxy] = this.visibleWorld();
-    // Торын алхам ≈ 50px — 1·2·5 цуваа.
-    const raw = 50 / (this.iso.s * 0.866);
-    const pow = Math.pow(10, Math.floor(Math.log10(raw)));
-    const step = [1, 2, 5, 10].map((m) => m * pow).find((v) => v >= raw) ?? raw;
-    if ((maxx - minx) / step > 400 || (maxy - miny) / step > 400) return;
-    ctx.strokeStyle = C.grid;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = Math.floor(minx / step) * step; x <= maxx; x += step) {
-      const [ax, ay] = project(this.iso, x, miny);
-      const [bx, by] = project(this.iso, x, maxy);
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(bx, by);
-    }
-    for (let y = Math.floor(miny / step) * step; y <= maxy; y += step) {
-      const [ax, ay] = project(this.iso, minx, y);
-      const [bx, by] = project(this.iso, maxx, y);
-      ctx.moveTo(ax, ay);
-      ctx.lineTo(bx, by);
-    }
-    ctx.stroke();
-  }
-
-  private drawFloor() {
-    if (!this.bbox) return;
-    const ctx = this.ctx;
-    const [minx, miny, maxx, maxy] = this.bbox;
-    const padX = (maxx - minx) * 0.12 + 20;
-    const padY = (maxy - miny) * 0.12 + 20;
-    const corners = [
-      [minx - padX, miny - padY],
-      [maxx + padX, miny - padY],
-      [maxx + padX, maxy + padY],
-      [minx - padX, maxy + padY],
-    ].map(([x, y]) => project(this.iso, x, y));
-    ctx.beginPath();
-    corners.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.closePath();
-    ctx.fillStyle = C.floor;
-    ctx.fill();
-    ctx.strokeStyle = C.floorBorder;
-    ctx.lineWidth = 1;
-    ctx.stroke();
   }
 
   private drawTiles() {
@@ -420,7 +377,8 @@ export class ChronosRenderer {
         const k = this.dpr;
         ctx.setTransform(a * k, b * k, c * k, d * k, e * k, f * k);
         // 1px давхцуулж tile хоорондын зурвасыг арилгана.
-        ctx.drawImage(img, 0, 0, 256, 256, 0, 0, 256.6, 256.6);
+        // @2x (512px) tile ч 256 нэгжид багтана.
+        ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, 256.6, 256.6);
       }
     }
   }

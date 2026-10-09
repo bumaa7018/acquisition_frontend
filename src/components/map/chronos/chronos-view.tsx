@@ -22,7 +22,7 @@ import {
   type ChronosStatus,
 } from "@/lib/chronos";
 import { DEFAULT_BASEMAP_MAX_ZOOM, DEFAULT_BASEMAP_URLS, getBasemapSetting, isBasemapActive } from "../basemap-config";
-import { ChronosRenderer, type ChronosBasemap } from "./chronos-renderer";
+import { ChronosRenderer, DARK_MAP_MAX_ZOOM, DARK_MAP_TILES, type ChronosBasemap } from "./chronos-renderer";
 import { chronosBody as body, chronosDisplay as display, chronosMono as mono } from "@/lib/chronos-fonts";
 
 
@@ -151,7 +151,7 @@ export function ChronosView({
 
   useEffect(() => rendererRef.current?.setAsOf(asOf), [asOf, parcels, mountNode, reducedMotion]);
   useEffect(() => {
-    const { urls, maxZoom } = basemapTiles();
+    const { urls, maxZoom } = basemap === "dark" ? { urls: DARK_MAP_TILES, maxZoom: DARK_MAP_MAX_ZOOM } : basemapTiles();
     rendererRef.current?.setBasemap(basemap, urls, maxZoom);
   }, [basemap, mountNode, reducedMotion]);
   useEffect(() => rendererRef.current?.setSelected(selected), [selected, mountNode, reducedMotion]);
@@ -346,7 +346,7 @@ export function ChronosView({
           </div>
           <p className="mt-4 text-[12px]" style={panelText}>Суурь</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className="ch-chip" aria-pressed={basemap === "dark"} onClick={() => setBasemap("dark")}>Харанхуй тор</button>
+            <button type="button" className="ch-chip" aria-pressed={basemap === "dark"} onClick={() => setBasemap("dark")}>Хар газрын зураг</button>
             <button type="button" className="ch-chip" aria-pressed={basemap === "imagery"} onClick={() => setBasemap("imagery")}>Суурь зураг</button>
           </div>
           <button type="button" className="ch-chip mt-3 inline-flex items-center gap-1.5" aria-pressed={showStats} onClick={() => setShowStats((v) => !v)}>

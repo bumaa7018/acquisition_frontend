@@ -200,3 +200,13 @@ test("Он цагийн зурагын хураангуй — бүтэн дэл�
   assert.equal(jun.data.total_orders, 1);
   assert.equal(jun.data.status_breakdown.find((r) => r.status_id === NOT_STARTED_STATUS_ID), undefined);
 });
+
+test("Shades of Grey — Google apistyle кодчилол", async () => {
+  const { googleApiStyle, SHADES_OF_GREY } = await import("../src/lib/map-styles.ts");
+  const decoded = decodeURIComponent(googleApiStyle(SHADES_OF_GREY)).split(",");
+  assert.equal(decoded.length, 13);
+  assert.equal(decoded[0], "s.e:l.t.f|p.s:36|p.c:#ff000000|p.l:40", "all → s.t-гүй");
+  assert.ok(decoded.includes("s.t:5|s.e:g|p.c:#ff000000|p.l:20"), "landscape");
+  assert.ok(decoded.includes("s.t:49|s.e:g.s|p.c:#ff000000|p.l:29|p.w:0.2"), "road.highway stroke");
+  assert.ok(decoded.includes("s.t:6|s.e:g|p.c:#ff000000|p.l:17"), "water");
+});

@@ -19,7 +19,11 @@ import {
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
-import { isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
+import { hasPermission, isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
+import { useChronosData } from "@/components/map/chronos/use-chronos";
+import { ChronosTimeline } from "@/components/map/chronos/chronos-timeline";
+import { overviewAt } from "@/lib/chronos-overview";
+import { monthLabel } from "@/lib/chronos";
 import { FinanceDashboard } from "@/components/dashboard/finance-dashboard";
 import Link from "next/link";
 import { cn, formatMoneyExact } from "@/lib/utils";
@@ -1187,7 +1191,7 @@ export default function DashboardPage() {
   }, [appliedFilter]);
 
   /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
-  const { data: dashData, isLoading } = useQuery({
+  const { data: dashDataRaw, isLoading } = useQuery({
     queryKey: ["dashboard", appliedFilter],
     queryFn: () => dashboardApi.get({
       acquisition_id:     appliedFilter.acqId || undefined,
@@ -1201,6 +1205,21 @@ export default function DashboardPage() {
     staleTime: 60_000,
     enabled: roleReady && !isProfOrg && !isOtherExternal,
   });
+
+  /* ── «Он цагийн зураг» — цагийн голоор сар сонгоход дашбоардын БҮХ тоо
+     тухайн сарын байдлаар (Он цагийн зурагтай ижил тооцоо: overviewAt).
+     null = одоогийн байдал. Шүүлт солигдоход цэвэрлэгдэнэ. ── */
+  const [chronosAllowed, setChronosAllowed] = useState(false);
+  useEffect(() => setChronosAllowed(!isExternalSpecialRole() && hasPermission("land:read")), []);
+  const chronosIds = useMemo(() => dashDataRaw?.acquisitions.map((a) => a.id), [dashDataRaw?.acquisitions]);
+  const chronos = useChronosData(chronosIds, chronosAllowed && !!dashDataRaw && !isProfOrg && !isOtherExternal);
+  const [asOfIdx, setAsOfIdx] = useState<number | null>(null);
+  useEffect(() => setAsOfIdx(null), [appliedFilter]);
+  const asOfKey = asOfIdx !== null ? chronos.months[asOfIdx] ?? null : null;
+  const dashData = useMemo(
+    () => (asOfKey && chronos.data && dashDataRaw ? overviewAt(dashDataRaw, null, chronos.data, asOfKey).data : dashDataRaw),
+    [asOfKey, chronos.data, dashDataRaw],
+  );
 
   /* ── API-аас бэлэн утгуудыг авна — тооцоо frontend-д байхгүй ── */
   const filteredAcqs     = useMemo(() => dashData?.acquisitions ?? [], [dashData?.acquisitions]);
@@ -1282,11 +1301,15 @@ export default function DashboardPage() {
   const overviewYears = useMemo(() => appliedFilter.years.map(Number).filter(Boolean), [appliedFilter.years]);
   // Санхүүгийн API нь чөлөөлөлт/он/дүүргээр л шүүдэг — бусад шүүлт (ангилал,
   // ажилтан, төлөвлөгөө) хэрэглэсэн үед нийлбэр нь зөрөх тул татахгүй.
-  const financeFilter = overviewAcqId
-    ? { acquisition_id: overviewAcqId }
-    : !appliedFilter.acqId && !appliedFilter.planCode && !appliedFilter.genCatId && !appliedFilter.subCatId && !appliedFilter.employeeId
-      ? { years: overviewYears, au2_code: appliedFilter.au2Code || undefined }
-      : null;
+  const financeFilter = useMemo(
+    () =>
+      overviewAcqId
+        ? { acquisition_id: overviewAcqId }
+        : !appliedFilter.acqId && !appliedFilter.planCode && !appliedFilter.genCatId && !appliedFilter.subCatId && !appliedFilter.employeeId
+          ? { years: overviewYears, au2_code: appliedFilter.au2Code || undefined }
+          : null,
+    [overviewAcqId, appliedFilter, overviewYears],
+  );
   const { data: overviewFinance } = useQuery({
     queryKey: ["map-overview", "finance", financeFilter],
     queryFn: () => dashboardApi.finance(financeFilter!, { silent: true }),
@@ -1294,10 +1317,19 @@ export default function DashboardPage() {
     staleTime: 60_000,
     retry: false,
   });
+  // Сар сонгосон бол үнэлгээний бүтэц ч тухайн сарын байдлаар.
+  const overviewFinanceView = useMemo(() => {
+    const base = financeFilter ? overviewFinance ?? null : null;
+    return asOfKey && chronos.data && dashDataRaw ? overviewAt(dashDataRaw, base, chronos.data, asOfKey).finance : base;
+  }, [asOfKey, chronos.data, dashDataRaw, financeFilter, overviewFinance]);
+  const chronosTimeline = (variant: "card" | "overlay") => (
+    <ChronosTimeline months={chronos.months} counts={chronos.counts} value={asOfIdx} onChange={setAsOfIdx}
+      loading={chronos.isLoading} variant={variant} />
+  );
   const mapOverview = (
     <AcquisitionOverviewPanel
       data={dashData}
-      finance={financeFilter ? overviewFinance ?? null : null}
+      finance={overviewFinanceView}
       loading={isLoading}
       title={perf.single?.acquisition_name || appliedFilter.acqName || `Нийт ${filteredAcqs.length} чөлөөлөлт`}
       subtitle={perf.single?.plan_code}
@@ -1319,6 +1351,8 @@ export default function DashboardPage() {
   const mapCommitKeyRef = useRef(0);
   const prevIsLoadingRef = useRef<boolean | null>(null);
 
+  // Газрын зургийн давхаргын шүүлт — сар сонголтоос ҮЛ хамаарна (түүхий хариу).
+  const rawAcqs = useMemo(() => dashDataRaw?.acquisitions ?? [], [dashDataRaw?.acquisitions]);
   const commitMap = useCallback(() => {
     // Шүүлт хийгдсэн эсэх — АНГИЛЛЫГ ч тооцно. Өмнө нь зөвхөн чөлөөлөлт/
     // төлөвлөгөө/он/ажилтныг л шалгадаг байсан тул "он"-оо цэвэрлээд зөвхөн
@@ -1334,30 +1368,30 @@ export default function DashboardPage() {
       appliedFilter.au2Code
     );
     const acqIds = hasF
-      ? (filteredAcqs.length > 0 ? filteredAcqs.map((a) => a.id) : ["__none__"])
+      ? (rawAcqs.length > 0 ? rawAcqs.map((a) => a.id) : ["__none__"])
       : undefined;
 
     const years = appliedFilter.years.length > 0 ? appliedFilter.years.map(Number) : undefined;
 
-    const au1Codes = dashData?.filtered_au1_codes?.length ? dashData.filtered_au1_codes : undefined;
-    const au2Codes = dashData?.filtered_au2_codes?.length ? dashData.filtered_au2_codes : undefined;
-    const au3Codes = dashData?.filtered_au3_codes?.length ? dashData.filtered_au3_codes : undefined;
+    const au1Codes = dashDataRaw?.filtered_au1_codes?.length ? dashDataRaw.filtered_au1_codes : undefined;
+    const au2Codes = dashDataRaw?.filtered_au2_codes?.length ? dashDataRaw.filtered_au2_codes : undefined;
+    const au3Codes = dashDataRaw?.filtered_au3_codes?.length ? dashDataRaw.filtered_au3_codes : undefined;
 
     const employeeId = appliedFilter.employeeId || undefined;
 
     mapCommitKeyRef.current += 1;
     setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes, employeeId });
-  }, [appliedFilter, filteredAcqs, dashData]);
+  }, [appliedFilter, rawAcqs, dashDataRaw]);
 
   useEffect(() => {
     const prevLoading = prevIsLoadingRef.current;
     prevIsLoadingRef.current = isLoading;
 
     // Commit when: first render with data (null→false) OR API just finished (true→false)
-    if (!isLoading && dashData && (prevLoading === null || prevLoading === true)) {
+    if (!isLoading && dashDataRaw && (prevLoading === null || prevLoading === true)) {
       commitMap();
     }
-  }, [isLoading, dashData, commitMap]);
+  }, [isLoading, dashDataRaw, commitMap]);
 
   /* Filter display label */
   const filterLabel = useMemo(() => {
@@ -1524,6 +1558,11 @@ export default function DashboardPage() {
           <div className="h-8 w-[3px] rounded-full shrink-0" style={{ background: "#02c0ce" }} />
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 leading-snug truncate">
             {filterLabel}
+            {asOfKey && (
+              <span className="ml-2 rounded-full bg-[#F2A541]/15 px-2 py-0.5 normal-case tracking-normal text-[#c77a12] dark:text-[#FFD9A0]">
+                {monthLabel(asOfKey)} байдлаар
+              </span>
+            )}
           </p>
         </div>
         <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
@@ -1840,8 +1879,8 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* CENTER: map + timeline */}
-        <div className="flex flex-col gap-4">
+        {/* CENTER: map + timeline — min-w-0: урт цагийн гол баганыг дэлгэцээс өргөн сунгахгүй (дотроо гүйлгэнэ). */}
+        <div className="flex min-w-0 flex-col gap-4">
           {/* Газрын зураг — дээрх картууд нам болсон тул өндрийг нэмэв */}
           <div className="ap-card overflow-hidden" style={{ height: 460 }}>
             {(!mapCommit || isLoading) ? (
@@ -1859,16 +1898,23 @@ export default function DashboardPage() {
                 employeeId={mapCommit.employeeId}
                 filterPending={false}
                 fullscreenOverlay={mapOverview}
-                chronosBase={{
-                  data: dashData,
-                  finance: financeFilter ? overviewFinance ?? null : null,
-                  title: perf.single?.acquisition_name || appliedFilter.acqName || `Нийт ${filteredAcqs.length} чөлөөлөлт`,
-                  subtitle: perf.single?.plan_code,
-                }}
+                chronos={chronosAllowed ? {
+                  data: chronos.data,
+                  months: chronos.months,
+                  asOf: asOfIdx ?? Math.max(0, chronos.months.length - 1),
+                  changed: chronos.counts.get(chronos.months[asOfIdx ?? chronos.months.length - 1] ?? "") ?? 0,
+                  loading: chronos.isLoading,
+                  acquisitions: filteredAcqs,
+                  timeline: chronosTimeline("overlay"),
+                } : undefined}
               />
             )}
           </div>
 
+          {chronosAllowed ? (
+            // Цаг хугацааны өөрчлөлт — сар сонгоход дээрх бүх тоо ба «Он цагийн зураг» шинэчлэгдэнэ.
+            <div className="ap-card p-4">{chronosTimeline("card")}</div>
+          ) : (
           <div className="ap-card p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-3">
               БАТАЛГААЖСАН ОГНООГООР НЭГЖ ТАЛБАР · САРААР
@@ -1895,6 +1941,7 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             )}
           </div>
+          )}
         </div>
 
         {/* RIGHT: acquisition list */}

@@ -12,7 +12,8 @@ import { buffer as bufferExtent, getCenter as getExtentCenter } from "ol/extent"
 import type { Coordinate } from "ol/coordinate";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
-import { Box, History, Map as MapIcon } from "lucide-react";
+import { Box, ExternalLink, History, Map as MapIcon, Maximize, Minimize, X } from "lucide-react";
+import Link from "next/link";
 
 import LayerPanel, { LayerConfig, LayerGroupConfig } from './layer-panel'
 import { createBasemapLayer, watchBasemap } from './basemap'
@@ -47,10 +48,29 @@ import {
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
-import { ChronosView } from './chronos/chronos-view'
-import type { DashboardData } from '@/lib/api'
-import type { FinanceDashboardData } from '@/types'
+import { ChronosCanvas, basemapThumb } from './chronos/chronos-canvas'
+import type { ChronosBasemap } from './chronos/chronos-renderer'
+import { CHRONOS_NO_COLOR, CHRONOS_NOT_STARTED, monthLabel, statusAt, type ChronosData } from '@/lib/chronos'
+import { chronosDisplay } from '@/lib/chronos-fonts'
+import { formatMillion } from '@/lib/utils'
+import type { LandAcquisition } from '@/types'
+import { RIGHT_TYPE_LABELS } from '@/types'
 import { hasPermission, isExternalSpecialRole } from '@/lib/role-utils'
+
+/** «Он цагийн зураг» — дашбоардын цагийн голтой хуваалцсан төлөв. */
+export interface MapChronosProps {
+  data?: ChronosData
+  months: string[]
+  /** Газрын зурагт харуулах сарын индекс. */
+  asOf: number
+  /** Тухайн сард явц өөрчлөгдсөн нэгж талбарын тоо. */
+  changed: number
+  loading?: boolean
+  /** Сонгосон сарын байдлаарх чөлөөлөлтүүд (явцын хувь). */
+  acquisitions?: LandAcquisition[]
+  /** Бүтэн дэлгэцэд газрын зургийн доор харуулах цагийн гол. */
+  timeline?: React.ReactNode
+}
 
 const STATIC_LAYER_DEFS: MapLayerDef[] = [
   layerDef('au1'),
@@ -121,12 +141,12 @@ interface MapViewProps {
   employeeId?: string
   /** Бүтэн дэлгэцээр харах үед зүүн талд гарах хураангуй (дашбоард). */
   fullscreenOverlay?: React.ReactNode
-  /** Он цагийн зурагын зүүн талын статистикт — бүтэн дэлгэцийн хураангуйн өгөгдөл. */
-  chronosBase?: { data?: DashboardData; finance?: FinanceDashboardData | null; title?: string; subtitle?: string }
+  /** «Он цагийн зураг» горим — өгөгдвөл 2D/3D-ийн хажууд гурав дахь сонголт. */
+  chronos?: MapChronosProps
 }
 
 
-export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, fullscreenOverlay, chronosBase }: MapViewProps) {
+export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, fullscreenOverlay, chronos }: MapViewProps) {
   const mapRef         = useRef<HTMLDivElement>(null)
   const containerRef   = useRef<HTMLDivElement>(null)
   const olMap          = useRef<OLMap | null>(null)
@@ -157,9 +177,13 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
   // «Он цагийн зураг» — зөвхөн дотоод ажилтан (backend /dashboard/chronos-той ижил).
-  const [chronosOpen, setChronosOpen] = useState(false)
+  // Өгөгдмөл горим — «Он цагийн зураг» (дашбоард chronos дамжуулсан үед).
+  const [chronosOn, setChronosOn] = useState(true)
   const [canChronos, setCanChronos] = useState(false)
   useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission('land:read')), [])
+  const [chronosBasemap, setChronosBasemap] = useState<ChronosBasemap>('dark')
+  const [chronosSelected, setChronosSelected] = useState<string | null>(null)
+  const showChronos = chronosOn && !!chronos && canChronos
 
   // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` бүртгэлээс (асинхрон).
   const { defs: statusLayerDefs } = useParcelStatusLayers()
@@ -531,17 +555,30 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       className={`relative h-full w-full overflow-hidden bg-white dark:bg-[#1e1f27] ${isFullscreen ? "" : "rounded-lg"}`}
     >
       <div ref={mapRef} className="h-full w-full" />
-      <LayerPanel
-        layers={panelLayers}
-        groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]}
-        onToggle={handleToggle}
-      />
+      {!showChronos && (
+        <LayerPanel
+          layers={panelLayers}
+          groups={[PARCEL_GROUP, AGREED_GROUP, SEC_GROUP]}
+          onToggle={handleToggle}
+        />
+      )}
+      {showChronos && chronos && (
+        <ChronosOverlay
+          chronos={chronos}
+          basemap={chronosBasemap}
+          onBasemap={setChronosBasemap}
+          selected={chronosSelected}
+          onSelect={setChronosSelected}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
+      )}
       <div className={`absolute top-3 left-3 z-10 flex h-9 items-center overflow-hidden rounded-lg bg-white/90 shadow-sm dark:bg-[#252630]/90`}>
         <button
           type="button"
-          onClick={() => void handleSelectMode("2d")}
+          onClick={() => { setChronosOn(false); void handleSelectMode("2d") }}
           className={`flex h-full items-center gap-1.5 px-3 text-[12px] font-semibold transition-colors ${
-            mapMode === "2d"
+            mapMode === "2d" && !showChronos
               ? "bg-[#02c0ce] text-white"
               : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
           }`}
@@ -551,10 +588,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         </button>
         <button
           type="button"
-          onClick={() => void handleSelectMode("3d")}
+          onClick={() => { setChronosOn(false); void handleSelectMode("3d") }}
           disabled={loading3D}
           className={`flex h-full items-center gap-1.5 px-3 text-[12px] font-semibold transition-colors disabled:opacity-60 ${
-            mapMode === "3d"
+            mapMode === "3d" && !showChronos
               ? "bg-[#02c0ce] text-white"
               : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
           }`}
@@ -562,31 +599,29 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           <Box className="h-4 w-4" />
           {loading3D ? "Ачаалж байна..." : "3D"}
         </button>
-        {canChronos && (
+        {canChronos && chronos && (
           <button
             type="button"
-            onClick={() => setChronosOpen(true)}
-            title="Он цагийн зураг — чөлөөлөлтийг сараар (изометр)"
-            className="flex h-full items-center gap-1.5 border-l border-slate-200 px-3 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-100 dark:border-white/[0.08] dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+            onClick={() => setChronosOn(true)}
+            title="Он цагийн зураг — нэгж талбарын явцыг сараар (изометр)"
+            className={`flex h-full items-center gap-1.5 px-3 text-[12px] font-semibold transition-colors ${
+              showChronos
+                ? "bg-[#F2A541] text-[#1a1206]"
+                : "text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-[#2d2f3d]"
+            }`}
           >
             <History className="h-4 w-4" />
             Он цагийн зураг
           </button>
         )}
       </div>
-      {chronosOpen && (
-        <ChronosView
-          // undefined = бүх чөлөөлөлт; «__none__» = шүүлтэд юу ч таараагүй.
-          acquisitionIds={acquisitionIds?.filter((id) => id !== '__none__')}
-          baseData={chronosBase?.data}
-          baseFinance={chronosBase?.finance}
-          title={chronosBase?.title}
-          subtitle={chronosBase?.subtitle}
-          onClose={() => setChronosOpen(false)}
-        />
-      )}
-      <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />
-      {isFullscreen && fullscreenOverlay}
+      {!showChronos && <FullscreenButton isFullscreen={isFullscreen} onClick={toggleFullscreen} />}
+      {isFullscreen && (showChronos ? (
+        // Цагийн гол доор байрлах тул статистикийн самбарыг түүний ДЭЭР багтаана.
+        <div className="pointer-events-none absolute bottom-[150px] left-0 top-0 z-20 w-[470px] [&>*]:pointer-events-auto">
+          {fullscreenOverlay}
+        </div>
+      ) : fullscreenOverlay)}
       {popup && (
         <FeaturePopup
           layer={popup.layer}
@@ -619,5 +654,166 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         />
       )}
     </div>
+  )
+}
+
+
+/**
+ * «Он цагийн зураг» — газрын зургийн хайрцаг доторх изометр харагдац ба түүний
+ * давхаргууд (сонгосон сар, чөлөөлөлт/нэгж талбарын карт, статусын тайлбар,
+ * суурь сонголт, дэлгэц дүүргэх). Сар нь дашбоардын цагийн голоос ирнэ.
+ */
+function ChronosOverlay({
+  chronos,
+  basemap,
+  onBasemap,
+  selected,
+  onSelect,
+  isFullscreen,
+  onToggleFullscreen,
+}: {
+  chronos: MapChronosProps
+  basemap: ChronosBasemap
+  onBasemap: (b: ChronosBasemap) => void
+  selected: string | null
+  onSelect: (id: string | null) => void
+  isFullscreen: boolean
+  onToggleFullscreen: () => void
+}) {
+  const monthKey = chronos.months[chronos.asOf] ?? ''
+  const statuses = useMemo(() => chronos.data?.statuses ?? [], [chronos.data?.statuses])
+  const statusById = useMemo(() => new Map(statuses.map((s) => [s.id, s])), [statuses])
+  const legend = useMemo(() => [...statuses].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id), [statuses])
+  const parcel = useMemo(() => chronos.data?.parcels.find((p) => p.id === selected) ?? null, [chronos.data?.parcels, selected])
+  const acqs = chronos.acquisitions ?? []
+  const acq = parcel ? acqs.find((a) => a.id === parcel.acquisition_id) : acqs.length === 1 ? acqs[0] : undefined
+  const st = parcel ? statusById.get(statusAt(parcel.events, monthKey) ?? NaN) : undefined
+  const progress = acq?.progress_percent ?? 0
+  const card = 'rounded-xl border border-[#222A35] bg-[rgba(18,22,28,.86)] text-[#ECE6D9] shadow-xl backdrop-blur'
+  const comp = parcel ? parcel.comp_land + parcel.comp_real_state + parcel.comp_property : 0
+
+  return (
+    <>
+      <div className="absolute inset-0 z-[5]">
+        <ChronosCanvas data={chronos.data} months={chronos.months} asOf={chronos.asOf} basemap={basemap}
+          selected={selected} onSelect={onSelect} />
+      </div>
+
+      {/* Төв дээд — сонгосон сар */}
+      <div className="pointer-events-none absolute left-1/2 top-3 z-[6] -translate-x-1/2 text-center"
+        style={{ textShadow: '0 2px 12px rgba(7,9,13,.9)' }}>
+        <div key={monthKey} className={`${chronosDisplay.className} ch-slide-in text-[40px] font-bold leading-none tracking-[-0.03em] text-[#ECE6D9] md:text-[48px]`}>
+          {monthKey ? monthLabel(monthKey) : '—'}
+        </div>
+        <p className="mt-1 text-[12px] text-[#A7AFBA]">Энэ сард {chronos.changed.toLocaleString()} өөрчлөлт</p>
+      </div>
+
+      {/* Чөлөөлөлт / сонгосон нэгж талбарын карт */}
+      {(acq || parcel) && (
+        <div className={`${card} absolute z-[6] w-[290px] p-3 ${isFullscreen ? 'right-3 top-14' : 'left-3 top-14'}`}>
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-[#3E9C8F]/50 text-[#3E9C8F]">
+              <MapIcon className="h-3.5 w-3.5" />
+            </span>
+            <p className="min-w-0 flex-1 break-words text-[13px] font-semibold leading-snug">
+              {acq?.acquisition_name || parcel?.acquisition_name || '—'}
+            </p>
+            {parcel && (
+              <button type="button" aria-label="Сонголт цуцлах" onClick={() => onSelect(null)}
+                className="rounded p-0.5 text-[#8E97A3] hover:text-[#ECE6D9]">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-[11px] text-[#A7AFBA]">
+            <span className="shrink-0">Явц<br /><b className="text-[13px] text-[#ECE6D9]">{progress}%</b></span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#1B2430]">
+              <div className="h-full rounded-full bg-[#2DD4A8] transition-[width] duration-500" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+          {parcel && (
+            <div className="mt-2.5 space-y-1 border-t border-[#222A35] pt-2 text-[12px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[13px] font-semibold">{parcel.parcel_id}</span>
+                <span className="rounded px-1.5 py-0.5 text-[11px] font-medium"
+                  style={{ background: `${st?.color || CHRONOS_NOT_STARTED}2e`, color: st?.color || '#B8BFC9' }}>
+                  {st?.name ?? 'Чөлөөлөгдөөгүй'}
+                </span>
+              </div>
+              {([
+                ['Эзэмшигч', parcel.holder_name],
+                ['Зориулалт', parcel.landuse_name],
+                ['Эрх', RIGHT_TYPE_LABELS[parcel.right_type] ?? ''],
+                ['Нөхөх олговор', comp ? formatMillion(comp) : ''],
+              ] as const).map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                  <span className="w-[86px] shrink-0 text-[#8E97A3]">{k}</span>
+                  <span className="min-w-0 flex-1 break-words">{v || '—'}</span>
+                </div>
+              ))}
+              <Link href={`/parcel/${parcel.id}?acq=${parcel.acquisition_id}`} target="_blank"
+                className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-[#F2A541] hover:underline">
+                Дэлгэрэнгүй <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Зүүн доод — суурь зураг: жижиг урьдчилсан зурагтай, дарж сольно */}
+      <div className={`absolute z-[6] flex gap-1.5 ${isFullscreen ? 'bottom-[158px] left-[482px]' : 'bottom-3 left-3'}`}
+        role="group" aria-label="Суурь зураг">
+        {([['dark', 'Хар зураг'], ['imagery', 'Хиймэл дагуул']] as const).map(([v, label]) => (
+          <button key={v} type="button" aria-pressed={basemap === v} onClick={() => onBasemap(v)} title={label}
+            className={`group relative h-[52px] w-[52px] overflow-hidden rounded-lg border-2 shadow-lg transition-all ${
+              basemap === v ? 'border-[#F2A541]' : 'border-white/30 opacity-80 hover:border-white/70 hover:opacity-100'}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- гадны tile, оновчлол шаардлагагүй */}
+            <img src={basemapThumb(v)} alt="" className="h-full w-full object-cover" loading="lazy" draggable={false} />
+            <span className="absolute inset-x-0 bottom-0 bg-black/60 px-0.5 py-px text-center text-[9px] font-semibold leading-tight text-white">
+              {label}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Баруун дээд — дэлгэц дүүргэх */}
+      <div className="absolute right-3 top-3 z-[6] flex items-center gap-2">
+        <button type="button" onClick={onToggleFullscreen}
+          className={`${card} flex h-9 items-center gap-1.5 px-3 text-[12px] font-semibold hover:border-[#3E9C8F]`}>
+          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          {isFullscreen ? 'Дэлгэцээс гарах' : 'Дэлгэц дүүргэх'}
+        </button>
+      </div>
+
+      {/* Статусын тайлбар — баруун доор */}
+      {legend.length > 0 && (
+        <div className={`${card} absolute right-3 z-[6] p-3 ${isFullscreen ? 'bottom-[158px]' : 'bottom-3'}`}>
+          <p className="mb-1.5 text-[12px] font-semibold">Статусын тайлбар</p>
+          <ul className="space-y-1">
+            {legend.map((s) => (
+              <li key={s.id} className="flex items-center gap-2 text-[12px] text-[#A7AFBA]">
+                <span className="inline-block h-3 w-3 shrink-0 rounded-sm"
+                  style={s.is_released ? { border: `1.5px dashed ${s.color || CHRONOS_NO_COLOR}` } : { background: s.color || CHRONOS_NO_COLOR }} />
+                {s.name}
+              </li>
+            ))}
+            <li className="flex items-center gap-2 text-[12px] text-[#8E97A3]">
+              <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: CHRONOS_NOT_STARTED }} /> Чөлөөлөгдөөгүй
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {chronos.loading && (
+        <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center text-[13px] text-[#A7AFBA]">
+          Ачаалж байна…
+        </div>
+      )}
+
+      {/* Бүтэн дэлгэц — цагийн гол газрын зургийн доод хэсэгт */}
+      {isFullscreen && chronos.timeline && (
+        <div className="absolute inset-x-3 bottom-3 z-[7]">{chronos.timeline}</div>
+      )}
+    </>
   )
 }
