@@ -183,7 +183,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [canChronos, setCanChronos] = useState(false)
   useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission('land:read')), [])
   const [chronosBasemap, setChronosBasemap] = useState<ChronosBasemap>('dark')
-  // Газрын зураг (хиймэл дагуул биш) — theme-ээс: хар → Shades of Grey, цагаан → Masik WWW.
+  // Газрын зураг (хиймэл дагуул биш) — theme-ээс: хар → Multi Brand Network, цагаан → Masik WWW.
   const { resolvedTheme } = useTheme()
   const chronosMapMode: ChronosBasemap = resolvedTheme === 'dark' ? 'dark' : 'light'
   const chronosBase: ChronosBasemap = chronosBasemap === 'imagery' ? 'imagery' : chronosMapMode

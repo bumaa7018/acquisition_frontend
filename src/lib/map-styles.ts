@@ -1,5 +1,5 @@
 /**
- * Газрын зургийн загвар — Snazzy Maps «Shades of Grey» (https://snazzymaps.com/style/38,
+ * Газрын зургийн загвар — Snazzy Maps «Multi Brand Network» (https://snazzymaps.com/style/20053,
  * хар theme) ба «Masik WWW» (https://snazzymaps.com/style/6376, цагаан theme).
  * Google Maps-ийн style JSON-ийг Google-ийн raster tile-ийн `apistyle`
  * параметр болгон хувиргаж «Он цагийн зураг»-ийн суурь болгоно (хиймэл
@@ -12,18 +12,29 @@ export interface MapStyleRule {
   stylers: Record<string, string | number>[];
 }
 
-export const SHADES_OF_GREY: MapStyleRule[] = [
+export const MULTI_BRAND_NETWORK: MapStyleRule[] = [
+  { featureType: "all", elementType: "labels", stylers: [{ visibility: "on" }] },
   { featureType: "all", elementType: "labels.text.fill", stylers: [{ saturation: 36 }, { color: "#000000" }, { lightness: 40 }] },
   { featureType: "all", elementType: "labels.text.stroke", stylers: [{ visibility: "on" }, { color: "#000000" }, { lightness: 16 }] },
   { featureType: "all", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
   { featureType: "administrative", elementType: "geometry.fill", stylers: [{ color: "#000000" }, { lightness: 20 }] },
   { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#000000" }, { lightness: 17 }, { weight: 1.2 }] },
+  { featureType: "administrative.country", elementType: "labels.text.fill", stylers: [{ color: "#e5c163" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#c4c4c4" }] },
+  { featureType: "administrative.neighborhood", elementType: "labels.text.fill", stylers: [{ color: "#e5c163" }] },
   { featureType: "landscape", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 20 }] },
-  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 21 }] },
-  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#000000" }, { lightness: 17 }] },
-  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#000000" }, { lightness: 29 }, { weight: 0.2 }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 21 }, { visibility: "on" }] },
+  { featureType: "poi.business", elementType: "geometry", stylers: [{ visibility: "on" }] },
+  { featureType: "road.highway", elementType: "geometry.fill", stylers: [{ color: "#e5c163" }, { lightness: "0" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ visibility: "off" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.highway", elementType: "labels.text.stroke", stylers: [{ color: "#e5c163" }] },
   { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 18 }] },
+  { featureType: "road.arterial", elementType: "geometry.fill", stylers: [{ color: "#575757" }] },
+  { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#ffffff" }] },
+  { featureType: "road.arterial", elementType: "labels.text.stroke", stylers: [{ color: "#2c2c2c" }] },
   { featureType: "road.local", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 16 }] },
+  { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#999999" }] },
   { featureType: "transit", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 19 }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#000000" }, { lightness: 17 }] },
 ];
@@ -64,7 +75,7 @@ export const MASIK_WWW: MapStyleRule[] = [
 const FEATURE: Record<string, number> = {
   administrative: 1, poi: 2, road: 3, transit: 4, landscape: 5, water: 6,
   "administrative.country": 17, "administrative.province": 18, "administrative.locality": 19,
-  "administrative.neighborhood": 20, "administrative.land_parcel": 21,
+  "administrative.neighborhood": 20, "administrative.land_parcel": 21, "poi.business": 33,
   "road.highway": 49, "road.arterial": 50, "road.local": 51,
 };
 const ELEMENT: Record<string, string> = {
@@ -99,5 +110,5 @@ const styledTiles = (rules: MapStyleRule[]) =>
     (n) => `https://mt${n}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&scale=2&hl=mn&apistyle=${googleApiStyle(rules)}`,
   );
 
-export const SHADES_OF_GREY_TILES = styledTiles(SHADES_OF_GREY);
+export const MULTI_BRAND_NETWORK_TILES = styledTiles(MULTI_BRAND_NETWORK);
 export const MASIK_WWW_TILES = styledTiles(MASIK_WWW);

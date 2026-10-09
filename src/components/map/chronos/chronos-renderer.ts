@@ -26,16 +26,16 @@ import {
   tileZoom,
   unproject,
 } from "@/lib/chronos";
-import { MASIK_WWW_TILES, SHADES_OF_GREY_TILES } from "@/lib/map-styles";
+import { MASIK_WWW_TILES, MULTI_BRAND_NETWORK_TILES } from "@/lib/map-styles";
 
 /** dark/light — theme-ийн газрын зураг; imagery — хиймэл дагуул. */
 export type ChronosBasemap = "dark" | "light" | "imagery";
 
 /**
- * Хар газрын зураг — Snazzy Maps «Shades of Grey» загвартай Google tile (@2x):
- * зам, гудамж, нэр бүдэг саарлаар. Хиймэл дагуултай адил гадны tile (интернет).
+ * Хар газрын зураг — Snazzy Maps «Multi Brand Network» загвартай Google tile (@2x):
+ * хар дэвсгэр, их зам алтлаг шараар. Хиймэл дагуултай адил гадны tile (интернет).
  */
-export const DARK_MAP_TILES = SHADES_OF_GREY_TILES;
+export const DARK_MAP_TILES = MULTI_BRAND_NETWORK_TILES;
 /** Цагаан газрын зураг (цагаан theme) — Snazzy Maps «Masik WWW». */
 export const LIGHT_MAP_TILES = MASIK_WWW_TILES;
 export const DARK_MAP_MAX_ZOOM = 20;

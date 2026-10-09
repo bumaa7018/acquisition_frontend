@@ -201,12 +201,16 @@ test("Он цагийн зурагын хураангуй — бүтэн дэл�
   assert.equal(jun.data.status_breakdown.find((r) => r.status_id === NOT_STARTED_STATUS_ID), undefined);
 });
 
-test("Shades of Grey — Google apistyle кодчилол", async () => {
-  const { googleApiStyle, SHADES_OF_GREY } = await import("../src/lib/map-styles.ts");
-  const decoded = decodeURIComponent(googleApiStyle(SHADES_OF_GREY)).split(",");
-  assert.equal(decoded.length, 13);
-  assert.equal(decoded[0], "s.e:l.t.f|p.s:36|p.c:#ff000000|p.l:40", "all → s.t-гүй");
+test("Multi Brand Network / Masik WWW — Google apistyle кодчилол", async () => {
+  const { googleApiStyle, MULTI_BRAND_NETWORK, MASIK_WWW } = await import("../src/lib/map-styles.ts");
+  const decoded = decodeURIComponent(googleApiStyle(MULTI_BRAND_NETWORK)).split(",");
+  assert.equal(decoded.length, 24);
+  assert.equal(decoded[1], "s.e:l.t.f|p.s:36|p.c:#ff000000|p.l:40", "all → s.t-гүй");
   assert.ok(decoded.includes("s.t:5|s.e:g|p.c:#ff000000|p.l:20"), "landscape");
-  assert.ok(decoded.includes("s.t:49|s.e:g.s|p.c:#ff000000|p.l:29|p.w:0.2"), "road.highway stroke");
+  assert.ok(decoded.includes("s.t:49|s.e:g.f|p.c:#ffe5c163|p.l:0"), "road.highway fill — алтлаг");
+  assert.ok(decoded.includes("s.t:33|s.e:g|p.v:on"), "poi.business");
   assert.ok(decoded.includes("s.t:6|s.e:g|p.c:#ff000000|p.l:17"), "water");
+  const light = decodeURIComponent(googleApiStyle(MASIK_WWW)).split(",");
+  assert.ok(light.includes("s.t:18|s.e:a|p.v:off"), "administrative.province");
+  assert.ok(light.includes("s.t:3|s.e:g|p.l:2|p.g:1.21"), "road gamma");
 });
