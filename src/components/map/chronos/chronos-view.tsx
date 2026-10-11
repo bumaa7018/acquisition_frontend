@@ -24,6 +24,7 @@ import {
 import { DEFAULT_BASEMAP_MAX_ZOOM, DEFAULT_BASEMAP_URLS, getBasemapSetting, isBasemapActive } from "../basemap-config";
 import { ChronosRenderer, DARK_MAP_MAX_ZOOM, DARK_MAP_TILES, type ChronosBasemap } from "./chronos-renderer";
 import { chronosBody as body, chronosDisplay as display, chronosMono as mono } from "@/lib/chronos-fonts";
+import { StatusLabel } from "@/components/ui/status-label";
 
 
 /** ▶ тоглуулахад нэг сарын хугацаа. */
@@ -39,12 +40,12 @@ function basemapTiles(): { urls: string[]; maxZoom: number } {
 }
 
 /** Сонгосон сарын байдлаарх төлөвийн badge — бүртгэлийн өнгөөр. */
-function statusTone(p: ChronosParcel, asOfKey: string, statuses: Map<number, ChronosStatus>): { label: string; bg: string; fg: string } {
+function statusTone(p: ChronosParcel, asOfKey: string, statuses: Map<number, ChronosStatus>): { label: string; bg: string; fg: string; color?: string } {
   const id = statusAt(p.events, asOfKey);
   const st = id === null ? undefined : statuses.get(id);
   if (!st) return { label: "Чөлөөлөгдөөгүй", bg: "var(--ch-planned-bg)", fg: "var(--ch-planned-text)" };
   const color = st.color || CHRONOS_NO_COLOR;
-  return { label: st.name, bg: `${color}2e`, fg: color };
+  return { label: st.name, bg: `${color}2e`, fg: color, color };
 }
 
 const ha = (m2: number) => (m2 / 10_000).toLocaleString("mn-MN", { maximumFractionDigits: 2 });
@@ -373,7 +374,12 @@ export function ChronosView({
                 <span className={cn(mono.className, "break-all text-[24px] font-semibold leading-none")}>{selectedParcel.parcel_id}</span>
                 {(() => {
                   const tone = statusTone(selectedParcel, asOfKey, statusById);
-                  return <span className="rounded-md px-2 py-0.5 text-[12px] font-medium" style={{ background: tone.bg, color: tone.fg }}>{tone.label}</span>;
+                  // Хронос үргэлж бараан — тэмдгийн dark хувилбар (бараан өнгөтэй төлөвийн текст уншигдана).
+                  return tone.color ? (
+                    <span className="dark"><StatusLabel color={tone.color} name={tone.label} /></span>
+                  ) : (
+                    <span className="rounded-md px-2 py-0.5 text-[12px] font-medium" style={{ background: tone.bg, color: tone.fg }}>{tone.label}</span>
+                  );
                 })()}
               </div>
               <p className="mt-1 break-words text-[12px]" style={weak}>{selectedParcel.acquisition_name || "[ ]"}</p>

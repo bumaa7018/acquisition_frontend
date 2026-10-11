@@ -7,6 +7,7 @@ import { Grid2x2, Plus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus, ParcelStatusRules } from "@/types";
 import { getParcelStatusStyle, PARCEL_STATUS_FALLBACK_COLOR } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 
 /** `#rrggbb` эсэхийг шалгана — backend болон DB-ийн CHECK-тэй ижил дүрэм. */
@@ -67,7 +68,7 @@ function rulesOf(item?: ParcelStatus | null): ParcelStatusRules {
 export default function ParcelStatusPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<ParcelStatus | null>(null);
-  const [form, setForm] = useState({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+  const [form, setForm] = useState({ name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
   const [rules, setRules] = useState<ParcelStatusRules>(NO_RULES);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
   const queryClient = useQueryClient();
@@ -80,7 +81,6 @@ export default function ParcelStatusPage() {
   const createMutation = useMutation({
     mutationFn: () =>
       parcelStatusApi.create({
-        code: form.code.trim(),
         name: form.name.trim(),
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
         color: form.color,
@@ -90,7 +90,7 @@ export default function ParcelStatusPage() {
       toast.success("Нэгж талбарын статус үүслээ");
       queryClient.invalidateQueries({ queryKey: ["parcel-statuses"] });
       setShowCreate(false);
-      setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+      setForm({ name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     },
     onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
   });
@@ -98,7 +98,6 @@ export default function ParcelStatusPage() {
   const updateMutation = useMutation({
     mutationFn: () =>
       parcelStatusApi.update(editItem!.id, {
-        code: form.code.trim() || undefined,
         name: form.name.trim() || undefined,
         sort_order: form.sort_order ? parseInt(form.sort_order) : undefined,
         color: form.color,
@@ -108,7 +107,7 @@ export default function ParcelStatusPage() {
       toast.success("Хадгалагдлаа");
       queryClient.invalidateQueries({ queryKey: ["parcel-statuses"] });
       setEditItem(null);
-      setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+      setForm({ name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     },
     onError: (err) => toast.error(getApiError(err, "Засварлахад алдаа гарлаа")),
   });
@@ -125,7 +124,6 @@ export default function ParcelStatusPage() {
   const openEdit = (item: ParcelStatus) => {
     setEditItem(item);
     setForm({
-      code: item.code,
       name: item.name,
       sort_order: String(item.sort_order),
       color: item.color || PARCEL_STATUS_FALLBACK_COLOR,
@@ -136,7 +134,7 @@ export default function ParcelStatusPage() {
 
   const openCreate = () => {
     setEditItem(null);
-    setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+    setForm({ name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
     setRules(NO_RULES);
     setShowCreate(true);
   };
@@ -144,11 +142,11 @@ export default function ParcelStatusPage() {
   const closeForm = () => {
     setShowCreate(false);
     setEditItem(null);
-    setForm({ code: "", name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
+    setForm({ name: "", sort_order: "", color: PARCEL_STATUS_FALLBACK_COLOR });
   };
 
   const submit = () => {
-    if (!form.name.trim() || !form.code.trim()) return;
+    if (!form.name.trim()) return;
     if (editItem) updateMutation.mutate();
     else createMutation.mutate();
   };
@@ -189,13 +187,13 @@ export default function ParcelStatusPage() {
             {editItem ? "Засварлах" : "Шинэ статус"}
           </p>
           <div className="flex flex-col gap-3 max-w-md">
-            <input
-              placeholder="Код * (жишээ: negotiating)"
-              value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && submit()}
-              className="rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 py-2 text-[13px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all"
-            />
+            {/* Код = id (101…109 seeder, шинэ төлөв 110-аас) — автоматаар, засагдахгүй. */}
+            <p className="text-[12px] text-slate-500 dark:text-slate-400">
+              Код:{" "}
+              <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
+                {editItem ? editItem.code : "автоматаар олгоно"}
+              </span>
+            </p>
             <input
               placeholder="Нэр *"
               value={form.name}
@@ -262,7 +260,7 @@ export default function ParcelStatusPage() {
             <div className="flex gap-2">
               <button
                 onClick={submit}
-                disabled={isPending || !form.name.trim() || !form.code.trim() || !isHexColor(form.color)}
+                disabled={isPending || !form.name.trim() || !isHexColor(form.color)}
                 className="rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white hover:bg-[#02a3af] disabled:opacity-60 transition-colors"
               >
                 {editItem ? "Хадгалах" : "Үүсгэх"}
@@ -311,34 +309,23 @@ export default function ParcelStatusPage() {
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
             {data.map((item) => {
-              const style = getParcelStatusStyle(item.id, item.name, item.color);
+              const style = getParcelStatusStyle(item.color);
               return (
                 <div
                   key={item.id}
                   className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: style.bg }}
-                    >
-                      <Grid2x2
-                        className="h-4 w-4"
-                        style={{ color: style.color }}
-                      />
-                    </div>
+                    {/* Тохируулсан өнгө — бусад хуудасны тэмдэгтэй ИЖИЛ харагдана. */}
+                    <span
+                      className="h-8 w-8 shrink-0 rounded-lg ring-1 ring-black/10 dark:ring-white/25"
+                      style={{ backgroundColor: style.color }}
+                      title={style.color}
+                    />
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-[13px] font-medium text-slate-700 dark:text-slate-200">
-                          {item.name}
-                        </p>
-                        <span
-                          className="rounded px-1.5 py-0.5 text-[10px] font-mono font-semibold"
-                          style={{
-                            color: style.color,
-                            backgroundColor: style.bg,
-                          }}
-                        >
+                        <StatusLabel color={style.color} name={item.name} />
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono font-semibold text-slate-600 dark:bg-white/[0.08] dark:text-slate-300">
                           {item.code}
                         </span>
                       </div>

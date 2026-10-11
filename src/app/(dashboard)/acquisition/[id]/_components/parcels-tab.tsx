@@ -17,7 +17,8 @@ import { profApi } from "@/lib/prof-api";
 import { getApiError } from "@/lib/utils";
 import { runSequentialWithDelay } from "@/lib/sequential-runner";
 import { canAccessParcel, getCurrentOrgId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
-import { getParcelStatusStyle, VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
+import { VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
 import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
@@ -706,12 +707,7 @@ export function ParcelsTab({
                         </td>
                         <td className="px-4 py-2.5">
                           {p.status_name ? (
-                            <span
-                              className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                              style={statusStyle(p.status, p.status_name)}
-                            >
-                              {p.status_name}
-                            </span>
+                            <StatusLabel color={statusStyle(p.status_id ?? p.status).color} name={p.status_name} />
                           ) : (
                             <span className="text-[11px] text-slate-400">—</span>
                           )}

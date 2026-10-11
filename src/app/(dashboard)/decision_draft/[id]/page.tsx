@@ -25,8 +25,8 @@ import {
   DECISION_DRAFT_STATUS_STYLES,
   DECISION_DRAFT_STATUS_DRAFT,
   DECISION_DRAFT_STATUS_CONFIRMED,
-  getParcelStatusStyle,
 } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { authStorage } from "@/lib/auth";
 import { canUpdateDecisionDraft, canViewDecisionDrafts } from "@/lib/role-utils";
@@ -561,12 +561,7 @@ export default function DecisionDraftDetailPage() {
                       </td>
                       <td className="px-4 py-3">
                         {p.parcel_status_name ? (
-                          <span
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                            style={statusStyle(p.parcel_status, p.parcel_status_name)}
-                          >
-                            {p.parcel_status_name}
-                          </span>
+                          <StatusLabel color={statusStyle(p.parcel_status).color} name={p.parcel_status_name} />
                         ) : (
                           <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
                         )}

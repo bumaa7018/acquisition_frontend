@@ -1,0 +1,88 @@
+/* ── Нэгж талбарын төлөвийн шошго (components/ui/status-label.ts) ─────────────
+   Ганц өнгөнөөс (--c) theme бүрт дэвсгэр, хүрээ, текст, цэгийн цагирагийг
+   OKLCH-д тооцоолно. Томьёо нь lib/status-colors.ts-тэй ЯГ ижил — нэгийг нь
+   өөрчилбөл нөгөөг нь хамт өөрчил.
+
+   Theme-ийн утгууд — next-themes нь `.dark` классыг <html>-д тавина. */
+:root {
+  --st-bg-l: 0.965;
+  --st-bd-l: 0.87;
+  --st-tx-min: 0;
+  --st-tx-max: 0.46;
+  --st-ring-l: 0.62;
+}
+.dark {
+  --st-bg-l: 0.27;
+  --st-bd-l: 0.42;
+  --st-tx-min: 0.83;
+  --st-tx-max: 1;
+  --st-ring-l: 0.66;
+}
+
+/* Fallback — relative color syntax дэмждэггүй хөтөч: TS-ийн бодсон бэлэн утга
+   (statusLabelVars → --st-*-light / --st-*-dark). */
+.status-label,
+.status-dot {
+  --st-bg: var(--st-bg-light);
+  --st-bd: var(--st-bd-light);
+  --st-tx: var(--st-tx-light);
+  --st-ring: var(--st-ring-light);
+}
+.dark .status-label,
+.dark .status-dot {
+  --st-bg: var(--st-bg-dark);
+  --st-bd: var(--st-bd-dark);
+  --st-tx: var(--st-tx-dark);
+  --st-ring: var(--st-ring-dark);
+}
+
+/* Үндсэн зам — хөтөч өөрөө тооцоолно. Сонгогч нь fallback-тай ИЖИЛ
+   (specificity) бөгөөд дараа нь тул дарна. */
+@supports (color: oklch(from red l c h)) {
+  .status-label,
+  .status-dot,
+  .dark .status-label,
+  .dark .status-dot {
+    --st-bg: oklch(from var(--c) var(--st-bg-l) min(c * 0.4, 0.045) h);
+    --st-bd: oklch(from var(--c) var(--st-bd-l) min(c, 0.11) h);
+    --st-tx: oklch(from var(--c) clamp(var(--st-tx-min), l, var(--st-tx-max)) min(c, 0.17) h);
+    --st-ring: oklch(from var(--c) var(--st-ring-l) min(c, 0.1) h);
+  }
+}
+
+.status-label {
+  display: inline-flex;
+  max-width: 220px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 8px;
+  border: 1px solid var(--st-bd);
+  border-radius: 6px;
+  background: var(--st-bg);
+  color: var(--st-tx);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  vertical-align: middle;
+  /* Товч биш — hover, заагч, сүүдэргүй. */
+  cursor: inherit;
+  box-shadow: none;
+  text-transform: none;
+}
+.status-label__dot,
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--c);
+  /* Цагираг — цагаан фон дээр цагаан, хар фон дээр хар цэг ч харагдана. */
+  box-shadow: inset 0 0 0 1px var(--st-ring);
+}
+.status-label__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

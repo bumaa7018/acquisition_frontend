@@ -5,6 +5,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import { BarChart3, LayoutDashboard, X } from "lucide-react";
 import { dashboardApi, type DashboardData } from "@/lib/api";
 import { getParcelStatusStyle, type FinanceDashboardData } from "@/types";
+import { StatusDot } from "@/components/ui/status-label";
 import { monthlyTimeline } from "@/lib/timeline-months";
 import { cn, formatBillion } from "@/lib/utils";
 import { AbbrevAmount } from "@/components/ui/amount-hint";
@@ -83,7 +84,7 @@ export function AcquisitionOverviewPanel({
         name: s.name,
         count: s.count,
         area: s.area_m2,
-        color: colors.get(s.status_id) || getParcelStatusStyle(s.status_id, s.name).color,
+        color: getParcelStatusStyle(colors.get(s.status_id)).color,
       }));
   }, [data?.parcel_statuses, data?.status_breakdown]);
 
@@ -279,7 +280,7 @@ export function AcquisitionOverviewPanel({
                     <ul className="mt-2 space-y-1">
                       {statuses.map((s) => (
                         <li key={s.id} className="flex items-start gap-2 text-[12px]">
-                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: s.color }} />
+                          <StatusDot color={s.color} className="mt-1" />
                           <span className="min-w-0 flex-1 break-words text-slate-600 dark:text-slate-300">{s.name}</span>
                           <span className="shrink-0 font-semibold tabular-nums text-slate-800 dark:text-white">{s.count.toLocaleString()}</span>
                           <span className="w-9 shrink-0 text-right tabular-nums text-slate-400">{pct(s.count, total)}%</span>

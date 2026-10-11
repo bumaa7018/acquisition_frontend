@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { monthlyTimeline } from "../src/lib/timeline-months.ts";
-import { getParcelStatusStyle } from "../src/types/index.ts";
+import { PARCEL_STATUS_FALLBACK_COLOR, getParcelStatusStyle } from "../src/types/index.ts";
 
 // ── Цагийн график: сонгосон оны БҮХ сар ───────────────────────────────────
 // Засварлаж буй алдаа: график нь ӨГӨГДӨЛ БАЙГАА эхний сараас эхэлдэг байсан
@@ -88,23 +88,20 @@ test("гажсан огноог алгасна (график эвдрэхгүй)
 // код дотор хатуу бичсэн хүснэгтээс өнгөө авдаг тул бүртгэлд өнгө солиход
 // хуучин өнгөөрөө үлддэг байв.
 
-test("бүртгэлийн өнгө хатуу хүснэгтээс ДАВУУ", () => {
-  // 5 = Чөлөөлсөн, хатуу хүснэгтэд #22c55e. Бүртгэл өөр өнгө өгвөл тэр нь дийлнэ.
-  assert.equal(getParcelStatusStyle(5, "Чөлөөлсөн", "#a855f7").color, "#a855f7");
+test("өнгө нь зөвхөн бүртгэлээс", () => {
+  // Код дотор төлөвийн id/нэрээр хатуу өнгө байхгүй — бүртгэлийн өнгө л.
+  assert.equal(getParcelStatusStyle("#a855f7").color, "#a855f7");
+  assert.equal(getParcelStatusStyle("#f22ef5").color, "#f22ef5");
 });
 
-test("бүртгэлд байхгүй ШИНЭ төлөв ч өнгөтэйгөө гарна", () => {
-  // Хатуу хүснэгтэд 7 гэсэн төлөв ОГТ байхгүй — зөвхөн бүртгэл л өнгө өгнө.
-  assert.equal(getParcelStatusStyle(7, "Шинэ төлөв", "#f22ef5").color, "#f22ef5");
-});
-
-test("өнгө өгөөгүй үед хуучин зан төлөв хэвээр", () => {
-  assert.equal(getParcelStatusStyle(5, "Чөлөөлсөн").color, "#22c55e");
+test("өнгө өгөөгүй үед саарал", () => {
+  assert.equal(getParcelStatusStyle().color, PARCEL_STATUS_FALLBACK_COLOR);
+  assert.equal(getParcelStatusStyle(null).color, PARCEL_STATUS_FALLBACK_COLOR);
 });
 
 test("гажсан өнгийг үл хэрэгсэнэ", () => {
   for (const bad of ["ногоон", "#12345", "rgb(1,2,3)", ""]) {
-    assert.equal(getParcelStatusStyle(5, "Чөлөөлсөн", bad).color, "#22c55e", `"${bad}"`);
+    assert.equal(getParcelStatusStyle(bad).color, PARCEL_STATUS_FALLBACK_COLOR, `"${bad}"`);
   }
 });
 

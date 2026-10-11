@@ -25,7 +25,7 @@ export function ChronosTimeline({
   value: number | null;
   onChange: (index: number | null) => void;
   loading?: boolean;
-  /** card — дашбоардын карт; overlay — газрын зургийн бүтэн дэлгэц дээр (харанхуй). */
+  /** card — дашбоардын карт; overlay — газрын зургийн бүтэн дэлгэц дээрх хөвөгч самбар (theme-ийг дагана). */
   variant?: "card" | "overlay";
 }) {
   const [playing, setPlaying] = useState(false);
@@ -63,15 +63,17 @@ export function ChronosTimeline({
     return Math.min(months.length - 1, Math.floor((x / rect.width) * months.length));
   };
 
-  const dark = variant === "overlay";
-  const muted = dark ? "text-[#8E97A3]" : "text-slate-400 dark:text-slate-500";
+  const overlay = variant === "overlay";
+  const muted = overlay ? "text-slate-500 dark:text-[#8E97A3]" : "text-slate-400 dark:text-slate-500";
   return (
     <div className={cn(
       "flex w-full min-w-0 flex-col gap-3",
-      dark ? "rounded-xl border border-[#222A35] bg-[rgba(18,22,28,.88)] p-3 text-[#ECE6D9] backdrop-blur" : "",
+      overlay
+        ? "rounded-xl border border-slate-200 bg-white/90 p-3 text-slate-800 shadow-xl backdrop-blur dark:border-[#222A35] dark:bg-[rgba(18,22,28,.88)] dark:text-[#ECE6D9]"
+        : "",
     )}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className={cn("flex items-center gap-1.5 text-[13px] font-semibold", dark ? "" : "text-slate-700 dark:text-slate-200")}>
+        <p className={cn("flex items-center gap-1.5 text-[13px] font-semibold", overlay ? "" : "text-slate-700 dark:text-slate-200")}>
           <History className="h-4 w-4 text-[#F2A541]" /> Цаг хугацааны өөрчлөлт
         </p>
         <div className="flex items-center gap-3">
@@ -142,13 +144,15 @@ export function ChronosTimeline({
                 return (
                   <div key={m} data-month={i} title={`${monthLabel(m)} — ${n} өөрчлөлт`} className="flex min-w-[46px] flex-1 flex-col items-stretch">
                     <span className={cn("mb-0.5 block text-center text-[11px] font-semibold tabular-nums leading-none",
-                      isSel ? "text-[#c77a12] dark:text-[#FFD9A0]" : n ? (dark ? "text-[#A7AFBA]" : "text-slate-600 dark:text-slate-300") : muted)}>
+                      isSel ? "text-[#c77a12] dark:text-[#FFD9A0]" : n ? (overlay ? "text-slate-600 dark:text-[#A7AFBA]" : "text-slate-600 dark:text-slate-300") : muted)}>
                       {n}
                     </span>
-                    <span className="block rounded-t-[3px] transition-[height,background-color] duration-300"
+                    <span className={cn("block rounded-t-[3px] transition-[height,background-color] duration-300",
+                      // Ирээдүйн сар — theme-ийн бүдэг өнгө.
+                      !isSel && !past && (overlay ? "bg-slate-400/35 dark:bg-[#1B2430]" : "bg-slate-400/35"))}
                       style={{
                         height: 6 + Math.round((36 * n) / max),
-                        background: isSel ? "#F2A541" : past ? "#3E9C8F" : dark ? "#1B2430" : "rgba(148,163,184,.35)",
+                        background: isSel ? "#F2A541" : past ? "#3E9C8F" : undefined,
                       }} />
                     <span className={cn("mt-1 block whitespace-nowrap text-center text-[11px] tabular-nums",
                       isSel ? "font-semibold text-[#c77a12] dark:text-[#FFD9A0]" : muted)}>

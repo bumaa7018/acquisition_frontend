@@ -5,6 +5,7 @@ import { X, MapPin, Users, Banknote, FileText, ArrowUpRight } from "lucide-react
 import { landApi, parcelApi } from "@/lib/api";
 import { formatArea, formatDate } from "@/lib/utils";
 import { getParcelStatusStyle } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
 import { useParcelStatusColors } from "./use-parcel-status-layers";
 import type { Compensation, ParcelHolder } from "@/types";
 
@@ -129,11 +130,7 @@ export default function ParcelInfoModal({
   // хатуу бичсэн хүснэгтээс авдаг байсан тул бүртгэлд өнгө солиход зураг
   // дээрх талбар өөр, цонх өөр өнгөтэй болдог байв.
   const statusColors = useParcelStatusColors();
-  const style = getParcelStatusStyle(
-    parcel?.status_id,
-    parcel?.status_name ?? "",
-    parcel?.status_id != null ? statusColors.get(parcel.status_id) : undefined,
-  );
+  const style = getParcelStatusStyle(parcel?.status_id != null ? statusColors.get(parcel.status_id) : undefined);
 
   // Газрын үнэлгээ = нэгж талбарт (target_type "parcel"), хөрөнгийн үнэлгээ =
   // хөрөнгө бүрд (target_type "asset"). Зөвхөн ҮНДСЭН урсгалыг тооцно —
@@ -160,10 +157,11 @@ export default function ParcelInfoModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Цонхны дэвсгэрийг ЯВЦЫН өнгөөр бүдэг будна (status.bg = өнгө + 1f alpha) */}
+      {/* Цонхны дэвсгэрийг ЯВЦЫН өнгөөр бүдэг будна (status.bg = өнгө + 1f alpha) —
+          картын өнгөн ДЭЭР, эс бөгөөс тунгалаг дэвсгэрээр арын бараан давхарга харагдана. */}
       <div
-        className="relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border shadow-2xl"
-        style={{ background: style.bg, borderColor: `${style.color}55` }}
+        className="relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border bg-white shadow-2xl dark:bg-[#1e1f27]"
+        style={{ backgroundImage: `linear-gradient(${style.bg}, ${style.bg})`, borderColor: `${style.color}55` }}
       >
         <div
           className="flex shrink-0 items-center justify-between gap-3 px-5 py-3.5"
@@ -171,16 +169,14 @@ export default function ParcelInfoModal({
         >
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${style.color}22` }}>
-              <MapPin className="h-4 w-4" style={{ color: style.color }} />
+              <MapPin className="h-4 w-4 text-slate-600 dark:text-slate-200" />
             </span>
             <div className="min-w-0">
               <p className="truncate font-mono text-[14px] font-bold text-slate-800 dark:text-white">
                 {parcel?.parcel_id || "Нэгж талбар"}
               </p>
               {parcel?.status_name && (
-                <p className="text-[11px] font-semibold" style={{ color: style.color }}>
-                  {parcel.status_name}
-                </p>
+                <StatusLabel color={style.color} name={parcel.status_name} className="mt-0.5" />
               )}
             </div>
           </div>
@@ -214,7 +210,10 @@ export default function ParcelInfoModal({
                 <Row label="Нэгж талбарын дугаар" value={<span className="font-mono">{parcel.parcel_id}</span>} />
                 <Row label="Талбай" value={formatArea(parcel.area_m2)} />
                 <Row label="Нөлөөлөлтөд өртсөн талбай" value={formatArea(parcel.acquisition_area_m2)} />
-                <Row label="Явцын нэр" value={<span style={{ color: style.color }}>{parcel.status_name || "—"}</span>} />
+                <Row
+                  label="Явцын нэр"
+                  value={parcel.status_name ? <StatusLabel color={style.color} name={parcel.status_name} /> : "—"}
+                />
                 {/* Шалтгаан — байхгүй бол "—" харагдана (мөр нь үргэлж байна) */}
                 <Row label="Шалтгаан" value={currentReason} />
               </div>
@@ -279,8 +278,7 @@ export default function ParcelInfoModal({
           >
             <Link
               href={`/parcel/${parcelUuid}?acq=${acquisitionId}`}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ background: style.color }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
             >
               Дэлгэрэнгүй харах
               <ArrowUpRight className="h-3.5 w-3.5" />

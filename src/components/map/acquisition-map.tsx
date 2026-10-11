@@ -18,7 +18,7 @@ import { Fill, Stroke, Style } from "ol/style";
 import "ol/ol.css";
 import { Box, History, Map as MapIcon } from "lucide-react";
 import type { AU, BoundaryHistory } from "@/types";
-import { PARCEL_STATUS_STYLES, PARCEL_STATUS_NAME_STYLES, STATUS_LABELS } from "@/types";
+import { PARCEL_STATUS_INITIAL_ID, STATUS_LABELS, getParcelStatusStyle } from "@/types";
 import { landApi } from "@/lib/api";
 import { formatArea } from "@/lib/utils";
 import LayerPanel, { type LayerConfig, type LayerGroupConfig } from "./layer-panel";
@@ -62,7 +62,6 @@ import { ChronosView } from "./chronos/chronos-view";
 import { hasPermission, isExternalSpecialRole } from "@/lib/role-utils";
 import type { PrintOrientation } from "./print-map";
 
-const PARCEL_STATUS_NAMES = Object.keys(PARCEL_STATUS_NAME_STYLES);
 
 const PARCEL_GROUP: LayerGroupConfig = { id: "parcel_status", label: "Нэгж талбарын хил", color: "#22c55e" };
 
@@ -814,19 +813,17 @@ export function AcquisitionMap({
         const counts: Record<number, number> = {};
         // 3D-ийн өнгө/нэр нь мөн БҮРТГЭЛЭЭС — 2D давхаргатай ижил эх сурвалж.
         // Эс бөгөөс нэг төлөв хавтгай зураг дээр нэг өнгөтэй, 3D дээр өөр
-        // өнгөтэй харагдана. Бүртгэлд байхгүй төлөвт хуучин хүснэгт рүү унана.
+        // өнгөтэй харагдана. Бүртгэлд байхгүй төлөв — саарал.
         const statusMeta = new Map(
           layerDefsRef.current
             .map((d) => [parcelStatusIdFromLayer(d.id), d] as const)
             .filter((e): e is [number, (typeof layerDefsRef.current)[number]] => e[0] !== null),
         );
         (json?.features ?? []).forEach((f: { id?: string; properties?: { parcel_id?: string; status?: number }; geometry?: { type?: string; coordinates?: unknown } }) => {
-          const status = f.properties?.status ?? 0;
+          const status = f.properties?.status ?? PARCEL_STATUS_INITIAL_ID;
           const meta = statusMeta.get(status);
-          const style = meta
-            ? { color: meta.color }
-            : PARCEL_STATUS_STYLES[status] ?? PARCEL_STATUS_STYLES[0];
-          const statusLabel = meta?.label ?? PARCEL_STATUS_NAMES[status] ?? "";
+          const style = getParcelStatusStyle(meta?.color);
+          const statusLabel = meta?.label ?? "";
           counts[status] = (counts[status] ?? 0) + 1;
           extractExteriorRings(f.geometry).forEach((ring, i) => {
             cesiumParcels.push({

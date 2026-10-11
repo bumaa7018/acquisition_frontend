@@ -517,54 +517,22 @@ export interface ParcelStatusRules {
   requires_reason: boolean;
 }
 
-export const PARCEL_STATUS_STYLES: Record<
-  number,
-  { color: string; bg: string }
-> = {
-  0: { color: "#64748b", bg: "#64748b1f" }, // Хүлээгдэж буй — саарал
-  1: { color: "#facc15", bg: "#facc151f" }, // Зөвшилцөх шатандаа — тод шар
-  2: { color: "#f97316", bg: "#f973161f" }, // Үнэлгээ хийх — улбар шар
-  3: { color: "#3b82f6", bg: "#3b82f61f" }, // Нөлөөлөгдсөн гарсан — цэнхэр
-  4: { color: "#ef4444", bg: "#ef44441f" }, // Татгалзсан — улаан
-  5: { color: "#22c55e", bg: "#22c55e1f" }, // Чөлөөлсөн — ногоон
-};
+/** Анхны төлөв (parcel.status-ийн DEFAULT). id нь code-той ижил (101–109). */
+export const PARCEL_STATUS_INITIAL_ID = 101;
 
-export const PARCEL_STATUS_NAME_STYLES: Record<
-  string,
-  { color: string; bg: string }
-> = {
-  "Хүлээгдэж буй": PARCEL_STATUS_STYLES[0],
-  "Зөвшилцөх шатандаа": PARCEL_STATUS_STYLES[1],
-  "Үнэлгээ хийх": PARCEL_STATUS_STYLES[2],
-  "Нөлөөлөгдсөн гарсан": PARCEL_STATUS_STYLES[3],
-  Татгалзсан: PARCEL_STATUS_STYLES[4],
-  Чөлөөлсөн: PARCEL_STATUS_STYLES[5],
-};
+/** Өнгө тохируулаагүй төлөвийн саарал (бүртгэлд өнгөгүй эсвэл бүртгэл ачаалагдаагүй). */
+export const PARCEL_STATUS_FALLBACK_COLOR = "#94a3b8";
 
 /**
- * Төлөвийн өнгө.
- *
- * `color` (бүртгэлээс) өгөгдвөл түүнийг ДАВУУ эрхтэйгээр хэрэглэнэ — энэ нь
- * эх сурвалж. Доорх хатуу хүснэгтүүд нь зөвхөн НӨӨЦ: өнгөө хараахан
- * тохируулаагүй хуучин төлөв, эсвэл өнгө дамжуулаагүй дуудагчид зориулагдсан.
+ * Төлөвийн өнгө — ЗӨВХӨН backend-ийн бүртгэлээс (`parcel_status.color`).
+ * Код дотор төлөвийн id/нэрээр хатуу өнгө БАЙХГҮЙ: id, нэр, өнгийг админ
+ * «Нэгж талбарын төлөв» тохиргооноос удирдана. Өнгө авахдаа
+ * `useParcelStatusStyle` / `useParcelStatusColors` (lib/use-parcel-status-style).
  */
-export function getParcelStatusStyle(
-  status?: number,
-  statusName?: string,
-  color?: string,
-) {
-  if (color && /^#[0-9a-fA-F]{6}$/.test(color)) {
-    return { color, bg: `${color}1f` };
-  }
-  return (
-    (statusName && PARCEL_STATUS_NAME_STYLES[statusName]) ||
-    (status !== undefined && PARCEL_STATUS_STYLES[status]) ||
-    PARCEL_STATUS_STYLES[0]
-  );
+export function getParcelStatusStyle(color?: string | null) {
+  const c = color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : PARCEL_STATUS_FALLBACK_COLOR;
+  return { color: c, bg: `${c}1f` };
 }
-
-/** Өнгө тохируулаагүй ШИНЭ төлөвт санал болгох өгөгдмөл (саарал). */
-export const PARCEL_STATUS_FALLBACK_COLOR = "#94a3b8";
 
 /**
  * Нөхөх олговрын олголтын гүйцэтгэл — «Нөхөх олговор олгосон баримт»-аас

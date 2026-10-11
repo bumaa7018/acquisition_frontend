@@ -7,7 +7,7 @@ import {
   useAcquisitionPlanOptions,
 } from "@/hooks/use-acquisition-options";
 import { authStorage } from "@/lib/auth";
-import { RIGHT_TYPE_LABELS, getParcelStatusStyle } from "@/types";
+import { RIGHT_TYPE_LABELS } from "@/types";
 import type { ReportParcelRow } from "@/types";
 import {
   Search,
@@ -934,7 +934,7 @@ export default function ReportPage() {
                     label={s.name || "—"}
                     value={s.count}
                     maxVal={Math.max(...stats.statuses.map((x) => x.count))}
-                    color={statusStyle(s.status, s.name).color}
+                    color={statusStyle(s.status).color}
                   />
                 ))}
               </div>

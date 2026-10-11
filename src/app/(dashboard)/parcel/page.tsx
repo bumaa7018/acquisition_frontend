@@ -3,7 +3,8 @@ import { CompensationPaymentBadge } from "@/components/ui/compensation-payment-b
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { parcelApi } from "@/lib/api";
-import { STATUS_LABELS, RIGHT_TYPE_LABELS, getParcelStatusStyle } from "@/types";
+import { STATUS_LABELS, RIGHT_TYPE_LABELS } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
@@ -337,12 +338,7 @@ export default function ParcelListPage() {
                       </td>
                       <td className="px-4 py-3 align-top">
                         {p.status_name ? (
-                          <span
-                            className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap"
-                            style={statusStyle(p.status_id, p.status_name)}
-                          >
-                            {p.status_name}
-                          </span>
+                          <StatusLabel color={statusStyle(p.status_id).color} name={p.status_name} />
                         ) : (
                           <span className="text-[11px] text-slate-300 dark:text-slate-600">—</span>
                         )}

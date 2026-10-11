@@ -5,6 +5,7 @@ import { Providers } from "@/components/layout/providers";
 import "@/lib/chronos-fonts";
 
 import "./globals.css";
+import "@/components/ui/status-label.css";
 
 const nunitoSans = Nunito_Sans({
   subsets: ["latin"],

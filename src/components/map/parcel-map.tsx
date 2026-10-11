@@ -32,7 +32,7 @@ import {
   type MapLayerDef,
 } from "./layers";
 import { GS_WMS, GS_WFS, wmsPostLoad } from "@/lib/geoserver";
-import { PARCEL_STATUS_STYLES, type ParcelOverlap } from "@/types";
+import { PARCEL_STATUS_INITIAL_ID, getParcelStatusStyle, type ParcelOverlap } from "@/types";
 import { useParcelStatusColors } from "./use-parcel-status-layers";
 import { logger } from "@/lib/logger";
 
@@ -77,10 +77,8 @@ const ALL_LAYER_DEFS = [...WMS_LAYER_DEFS, ...VECTOR_LAYER_DEFS];
 const statusColorRef: { current: Map<number, string> } = { current: new Map() };
 
 function parcelStyle(feature: { get: (k: string) => unknown }): Style {
-  const sid = (feature.get("status_id") as number) ?? 0;
-  const color =
-    statusColorRef.current.get(sid) ??
-    (PARCEL_STATUS_STYLES[sid] ?? PARCEL_STATUS_STYLES[0]).color;
+  const sid = (feature.get("status_id") as number) ?? PARCEL_STATUS_INITIAL_ID;
+  const color = getParcelStatusStyle(statusColorRef.current.get(sid)).color;
   return new Style({
     stroke: new Stroke({ color, width: 2 }),
     fill:   new Fill({ color: `${color}cc` }),

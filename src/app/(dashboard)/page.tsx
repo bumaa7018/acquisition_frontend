@@ -29,7 +29,9 @@ import Link from "next/link";
 import { cn, formatMoneyExact } from "@/lib/utils";
 import { AbbrevAmount } from "@/components/ui/amount-hint";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
-import { getParcelStatusStyle, PARCEL_STATUS_STYLES } from "@/types";
+import { getParcelStatusStyle } from "@/types";
+import { StatusDot, StatusLabel } from "@/components/ui/status-label";
+import { useParcelStatusColors } from "@/lib/use-parcel-status-style";
 import type { ParcelStatus } from "@/types";
 import { AcquisitionOverviewPanel } from "@/components/map/acquisition-overview-panel";
 import { monthlyTimeline } from "@/lib/timeline-months";
@@ -738,6 +740,7 @@ function ExternalDashboard() {
 
   const acquisitions = data?.acquisitions ?? [];
   const statuses = data?.status_breakdown ?? [];
+  const statusColors = useParcelStatusColors();
   const valuationStatuses = data?.valuation_statuses ?? [];
   const valuationTypes = data?.valuation_types ?? [];
   const totalCompensation = data?.total_compensation ?? 0;
@@ -795,7 +798,7 @@ function ExternalDashboard() {
   const parcelStatusChart = statuses.slice(0, 6).map((status) => ({
     name: status.name,
     count: status.count,
-    color: getParcelStatusStyle(status.status_id, status.name).color,
+    color: getParcelStatusStyle(statusColors.get(status.status_id)).color,
   }));
   const hasValuationStatusChart = valuationStatusChart.some((status) => status.count > 0);
   const hasValuationTypeChart = valuationTypeChart.some((type) => type.count > 0 || type.amount > 0);
@@ -1251,8 +1254,8 @@ export default function DashboardPage() {
   const STATUSES = useMemo(() => (dashData?.status_breakdown ?? []).map((s) => ({
     key:   `ps-${s.status_id}`,
     label: s.name,
-    // Бүртгэлийн өнгө ДАВУУ; тохируулаагүй хуучин төлөвт хатуу хүснэгт рүү унана.
-    color: statusColorById.get(s.status_id) ?? getParcelStatusStyle(s.status_id, s.name).color,
+    // Өнгө нь зөвхөн бүртгэлээс; өнгөгүй төлөв — саарал.
+    color: getParcelStatusStyle(statusColorById.get(s.status_id)).color,
     count: s.count,
     area:  Math.round(s.area_m2),
   })), [dashData?.status_breakdown, statusColorById]);
@@ -1844,7 +1847,7 @@ export default function DashboardPage() {
                 {STATUSES.map((s) => (
                   <div key={s.key} className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 whitespace-normal break-words">
-                      <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: s.color }} />
+                      <StatusDot color={s.color} />
                       {s.label}
                     </span>
                     <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200 shrink-0">
@@ -1864,15 +1867,10 @@ export default function DashboardPage() {
               {[...parcelStatusList]
                 .sort((a, b) => a.sort_order - b.sort_order)
                 .map((s) => (
-                  <div key={s.id} className="flex items-center gap-2">
-                    {/* Өнгө нь БҮРТГЭЛЭЭС (`parcel_status.color`) — дашбоардын
-                        хариунд аль хэдийн ирдэг тул НЭМЭЛТ дуудлага үүсэхгүй.
-                        Тохируулаагүй хуучин төлөвт хатуу хүснэгт рүү унана. */}
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ background: s.color || PARCEL_STATUS_STYLES[s.id]?.color || "#94a3b8" }}
-                    />
-                    <span className="min-w-0 text-[11px] text-slate-600 dark:text-slate-400 whitespace-normal break-words">{s.name}</span>
+                  // Өнгө нь БҮРТГЭЛЭЭС (`parcel_status.color`) — дашбоардын хариунд
+                  // аль хэдийн ирдэг тул НЭМЭЛТ дуудлага үүсэхгүй.
+                  <div key={s.id}>
+                    <StatusLabel color={s.color} name={s.name} />
                   </div>
                 ))}
             </div>

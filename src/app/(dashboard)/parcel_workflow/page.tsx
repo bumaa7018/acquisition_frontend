@@ -7,7 +7,8 @@ import { getApiError } from "@/lib/utils";
 import { ArrowRight, GitBranch, Paperclip, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelWorkflow } from "@/types";
-import { getParcelStatusStyle } from "@/types";
+import { StatusLabel } from "@/components/ui/status-label";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DocumentTypeChecklist } from "./_components/document-type-checklist";
 
 const inputCls =
@@ -15,7 +16,8 @@ const inputCls =
 const labelCls =
   "block text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider";
 
-function StatusBadge({ name, id }: { name: string; id: number | null }) {
+// Өнгө нь «Нэгж талбарын төлөв» бүртгэлээс (ажлын урсгалын хариунд өнгө ирдэггүй).
+function StatusBadge({ name, id, color }: { name: string; id: number | null; color?: string }) {
   if (!name && id === null) {
     return (
       <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-medium bg-slate-100 dark:bg-white/[0.06] text-slate-500 dark:text-slate-400">
@@ -23,15 +25,7 @@ function StatusBadge({ name, id }: { name: string; id: number | null }) {
       </span>
     );
   }
-  const style = getParcelStatusStyle(id ?? undefined, name);
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[12px] font-semibold"
-      style={{ color: style.color, background: style.bg }}
-    >
-      {name || `Статус ${id}`}
-    </span>
-  );
+  return <StatusLabel color={color} name={name || `Статус ${id}`} />;
 }
 
 export default function ParcelWorkflowPage() {
@@ -44,6 +38,8 @@ export default function ParcelWorkflowPage() {
   const [newDocs, setNewDocs] = useState<number[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDocs, setEditDocs] = useState<number[]>([]);
+  // Устгахын өмнө баталгаажуулна — шилжилт ба түүний заавал хавсралт хамт устна.
+  const [pendingDelete, setPendingDelete] = useState<ParcelWorkflow | null>(null);
 
   const { data: docTypes = [] } = useQuery({
     queryKey: ["document-types", "parcel"],
@@ -61,6 +57,7 @@ export default function ParcelWorkflowPage() {
     queryKey: ["parcel-statuses"],
     queryFn: () => parcelStatusApi.list(),
   });
+  const colorById = useMemo(() => new Map(statuses.map((s) => [s.id, s.color])), [statuses]);
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -247,6 +244,7 @@ export default function ParcelWorkflowPage() {
                       <StatusBadge
                         name={first.from_status_name}
                         id={first.from_status_id}
+                        color={first.from_status_id !== null ? colorById.get(first.from_status_id) : undefined}
                       />
                       <ArrowRight className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 shrink-0" />
                       <span className="text-[11px] text-slate-400 dark:text-slate-500">
@@ -265,7 +263,7 @@ export default function ParcelWorkflowPage() {
                             className="rounded-lg border border-slate-100 dark:border-[#37394d] px-3 py-2 bg-slate-50/50 dark:bg-[#1a1d20]"
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <StatusBadge name={w.to_status_name} id={w.to_status_id} />
+                              <StatusBadge name={w.to_status_name} id={w.to_status_id} color={colorById.get(w.to_status_id)} />
                               <div className="flex items-center gap-2 ml-auto">
                                 <span className="text-[11px] text-slate-400 dark:text-slate-500">
                                   #{w.sort_order}
@@ -279,8 +277,9 @@ export default function ParcelWorkflowPage() {
                                   <Pencil className="h-3.5 w-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => deleteMutation.mutate(w.id)}
+                                  onClick={() => setPendingDelete(w)}
                                   disabled={deleteMutation.isPending}
+                                  title="Шилжилт устгах"
                                   className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -339,6 +338,21 @@ export default function ParcelWorkflowPage() {
         </div>
       </div>
 
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Шилжилтийг устгах уу?"
+        description={
+          pendingDelete
+            ? `«${pendingDelete.from_status_name || "Эхний статус"}» → «${pendingDelete.to_status_name}» шилжилт болон түүний заавал хавсралтын тохиргоо устна.`
+            : undefined
+        }
+        confirmLabel="Устгах"
+        onConfirm={() => {
+          if (pendingDelete) deleteMutation.mutate(pendingDelete.id);
+          setPendingDelete(null);
+        }}
+        onClose={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

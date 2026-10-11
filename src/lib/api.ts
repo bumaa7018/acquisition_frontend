@@ -1647,9 +1647,10 @@ export const parcelStatusApi = {
   list: () =>
     api.get<ApiResponse<ParcelStatus[]>>('/parcel-statuses').then(r => r.data.data ?? []),
   // Төлөвийн дүрэм (is_final, locks_progress, …) — илгээгээгүй бол засварт ХЭВЭЭР.
-  create: (body: { code: string; name: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
+  // Код илгээхгүй: backend id-г sequence-ээс (110…) авч, кодыг id-тай ИЖИЛ болгоно.
+  create: (body: { name: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
     api.post<ApiResponse<ParcelStatus>>('/parcel-statuses', body).then(r => r.data.data),
-  update: (id: number, body: { code?: string; name?: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
+  update: (id: number, body: { name?: string; sort_order?: number; color?: string } & Partial<ParcelStatusRules>) =>
     api.put<ApiResponse<ParcelStatus>>(`/parcel-statuses/${id}`, body).then(r => r.data.data),
   delete: (id: number) => api.delete(`/parcel-statuses/${id}`),
 }

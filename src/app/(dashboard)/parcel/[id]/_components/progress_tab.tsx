@@ -8,6 +8,7 @@ import type { DocumentPaymentInput } from "@/lib/api";
 import { getApiError, formatDate } from "@/lib/utils";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
+import { StatusLabel } from "@/components/ui/status-label";
 import { Plus, Clock, User, CheckCircle2, X, ChevronRight, AlertCircle, Paperclip, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import type { ParcelStatus } from "@/types";
@@ -171,7 +172,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
 
   const currentStatusId = parcelFull?.status_id ?? parcelFull?.status;
   const currentStatusName = parcelFull?.status_name;
-  const currentStyle = statusStyle(currentStatusId, currentStatusName);
+  const currentColor = statusStyle(currentStatusId).color;
   // Төлөвийн дүрэм «Нэгж талбарын төлөв» тохиргооноос (өмнө НЭРЭЭР шалгадаг байв).
   const selectedRules = statusRules(selected?.id);
   const isMovingFromEvaluationToReleased =
@@ -203,13 +204,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
           </div>
           <div className="px-5 py-4">
             {currentStatusName ? (
-              <span
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-semibold"
-                style={{ color: currentStyle.color, background: currentStyle.bg }}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {currentStatusName}
-              </span>
+              <StatusLabel color={currentColor} name={currentStatusName} />
             ) : (
               <span className="text-[13px] text-slate-400">Уншиж байна...</span>
             )}
@@ -252,7 +247,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
             <div className="p-5">
               <ol className="relative border-l-2 border-slate-100 dark:border-[#37394d] space-y-0">
                 {history.map((h, idx) => {
-                  const style = statusStyle(h.status_id, h.status_name);
+                  const style = statusStyle(h.status_id);
                   const isLatest = idx === 0;
                   return (
                     <li key={h.id} className="ml-5 pb-6 last:pb-0">
@@ -268,12 +263,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                       <div className="rounded-lg border border-slate-100 dark:border-[#37394d] bg-slate-50/50 dark:bg-[#1a1d20] px-4 py-3">
                         <div className="flex items-start justify-between gap-3 flex-wrap">
                           <div className="flex items-center gap-2">
-                            <span
-                              className="inline-flex items-center rounded-md px-2.5 py-0.5 text-[12px] font-semibold"
-                              style={{ color: style.color, background: style.bg }}
-                            >
-                              {h.status_name}
-                            </span>
+                            <StatusLabel color={style.color} name={h.status_name} />
                             {isLatest && (
                               <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold bg-[#02c0ce]/10 text-[#02c0ce]">
                                 Одоогийн
@@ -327,8 +317,8 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
         >
           {/* Status picker */}
           {modal === "picking" && (
-            <div className="w-full max-w-sm mx-4 rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm mx-4 flex-col rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
                 <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
                   Явц сонгох
                 </p>
@@ -340,32 +330,23 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </button>
               </div>
 
-              <div className="p-3 space-y-1.5">
+              <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-1.5">
                 {availableStatuses.map((s) => {
-                  const style = statusStyle(s.id, s.name);
+                  const style = statusStyle(s.id);
                   return (
                     <button
                       key={s.id}
                       onClick={() => handleSelectStatus(s)}
                       className="w-full flex items-center justify-between rounded-xl px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors group"
                     >
-                      <span
-                        className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-semibold"
-                        style={{ color: style.color, background: style.bg }}
-                      >
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ background: style.color }}
-                        />
-                        {s.name}
-                      </span>
+                      <StatusLabel color={style.color} name={s.name} />
                       <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 transition-colors" />
                     </button>
                   );
                 })}
               </div>
 
-              <div className="px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
+              <div className="shrink-0 px-5 py-4 border-t border-slate-100 dark:border-[#37394d]">
                 <button
                   onClick={closeModal}
                   className="w-full rounded-xl py-2.5 text-[13px] font-medium text-slate-500 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
@@ -378,8 +359,10 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
 
           {/* Confirmation dialog */}
           {modal === "confirming" && selected && (
-            <div className="w-full max-w-sm mx-4 rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
+            // Олон заавал хавсралттай шилжилтэд цонх дэлгэцээс өндөр болдог —
+            // гарчиг, товчлуур тогтмол, дунд хэсэг нь гүйнэ.
+            <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm mx-4 flex-col rounded-2xl bg-white dark:bg-[#1e1f27] shadow-2xl overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">
                 <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">
                   Баталгаажуулах
                 </p>
@@ -391,6 +374,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </button>
               </div>
 
+              <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="px-5 py-5">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="flex-shrink-0 mt-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 p-2">
@@ -410,26 +394,7 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                   </p>
                 </div>
 
-                {(() => {
-                  const style = statusStyle(selected.id, selected.name);
-                  return (
-                    <div
-                      className="rounded-xl px-4 py-3 flex items-center gap-2"
-                      style={{ background: style.bg }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                        style={{ background: style.color }}
-                      />
-                      <span
-                        className="text-[13px] font-semibold"
-                        style={{ color: style.color }}
-                      >
-                        {selected.name}
-                      </span>
-                    </div>
-                  );
-                })()}
+                <StatusLabel color={statusStyle(selected.id).color} name={selected.name} />
               </div>
 
               {/* ШАЛТГААН — сөрөг эцсийн 2 төлөвт заавал, бусдад заавал бус */}
@@ -635,7 +600,9 @@ export function ProgressTab({ acqId, parcelId, isLocked = false, beforeFieldStag
                 </div>
               )}
 
-              <div className="px-5 pb-5 flex gap-2">
+              </div>
+
+              <div className="shrink-0 px-5 py-4 flex gap-2 border-t border-slate-100 dark:border-[#37394d]">
                 <button
                   onClick={handleBackToPicker}
                   disabled={updateStatusMutation.isPending}

@@ -57,6 +57,7 @@ import { formatMillion } from '@/lib/utils'
 import type { LandAcquisition } from '@/types'
 import { RIGHT_TYPE_LABELS } from '@/types'
 import { hasPermission, isExternalSpecialRole } from '@/lib/role-utils'
+import { StatusLabel } from '@/components/ui/status-label'
 
 /** «Он цагийн зураг» — дашбоардын цагийн голтой хуваалцсан төлөв. */
 export interface MapChronosProps {
@@ -698,7 +699,8 @@ function ChronosOverlay({
   const acq = parcel ? acqs.find((a) => a.id === parcel.acquisition_id) : acqs.length === 1 ? acqs[0] : undefined
   const st = parcel ? statusById.get(statusAt(parcel.events, monthKey) ?? NaN) : undefined
   const progress = acq?.progress_percent ?? 0
-  const card = 'rounded-xl border border-[#222A35] bg-[rgba(18,22,28,.86)] text-[#ECE6D9] shadow-xl backdrop-blur'
+  // Хөвөгч картууд theme-ийг дагана (light — цагаан, dark — хронос-ын бараан).
+  const card = 'rounded-xl border border-slate-200 bg-white/90 text-slate-800 shadow-xl backdrop-blur dark:border-[#222A35] dark:bg-[rgba(18,22,28,.86)] dark:text-[#ECE6D9]'
   const comp = parcel ? parcel.comp_land + parcel.comp_real_state + parcel.comp_property : 0
 
   return (
@@ -709,12 +711,11 @@ function ChronosOverlay({
       </div>
 
       {/* Төв дээд — сонгосон сар */}
-      <div className="pointer-events-none absolute left-1/2 top-3 z-[6] -translate-x-1/2 text-center"
-        style={{ textShadow: '0 2px 12px rgba(7,9,13,.9)' }}>
-        <div key={monthKey} className={`${chronosDisplay.className} ch-slide-in text-[40px] font-bold leading-none tracking-[-0.03em] text-[#ECE6D9] md:text-[48px]`}>
+      <div className="pointer-events-none absolute left-1/2 top-3 z-[6] -translate-x-1/2 text-center [text-shadow:0_2px_12px_rgba(255,255,255,.95)] dark:[text-shadow:0_2px_12px_rgba(7,9,13,.9)]">
+        <div key={monthKey} className={`${chronosDisplay.className} ch-slide-in text-[40px] font-bold leading-none tracking-[-0.03em] text-slate-800 dark:text-[#ECE6D9] md:text-[48px]`}>
           {monthKey ? monthLabel(monthKey) : '—'}
         </div>
-        <p className="mt-1 text-[12px] text-[#A7AFBA]">Энэ сард {chronos.changed.toLocaleString()} өөрчлөлт</p>
+        <p className="mt-1 text-[12px] text-slate-600 dark:text-[#A7AFBA]">Энэ сард {chronos.changed.toLocaleString()} өөрчлөлт</p>
       </div>
 
       {/* Чөлөөлөлт / сонгосон нэгж талбарын карт */}
@@ -729,25 +730,28 @@ function ChronosOverlay({
             </p>
             {parcel && (
               <button type="button" aria-label="Сонголт цуцлах" onClick={() => onSelect(null)}
-                className="rounded p-0.5 text-[#8E97A3] hover:text-[#ECE6D9]">
+                className="rounded p-0.5 text-slate-500 hover:text-slate-800 dark:text-[#8E97A3] dark:hover:text-[#ECE6D9]">
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
-          <div className="mt-2 flex items-center gap-2 text-[11px] text-[#A7AFBA]">
-            <span className="shrink-0">Явц<br /><b className="text-[13px] text-[#ECE6D9]">{progress}%</b></span>
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#1B2430]">
+          <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-[#A7AFBA]">
+            <span className="shrink-0">Явц<br /><b className="text-[13px] text-slate-800 dark:text-[#ECE6D9]">{progress}%</b></span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-[#1B2430]">
               <div className="h-full rounded-full bg-[#2DD4A8] transition-[width] duration-500" style={{ width: `${progress}%` }} />
             </div>
           </div>
           {parcel && (
-            <div className="mt-2.5 space-y-1 border-t border-[#222A35] pt-2 text-[12px]">
+            <div className="mt-2.5 space-y-1 border-t border-slate-200 pt-2 text-[12px] dark:border-[#222A35]">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-[13px] font-semibold">{parcel.parcel_id}</span>
-                <span className="rounded px-1.5 py-0.5 text-[11px] font-medium"
-                  style={{ background: `${st?.color || CHRONOS_NOT_STARTED}2e`, color: st?.color || '#B8BFC9' }}>
-                  {st?.name ?? 'Чөлөөлөгдөөгүй'}
-                </span>
+                {st ? (
+                  <StatusLabel color={st.color} name={st.name} />
+                ) : (
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-[#6B7480]/20 dark:text-[#B8BFC9]">
+                    Чөлөөлөгдөөгүй
+                  </span>
+                )}
               </div>
               {([
                 ['Эзэмшигч', parcel.holder_name],
@@ -756,12 +760,12 @@ function ChronosOverlay({
                 ['Нөхөх олговор', comp ? formatMillion(comp) : ''],
               ] as const).map(([k, v]) => (
                 <div key={k} className="flex gap-2">
-                  <span className="w-[86px] shrink-0 text-[#8E97A3]">{k}</span>
+                  <span className="w-[86px] shrink-0 text-slate-500 dark:text-[#8E97A3]">{k}</span>
                   <span className="min-w-0 flex-1 break-words">{v || '—'}</span>
                 </div>
               ))}
               <Link href={`/parcel/${parcel.id}?acq=${parcel.acquisition_id}`} target="_blank"
-                className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-[#F2A541] hover:underline">
+                className="mt-1 inline-flex items-center gap-1 text-[12px] font-semibold text-[#c77a12] hover:underline dark:text-[#F2A541]">
                 Дэлгэрэнгүй <ExternalLink className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -800,21 +804,22 @@ function ChronosOverlay({
           <p className="mb-1.5 text-[12px] font-semibold">Статусын тайлбар</p>
           <ul className="space-y-1">
             {legend.map((s) => (
-              <li key={s.id} className="flex items-center gap-2 text-[12px] text-[#A7AFBA]">
-                <span className="inline-block h-3 w-3 shrink-0 rounded-sm"
+              <li key={s.id} className="flex items-center gap-2 text-[12px] text-slate-600 dark:text-[#A7AFBA]">
+                {/* Цагираг — цайвар өнгө light-д, бараан өнгө dark-д ч харагдана. */}
+                <span className="inline-block h-3 w-3 shrink-0 rounded-sm ring-1 ring-black/15 dark:ring-white/25"
                   style={s.is_released ? { border: `1.5px dashed ${s.color || CHRONOS_NO_COLOR}` } : { background: s.color || CHRONOS_NO_COLOR }} />
                 {s.name}
               </li>
             ))}
-            <li className="flex items-center gap-2 text-[12px] text-[#8E97A3]">
-              <span className="inline-block h-3 w-3 shrink-0 rounded-sm" style={{ background: CHRONOS_NOT_STARTED }} /> Чөлөөлөгдөөгүй
+            <li className="flex items-center gap-2 text-[12px] text-slate-500 dark:text-[#8E97A3]">
+              <span className="inline-block h-3 w-3 shrink-0 rounded-sm ring-1 ring-black/15 dark:ring-white/25" style={{ background: CHRONOS_NOT_STARTED }} /> Чөлөөлөгдөөгүй
             </li>
           </ul>
         </div>
       )}
 
       {chronos.loading && (
-        <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center text-[13px] text-[#A7AFBA]">
+        <div className="pointer-events-none absolute inset-0 z-[6] flex items-center justify-center text-[13px] text-slate-600 dark:text-[#A7AFBA]">
           Ачаалж байна…
         </div>
       )}

@@ -9,43 +9,28 @@ import type { ParcelStatus } from "@/types";
 const EMPTY: ParcelStatus[] = [];
 
 /**
- * Нэгж талбарын төлөвийн ӨНГИЙГ БҮРТГЭЛЭЭС авах.
- *
- * ЯАГААД: `getParcelStatusStyle` нь код дотор хатуу бичсэн хүснэгттэй бөгөөд
- * тэр хүснэгтэд ЗӨВХӨН анхны 6 төлөв (0-5) байдаг. Бүртгэлд шинэ төлөв
- * нэмэхэд (эсвэл байгаа төлөвийн өнгийг солиход) жагсаалт, дэлгэрэнгүй
- * хуудсууд хуучин/саарал өнгөөр харагддаг байв.
- *
- * Энэ hook нь бүртгэлийн өнгийг холбож өгсөн ИЖИЛ функцийг буцаана —
- * дуудагч зөвхөн `getStyle(id, name)` гэж дуудна:
+ * Нэгж талбарын төлөвийн ӨНГИЙГ БҮРТГЭЛЭЭС авах — өнгөний цорын ганц эх
+ * сурвалж нь backend-ийн `parcel_status.color`. Кодонд төлөвийн id/нэрээр
+ * хатуу өнгө байхгүй: админ шинэ төлөв нэмэх, өнгө солиход бүх хуудас дагана.
  *
  *     const statusStyle = useParcelStatusStyle();
- *     const s = statusStyle(p.status_id, p.status_name);
+ *     const s = statusStyle(p.status_id);   // { color, bg }
+ *
+ * Бүртгэл ачаалагдаж байх үед / өнгөгүй төлөв — саарал (PARCEL_STATUS_FALLBACK_COLOR).
  *
  * Хүсэлт: `["parcel-statuses"]` түлхүүр нь газрын зургийн давхаргууд,
  * бүртгэлийн хуудастай ИЖИЛ тул React Query давхардлыг нэгтгэнэ —
  * хуудсанд хэдэн ч компонент дуудсан нэг л хүсэлт явна (~700 байт).
  */
 export function useParcelStatusStyle() {
-  const { data } = useQuery({
-    queryKey: ["parcel-statuses"],
-    queryFn: () => parcelStatusApi.list(),
-    staleTime: 5 * 60_000,
-  });
-
-  return useMemo(() => {
-    const byId = new Map<number, string>();
-    for (const s of data ?? EMPTY) if (s.color) byId.set(s.id, s.color);
-    return (statusId?: number, statusName?: string) =>
-      getParcelStatusStyle(
-        statusId,
-        statusName ?? "",
-        statusId != null ? byId.get(statusId) : undefined,
-      );
-  }, [data]);
+  const byId = useParcelStatusColors();
+  return useMemo(
+    () => (statusId?: number | null) => getParcelStatusStyle(statusId != null ? byId.get(statusId) : undefined),
+    [byId],
+  );
 }
 
-/** Төлөвийн id → өнгө. Зөвхөн өнгө хэрэгтэй дуудагчид (газрын зургийн давхарга г.м.). */
+/** Төлөвийн id → өнгө. Зөвхөн өнгө хэрэгтэй дуудагчид (график, газрын зургийн давхарга г.м.). */
 export function useParcelStatusColors() {
   const { data } = useQuery({
     queryKey: ["parcel-statuses"],
