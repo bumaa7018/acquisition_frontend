@@ -243,12 +243,17 @@ async function listParcelsFromAcquisitions(params?: ParcelListParams): Promise<P
     }))
   }))
 
+  // «Захирамжид холбогдоно» төлөвүүд — бүртгэлийн дүрмээс (is_released); кодонд
+  // төлөвийн id хатуу бичихгүй.
+  const releasedIds = params?.released_only
+    ? new Set((await parcelStatusApi.list()).filter(s => s.is_released).map(s => s.id))
+    : null
+
   const filtered = parcelPages.flat().filter(parcel => {
     if (params?.right_type && parcel.right_type !== params.right_type) return false
     if (params?.au3_code && parcel.au3_code !== params.au3_code) return false
     if (params?.status_id && parcel.status_id !== params.status_id) return false
-    // Нөөц зам (хуучин backend) төлөвийн тохиргоогүй — өмнөх шиг 5 = Чөлөөлсөн.
-    if (params?.released_only && parcel.status_id !== 5) return false
+    if (releasedIds && !releasedIds.has(parcel.status_id)) return false
     return true
   })
 

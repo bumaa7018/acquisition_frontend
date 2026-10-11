@@ -27,16 +27,8 @@ const ALLOWED_ROOTS = new Set(['land'])
 // frontend төлөв бүрийг `CQL_FILTER=status=N`-ээр ялгана. Өмнө нь төлөв
 // бүрд тусдаа давхарга байсан тул бүртгэлд шинэ төлөв нэмэхэд энэ
 // жагсаалтад ГАРААР нэмэх шаардлагатай байв — эс бөгөөс fail-closed
-// журмаар 403 өгдөг байлаа.
-//
-// ХУУЧИН `v_parcel_s0..s5` нэрсийг хэвээр зөвшөөрнө: GeoServer-ийн
-// каталогоос тэдгээр давхаргууд хасагдаж, хуучин клиентүүд шинэчлэгдэх
-// хүртэл хэрэглэгдсээр байна.
-const PARCEL_STATUS_LAYERS = [
-  'v_parcel_status',
-  'v_parcel_s0', 'v_parcel_s1', 'v_parcel_s2',
-  'v_parcel_s3', 'v_parcel_s4', 'v_parcel_s5',
-]
+// журмаар 403 өгдөг байлаа. (Хуучин `v_parcel_s0..s5` давхаргууд устсан.)
+const PARCEL_STATUS_LAYERS = ['v_parcel_status']
 // Чөлөөлөлтөөр хумигдах давхаргууд — бүгд `acquisition_id` баганатай
 // (DescribeFeatureType-ээр `parcel` дээр шалгасан; views нь client-ийн
 // `acquisition_id=...` CQL-ээр аль хэдийн шүүгддэг).
@@ -120,7 +112,7 @@ function isAllowedOperation(path: string[], search: string, body?: string): bool
   return false
 }
 
-/** `land:v_parcel_s0` эсвэл `v_parcel_s0` → `v_parcel_s0`. */
+/** `land:v_parcel_status` эсвэл `v_parcel_status` → `v_parcel_status`. */
 function bareLayerName(value: string): string {
   const trimmed = value.trim()
   const colon = trimmed.indexOf(':')
