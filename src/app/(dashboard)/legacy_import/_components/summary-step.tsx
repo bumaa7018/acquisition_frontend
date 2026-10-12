@@ -65,6 +65,10 @@ export function SummaryStep({ state, onCommitted }: { state: ImportState; onComm
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Stat label="Чөлөөлөлт (шинэ / шинэчилсэн)" value={`${result.acquisitions?.created ?? 0} / ${result.acquisitions?.updated ?? 0}`} />
           <Stat label="Нэгж талбар" value={fmt(result.parcels?.imported)} />
+          {(result.parcels?.statusUnmatched ?? 0) > 0 && (
+            <Stat label="Төлөв таараагүй (эхний төлөвт)" value={fmt(result.parcels?.statusUnmatched)} tone="warn"
+              hint="SHP-ийн төлөвийн код системд байхгүй тул эхний төлөвт хадгалсан" />
+          )}
           <Stat label="Үнэлгээ" value={fmt(result.compensations?.applied ?? 0)} />
           <Stat label="Нийт дүн (₮)" value={fmt(result.compensations?.totalAmount ?? 0)} />
           <Stat label="Баталгаажсан чөлөөлөлт" value={fmt(result.acquisitionStatuses?.verified)} />

@@ -12,20 +12,17 @@ import {
 
 const GeometryPreviewMap = dynamic(() => import("@/components/map/geometry-preview-map"), { ssr: false });
 
-type Filter = "issues" | "outside" | "gus" | "all";
+type Filter = "issues" | "status" | "outside" | "gus" | "all";
 
 const GUS_LABEL: Record<ParcelRow["gus"], string> = {
   info: "ГУС", ub: "data_ub", missing: "олдоогүй", failed: "алдаа", skip: "—", pending: "шалгаж байна",
 };
 
-const STATUS_LABEL: Record<number, string> = {
-  0: "Хүлээгдэж буй", 1: "Зөвшилцөх", 2: "Үнэлгээ хийх", 3: "Нөлөөлөгдсөн гарсан", 4: "Татгалзсан", 5: "Чөлөөлсөн",
-};
-
 /**
  * 2-Р АЛХАМ — НЭГЖ ТАЛБАР.
  *
- * Дугааргүй / давхардсан / геометргүй мөр, тохируулаагүй төлөвийн код, санд
+ * Дугааргүй / давхардсан / геометргүй мөр, СИСТЕМД БАЙХГҮЙ төлөвийн код (эхний
+ * төлөвт орно — тусад нь ялгаж харуулна), санд
  * аль хэдийн байгаа нэгж талбар, ЧӨЛӨӨЛӨЛТИЙН ХИЛИЙН ГАДНАХ нэгж талбар болон
  * ГУС-аас татагдах эсэхийг харуулна. ГУС-ын шалгалт арын ажлаар явна.
  */
@@ -62,6 +59,7 @@ export function ParcelStep({
   const rows = useMemo(() => {
     const list = view?.rows ?? [];
     if (filter === "outside") return list.filter((r) => r.outside);
+    if (filter === "status") return list.filter((r) => r.statusUnmatched);
     if (filter === "gus") return list.filter((r) => r.gus === "missing" || r.gus === "ub" || r.gus === "failed");
     if (filter === "issues") return list.filter((r) => worst(r.issues) === "error" || worst(r.issues) === "warning");
     return list;
@@ -111,11 +109,25 @@ export function ParcelStep({
             <Stat label="Санд байгаа" value={fmt(view.stats.alreadyImported)} hint="Аль хэдийн бүртгэгдсэн — алгасна" />
             <Stat label="Давхардсан" value={fmt(view.stats.duplicates)} tone={view.stats.duplicates ? "warn" : "default"} />
             <Stat label="Дугааргүй (ERR)" value={fmt(view.stats.synthetic)} tone={view.stats.synthetic ? "warn" : "default"} />
+            <Stat label="Төлөв таараагүй" value={fmt(view.stats.statusUnmatched ?? 0)}
+              tone={view.stats.statusUnmatched ? "warn" : "good"}
+              hint="SHP-ийн төлөвийн код системийн төлөвтэй таараагүй — эхний төлөвт орно" />
           </div>
           {Object.keys(view.stats.unmappedCodes).length > 0 && (
-            <p className="text-[12px] text-amber-600">
-              Тохируулаагүй төлөвийн код: {Object.entries(view.stats.unmappedCodes).map(([c, n]) => `${c} (${n})`).join(", ")}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+              <span className="font-semibold">Системд байхгүй төлөвийн код:</span>
+              {Object.entries(view.stats.unmappedCodes).map(([c, n]) => (
+                <span key={c} className="rounded-md bg-amber-200/70 px-1.5 py-0.5 font-mono font-semibold dark:bg-amber-500/25">
+                  {c} × {fmt(n)}
+                </span>
+              ))}
+              <span>
+                — эдгээр нэгж талбар эхний төлөв <b>«{view.stats.initialStatusName}»</b>-д хадгалагдана.
+              </span>
+              <button type="button" onClick={() => setFilter("status")} className="ml-auto font-semibold underline-offset-2 hover:underline">
+                Жагсаалтаар харах
+              </button>
+            </div>
           )}
 
           {geometries.length > 0 && (
@@ -132,6 +144,9 @@ export function ParcelStep({
           <div className="flex flex-wrap gap-1.5">
             {([
               ["issues", `Анхаарах (${view.rows.filter((r) => ["error", "warning"].includes(worst(r.issues) ?? "")).length})`],
+              ...(view.stats.statusUnmatched
+                ? ([["status", `Төлөв таараагүй (${view.stats.statusUnmatched})`]] as [Filter, string][])
+                : []),
               ["outside", `Хилийн гадна (${view.stats.outside})`],
               ["gus", `ГУС-аас татагдаагүй (${view.stats.gus.missing + view.stats.gus.ub + view.stats.gus.failed})`],
               ["all", `Бүгд (${view.rows.length})`],
@@ -161,15 +176,24 @@ export function ParcelStep({
                   <tr><td className={td} colSpan={7}>Энэ ангилалд мөр алга.</td></tr>
                 )}
                 {rows.slice(0, 1000).map((row) => (
-                  <tr key={row.idx} className="border-b border-slate-50 dark:border-white/[0.04]">
+                  <tr key={row.idx} className={cn("border-b border-slate-50 dark:border-white/[0.04]",
+                    row.statusUnmatched && "bg-amber-50/70 dark:bg-amber-500/[0.07]")}>
                     <td className={td}>{row.idx}</td>
                     <td className={td}>
                       <b>{row.parcelID || "—"}</b>
                       {row.oldParcelID && <div className="text-[11px] text-slate-400">{row.oldParcelID}</div>}
                     </td>
                     <td className={td}>
-                      {STATUS_LABEL[row.status] ?? row.status}
-                      {row.sourceCode !== null && <span className="text-[11px] text-slate-400"> (код {row.sourceCode})</span>}
+                      {row.statusName || row.status}
+                      {row.statusUnmatched ? (
+                        <div className="mt-0.5 inline-flex items-center rounded-md bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                          код {row.sourceCode} системд байхгүй → эхний төлөв
+                        </div>
+                      ) : row.sourceCode !== null ? (
+                        <span className="text-[11px] text-slate-400"> (код {row.sourceCode})</span>
+                      ) : (
+                        <span className="text-[11px] text-slate-400"> (кодгүй)</span>
+                      )}
                     </td>
                     <td className={td}>{fmt(row.areaM2)}</td>
                     <td className={td}>

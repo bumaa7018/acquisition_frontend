@@ -47,7 +47,11 @@ export interface ParcelRow {
   synthetic: boolean;
   sourceCode: number | null;
   status: number;
+  /** Системийн төлөвийн нэр (parcel_status). */
+  statusName: string;
   statusMapped: boolean;
+  /** SHP-ийн код системийн төлөвтэй таараагүй — эхний төлөвт орно. */
+  statusUnmatched: boolean;
   areaM2: number | null;
   boundaryIdx: number | null;
   insidePct: number | null;
@@ -67,6 +71,10 @@ export interface ParcelView {
     duplicates: number;
     noGeometry: number;
     unmappedCodes: Record<string, number>;
+    /** Төлөвийн код таараагүй нэгж талбарын тоо. */
+    statusUnmatched: number;
+    /** Таараагүй / кодгүй нэгж талбар орох эхний төлөв. */
+    initialStatusName: string;
     alreadyImported: number;
     outside: number;
     partlyOutside: number;
@@ -200,7 +208,7 @@ export interface CommitResult {
   error?: string;
   committedAt?: string;
   acquisitions?: { created: number; updated: number; names: string[] };
-  parcels?: { imported: number; alreadyImported: number; gusMissing: number; fromUb: number; nearest: number };
+  parcels?: { imported: number; alreadyImported: number; gusMissing: number; fromUb: number; nearest: number; statusUnmatched?: number };
   compensations?: { applied: number; totalAmount: number; missingParcels: number } | null;
   acquisitionStatuses?: { verified: number; field: number; changed: number };
   log?: {
