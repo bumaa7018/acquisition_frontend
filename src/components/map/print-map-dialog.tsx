@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toLonLat, transformExtent } from "ol/proj";
 import { Download, ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
@@ -16,6 +16,13 @@ import {
 } from "./layers";
 import { useParcelStatusLayers } from "./use-parcel-status-layers";
 import {
+  PRINT_BOUNDARY_IDS,
+  PRINT_STYLES,
+  PARCEL_STATUS_PRINT_STYLE,
+  PRINT_SATELLITE_URLS,
+  PRINT_SATELLITE_MAX_ZOOM,
+} from "./print-layers";
+import {
   composePrintPage,
   downloadCanvasAsPdf,
   printMapAreaSizePx,
@@ -28,7 +35,17 @@ import {
   type PrintPaperSize,
   type PrintInfo,
   type PrintLegendItem,
+  type PrintMapViewInfo,
 } from "./print-map";
+
+/** Зураг боловсруулах тохиргоо — ноорог ба хэрэгжсэн хоёул ийм хэлбэртэй. */
+interface PrintSettings {
+  title: string;
+  paper: PrintPaperSize;
+  orientation: PrintOrientation;
+  hiddenLayers: Set<string>;
+  drones: Set<string>;
+}
 
 /**
  * "Ажлын зураг" — ДАШБОАРДААС хэвлэх цонх.
@@ -46,26 +63,7 @@ import {
 // Нэгж талбарын ТӨЛӨВҮҮД нь `parcel_status` бүртгэлээс ирнэ (доор
 // `useParcelStatusLayers`). Хатуу жагсаалт байхгүй тул шинэ төлөв нэмэхэд
 // хэвлэх цонх өөрөө түүнийг тайлбар/задаргаа/давхаргадаа оруулна.
-const BOUNDARY_IDS = ["v_acquisition_plan", "v_plan_acquisition", "au1", "au2", "au3"] as const;
-
-// Хэвлэхэд зориулсан style-ууд (GeoServer дээр make config-оор ачаалагдана)
-const PRINT_STYLES: Record<string, string> = {
-  au1: "au1_boundary_print",
-  au2: "au2_boundary_print",
-  au3: "au3_boundary_print",
-  v_acquisition_plan: "acquisition_plan_print",
-  v_plan_acquisition: "plan_acquisition_print",
-};
-
-/**
- * Төлөвийн давхаргуудын хэвлэх ГАНЦ загвар.
- *
- * Өмнө нь төлөв бүрд тусдаа (`parcel_s0_print` … `parcel_s5_print`) байсан
- * тул шинэ төлөв нэмэхэд хэвлэх зураг дээр ОГТ гарч ирдэггүй байв. Одоо ганц
- * загвар бөгөөд өнгийг нь давхаргын `color` баганаас (эх нь `parcel_status`
- * хүснэгт) SLD өөрөө уншина — эндээс дамжуулах шаардлагагүй.
- */
-const PARCEL_STATUS_PRINT_STYLE = "parcel_status_print";
+const BOUNDARY_IDS = PRINT_BOUNDARY_IDS;
 
 /**
  * Хэвлэх газрын зургийн ӨРГӨН (px) — нягтаршлын коэффициентээр өснө.
@@ -106,41 +104,40 @@ export default function PrintMapDialog({
   const [paper, setPaper] = useState<PrintPaperSize>("A4");
   const [orientation, setOrientation] = useState<PrintOrientation>("landscape");
   const [title, setTitle] = useState(acquisitionName?.trim() || "Чөлөөлөлтийн байршил");
-  /* ── ДАВХАРГА/ДРОНЫ СОНГОЛТ: ноорог vs хэрэгжсэн ────────────────────
-     Давхарга чагтлах бүрд дахин зурвал WMS хүсэлтүүд дахин дахин явж, олон
-     давхарга унтраах гэхэд удаан болдог. Иймд чип дарахад зөвхөн НООРОГ
-     (hidden/selected) өөрчлөгдөж, зураг нь "Шинээр үүсгэх" дарж ХЭРЭГЖСЭН
-     (applied*) төлөв солигдсон үед л дахин зурагдана.
-     Цаас/чиглэл нь харин хуудасны хэлбэрийг өөрчилдөг тул ШУУД зурагдана. */
+  /* ── ТОХИРГОО: ноорог vs хэрэгжсэн ──────────────────────────────────
+     Гарчиг, цаас, чиглэл, давхарга, дроны сонголт БҮГД зөвхөн НООРОГ —
+     өөрчлөхөд зураг шинэчлэгдэхгүй. "Зураг үүсгэх"/"Шинээр үүсгэх" дарахад
+     л ноорог нь `applied` болж зураг боловсруулагдана. Өмнө нь цаас/чиглэл
+     сонгомогц, гарчиг бичих бүрд зураг шууд дахин зурагддаг байв. */
   const [selectedDrones, setSelectedDrones] = useState<Set<string>>(() => new Set());
   /* ЧАГТЛААГҮЙ давхаргууд — газрын зураг дээр ч, таних тэмдэг дээр ч ГАРАХГҮЙ.
      Өгөгдмөл нь бүгд асаалттай (хоосон Set). */
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(() => new Set());
-  const [appliedDrones, setAppliedDrones] = useState<Set<string>>(() => new Set());
-  const [appliedLayers, setAppliedLayers] = useState<Set<string>>(() => new Set());
+  /* Сүүлд ХЭРЭГЖСЭН тохиргоо — урьдчилан харах зураг ЯГ үүгээр бүтсэн.
+     null = цонх нээгдээд зураг хараахан үүсгээгүй (нээгдэнгүүт дэмий
+     WMS/тайлын хүсэлт явуулахгүй). Татах үед ч цаас/чиглэлийг ЭНДЭЭС авна —
+     ноорог руу сольсон чиглэлээр PDF үүсгэвэл зураг сунаж гажина. */
+  const [applied, setApplied] = useState<PrintSettings | null>(null);
+  const viewInfoRef = useRef<PrintMapViewInfo | null>(null);
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [pageCanvas, setPageCanvas] = useState<HTMLCanvasElement | null>(null);
-  /* Цонх нээгдэнгүүт зураг үүсгэхГҮЙ. Хэрэглэгч эхлээд цаас/чиглэл/давхаргаа
-     сонгоод "Зураг үүсгэх" дарна — ингэснээр дэмий WMS/тайлын хүсэлт явахгүй,
-     буруу тохиргоотой зураг бэлдэх хүлээлт ч үүсэхгүй. */
-  const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const acqFilter = `acquisition_id='${acquisitionId}'`;
 
   /* ── Өгөгдөл ─────────────────────────────────────────────────── */
-  const { data: acq } = useQuery({
+  const { data: acq, isFetched: acqFetched } = useQuery({
     queryKey: ["land", acquisitionId],
     queryFn: () => landApi.getById(acquisitionId),
     staleTime: 60_000,
   });
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isFetched: categoriesFetched } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
     staleTime: Infinity,
   });
-  const { data: departments = [] } = useQuery({
+  const { data: departments = [], isFetched: departmentsFetched } = useQuery({
     queryKey: ["departments", "options"],
     queryFn: () => departmentApi.list({ page_size: 200 }).then((r) => r.data ?? []),
     staleTime: 5 * 60_000,
@@ -159,6 +156,7 @@ export default function PrintMapDialog({
 
   const [statusCounts, setStatusCounts] = useState<Record<number, number>>({});
   const [parcelsAreaM2, setParcelsAreaM2] = useState(0);
+  const [countsLoaded, setCountsLoaded] = useState(false);
 
   useEffect(() => {
     void loadImage("/logo.png").then((img) => {
@@ -215,30 +213,29 @@ export default function PrintMapDialog({
         setStatusCounts(counts);
         setParcelsAreaM2(sum);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setCountsLoaded(true));
   }, [acqFilter]);
 
   /* ── Зураг авч, хуудас бүрдүүлэх ─────────────────────────────── */
-  const legend = useMemo<PrintLegendItem[]>(
-    () => [
-      // Төлөвүүд БҮРТГЭЛЭЭС ирнэ (хатуу жагсаалт биш) бөгөөд хэрэглэгчийн
-      // ХАССАН давхарга таних тэмдэгт гарахгүй.
-      ...statusLayerDefs
-        .filter((d) => {
-          const sid = parcelStatusIdFromLayer(d.id) ?? -1;
-          return (statusCounts[sid] ?? 0) > 0 && !appliedLayers.has(d.id);
-        })
-        .map((d) => {
-          const sid = parcelStatusIdFromLayer(d.id) ?? -1;
-          return { color: d.color, label: `${d.label} (${statusCounts[sid]})` };
-        }),
-      ...BOUNDARY_IDS.filter((id) => !appliedLayers.has(id)).map((id) => {
-        const def = layerDef(id);
-        return { color: def.color, label: def.label, line: true };
+  // Таних тэмдэг — ХЭРЭГЖҮҮЛЖ буй тохиргооны давхаргуудаар (ноорогоор биш).
+  const buildLegend = (hidden: Set<string>): PrintLegendItem[] => [
+    // Төлөвүүд БҮРТГЭЛЭЭС ирнэ (хатуу жагсаалт биш) бөгөөд хэрэглэгчийн
+    // ХАССАН давхарга таних тэмдэгт гарахгүй.
+    ...statusLayerDefs
+      .filter((d) => {
+        const sid = parcelStatusIdFromLayer(d.id) ?? -1;
+        return (statusCounts[sid] ?? 0) > 0 && !hidden.has(d.id);
+      })
+      .map((d) => {
+        const sid = parcelStatusIdFromLayer(d.id) ?? -1;
+        return { color: d.color, label: `${d.label} (${statusCounts[sid]})` };
       }),
-    ],
-    [statusCounts, statusLayerDefs, appliedLayers],
-  );
+    ...BOUNDARY_IDS.filter((id) => !hidden.has(id)).map((id) => {
+      const def = layerDef(id);
+      return { color: def.color, label: def.label, line: true };
+    }),
+  ];
 
   /* Чагтлах давхаргын жагсаалт — таних тэмдэгтэй ЯГ ижил өнгө/шошго/дараалалтай.
      Нэг ч нэгж талбаргүй төлөв харагдахгүй (легенд дээр ч гардаггүй); тоолол
@@ -274,17 +271,23 @@ export default function PrintMapDialog({
     });
     return same;
   };
+  // Газрын зургийг ДАХИН ТАТАХ шаардлагатай өөрчлөлт үү (гарчгаас бусад)
+  const sameMapSettings = (a: PrintSettings, b: PrintSettings) =>
+    a.paper === b.paper &&
+    a.orientation === b.orientation &&
+    sameSet(a.hiddenLayers, b.hiddenLayers) &&
+    sameSet(a.drones, b.drones);
+
+  const draft: PrintSettings = { title, paper, orientation, hiddenLayers, drones: selectedDrones };
+  const started = applied !== null;
   /* Ноорог нь зураг дээр хэрэгжсэнээсээ ЗӨРСӨН үү — товчийг онцолж,
      урьдчилан харагдаж буй зураг ХУУЧИН гэдгийг мэдэгдэнэ. */
-  const dirty = !sameSet(hiddenLayers, appliedLayers) || !sameSet(selectedDrones, appliedDrones);
+  const dirty = !!applied && (applied.title !== draft.title || !sameMapSettings(applied, draft));
   // Эхний үүсгэлтийн өмнө товч нь ҮНДСЭН үйлдэл тул үргэлж тодоор харагдана.
   const highlight = dirty || !started;
-
-  const applySelection = () => {
-    setAppliedLayers(new Set(hiddenLayers));
-    setAppliedDrones(new Set(selectedDrones));
-    setStarted(true);
-  };
+  /* Тоолол/мэдээлэл ирэхээс ӨМНӨ үүсгэвэл таних тэмдэг/мэдээллийн карт
+     дутуу гарна — тэгээд дараа нь автоматаар дахин зурахгүй тул товчийг хүлээлгэнэ. */
+  const dataReady = !!extent && countsLoaded && acqFetched && categoriesFetched && departmentsFetched;
 
   const info = useMemo<PrintInfo>(() => {
     const cat = categories.find((c) => c.id === acq?.general_category_id);
@@ -311,17 +314,18 @@ export default function PrintMapDialog({
     };
   }, [acq, categories, departments, parcelsAreaM2, statusCounts, statusLayerDefs]);
 
-  /* Зургийн хэмжээ — хуудасны зургийн талбайн ХАРЬЦААГААР (тайралт үүсэхгүй),
-     нягтаршлын коэффициентээр ТОМСГОСОН (PDF дээр тод гарна). */
-  const area = printMapAreaSizePx(orientation, paper);
-  const mapW = Math.min(MAP_W_MAX, Math.round(area.width * printScaleFor(paper)));
-  const mapH = Math.round((mapW * area.height) / area.width);
-
-  const rebuild = useCallback(async () => {
+  const rebuild = async (cfg: PrintSettings) => {
     const ext = extent;
     if (!ext) return;
     setBusy(true);
     setError(null);
+    const { orientation, paper } = cfg;
+
+    /* Зургийн хэмжээ — хуудасны зургийн талбайн ХАРЬЦААГААР (тайралт үүсэхгүй),
+       нягтаршлын коэффициентээр ТОМСГОСОН (PDF дээр тод гарна). */
+    const area = printMapAreaSizePx(orientation, paper);
+    const mapW = Math.min(MAP_W_MAX, Math.round(area.width * printScaleFor(paper)));
+    const mapH = Math.round((mapW * area.height) / area.width);
 
     /* Хилийг ДЭЭД хэсэгт: доод зурвасыг таних тэмдэг/мэдээллийн карт эзэлнэ. */
     const a = printMapAreaSizePx(orientation, paper);
@@ -345,13 +349,13 @@ export default function PrintMapDialog({
     const layers: PrintLayerSpec[] = [
       {
         kind: "xyz",
-        urls: [0, 1, 2, 3].map((i) => `https://mt${i}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}`),
-        maxZoom: 20,
+        urls: PRINT_SATELLITE_URLS,
+        maxZoom: PRINT_SATELLITE_MAX_ZOOM,
         crossOrigin: "anonymous",
       },
     ];
     usableDrones
-      .filter((img) => appliedDrones.has(img.id))
+      .filter((img) => cfg.drones.has(img.id))
       .forEach((img) => {
         const b = droneBounds(img);
         if (!b) return;
@@ -363,12 +367,12 @@ export default function PrintMapDialog({
         });
       });
     // Хилийн давхаргууд ТОГТМОЛ, төлөвийнх нь БҮРТГЭЛЭЭС. Хэрэглэгчийн
-    // хассан (appliedLayers) давхаргыг хэвлэхэд оруулахгүй.
+    // хассан (cfg.hiddenLayers) давхаргыг хэвлэхэд оруулахгүй.
     [
       ...BOUNDARY_IDS.map((id) => ({ id: id as string, def: layerDef(id) })),
       ...statusLayerDefs.map((d) => ({ id: d.id as string, def: d })),
     ]
-      .filter(({ id }) => !appliedLayers.has(id))
+      .filter(({ id }) => !cfg.hiddenLayers.has(id))
       .sort((x, y) => x.def.zIndex - y.def.zIndex)
       .forEach(({ id, def }) => {
         const isStatus = parcelStatusIdFromLayer(id) !== null;
@@ -389,44 +393,50 @@ export default function PrintMapDialog({
     try {
       const canvas = await renderPrintMapCanvas({ extent: view, width: mapW, height: mapH, layers });
       mapCanvasRef.current = canvas;
-      const page = composePrintPage(canvas, { title, orientation, paper, legend, viewInfo, info });
-      setPageCanvas(page);
-      setDataUrl(page.toDataURL("image/png"));
+      viewInfoRef.current = viewInfo;
+      compose(canvas, cfg, viewInfo);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orientation, paper, title, legend, info, mapW, mapH, extent, appliedDrones, usableDrones, appliedLayers, acquisitionId, acqFilter]);
+  };
 
-  /* ЭХНИЙ зургийг зөвхөн "Зураг үүсгэх" товч эхлүүлнэ (started).
-     Түүнээс ХОЙШ автоматаар дахин зурах нөхцөл: цаас/чиглэл (хуудасны хэлбэр
-     өөрчлөгдөж зургийг заавал дахин авах шаардлагатай), хүрээ/өгөгдөл ирэх,
-     болон "Шинээр үүсгэх"-ээр хэрэгжүүлсэн давхарга/дроны сонголт.
-     Гарчиг энд БАЙХГҮЙ — доорх тусдаа effect нь хадгалсан зураг дээрээ
-     хуудсыг л дахин бүрдүүлнэ (WMS хүсэлт дахин явахгүй). */
-  useEffect(() => {
-    if (!started) return; // эхний зургийг ЗӨВХӨН товч үүсгэнэ
-    const t = setTimeout(() => void rebuild(), 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [started, orientation, paper, appliedDrones, appliedLayers, statusCounts, acq, mapW, mapH, extent]);
-
-  // Гарчиг солиход зургийг ДАХИН АВАХГҮЙ — хадгалсан canvas дээрээ дахин зурна
-  useEffect(() => {
-    const canvas = mapCanvasRef.current;
-    if (!canvas) return;
-    const page = composePrintPage(canvas, { title, orientation, paper, legend, info });
+  const compose = (canvas: HTMLCanvasElement, cfg: PrintSettings, viewInfo: PrintMapViewInfo | null) => {
+    const page = composePrintPage(canvas, {
+      title: cfg.title,
+      orientation: cfg.orientation,
+      paper: cfg.paper,
+      legend: buildLegend(cfg.hiddenLayers),
+      viewInfo,
+      info: { ...info, logo: logoRef.current },
+    });
     setPageCanvas(page);
     setDataUrl(page.toDataURL("image/png"));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
+  };
+
+  /* ЗУРАГ ЗӨВХӨН ЭНД боловсруулагдана — "Зураг үүсгэх"/"Шинээр үүсгэх" товч.
+     Зөвхөн гарчиг өөрчлөгдсөн бол газрын зургийг ДАХИН ТАТАХГҮЙ — хадгалсан
+     canvas дээрээ хуудсыг л дахин бүрдүүлнэ (масштабын мөр ч хадгалагдана). */
+  const generate = () => {
+    const next: PrintSettings = {
+      ...draft,
+      hiddenLayers: new Set(hiddenLayers),
+      drones: new Set(selectedDrones),
+    };
+    const prev = applied;
+    setApplied(next);
+    if (prev && mapCanvasRef.current && !error && sameMapSettings(prev, next)) {
+      compose(mapCanvasRef.current, next, viewInfoRef.current);
+    } else {
+      void rebuild(next);
+    }
+  };
 
   const download = () => {
-    if (!pageCanvas) return;
-    const name = title.trim().replace(/\s+/g, "_").slice(0, 80) || "gazriin_zurag";
-    void downloadCanvasAsPdf(pageCanvas, orientation, name, paper);
+    if (!pageCanvas || !applied) return;
+    const name = applied.title.trim().replace(/\s+/g, "_").slice(0, 80) || "gazriin_zurag";
+    void downloadCanvasAsPdf(pageCanvas, applied.orientation, name, applied.paper);
   };
 
   const selectCls =
@@ -555,13 +565,15 @@ export default function PrintMapDialog({
                 Сонголт өөрчлөгдсөн — зургийг шинэчилнэ үү
               </span>
             )}
-            {!extent && (
-              <span className="text-[11px] text-slate-400">Чөлөөлөлтийн хил ачаалж байна...</span>
+            {!dataReady && (
+              <span className="text-[11px] text-slate-400">
+                {!extent ? "Чөлөөлөлтийн хил ачаалж байна..." : "Мэдээлэл ачаалж байна..."}
+              </span>
             )}
             <button
               type="button"
-              onClick={applySelection}
-              disabled={busy || !extent}
+              onClick={generate}
+              disabled={busy || !dataReady}
               className={`flex h-8 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-semibold transition-colors disabled:opacity-50 ${
                 highlight
                   ? "border-[#02c0ce] bg-[#02c0ce] text-white hover:bg-[#02aab6]"

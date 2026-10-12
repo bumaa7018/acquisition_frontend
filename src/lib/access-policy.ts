@@ -160,6 +160,24 @@ export function canCancelValuationForActor(
   );
 }
 
+/**
+ * Нэгж талбарын "Трас зураг" хэвлэх — хэвлэхэд «Трас зураг» хавсралтыг
+ * ДАРЖ бичдэг тул зөвхөн АДМИН ба тухайн чөлөөлөлтийг ХАРИУЦСАН ажилтан
+ * (assigned_users). Ахлах/санхүү/гадны байгууллага ч хэвлэхгүй.
+ */
+export function canPrintParcelTraceForActor(
+  actor: AccessActor,
+  acquisition: AccessAcquisition | null | undefined,
+): boolean {
+  if (isAdminActor(actor)) return true;
+  return (
+    !!actor.userId &&
+    (acquisition?.assigned_users ?? []).some(
+      (assignee) => assignee.user_id === actor.userId,
+    )
+  );
+}
+
 export function isExternalSpecialActor(actor: AccessActor): boolean {
   if (isAdminActor(actor) || isSeniorSpecialistActor(actor)) return false;
   return (

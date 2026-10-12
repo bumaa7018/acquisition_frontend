@@ -5,6 +5,7 @@ import {
   canAccessAcquisitionForActor,
   canAccessParcelForActor,
   canCancelValuationForActor,
+  canPrintParcelTraceForActor,
   canCreateDecisionDraftForActor,
   canDeleteDecisionDraftForActor,
   canUpdateDecisionDraftForActor,
@@ -983,6 +984,47 @@ test("10-р системийн admin зөвхөн land/compensation/decision э�
   );
   assert.equal(
     canGrantRoleForActor(system10Admin, ["land:read", "users:delete"]),
+    false,
+  );
+});
+
+test("трас зургийг зөвхөн админ ба чөлөөлөлтийг хариуцсан ажилтан хэвлэнэ", () => {
+  const assignedAcquisition = {
+    ...acquisition,
+    assigned_users: [{ user_id: "assigned-user" }],
+  };
+  for (const actor of [
+    { roles: ["admin"] },
+    { roles: ["Админ"] },
+    { userId: "admin-user", roles: ["admin"] },
+  ]) {
+    assert.equal(canPrintParcelTraceForActor(actor, assignedAcquisition), true);
+    // Админ хариуцагчгүй чөлөөлөлт дээр ч хэвлэнэ
+    assert.equal(canPrintParcelTraceForActor(actor, undefined), true);
+  }
+  assert.equal(
+    canPrintParcelTraceForActor(
+      { userId: "assigned-user", roles: ["specialist"] },
+      assignedAcquisition,
+    ),
+    true,
+  );
+  for (const actor of [
+    { userId: "unassigned-user", roles: ["specialist"] },
+    { roles: ["specialist"] },
+    { ...senior, userId: "senior-user" },
+    { ...finance, userId: "finance-user" },
+    { ...mika, userId: "mika-user" },
+    { ...primaryProfessional, userId: "prof-user" },
+  ]) {
+    assert.equal(canPrintParcelTraceForActor(actor, assignedAcquisition), false);
+  }
+  // Хариуцагч мөртлөө чөлөөлөлтийн мэдээлэл ирээгүй бол хэвлэхгүй
+  assert.equal(
+    canPrintParcelTraceForActor(
+      { userId: "assigned-user", roles: ["specialist"] },
+      undefined,
+    ),
     false,
   );
 });

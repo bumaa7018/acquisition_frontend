@@ -2,6 +2,7 @@
 import { authStorage, decodeJwtPayload } from "./auth";
 import {
   canAccessAcquisitionForActor,
+  canPrintParcelTraceForActor,
   canAccessParcelForActor,
   canCreateDecisionDraftForActor,
   canCreateUser,
@@ -118,6 +119,11 @@ export function isSeniorSpecialist(): boolean {
 // Админ role
 export function isAdmin(): boolean {
   return isAdminActor(getCurrentActor());
+}
+
+// Нэгж талбарын трас зураг хэвлэх — админ эсвэл чөлөөлөлтийг хариуцсан ажилтан
+export function canPrintParcelTrace(acquisition?: AccessAcquisition | null): boolean {
+  return canPrintParcelTraceForActor(getCurrentActor(), acquisition);
 }
 
 // Хуучин мэдээллийн импорт

@@ -33,7 +33,7 @@ const PAPER_PT: Record<PrintPaperSize, { width: number; height: number }> = {
   A3: { width: 841.89, height: 1190.55 },
 };
 
-function pageSizePx(
+export function pageSizePx(
   orientation: PrintOrientation,
   paper: PrintPaperSize = "A4",
 ): { width: number; height: number } {
@@ -44,15 +44,15 @@ function pageSizePx(
 // Хуудасны layout-ын тогтмолууд — composePrintPage болон
 // printMapAreaSizePx хоёулаа ЭНДЭЭС уншина. Хоёр газар тусад нь бичвэл
 // зурган дээрх тайралтын тооцоо чимээгүйхэн зөрнө.
-const PAGE_MARGIN = 24;
+export const PAGE_MARGIN = 24;
 // Толгой: дээр нь ЖИЖИГ байгууллагын мөр, доор нь ГАРЧИГ (олон мөр).
-const PAGE_ORG_ROW_H = 20;
-const PAGE_TITLE_AREA_H = PAGE_ORG_ROW_H + 52;
+export const PAGE_ORG_ROW_H = 20;
+export const PAGE_TITLE_AREA_H = PAGE_ORG_ROW_H + 52;
 // Мэдээллийн КАРТ — тусдаа панель БИШ, газрын зургийн ДЭЭР хөвнө
 // (таних тэмдэгтэй яг ижил цагаан дэвсгэртэй). Зургийн доод хэсэгт
 // чөлөөлөлтийн хил ороогүй хоосон зай үлдээж, түүн дээр нь зурна.
-const INFO_CARD_H = 72;
-const CARD_INSET = 10;
+export const INFO_CARD_H = 72;
+export const CARD_INSET = 10;
 /* БОСОО хэвлэхэд хуудас нарийн тул таних тэмдэг + мэдээллийн карт зэрэгцэж
    БАГТДАГГҮЙ — мөрийн шошго ба утга давхарлаж уншигдахгүй болдог. Иймд босоо
    үед хоёр картыг ДЭЭШ-ДООШ өрж, тус бүрд нь БҮТЭН өргөн өгнө. */
@@ -147,19 +147,19 @@ export interface PrintInfo {
 }
 
 // Хэвлэсэн огноо — "2026.09.01" (тэгээр гүйцээсэн, монгол бичиглэл).
-function formatDateDots(date: Date): string {
+export function formatDateDots(date: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}.${p(date.getMonth() + 1)}.${p(date.getDate())}`;
 }
 
 /** м² → уншихад тохиромжтой (га эсвэл м²). */
-function areaText(m2?: number): string {
+export function areaText(m2?: number): string {
   if (m2 == null || !Number.isFinite(m2) || m2 <= 0) return "—";
   return m2 >= 10000 ? `${(m2 / 10000).toFixed(2)} га` : `${Math.round(m2).toLocaleString()} м²`;
 }
 
 /** ЗҮГ ЧИГИЙН тэмдэг — газрын зургийн баруун дээд буланд. */
-function drawNorthArrow(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+export function drawNorthArrow(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
   ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.strokeStyle = "#cbd5e1";
@@ -249,7 +249,7 @@ export function getMapViewInfo(map: OLMap): PrintMapViewInfo | null {
 
 // Масштабын харьцааг "цэвэрхэн" тоо болгож дугуйлна (жиш: 1834 → 1800), учир нь
 // PDF/preview дээр 1:1,834.27 гэх мэт хэт нарийвчлалтай тоо мэргэжлийн бус харагдана.
-function roundScaleDenominator(value: number): number {
+export function roundScaleDenominator(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 0;
   let step: number;
   if (value < 200) step = 5;
@@ -267,7 +267,7 @@ function roundScaleDenominator(value: number): number {
  * илүү үзүүлдэг тул cos(lat)-аар засна. mapCanvas болон А4 хуудас хоёул нэг ижил
  * "96dpi CSS px" конвенцоор хэмжигдсэн тул шууд харьцуулж болно.
  */
-function computeScaleDenominator(viewInfo: PrintMapViewInfo, coverScale: number): number {
+export function computeScaleDenominator(viewInfo: PrintMapViewInfo, coverScale: number): number {
   const groundMetersPerOLpx = viewInfo.resolution * Math.cos((viewInfo.centerLat * Math.PI) / 180);
   const mmPerPagePx = 25.4 / 96;
   const groundMetersPerPagePx = groundMetersPerOLpx / coverScale;
@@ -295,7 +295,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 }
 
 /** Урт текстийг өргөнд багтаахаар тайрч "…" залгана (шахаж гажуудуулахгүй). */
-function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+export function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let lo = 0;
   let hi = text.length;
@@ -318,7 +318,7 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
  * Гарчгийн блокийн ӨНДӨР нь тогтмол (PAGE_TITLE_AREA_H) — тиймээс хуудасны
  * бусад хэсгийн байрлал (газрын зураг, инфо панель) гарчгаас хамаарч хөвөхгүй.
  */
-function layoutTitle(
+export function layoutTitle(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
@@ -342,7 +342,7 @@ function layoutTitle(
   return { lines, fontSize: minSize, lineHeight };
 }
 
-function drawRoundedRect(
+export function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -407,7 +407,57 @@ export type PrintLayerSpec =
       crossOrigin?: string;
       /** EPSG:3857 хүрээ — зөвхөн энэ дотор зурна (дроны зураг). */
       clipExtent?: [number, number, number, number];
+    }
+  | {
+      /**
+       * Клиент талд мэдэгдэж буй геометр (нэгж талбарын WKT г.м) — GeoServer-ээс
+       * татахгүй, шууд canvas дээр зурна. Дэлгэцийн OL вектор давхаргатай ижил
+       * хэлбэрээр (хүрээ/дүүргэлт/тасархай) хэвлэхэд хэрэглэнэ.
+       */
+      kind: "vector";
+      /** Олон өнцөгтүүд (EPSG:3857): polygon → цагираг → [x, y] */
+      polygons: number[][][][];
+      stroke?: string;
+      /** Зураасны зузаан — газрын зургийн CANVAS-ын px-ээр (дуудагч масштаблана). */
+      strokeWidth?: number;
+      fill?: string;
+      dash?: number[];
+      opacity?: number;
     };
+
+function drawVectorLayer(
+  ctx: CanvasRenderingContext2D,
+  spec: Extract<PrintLayerSpec, { kind: "vector" }>,
+  extent: [number, number, number, number],
+  resolution: number,
+): void {
+  ctx.save();
+  ctx.beginPath();
+  spec.polygons.forEach((poly) =>
+    poly.forEach((ring) =>
+      ring.forEach(([x, y], i) => {
+        const px = (x - extent[0]) / resolution;
+        const py = (extent[3] - y) / resolution;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }),
+    ),
+  );
+  ctx.closePath();
+  if (spec.fill) {
+    ctx.fillStyle = spec.fill;
+    // Нүхтэй (дотоод цагирагтай) талбарыг зөв зурна
+    ctx.fill("evenodd");
+  }
+  if (spec.stroke) {
+    ctx.strokeStyle = spec.stroke;
+    ctx.lineWidth = spec.strokeWidth ?? 2;
+    ctx.lineJoin = "round";
+    if (spec.dash) ctx.setLineDash(spec.dash);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 async function decodeFromUrl(src: string, crossOrigin?: string): Promise<HTMLImageElement | null> {
   const img = new Image();
@@ -598,6 +648,7 @@ export async function renderPrintMapCanvas(o: {
   for (const spec of layers) {
     ctx.globalAlpha = spec.opacity ?? 1;
     if (spec.kind === "wms") await drawWmsLayer(ctx, spec, extent, width, height);
+    else if (spec.kind === "vector") drawVectorLayer(ctx, spec, extent, resolution);
     else await drawXyzLayer(ctx, spec, extent, resolution);
   }
   ctx.globalAlpha = 1;
@@ -988,22 +1039,46 @@ export async function downloadCanvasAsPdf(
   fileName = "gazriin-zurag",
   paper: PrintPaperSize = "A4",
 ): Promise<void> {
-  const pngBytes = await fetch(canvas.toDataURL("image/png")).then((r) => r.arrayBuffer());
+  const blob = await canvasToPdfBlob(canvas, orientation, paper);
+  downloadBlob(blob, `${fileName}.pdf`);
+}
+
+/**
+ * Хуудасны canvas → нэг хуудастай PDF (Blob).
+ *
+ * `jpegQuality` өгвөл зургийг JPEG-ээр шигтгэнэ: хиймэл дагуулын зурагтай
+ * хуудас PNG-ээр 10–20MB хүрч, хавсралтын хязгаарт (backend 20MB) багтдаггүй.
+ * JPEG нь ижил харагдацтайгаар хэд дахин бага.
+ */
+export async function canvasToPdfBlob(
+  canvas: HTMLCanvasElement,
+  orientation: PrintOrientation,
+  paper: PrintPaperSize = "A4",
+  jpegQuality?: number,
+): Promise<Blob> {
+  const jpeg = jpegQuality != null;
+  const bytes = await fetch(
+    jpeg ? canvas.toDataURL("image/jpeg", jpegQuality) : canvas.toDataURL("image/png"),
+  ).then((r) => r.arrayBuffer());
 
   const pt = PAPER_PT[paper];
   const pageSize = orientation === "landscape" ? { width: pt.height, height: pt.width } : pt;
 
   const pdfDoc = await PDFDocument.create();
-  const png = await pdfDoc.embedPng(pngBytes);
+  const img = jpeg ? await pdfDoc.embedJpg(bytes) : await pdfDoc.embedPng(bytes);
   const page = pdfDoc.addPage([pageSize.width, pageSize.height]);
-  page.drawImage(png, { x: 0, y: 0, width: pageSize.width, height: pageSize.height });
+  page.drawImage(img, { x: 0, y: 0, width: pageSize.width, height: pageSize.height });
 
   const pdfBytes = await pdfDoc.save();
-  const blob = new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+  return new Blob([pdfBytes as unknown as BlobPart], { type: "application/pdf" });
+}
+
+export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${fileName}.pdf`;
+  link.download = fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  // Зарим браузер click-ийн дараа шууд revoke хийвэл таталтыг тасалдаг
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -33,5 +33,11 @@ export async function resolve(specifier, context, next) {
     }
   }
 
+  // OpenLayers нь "exports"-гүй ESM багц — Next шиг "ol/proj" гэж өргөтгөлгүй
+  // бичсэн import-ыг Node олдоггүй тул ".js" залгаж дахин оролдоно.
+  if (specifier.startsWith("ol/") && !path.extname(specifier)) {
+    return next(`${specifier}.js`, context);
+  }
+
   return next(specifier, context);
 }

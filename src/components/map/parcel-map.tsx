@@ -76,27 +76,39 @@ const ALL_LAYER_DEFS = [...WMS_LAYER_DEFS, ...VECTOR_LAYER_DEFS];
  */
 const statusColorRef: { current: Map<number, string> } = { current: new Map() };
 
-function parcelStyle(feature: { get: (k: string) => unknown }): Style {
-  const sid = (feature.get("status_id") as number) ?? PARCEL_STATUS_INITIAL_ID;
-  const color = getParcelStatusStyle(statusColorRef.current.get(sid)).color;
+/** "Нэгж талбар" — ҮНДСЭН давхарга: бүтэн нэгж талбарын хил, зөвхөн ТОД ХӨХ хүрээ. */
+export const PARCEL_OUTLINE_COLOR = "#0062ff";
+/** "Чөлөөлөх талбай" — нөлөөлөлтөд өртсөн хэсгийн дүүргэлтийн тунгалаг байдал. */
+export const ACQUISITION_FILL_ALPHA = 0.2;
+
+export function parcelStatusColor(statusId: number | null | undefined): string {
+  return getParcelStatusStyle(statusColorRef.current.get(statusId ?? PARCEL_STATUS_INITIAL_ID)).color;
+}
+
+/** Нөлөөлөлтөд өртсөн хэсэг — ОДООГИЙН ТӨЛӨВИЙН өнгөөр, 20% дүүргэлт. */
+function acquisitionStyle(feature: { get: (k: string) => unknown }): Style {
+  const color = parcelStatusColor(feature.get("status_id") as number | undefined);
+  const a = Math.round(ACQUISITION_FILL_ALPHA * 255).toString(16).padStart(2, "0");
   return new Style({
     stroke: new Stroke({ color, width: 2 }),
-    fill:   new Fill({ color: `${color}cc` }),
+    fill:   new Fill({ color: `${color}${a}` }),
   });
 }
 
 const VECTOR_STYLES: Record<string, Style | ((f: { get: (k: string) => unknown }) => Style)> = {
-  v_parcel_acquisition: parcelStyle,
-  parcel: new Style({
-    stroke: new Stroke({ color: "#22c55e", width: 3 }),
-    fill:   new Fill({ color: "rgba(34,197,94,0.35)" }),
+  v_parcel_acquisition: new Style({
+    stroke: new Stroke({ color: PARCEL_OUTLINE_COLOR, width: 2.5 }),
   }),
+  parcel: acquisitionStyle,
 };
+/* Нөлөөлөлтийн дүүргэлт ДООР, нэгж талбарын хөх хүрээ ДЭЭР — өртсөн хэсэг
+   хилтэйгээ давхцахад ч нэгж талбарын хил үргэлж тод харагдана. */
+const VECTOR_Z: Record<string, number> = { parcel: 49, v_parcel_acquisition: 50 };
 
 /**
  * Давхардсан нэгж талбарын давхарга: нөгөө талбарын хил (тасархай улбар шар)
- * + огтлолцох хэсэг (улаан). Энэ талбар (ногоон, zIndex 50)-ын ДЭЭР зурагдана —
- * давхцах хэсэг нь ногоон талбарын дотор тод харагдах ёстой.
+ * + огтлолцох хэсэг (улаан). Энэ талбар (хөх хүрээ, zIndex 50)-ын ДЭЭР зурагдана —
+ * давхцах хэсэг нь энэ талбарын дотор тод харагдах ёстой.
  */
 const OVERLAP_Z = 60;
 const OVERLAP_PART_Z = 70;
@@ -124,20 +136,32 @@ interface Props {
   parcelId: string;
   acquisitionId?: string;
   geometryWkt?: string | null;
+  /**
+   * Нөлөөлөлтөд өртсөн (чөлөөлөгдөх) хэсгийн хил — нэгж талбар ∩ чөлөөлөлтийн
+   * хил. Хоосон бол бүтэн нэгж талбарыг өртсөн гэж үзнэ.
+   */
+  acquisitionGeometryWkt?: string | null;
   statusId?: number | null;
   /** Энэ талбартай давхцаж буй нэгж талбарууд (геометртэй) */
   overlaps?: ParcelOverlap[];
   /** true бол `overlaps`-ийг газрын зураг дээр давхцуулж зурна */
   showOverlaps?: boolean;
+  /**
+   * Самбараас асаалттай давхаргууд солигдох бүрд (мөн анх) дуудагдана —
+   * трас зургийн жижиг зураг дэлгэцтэй ИЖИЛ давхаргуудаар зурагдана.
+   */
+  onVisibleLayersChange?: (ids: string[]) => void;
 }
 
 export function ParcelMap({
   parcelId,
   acquisitionId,
   geometryWkt,
+  acquisitionGeometryWkt,
   statusId,
   overlaps,
   showOverlaps = false,
+  onVisibleLayersChange,
 }: Props) {
   const mapRef       = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,7 +177,10 @@ export function ParcelMap({
   useEffect(() => {
     statusColorRef.current = statusColors;
     Object.values(vectorLayers.current).forEach((l) => l.changed());
-  }, [statusColors]);
+    // "Чөлөөлөх талбай"-н самбарын тэмдэг — одоогийн төлөвийн өнгө
+    const color = parcelStatusColor(statusId);
+    setLayers((prev) => prev.map((l) => (l.id === "parcel" && l.color !== color ? { ...l, color } : l)));
+  }, [statusColors, statusId]);
   const wktFormat    = useRef(new WKT());
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef);
 
@@ -164,12 +191,21 @@ export function ParcelMap({
     ALL_LAYER_DEFS.map((d) => ({
       id: d.id,
       label: d.label,
-      color: d.color,
+      // Самбарын тэмдэг газрын зурагтай таарна (layer-config-ийн өнгө нь
+      // бусад газрын зурагт хэрэглэгддэг тул энд л дарна).
+      color: d.id === "v_parcel_acquisition" ? PARCEL_OUTLINE_COLOR : d.color,
       visible: ("defaultVisible" in d ? d.defaultVisible : true) as boolean,
       group: d.group,
       hatch: d.hatch,
     })),
   );
+
+  const onVisibleRef = useRef(onVisibleLayersChange);
+  onVisibleRef.current = onVisibleLayersChange;
+  const visibleKey = layers.filter((l) => l.visible).map((l) => l.id).join(",");
+  useEffect(() => {
+    onVisibleRef.current?.(visibleKey ? visibleKey.split(",") : []);
+  }, [visibleKey]);
 
   const handleToggle = useCallback(
     (id: string) => {
@@ -237,7 +273,7 @@ export function ParcelMap({
     const vRecord: Record<string, VectorLayer<VectorSource>> = {};
     VECTOR_LAYER_DEFS.forEach((d) => {
       const src   = new VectorSource();
-      const zIdx  = d.id === "parcel" ? 50 : d.zIndex;
+      const zIdx  = VECTOR_Z[d.id] ?? d.zIndex;
       const layer = new VectorLayer({
         source: src,
         visible: true,
@@ -317,23 +353,26 @@ export function ParcelMap({
     };
 
     const wkt = geometryWkt?.trim();
-    const acqFeat = wkt ? makeFeature(wkt, statusId) : null;
+    // "Нэгж талбар" — бүтэн хил (хөх хүрээ)
     const parcelFeat = wkt ? makeFeature(wkt) : null;
+    // "Чөлөөлөх талбай" — өртсөн хэсэг; байхгүй бол бүтэн нэгж талбар
+    const acqWkt = acquisitionGeometryWkt?.trim() || wkt;
+    const acqFeat = acqWkt ? makeFeature(acqWkt, statusId) : null;
 
     const vAllSrc = vectorLayers.current["v_parcel_acquisition"]?.getSource();
     if (vAllSrc) {
       vAllSrc.clear();
-      if (acqFeat) vAllSrc.addFeature(acqFeat);
+      if (parcelFeat) vAllSrc.addFeature(parcelFeat);
     }
 
     const vParcelSrc = vectorLayers.current["parcel"]?.getSource();
     if (vParcelSrc) {
       vParcelSrc.clear();
-      if (parcelFeat) vParcelSrc.addFeature(parcelFeat);
+      if (acqFeat) vParcelSrc.addFeature(acqFeat);
     }
 
     if (parcelFeat && olMap.current) {
-      const extent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
+      const extent = vectorLayers.current["v_parcel_acquisition"]?.getSource()?.getExtent();
       if (extent) {
         olMap.current.getView().fit(extent, {
           padding: [60, 60, 60, 60],
@@ -341,7 +380,7 @@ export function ParcelMap({
         });
       }
     }
-  }, [geometryWkt, statusId]);
+  }, [geometryWkt, acquisitionGeometryWkt, statusId]);
 
   // Давхардсан нэгж талбаруудын геометрийг давхаргад ачаална. Агуулгаар нь
   // (WKT) харьцуулна — эцэг компонент рендер бүрт шинэ массив дамжуулж болно.
@@ -392,7 +431,7 @@ export function ParcelMap({
     prevShowOverlaps.current = showOverlaps;
 
     const map = olMap.current;
-    const parcelExtent = vectorLayers.current["parcel"]?.getSource()?.getExtent();
+    const parcelExtent = vectorLayers.current["v_parcel_acquisition"]?.getSource()?.getExtent();
     if (!map || !parcelExtent || isEmpty(parcelExtent)) return;
     const extent = extend(createEmpty(), parcelExtent);
     const ovExtent = overlapLayer.current?.getSource()?.getExtent();

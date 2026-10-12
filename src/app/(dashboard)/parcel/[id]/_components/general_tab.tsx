@@ -29,9 +29,11 @@ import {
   AlertCircle,
   MapPin,
   History,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  canPrintParcelTrace,
   isExternalSpecialRole,
   shouldUseProfessionalOrgApi,
 } from "@/lib/role-utils";
@@ -48,6 +50,14 @@ const ParcelMap = dynamic(
     loading: () => (
       <div className="h-[420px] rounded-xl bg-slate-100 dark:bg-[#252630] animate-pulse" />
     ),
+  },
+);
+
+// Трас зураг — canvas/pdf-lib ашигладаг тул зөвхөн нээхэд ачаална.
+const TracePrintDialog = dynamic(
+  () => import("@/components/map/trace-print-dialog"),
+  {
+    ssr: false,
   },
 );
 
@@ -604,6 +614,9 @@ export function GeneralTab({
   const [confirmCountdown, setConfirmCountdown] = useState(10);
   // Давхардсан нэгж талбаруудыг "Байршил"-ын газрын зураг дээр давхцуулж харуулах эсэх.
   const [showOverlaps, setShowOverlaps] = useState(false);
+  // Трас зураг — жижиг зураг нь "Байршил" газрын зурагт АСААЛТТАЙ давхаргуудаар
+  const [traceOpen, setTraceOpen] = useState(false);
+  const [mapLayers, setMapLayers] = useState<string[] | null>(null);
 
   useEffect(() => {
     if (!confirmOpen) return;
@@ -658,6 +671,7 @@ export function GeneralTab({
   );
   const monitorings = data.monitorings ?? [];
   const overlaps = data.overlaps ?? [];
+  const canPrintTrace = canPrintParcelTrace(acquisition);
 
   return (
     <div className="flex flex-col gap-5">
@@ -988,29 +1002,83 @@ export function GeneralTab({
             <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Байршил
             </p>
-            {overlaps.length > 0 && (
-              <label className="ml-auto flex cursor-pointer items-center gap-2 text-[12px] font-medium text-slate-600 dark:text-slate-300">
-                <span>Давхардсан нэгж талбар ({overlaps.length})</span>
-                <Switch
-                  checked={showOverlaps}
-                  onCheckedChange={setShowOverlaps}
-                  className="data-[state=checked]:bg-red-500"
-                />
-              </label>
-            )}
+            <div className="ml-auto flex items-center gap-3">
+              {overlaps.length > 0 && (
+                <label className="flex cursor-pointer items-center gap-2 text-[12px] font-medium text-slate-600 dark:text-slate-300">
+                  <span>Давхардсан нэгж талбар ({overlaps.length})</span>
+                  <Switch
+                    checked={showOverlaps}
+                    onCheckedChange={setShowOverlaps}
+                    className="data-[state=checked]:bg-red-500"
+                  />
+                </label>
+              )}
+              {/* Хэвлэхэд «Трас зураг» хавсралтыг дарж бичдэг тул зөвхөн
+                  админ ба чөлөөлөлтийг хариуцсан ажилтан */}
+              {canPrintTrace && (
+                <button
+                  type="button"
+                  onClick={() => setTraceOpen(true)}
+                  disabled={!data.geometry_wkt}
+                  title={
+                    data.geometry_wkt
+                      ? "Трас зураг хэвлэх"
+                      : "Нэгж талбарын хил байхгүй"
+                  }
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-[#02c0ce]/30 bg-[#02c0ce]/10 px-2.5 text-[12px] font-semibold text-[#02c0ce] transition-colors hover:bg-[#02c0ce]/20 disabled:opacity-50"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Трас зураг
+                </button>
+              )}
+            </div>
           </div>
           <ParcelMap
             parcelId={data.parcel_id}
             acquisitionId={acqId}
             geometryWkt={data.geometry_wkt}
+            acquisitionGeometryWkt={data.acquisition_geom_wkt}
             statusId={data.status_id ?? data.status}
             overlaps={overlaps}
             showOverlaps={showOverlaps}
+            onVisibleLayersChange={setMapLayers}
           />
+          {traceOpen && canPrintTrace && (
+            <TracePrintDialog
+              acquisitionId={acqId}
+              acquisitionName={
+                acquisition?.acquisition_name || acquisition?.plan_name
+              }
+              planCode={acquisition?.plan_code}
+              parcel={{
+                uuid: parcelId,
+                code: data.parcel_id,
+                geometryWkt: data.geometry_wkt,
+                acquisitionGeometryWkt: data.acquisition_geom_wkt,
+                statusId: data.status_id ?? data.status,
+                statusName: data.status_name,
+                areaM2: data.area_m2,
+                acquisitionAreaM2: data.acquisition_area_m2,
+                location: [adminUnit?.au2_name, adminUnit?.au3_name]
+                  .filter(Boolean)
+                  .join(", "),
+                address: [data.address_streetname, data.address_khashaa]
+                  .filter(Boolean)
+                  .join(", "),
+                landuse: data.landuse_name || data.landuse,
+                rightType: RIGHT_TYPE_LABELS[data.right_type],
+              }}
+              insetLayers={mapLayers}
+              overlaps={overlaps}
+              showOverlaps={showOverlaps}
+              canSave={!isLocked}
+              onClose={() => setTraceOpen(false)}
+            />
+          )}
           {showOverlaps && overlaps.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-5 py-2 text-[11.5px] text-slate-500 dark:border-[#37394d] dark:text-slate-400">
               <span className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm border-2 border-[#22c55e] bg-[#22c55e]/35" />
+                <span className="h-3 w-3 rounded-sm border-2 border-[#0062ff]" />
                 Энэ нэгж талбар
               </span>
               <span className="flex items-center gap-1.5">
