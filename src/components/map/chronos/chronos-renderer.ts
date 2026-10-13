@@ -133,7 +133,10 @@ export class ChronosRenderer {
   }
 
   resize(w: number, h: number, dpr: number) {
+    if (w === this.w && h === this.h && dpr === this.dpr) return;
     const first = this.w === 0;
+    const dw = w - this.w;
+    const dh = h - this.h;
     this.w = w;
     this.h = h;
     this.dpr = dpr;
@@ -141,8 +144,14 @@ export class ChronosRenderer {
     this.canvas.height = Math.round(h * dpr);
     if (first) this.fit();
     else {
-      this.iso.cx = w / 2;
-      this.iso.cy = h / 2;
+      /* Хэрэглэгчийн чирж/томруулсан харагдацыг ХАДГАЛНА — дэлгэцийн төвд
+         байсан цэг төвдөө үлдэнэ. Өмнө нь cx/cy-г шууд w/2, h/2 болгодог
+         байсан тул хэмжээ бага зэрэг өөрчлөгдөхөд (жиш: дашбоардад сар
+         сонгоход хуудасны өндөр солигдож гүйлгэх зурвас гарах/алга болох)
+         харагдац бүх чөлөөлөлтийн хүрээний ТӨВ рүү — ихэвчлэн хоосон газар
+         руу — үсэрдэг байв. */
+      this.iso.cx += dw / 2;
+      this.iso.cy += dh / 2;
     }
     this.dirty = true;
   }
