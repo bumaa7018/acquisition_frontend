@@ -20,31 +20,6 @@ import {
   X,
 } from "lucide-react";
 
-const TITLES: Record<string, { greeting: string; crumb: string }> = {
-  "/": { greeting: "Тавтай морилно уу!", crumb: "Хяналтын самбар" },
-  "/acquisition": { greeting: "Газар чөлөөлөлт", crumb: "Газар чөлөөлөлт" },
-  "/map": { greeting: "Газрын зураг", crumb: "Газрын зураг" },
-  "/compensation/create": {
-    greeting: "Нэхэмжлэл үүсгэх",
-    crumb: "Нэхэмжлэл үүсгэх",
-  },
-  "/compensation": { greeting: "Нэхэмжлэл", crumb: "Нэхэмжлэл" },
-  "/users": { greeting: "Хэрэглэгчид", crumb: "Хэрэглэгчид" },
-  "/profile": { greeting: "Хувийн мэдээлэл", crumb: "Хувийн мэдээлэл" },
-  "/roles": { greeting: "Эрх & Роль", crumb: "Эрх & Роль" },
-};
-
-function resolveTitle(pathname: string) {
-  const sorted = Object.entries(TITLES).sort(
-    (a, b) => b[0].length - a[0].length,
-  );
-  return (
-    sorted.find(([k]) =>
-      k === "/" ? pathname === "/" : pathname.startsWith(k),
-    )?.[1] ?? { greeting: "Систем", crumb: "Систем" }
-  );
-}
-
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -57,7 +32,6 @@ export function Header() {
     setIsExternal(isExternalSpecialRole());
     setReady(true);
   }, []);
-  const { crumb } = resolveTitle(pathname);
   const { resolvedTheme, setTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -95,26 +69,17 @@ export function Header() {
 
   return (
     <header
-      className="relative flex h-[85px] shrink-0 items-center gap-2 sm:gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] pl-16 pr-3 sm:pl-20 sm:pr-6"
+      className="relative flex h-[85px] shrink-0 items-center gap-2 sm:gap-3 bg-white dark:bg-[#1e1f27] border-b border-slate-200/80 dark:border-[#37394d] px-3 sm:px-6"
       style={{ boxShadow: "0 0 35px 0 rgba(154,161,171,.15)" }}
     >
-      {/* Page title + breadcrumb */}
+      {/* Page title */}
       <div className="min-w-0">
         {/* Цэсний нэрийн ОРОНД угтах бичиг — ЯГ ИЖИЛ хэмжээ/жин (text-[15px]
-            font-bold). Аль хуудсанд байгааг доорх breadcrumb харуулна. */}
+            font-bold). */}
         <p className="text-[15px] font-bold text-slate-800 dark:text-white leading-tight truncate">
           ГАЗАР ЧӨЛӨӨЛӨЛТИЙН ЦАХИМ СИСТЕМД{" "}
           <span style={{ color: "#02c0ce" }}>ТАВТАЙ МОРИЛНО УУ.</span>
         </p>
-        <div className="flex items-center gap-1 mt-0.5">
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            Газрын Систем
-          </span>
-          <ChevronRight className="h-2.5 w-2.5 text-slate-300 dark:text-slate-600" />
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-            {crumb}
-          </span>
-        </div>
       </div>
 
       <div className="flex-1" />

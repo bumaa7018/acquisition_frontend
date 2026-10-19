@@ -27,8 +27,8 @@ import {
   Shield,
   LogOut,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Receipt,
   Layers,
   Building,
@@ -128,6 +128,84 @@ const NAV_HR = [
   { href: "/position", label: "Албан тушаал", icon: BadgeCheck },
 ];
 
+type NavEntry = { href: string; label: string; icon: React.ElementType };
+
+// Цэсэнд байхгүй ч таб болж нээгддэг хуудсууд.
+const NAV_EXTRA: NavEntry[] = [
+  { href: "/my_acquisitions", label: "Газар чөлөөлөлт", icon: FileText },
+  { href: "/profile", label: "Хувийн мэдээлэл", icon: User },
+];
+
+const NAV_ALL: NavEntry[] = [
+  ...NAV_MAIN,
+  ...NAV_ADMIN,
+  ...NAV_AUDIT,
+  ...NAV_CONFIG,
+  ...NAV_HR,
+  ...NAV_EXTRA,
+].sort((a, b) => b.href.length - a.href.length);
+
+/**
+ * Замд харгалзах цэсийн зүйл (хамгийн урт prefix). Таб нь цэсийн зүйлээр
+ * бүлэглэгдэнэ — `/acquisition/12` нь "Газар чөлөөлөлт" табд нээгдэнэ.
+ * `/acquisition_category` нь `/acquisition`-д андуурагдахгүйн тулд сегментийн
+ * хилээр тааруулна.
+ */
+export function resolveNavItem(pathname: string): NavEntry | null {
+  if (pathname === "/") return NAV_MAIN[0];
+  return (
+    NAV_ALL.find(
+      (item) =>
+        item.href !== "/" &&
+        (pathname === item.href || pathname.startsWith(`${item.href}/`)),
+    ) ?? null
+  );
+}
+
+/**
+ * Хураасан (icon-only) sidebar дээр курсор очиход нэрийг нь баруун талд
+ * харуулдаг tooltip. Native `title` удаан, загваргүй тул оронд нь ашиглана.
+ * `fixed` байрлалтай — nav нь overflow-y-auto тул absolute бол тасарна.
+ */
+function CollapsedTip({
+  label,
+  collapsed,
+  className,
+  children,
+}: {
+  label: string;
+  collapsed: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  return (
+    <div
+      className={className}
+      onMouseEnter={(e) => {
+        if (!collapsed) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        setPos({ top: r.top + r.height / 2, left: r.right + 10 });
+      }}
+      onMouseLeave={() => setPos(null)}
+    >
+      {children}
+      {collapsed && pos && (
+        <span
+          role="tooltip"
+          style={{ top: pos.top, left: pos.left }}
+          className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm dark:border-[#37394d] dark:bg-[#252630] dark:text-[#e2eeff]"
+        >
+          {/* Зүүн сум — tooltip-ийн хүрээтэй ижил өнгө, 45° эргүүлсэн дөрвөлжин */}
+          <span className="absolute -left-[5px] top-1/2 h-2 w-2 -translate-y-1/2 rotate-45 border-b border-l border-slate-200 bg-white dark:border-[#37394d] dark:bg-[#252630]" />
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function NavItem({
   href,
   label,
@@ -144,7 +222,7 @@ function NavItem({
   indent?: boolean;
 }) {
   return (
-    <div className="relative">
+    <CollapsedTip label={label} collapsed={collapsed} className="relative">
       {active && (
         <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-[#02c0ce]" />
       )}
@@ -162,7 +240,6 @@ function NavItem({
       <Link
         prefetch={false}
         href={href}
-        title={collapsed ? label : undefined}
         onClick={notifyNavStart}
         className={cn(
           "flex items-center rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
@@ -176,7 +253,7 @@ function NavItem({
         <Icon className="h-[17px] w-[17px] shrink-0" />
         {!collapsed && <span className="flex-1">{label}</span>}
       </Link>
-    </div>
+    </CollapsedTip>
   );
 }
 
@@ -257,6 +334,19 @@ export function Sidebar() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  // Дэд цэс сонгогдсон үед эцэг цэс (Удирдлага / Хүний нөөц / Тохиргоо)
+  // хураалттай байсан ч идэвхтэй өнгөөр ялгарч харагдана.
+  const hrActive = NAV_HR.some((item) => isActive(item.href));
+  const configActive = NAV_CONFIG.some((item) => isActive(item.href));
+  const adminActive =
+    hrActive ||
+    configActive ||
+    adminNav.some((item) => isActive(item.href)) ||
+    (canViewAudit && NAV_AUDIT.some((item) => isActive(item.href)));
+  const parentIdle = "text-slate-400 dark:text-[#8391a2]";
+  const parentIdleLabel = "text-slate-500 dark:text-[#97aac1]";
+  const parentActive = "text-[#02c0ce] dark:text-[#02c0ce]";
+
   return (
     <aside
       className={cn(
@@ -264,18 +354,6 @@ export function Sidebar() {
         collapsed ? "w-16" : "w-60",
       )}
     >
-      {/* Toggle button */}
-      <button
-        onClick={() => setCollapsed((v) => !v)}
-        className="absolute -right-11 top-[24px] z-10 flex h-10 w-10 items-center justify-center bg-transparent"
-      >
-        {collapsed ? (
-          <ChevronRight className="h-5 w-5 text-slate-500 dark:text-[#97aac1]" />
-        ) : (
-          <ChevronLeft className="h-5 w-5 text-slate-500 dark:text-[#97aac1]" />
-        )}
-      </button>
-
       {/* Logo */}
       <div
         className={cn(
@@ -348,17 +426,18 @@ export function Sidebar() {
             (эрхгүй) хэрэглэгчид харагдахгүй */}
         {ready && !isExternal && (adminNav.length > 0 || canViewAudit || canViewConfig || canViewHrNav) && (
           <div>
+            <CollapsedTip label="Удирдлага" collapsed={collapsed}>
             <button
               onClick={() => setAdminOpen((v) => !v)}
               className={cn(
-                "flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630] py-2",
+                "relative flex w-full items-center mb-1 gap-1 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-[#252630] py-2",
                 collapsed ? "justify-center px-3 py-2.5" : "px-3",
               )}
             >
-              <Settings className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+              <Settings className={cn("h-[17px] w-[17px] shrink-0", adminActive ? parentActive : parentIdle)} />
               {!collapsed && (
                 <>
-                  <p className="flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-[#8391a2]">
+                  <p className={cn("flex-1 text-left text-[10px] font-semibold uppercase tracking-[0.08em]", adminActive ? parentActive : parentIdle)}>
                     Удирдлага
                   </p>
                   <ChevronDown
@@ -369,7 +448,17 @@ export function Sidebar() {
                   />
                 </>
               )}
+              {/* Хураасан үед дэд цэстэйг илтгэх жижиг сум */}
+              {collapsed && (
+                <ChevronDown
+                  className={cn(
+                    "absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                    adminOpen ? "rotate-180" : "rotate-0",
+                  )}
+                />
+              )}
             </button>
+            </CollapsedTip>
 
             <div
               className={cn(
@@ -400,18 +489,18 @@ export function Sidebar() {
 
                 {canViewHrNav && (
                   <div className="mt-0.5">
+                    <CollapsedTip label="Хүний нөөц" collapsed={collapsed}>
                     <button
                       onClick={() => setHrOpen((v) => !v)}
-                      title={collapsed ? "Хүний нөөц" : undefined}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+                        "relative flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
                         collapsed ? "justify-center px-3" : "px-3",
                       )}
                     >
-                      <UserCog className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+                      <UserCog className={cn("h-[17px] w-[17px] shrink-0", hrActive ? parentActive : parentIdle)} />
                       {!collapsed && (
                         <>
-                          <span className="flex-1 text-left text-[13px] font-medium text-slate-500 dark:text-[#97aac1]">
+                          <span className={cn("flex-1 text-left text-[13px] font-medium", hrActive ? parentActive : parentIdleLabel)}>
                             Хүний нөөц
                           </span>
                           <ChevronDown
@@ -422,7 +511,17 @@ export function Sidebar() {
                           />
                         </>
                       )}
+                      {/* Хураасан үед дэд цэстэйг илтгэх жижиг сум */}
+                      {collapsed && (
+                        <ChevronDown
+                          className={cn(
+                            "absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                            hrOpen ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      )}
                     </button>
+                    </CollapsedTip>
 
                     <div
                       className={cn(
@@ -450,18 +549,18 @@ export function Sidebar() {
                 {/* Тохиргоо nested dropdown — системийн тохиргоо харах эрхтэй хэрэглэгчид */}
                 {canViewConfig && (
                   <div className="mt-0.5">
+                    <CollapsedTip label="Тохиргоо" collapsed={collapsed}>
                     <button
                       onClick={() => setConfigOpen((v) => !v)}
-                      title={collapsed ? "Тохиргоо" : undefined}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+                        "relative flex w-full items-center gap-2 rounded-lg py-2 transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
                         collapsed ? "justify-center px-3" : "px-3",
                       )}
                     >
-                      <SlidersHorizontal className="h-[17px] w-[17px] shrink-0 text-slate-400 dark:text-[#8391a2]" />
+                      <SlidersHorizontal className={cn("h-[17px] w-[17px] shrink-0", configActive ? parentActive : parentIdle)} />
                       {!collapsed && (
                         <>
-                          <span className="flex-1 text-left text-[13px] font-medium text-slate-500 dark:text-[#97aac1]">
+                          <span className={cn("flex-1 text-left text-[13px] font-medium", configActive ? parentActive : parentIdleLabel)}>
                             Тохиргоо
                           </span>
                           <ChevronDown
@@ -472,7 +571,17 @@ export function Sidebar() {
                           />
                         </>
                       )}
+                      {/* Хураасан үед дэд цэстэйг илтгэх жижиг сум */}
+                      {collapsed && (
+                        <ChevronDown
+                          className={cn(
+                            "absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                            configOpen ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      )}
                     </button>
+                    </CollapsedTip>
 
                     <div
                       className={cn(
@@ -509,6 +618,28 @@ export function Sidebar() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Хураах/дэлгэх товч — sidebar-ын доод хэсэгт */}
+      <div className="shrink-0 border-t border-slate-100 dark:border-[#37394d] p-3">
+        <CollapsedTip label="Цэс дэлгэх" collapsed={collapsed}>
+        <button
+          onClick={() => setCollapsed((v) => !v)}
+          className={cn(
+            "flex w-full items-center rounded-lg px-3 py-2.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
+            collapsed ? "justify-center" : "gap-3",
+          )}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-[17px] w-[17px] shrink-0" />
+          ) : (
+            <>
+              <span className="flex-1 text-left">Хураах</span>
+              <PanelLeftClose className="h-[17px] w-[17px] shrink-0" />
+            </>
+          )}
+        </button>
+        </CollapsedTip>
       </div>
     </aside>
   );

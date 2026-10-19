@@ -18,6 +18,9 @@ const {
   notifyRequestEnd,
   notifyNavStart,
   notifyNavEnd,
+  getScreenBlocking,
+  getContentLoading,
+  getNavTarget,
 } = await import("../src/lib/blocking-loader-state.ts");
 
 /** Тест хооронд төлвийг цэвэрлэнэ (модуль нь нэг л удаа ачаалагдана). */
@@ -128,4 +131,34 @@ test("watchdog: дуусаагүй хүсэлт ч дэлгэцийг мөнхө
   const next = notifyRequestStart();
   assert.equal(getIsBlocking(), true, "дараагийн хүсэлтэд loader дахин ажиллана");
   notifyRequestEnd(next);
+});
+
+test("байрлал: унших хүсэлт контентод, өөрчлөх хүсэлт бүтэн дэлгэцэд", () => {
+  reset();
+  const r = notifyRequestStart("read");
+  assert.equal(getContentLoading(), "read");
+  assert.equal(getScreenBlocking(), false, "GET дэлгэцийг түгжихгүй");
+
+  const w = notifyRequestStart("write");
+  assert.equal(getScreenBlocking(), true);
+
+  notifyRequestEnd(w);
+  notifyRequestEnd(r);
+  assert.equal(getContentLoading(), null);
+  assert.equal(getScreenBlocking(), false);
+});
+
+test("шилжилт: зорилтот зам (таб шууд нээгдэхэд) — дуусахад цэвэрлэгдэнэ", () => {
+  reset();
+  notifyNavStart(anchorEvent("https://gov.local/acquisition/12?tab=parcel"));
+  assert.equal(getContentLoading(), "nav");
+  assert.equal(getScreenBlocking(), false, "шилжилт дэлгэцийг түгжихгүй");
+  assert.equal(getNavTarget(), "/acquisition/12?tab=parcel");
+
+  notifyNavEnd();
+  assert.equal(getNavTarget(), null);
+
+  notifyNavStart(undefined, "/map");
+  assert.equal(getNavTarget(), "/map", "router.push-ийн өмнө шууд өгсөн зам");
+  notifyNavEnd();
 });

@@ -1,5 +1,6 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
+import { replaceQueryParam } from "@/lib/url-state";
 import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
@@ -78,16 +79,17 @@ async function generateReport(acqId: string) {
 export default function AcquisitionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
-  const tabParam = searchParams.get("tab");
-  const initialTab = (tabParam as Tab) ?? "general";
-  const [tab, setTab] = useState<Tab>(initialTab);
+  // Идэвхтэй таб URL-д (`?tab=`) хадгалагдана — нэгж талбар руу ороод буцахад
+  // (хуудасны таб, browser-ийн back) орхисон табдаа буцаж ирнэ.
+  const tab = (searchParams.get("tab") as Tab | null) ?? "general";
   const [reportLoading, setReportLoading] = useState(false);
   const isExternal = isExternalSpecialRole();
   const isFinance = isFinanceSpecialist();
   const useProfApi = shouldUseProfessionalOrgApi();
 
   function handleTabClick(key: Tab) {
-    setTab(key);
+    // `print` — нэг удаагийн хэвлэх тушаал, дахин асахгүй.
+    replaceQueryParam(searchParams, "tab", key, ["print"]);
   }
   // Backend PUT нь admin эсвэл ахлах мэргэжилтний роль + land:update шаарддаг тул ижил нөхцөл
   const canEditBase =

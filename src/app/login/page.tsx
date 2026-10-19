@@ -9,6 +9,7 @@ import { Building2, Briefcase, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
+import { clearPageTabs } from "@/lib/page-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -84,6 +85,8 @@ export default function LoginPage() {
         tab === "prof"
           ? await authApi.loginProf(data.login, data.password)
           : await authApi.login(data.login, data.password);
+      // Шинэ нэвтрэлт бүр цэвэр табаар эхэлнэ.
+      clearPageTabs();
       authStorage.setTokens(res.access_token, res.refresh_token);
       // Cookie тохирсоныг навигацаас ӨМНӨ баталгаажуулна — эхний map/файл
       // хүсэлт cookie-гүй явж 401 болох race-аас сэргийлнэ.

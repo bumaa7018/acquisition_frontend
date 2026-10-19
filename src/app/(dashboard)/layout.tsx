@@ -1,5 +1,5 @@
 "use client";
-import { useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { authStorage } from "@/lib/auth";
@@ -17,8 +17,9 @@ import {
 } from "@/lib/role-utils";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { BlockingLoaderProvider } from "@/lib/blocking-loader";
+import { BlockingLoaderProvider, ContentLoader } from "@/lib/blocking-loader";
 import { NavigationEvents } from "@/components/layout/navigation-events";
+import { PageTabs } from "@/components/layout/page-tabs";
 
 /**
  * Хуудасны түвшний эрхийн бодлого.
@@ -73,8 +74,14 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  // Хуудсууд эрхийг (localStorage) render-ийн үеэр шууд уншдаг — сервер дээр
+  // localStorage байхгүй тул эрхтэй товч г.м. SERVER HTML-д байхгүй, client-д
+  // байдаг → URL-ыг шууд нээх/F5 дарахад hydration алдаа гардаг байв. Нэвтрэлт
+  // бүхэлдээ client талд тул хуудсыг зөвхөн mount болсны дараа зурна.
+  const [mounted, setMounted] = useState(false);
   useEffect(() => {
     if (!authStorage.getAccessToken()) router.replace("/login");
+    setMounted(true);
   }, [router]);
 
   useEffect(() => {
@@ -115,9 +122,17 @@ export default function DashboardLayout({
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto bg-background p-6">
-            {children}
-          </main>
+          {/* useSearchParams — Suspense-гүй бол Next build CSR bailout алдаа өгнө */}
+          <Suspense fallback={<div className="h-11 shrink-0 border-b border-slate-200/80 dark:border-[#37394d]" />}>
+            <PageTabs />
+          </Suspense>
+          {/* Loader нь гүйлгэх элементийн ГАДНА — гүйлгэсэн үед ч харагдах хэсгийг бүрхэнэ */}
+          <div className="relative flex-1 overflow-hidden">
+            <main className="h-full overflow-y-auto bg-background p-6">
+              {mounted ? children : null}
+            </main>
+            <ContentLoader />
+          </div>
         </div>
       </div>
     </BlockingLoaderProvider>

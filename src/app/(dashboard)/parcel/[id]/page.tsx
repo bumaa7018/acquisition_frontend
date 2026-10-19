@@ -2,6 +2,7 @@
 import { useParcelStatusRules } from "@/lib/use-parcel-status-rules";
 import React, { useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
+import { replaceQueryParam } from "@/lib/url-state";
 import { useQuery } from "@tanstack/react-query";
 import { landApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
@@ -40,7 +41,9 @@ export default function ParcelDetailPage() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const acqId = searchParams.get("acq") ?? "";
-  const [tab, setTab] = useState<Tab>("general");
+  // Идэвхтэй таб URL-д (`?tab=`) хадгалагдана — өөр хуудас руу ороод буцахад
+  // орхисон табдаа буцаж ирнэ.
+  const tab = (searchParams.get("tab") as Tab | null) ?? "general";
   const [mounted, setMounted] = useState(false);
   const isExternal = isExternalSpecialRole();
   const isFinance = isFinanceSpecialist();
@@ -49,7 +52,7 @@ export default function ParcelDetailPage() {
   React.useEffect(() => setMounted(true), []);
 
   function handleTabClick(key: Tab) {
-    setTab(key);
+    replaceQueryParam(searchParams, "tab", key);
   }
 
   const {
@@ -173,7 +176,7 @@ export default function ParcelDetailPage() {
           </p>
         </div>
         <Link
-          href={acqId ? `/acquisition/${acqId}` : "/acquisition"}
+          href={acqId ? `/acquisition/${acqId}?tab=parcels` : "/acquisition"}
           className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Буцах
@@ -207,7 +210,7 @@ export default function ParcelDetailPage() {
           </p>
         </div>
         <Link
-          href={`/acquisition/${acqId}`}
+          href={`/acquisition/${acqId}?tab=parcels`}
           className="mt-2 inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-[#37394d] px-4 py-2 text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:border-[#02c0ce] hover:text-[#02c0ce] transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Чөлөөлөлт рүү буцах

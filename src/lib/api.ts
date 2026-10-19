@@ -305,7 +305,10 @@ api.interceptors.request.use((config) => {
   //
   // 401-ийн дараах дахин оролдлого нь ИЖИЛ config-оор энэ interceptor-т дахин
   // ирдэг тул ШИНЭ id авна — өмнөх id нь аль хэдийн хаагдсан.
-  config._loaderId = config._silent ? undefined : notifyRequestStart()
+  // GET нь контентын хэсэгт л loader харуулна; өөрчлөх хүсэлт бүтэн дэлгэцийг
+  // түгжинэ (давхар илгээхээс сэргийлнэ).
+  const kind = (config.method ?? 'get').toLowerCase() === 'get' ? 'read' : 'write'
+  config._loaderId = config._silent ? undefined : notifyRequestStart(kind)
   return config
 })
 

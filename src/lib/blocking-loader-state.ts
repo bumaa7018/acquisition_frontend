@@ -17,17 +17,29 @@
 // Одоо: (а) pathname солигдохгүй шилжилтэд loader огт асахгүй, (б) хоёуланд нь
 // дээд хугацаа тавьж, хэтэрвэл overlay АВТОМАТААР унтарна. Хүсэлт өөрөө
 // цуцлагдахгүй — зөвхөн дэлгэцийн түгжээ тайлагдана.
+//
+// ─── ХААНА ХАРУУЛАХ ─────────────────────────────────────────────────────────
+// Хуудас солих болон өгөгдөл УНШИХ (GET) үед loader нь ЗӨВХӨН контентын
+// хэсэгт гарна (`ContentLoader` — шилжилтийг эндээс, анхны уншилтыг
+// react-query-оос авна) — шинэ таб шууд харагдаж, sidebar/табууд
+// идэвхтэй хэвээр. Өгөгдөл ӨӨРЧЛӨХ (POST/PUT/DELETE) үед л бүтэн дэлгэцийг
+// түгжинэ (`getScreenBlocking`) — dialog доторх хадгалах товчийг давхар
+// дарахаас сэргийлнэ.
 
 /** Хүсэлтийн overlay-ийн дээд хугацаа. Хэтэрвэл дэлгэц чөлөөлөгдөнө. */
 const MAX_BLOCK_MS = 20_000;
 /** Шилжилтийн overlay-ийн дээд хугацаа. */
 const MAX_NAV_MS = 10_000;
 
-/** Идэвхтэй хүсэлтүүдийн id. Set — давхар хасалт/алдагдалаас хамгаална. */
-const _pending = new Set<number>();
+export type RequestKind = "read" | "write";
+
+/** Идэвхтэй хүсэлтүүд (id → төрөл). Map — давхар хасалт/алдагдалаас хамгаална. */
+const _pending = new Map<number, RequestKind>();
 let _nextId = 1;
 
 let _navPending = false;
+/** Шилжиж буй зам (pathname + query) — таб шууд нээгдэхэд хэрэглэнэ. */
+let _navTarget: string | null = null;
 let _navTimer: ReturnType<typeof setTimeout> | null = null;
 
 let _apiTimer: ReturnType<typeof setTimeout> | null = null;
@@ -44,8 +56,36 @@ export function subscribe(cb: () => void): () => void {
   return () => _subscribers.delete(cb);
 }
 
+/** Ямар нэг loader идэвхтэй эсэх (дэлгэц эсвэл контент). */
 export function getIsBlocking(): boolean {
   return (_pending.size > 0 && !_apiExpired) || _navPending;
+}
+
+function hasPending(kind: RequestKind): boolean {
+  if (_apiExpired) return false;
+  let found = false;
+  _pending.forEach((k) => {
+    if (k === kind) found = true;
+  });
+  return found;
+}
+
+/** Бүтэн дэлгэцийн түгжээ — зөвхөн өөрчлөх хүсэлтийн үед. */
+export function getScreenBlocking(): boolean {
+  return hasPending("write");
+}
+
+/**
+ * Контентын хэсгийн loader: "nav" — шинэ хуудас ачаалж байна (хуучин агуулгыг
+ * бүрэн далдална), "read" — өгөгдөл уншиж байна (агуулга бүдэг харагдана).
+ */
+export function getContentLoading(): "nav" | "read" | null {
+  if (_navPending) return "nav";
+  return hasPending("read") ? "read" : null;
+}
+
+export function getNavTarget(): string | null {
+  return _navPending ? _navTarget : null;
 }
 
 function armApiWatchdog() {
@@ -66,9 +106,9 @@ function disarmApiWatchdog() {
 }
 
 /** Хүсэлт эхлэв. Буцаах id-г `notifyRequestEnd`-д ЗААВАЛ буцааж өгнө. */
-export function notifyRequestStart(): number {
+export function notifyRequestStart(kind: RequestKind = "write"): number {
   const id = _nextId++;
-  _pending.add(id);
+  _pending.set(id, kind);
   if (_pending.size === 1) armApiWatchdog();
   emit();
   return id;
@@ -133,13 +173,32 @@ function shouldTrackNavigation(event?: NavStartEvent): boolean {
   return true;
 }
 
-export function notifyNavStart(event?: NavStartEvent): void {
+/** Холбоосын href-ээс эсвэл шууд өгсөн замаас зорилтот замыг гаргана. */
+function resolveNavTarget(event?: NavStartEvent, href?: string): string | null {
+  const anchor = event?.currentTarget as { href?: unknown } | null | undefined;
+  const raw = href ?? (typeof anchor?.href === "string" ? anchor.href : "");
+  if (!raw) return null;
+  try {
+    const url = new URL(raw, window.location.href);
+    return url.pathname + url.search;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Шилжилт эхлэв. `<Link onClick={notifyNavStart}>` хэлбэрээр event-тэй, эсвэл
+ * `router.push`-ийн өмнө `notifyNavStart(undefined, path)` хэлбэрээр дуудна.
+ */
+export function notifyNavStart(event?: NavStartEvent, href?: string): void {
   if (!shouldTrackNavigation(event)) return;
   _navPending = true;
+  _navTarget = resolveNavTarget(event, href);
   if (_navTimer !== null) clearTimeout(_navTimer);
   _navTimer = setTimeout(() => {
     _navTimer = null;
     _navPending = false;
+    _navTarget = null;
     emit();
   }, MAX_NAV_MS);
   emit();
@@ -152,5 +211,6 @@ export function notifyNavEnd(): void {
   }
   if (!_navPending) return;
   _navPending = false;
+  _navTarget = null;
   emit();
 }

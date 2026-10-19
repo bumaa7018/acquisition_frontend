@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { clearPageTabs } from "./page-tabs";
 
 /** localStorage-ийн түлхүүр. Таб хооронд `storage` event сонсоход хэрэгтэй тул экспортлов. */
 export const ACCESS_TOKEN_KEY = "gov_access_token";
@@ -145,6 +146,8 @@ export const authStorage = {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // Өмнөх хэрэглэгчийн нээлттэй табууд дараагийн нэвтрэлтэд үлдэхгүй.
+    clearPageTabs();
     endSession();
   },
 };
