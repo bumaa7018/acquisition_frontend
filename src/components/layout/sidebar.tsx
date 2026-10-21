@@ -36,7 +36,6 @@ import {
   Grid2x2,
   BarChart3,
   Settings,
-  ClipboardList,
   SlidersHorizontal,
   GitBranch,
   FolderOpen,
@@ -89,7 +88,6 @@ const NAV_CONFIG_GROUPS = [
     label: "Чөлөөлөлт",
     items: [
       { href: "/acquisition_category", label: "Чөлөөлөлтийн ангилал", icon: FolderOpen },
-      { href: "/acquisition_progress_status", label: "Чөлөөлөлтийн явцын статус", icon: ClipboardList },
       { href: "/acquisition_workflow", label: "Чөлөөлөлтийн урсгал", icon: SlidersHorizontal },
     ],
   },

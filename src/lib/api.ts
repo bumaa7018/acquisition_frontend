@@ -70,7 +70,7 @@ import type {
   AcquisitionProgress, AcquisitionSocioSurvey, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
   ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
-  ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, AcquisitionProgressStatus, DocumentType,
+  ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, ParcelStatusRules, BoundaryHistory, BoundaryPreview, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
   DroneImage,
@@ -1626,17 +1626,6 @@ export const dashboardApi = {
       .get<ApiResponse<FinanceDashboardData>>(`/dashboard/finance${suffix ? `?${suffix}` : ''}`, { _silent: opts?.silent })
       .then(r => r.data.data)
   },
-}
-
-// ── Acquisition Progress Statuses ─────────────────────
-export const acquisitionProgressStatusApi = {
-  list: () =>
-    api.get<ApiResponse<AcquisitionProgressStatus[]>>('/acquisition-progress-statuses').then(r => r.data.data ?? []),
-  create: (body: { name: string; description?: string; sort_order?: number }) =>
-    api.post<ApiResponse<AcquisitionProgressStatus>>('/acquisition-progress-statuses', body).then(r => r.data.data),
-  update: (id: number, body: { name?: string; description?: string; sort_order?: number }) =>
-    api.put<ApiResponse<AcquisitionProgressStatus>>(`/acquisition-progress-statuses/${id}`, body).then(r => r.data.data),
-  delete: (id: number) => api.delete(`/acquisition-progress-statuses/${id}`),
 }
 
 // ── Document Types ────────────────────────────────────

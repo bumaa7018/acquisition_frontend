@@ -138,13 +138,6 @@ export interface AcquisitionCategory {
   sub_count?: number;
 }
 
-export interface AcquisitionProgressStatus {
-  id: number;
-  name: string;
-  description?: string;
-  sort_order?: number;
-}
-
 export interface DocumentType {
   id: number;
   type: string;
