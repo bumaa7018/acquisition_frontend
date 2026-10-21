@@ -51,7 +51,6 @@ const ROUTE_GUARDS: { match: (p: string) => boolean; allow: () => boolean }[] = 
     match: (p) =>
       [
         "/acquisition_category",
-        "/acquisition_progress_status",
         "/acquisition_workflow",
         "/parcel_status",
         "/parcel_workflow",
