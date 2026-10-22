@@ -61,7 +61,9 @@ const NAV_MAIN = [
   { href: "/map", label: "Газрын зураг", icon: Map },
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
-  { href: "/compensation", label: "Нөхөх олговорын түүх", icon: Receipt },
+  // «Нөхөх олговрын түүх» цэсийг хассан — хуудас нь хуваарилалтаар хязгаарлагдахгүй
+  // бүх чөлөөлөлтийн олговрыг харуулдаг байв. Мэдэгдлээс дэлгэрэнгүй
+  // (/compensation/[id]) руу орох холбоос хэвээр.
   // Хуучин мэдээллийн импорт — ЗӨВХӨН админ (proxy ба импортын үйлчилгээ
   // backend-ээр дахин шалгана).
   { href: "/legacy_import", label: "Хуучин мэдээлэл оруулах", icon: FileUp },
