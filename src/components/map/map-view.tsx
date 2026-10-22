@@ -179,8 +179,8 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d")
   const [loading3D, setLoading3D] = useState(false)
   // «Он цагийн зураг» — зөвхөн дотоод ажилтан (backend /dashboard/chronos-той ижил).
-  // Өгөгдмөл горим — «Он цагийн зураг» (дашбоард chronos дамжуулсан үед).
-  const [chronosOn, setChronosOn] = useState(true)
+  // Өгөгдмөл горим — 2D; «Он цагийн зураг» хэрэглэгч товч дарж байж нээгдэнэ.
+  const [chronosOn, setChronosOn] = useState(false)
   const [canChronos, setCanChronos] = useState(false)
   useEffect(() => setCanChronos(!isExternalSpecialRole() && hasPermission('land:read')), [])
   const [chronosBasemap, setChronosBasemap] = useState<ChronosBasemap>('dark')

@@ -255,6 +255,21 @@ function NavItem({
   );
 }
 
+const COLLAPSED_COOKIE = "sidebar_collapsed";
+
+function readCollapsedCookie(): boolean | null {
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${COLLAPSED_COOKIE}=([^;]*)`),
+  );
+  if (!match) return null;
+  return match[1] === "1";
+}
+
+function writeCollapsedCookie(value: boolean) {
+  // 1 жил хадгална
+  document.cookie = `${COLLAPSED_COOKIE}=${value ? "1" : "0"}; path=/; max-age=31536000; SameSite=Lax`;
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -286,6 +301,8 @@ export function Sidebar() {
     NAV_HR.some((item) => pathname.startsWith(item.href)),
   );
   const [collapsed, setCollapsed] = useState(false);
+  // Анх ачааллахад cookie-оос сэргээх үед width анимаци харагдахгүй байлгана.
+  const [animate, setAnimate] = useState(false);
 
   useEffect(() => {
     setUser(authStorage.getUser());
@@ -321,13 +338,33 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
+    // Хэрэглэгч өөрөө хураасан/дэлгэсэн бол cookie-оос сэргээнэ, үгүй бол
+    // дэлгэцийн өргөнөөр шийднэ. Resize үед зөвхөн 1024px зааг давахад л
+    // автоматаар өөрчилнө — тэгэхгүй бол хэрэглэгчийн сонголтыг дарж бичнэ.
+    const saved = readCollapsedCookie();
+    let wasNarrow = window.innerWidth < 1024;
+    setCollapsed(saved ?? wasNarrow);
+    const raf = requestAnimationFrame(() => setAnimate(true));
     const handleResize = () => {
-      setCollapsed(window.innerWidth < 1024);
+      const isNarrow = window.innerWidth < 1024;
+      if (isNarrow !== wasNarrow) {
+        wasNarrow = isNarrow;
+        setCollapsed(isNarrow);
+      }
     };
-    handleResize();
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((v) => {
+      writeCollapsedCookie(!v);
+      return !v;
+    });
+  };
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -348,7 +385,8 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "relative flex h-screen shrink-0 flex-col bg-white dark:bg-[#1e1f27] border-r border-slate-200/80 dark:border-[#37394d] transition-all duration-300",
+        "relative flex h-screen shrink-0 flex-col bg-white dark:bg-[#1e1f27] border-r border-slate-200/80 dark:border-[#37394d]",
+        animate && "transition-all duration-300",
         collapsed ? "w-16" : "w-60",
       )}
     >
@@ -622,7 +660,7 @@ export function Sidebar() {
       <div className="shrink-0 border-t border-slate-100 dark:border-[#37394d] p-3">
         <CollapsedTip label="Цэс дэлгэх" collapsed={collapsed}>
         <button
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={toggleCollapsed}
           className={cn(
             "flex w-full items-center rounded-lg px-3 py-2.5 text-[13px] font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
             collapsed ? "justify-center" : "gap-3",
