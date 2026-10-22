@@ -36,7 +36,10 @@ import {
   staticLayerStyle,
   combineCql,
   parcelStatusIdFromLayer,
+  parcelStatusLayerId,
   PARCEL_STATUS_DEFAULT_COLOR,
+  PARCEL_STATUS_GROUP_ID,
+  PARCEL_STATUS_SOURCE,
   AGREED_GROUP,
   AGREED_GROUP_ID,
   AGREED_CODE_LAYER_IDS,
@@ -46,6 +49,8 @@ import {
   type MapLayerDef,
   type MapLayerId,
 } from './layers'
+import { PARCEL_STATUS_Z_BASE } from './layer-config'
+import { NOT_STARTED_STATUS_ID } from '@/lib/chronos-overview'
 import { GS_WMS, GS_WFS, wmsPostLoad, buildAcqCql, buildParcelStatusCql, buildCodeCql, gsAuthHeaders } from '@/lib/geoserver'
 import { logger } from '@/lib/logger'
 import { activateCesium3D, type Cesium3DHandle } from './cesium-3d'
@@ -93,6 +98,37 @@ const STATIC_LAYER_DEFS: MapLayerDef[] = [
 // Төлөвийн давхаргууд нь ДИНАМИК тул тогтмол жагсаалт байхгүй — id-гаар нь
 // (`v_parcel_s<N>`) танина.
 const isParcelStatusLayer = (id: string) => parcelStatusIdFromLayer(id) !== null
+
+/**
+ * «Чөлөөлөгдөөгүй (түүх эхлээгүй)» — сонгосон сар хүртэл төлөвийн түүхгүй
+ * нэгж талбар. GeoServer `v_parcel_status` (month параметртэй) тэднийг
+ * status = -1, өнгө CHRONOS_NOT_STARTED-ээр буцаана — «Он цагийн зураг»-тай ижил.
+ */
+const NOT_STARTED_LAYER_DEF: MapLayerDef = {
+  id: parcelStatusLayerId(NOT_STARTED_STATUS_ID),
+  label: 'Чөлөөлөгдөөгүй (түүх эхлээгүй)',
+  color: CHRONOS_NOT_STARTED,
+  zIndex: PARCEL_STATUS_Z_BASE - 1,
+  group: PARCEL_STATUS_GROUP_ID,
+  opacity: 1,
+  source: PARCEL_STATUS_SOURCE,
+  cql: `status=${NOT_STARTED_STATUS_ID}`,
+} as MapLayerDef
+
+/** Төлөвийн давхаргын сар — `VIEWPARAMS=month:YYYY-MM`; сар байхгүй бол одоогийн төлөв. */
+const statusViewParams = (month?: string) => ({ VIEWPARAMS: month ? `month:${month}` : undefined })
+
+/**
+ * 3D (olcs) нь ImageWMS-ийг Cesium давхарга болгохдоо параметрийг ХУУЛЖ авдаг
+ * тул `updateParams` 3D-д тусахгүй. olcs нь `change:extent` дээр Cesium
+ * давхаргыг одоогийн параметрээр ДАХИН ҮҮСГЭДЭГ — түүнийг өдөөнө.
+ */
+const WORLD_3857 = [-20037508.34, -20037508.34, 20037508.34, 20037508.34]
+function resync3D(layer: ImageLayer<ImageWMS>) {
+  const extent = layer.getExtent()
+  layer.setExtent(extent ? undefined : WORLD_3857)
+  layer.setExtent(extent)
+}
 // Нэгж талбарын давхаргад дарвал ЖИЖИГ popup биш, ДЭЛГЭРЭНГҮЙ цонх нээнэ.
 const isParcelInfoLayer = (id: string) =>
   isParcelStatusLayer(id) || id === 'v_parcel_acquisition'
@@ -194,6 +230,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   // Нэгж талбарын ТӨЛӨВИЙН давхаргууд — `parcel_status` бүртгэлээс (асинхрон).
   const { defs: statusLayerDefs } = useParcelStatusLayers()
 
+  // Дашбоард (хронос өгөгдсөн) — давхаргын хүрээ, төлөвүүд хроностой ижил байна.
+  const chronosScoped = !!chronos
+
   /** Тогтмол давхаргууд + бүртгэлээс ирсэн төлөвүүд (ГУС-ийн бүлгүүдийн ӨМНӨ). */
   const layerDefs = useMemo(() => {
     const cut = STATIC_LAYER_DEFS.findIndex(
@@ -202,10 +241,11 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     const at = cut === -1 ? STATIC_LAYER_DEFS.length : cut
     return [
       ...STATIC_LAYER_DEFS.slice(0, at),
+      ...(chronosScoped ? [NOT_STARTED_LAYER_DEF] : []),
       ...statusLayerDefs,
       ...STATIC_LAYER_DEFS.slice(at),
     ]
-  }, [statusLayerDefs])
+  }, [statusLayerDefs, chronosScoped])
 
   const layerDefsRef = useRef(layerDefs)
   layerDefsRef.current = layerDefs
@@ -217,6 +257,17 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     acqCql: '',
     parcelCql: '',
   })
+
+  // Цагийн голын сонгосон (сонгоогүй бол хамгийн сүүлийн) сар — нэгж талбарын
+  // төлөвийн давхарга ТУХАЙН САРЫН БАЙДЛААР зурагдана («Он цагийн зураг»-тай
+  // ижил). GeoServer-ийн `v_parcel_status` SQL view-ийн `month` параметр
+  // (../government-geoserver/layers/v_parcel_status.xml); хронос ачаалаагүй
+  // бол параметргүй = одоогийн төлөв.
+  const asOfMonth = chronos?.months.length
+    ? chronos.months[Math.min(Math.max(chronos.asOf, 0), chronos.months.length - 1)]
+    : undefined
+  const asOfMonthRef = useRef(asOfMonth)
+  asOfMonthRef.current = asOfMonth
 
   const makeWmsLayer = useCallback((id: string, visible: boolean, cqlFilter = '') => {
     // Давхаргын өөрийн opacity-г эрхэмлэнэ (нэгж талбарууд = 1, ингэснээр
@@ -242,6 +293,7 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
           // шууд уншина. Хүсэлтээр дамжуулбал дуудагч тал бүр давтан илгээх
           // үүрэгтэй болж, мартвал тэр газартаа саарал зурагдана.
           ...(cql ? { CQL_FILTER: cql } : {}),
+          ...(isParcelStatusLayer(id) ? statusViewParams(asOfMonthRef.current) : {}),
         },
         ratio: 1,
         serverType: 'geoserver',
@@ -417,7 +469,11 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     if (filterPending || !olMap.current) return
 
     const acqCql    = buildAcqCql(acquisitionIds)
-    const parcelCql = buildParcelStatusCql(acquisitionIds, years, employeeId)
+    // «Он цагийн зураг»-тай (сараар) үед оныг НЭГЖ ТАЛБАРЫН `status_year`-аар
+    // (сүүлд төлөв солигдсон он) ДАХИН шүүхгүй: чөлөөлөлтүүд он шүүлтээр аль
+    // хэдийн сонгогдсон (acquisitionIds) — хронос ч яг тэр хүрээг харуулдаг.
+    // Үгүй бол өмнө нь чөлөөлөгдөөд дахин хөдлөөгүй нэгж талбар 2D-ээс алга болно.
+    const parcelCql = buildParcelStatusCql(acquisitionIds, chronosScoped ? undefined : years, employeeId)
     const hasFilter = !!(acquisitionIds && acquisitionIds.length > 0)
     scopeRef.current = { active: hasFilter, acqCql, parcelCql }
 
@@ -469,7 +525,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
       // талбарыг зурдаг болно (өнгө нь л өөр, дээд давхарга нь бусдыг халхална).
       const def = layerDefsRef.current.find(l => l.id === id)
       const merged = combineCql(def?.cql, getCql(id))
-      wmsLayers.current[id]?.getSource()?.updateParams({ CQL_FILTER: merged || undefined })
+      const layer = wmsLayers.current[id]
+      layer?.getSource()?.updateParams({ CQL_FILTER: merged || undefined })
+      if (layer && cesium3D.current) resync3D(layer)
     })
 
     // Самбарын жагсаалтыг тодорхойлолттой тааруулна — хэрэглэгчийн асаасан/
@@ -516,7 +574,19 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         // хэсэг рүү бүрэн ойртоно.
       })
     }
-  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer, layerDefs])
+  }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer, layerDefs, chronosScoped])
+
+  /* ── Сар солигдоход ЗӨВХӨН төлөвийн давхаргын сарыг шинэчилнэ (зумлахгүй) — 2D ба 3D ── */
+  useEffect(() => {
+    Object.entries(wmsLayers.current).forEach(([id, layer]) => {
+      if (!isParcelStatusLayer(id)) return
+      const source = layer.getSource()
+      const next = statusViewParams(asOfMonth).VIEWPARAMS
+      if (!source || source.getParams().VIEWPARAMS === next) return
+      source.updateParams({ VIEWPARAMS: next })
+      if (cesium3D.current) resync3D(layer)
+    })
+  }, [asOfMonth])
 
   /* ── Layer toggle ── */
   const handleToggle = useCallback((id: string) => {

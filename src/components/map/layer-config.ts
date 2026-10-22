@@ -581,9 +581,10 @@ export function parcelStatusLayerId(statusId: number): `v_parcel_s${number}` {
   return `v_parcel_s${statusId}`
 }
 
-/** Давхаргын id-аас төлөвийн дугаарыг буцаана (виртуал биш бол `null`). */
+/** Давхаргын id-аас төлөвийн дугаарыг буцаана (виртуал биш бол `null`).
+ *  Сөрөг дугаар — бүртгэлд байхгүй псевдо төлөв (-1 = «Чөлөөлөгдөөгүй (түүх эхлээгүй)»). */
 export function parcelStatusIdFromLayer(layerId: string): number | null {
-  const m = /^v_parcel_s(\d+)$/.exec(layerId)
+  const m = /^v_parcel_s(-?\d+)$/.exec(layerId)
   return m ? Number(m[1]) : null
 }
 

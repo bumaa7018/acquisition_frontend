@@ -1352,7 +1352,6 @@ export default function DashboardPage() {
     employeeId: string | undefined;
   } | null>(null);
   const mapCommitKeyRef = useRef(0);
-  const prevIsLoadingRef = useRef<boolean | null>(null);
 
   // Газрын зургийн давхаргын шүүлт — сар сонголтоос ҮЛ хамаарна (түүхий хариу).
   const rawAcqs = useMemo(() => dashDataRaw?.acquisitions ?? [], [dashDataRaw?.acquisitions]);
@@ -1386,14 +1385,15 @@ export default function DashboardPage() {
     setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes, employeeId });
   }, [appliedFilter, rawAcqs, dashDataRaw]);
 
+  // Газрын зургийг дашбоардын ХАРИУ ӨӨРЧЛӨГДӨХ БҮРД шинэчилнэ. Өмнө нь зөвхөн
+  // ачаалалт true→false шилжихэд шинэчилдэг байсан тул КЭШЛЭГДСЭН шүүлт рүү
+  // (60с дотор дахин сонгоход) буцахад хариу шууд ирж, газрын зураг өмнөх
+  // шүүлтээрээ (ж: бүх чөлөөлөлт) үлддэг байв.
+  const committedDataRef = useRef<typeof dashDataRaw>(undefined);
   useEffect(() => {
-    const prevLoading = prevIsLoadingRef.current;
-    prevIsLoadingRef.current = isLoading;
-
-    // Commit when: first render with data (null→false) OR API just finished (true→false)
-    if (!isLoading && dashDataRaw && (prevLoading === null || prevLoading === true)) {
-      commitMap();
-    }
+    if (isLoading || !dashDataRaw || committedDataRef.current === dashDataRaw) return;
+    committedDataRef.current = dashDataRaw;
+    commitMap();
   }, [isLoading, dashDataRaw, commitMap]);
 
   /* Filter display label */
