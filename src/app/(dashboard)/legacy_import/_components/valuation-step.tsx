@@ -9,8 +9,9 @@ import {
   ReadOnlyNotice,
 } from "./shared";
 import { ProjectCategoryPicker } from "./project-category-picker";
+import { hasOwnerIssue } from "./report-step";
 
-type Filter = "attention" | "skipped" | "all";
+type Filter = "attention" | "skipped" | "owner" | "all";
 
 const MATCH_LABEL: Partial<Record<ReportRow["match"], string>> = {
   gus: "ГУС",
@@ -65,8 +66,10 @@ export function ValuationStep({
     const list = view?.rows ?? [];
     if (filter === "skipped") return list.filter(skipped);
     if (filter === "attention") return list.filter((r) => r.issues.some((i) => i.level !== "info"));
+    if (filter === "owner") return list.filter(hasOwnerIssue);
     return list;
   }, [view, filter]);
+  const ownerRows = view?.stats.ownerIssues ?? (view?.rows ?? []).filter(hasOwnerIssue).length;
   const projectIssues = (view?.projects ?? []).flatMap((p) => p.issues);
   const stats = view?.stats;
 
@@ -99,7 +102,7 @@ export function ValuationStep({
       {view && stats && (
         <div className="ap-card space-y-4 p-4">
           <FileResults files={view.files} />
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
             <Stat label="Үнэлгээний мөр" value={fmt(stats.rows)} />
             <Stat label="Нийт дүн (₮)" value={fmt(stats.totalAmount)} />
             <Stat label="Чөлөөлөлт (төсөл)" value={fmt(stats.projects ?? 0)} />
@@ -109,6 +112,7 @@ export function ValuationStep({
             <Stat label="Давхардсан (D2…)" value={fmt(stats.duplicates)} tone={stats.duplicates ? "warn" : "default"} />
             <Stat label="Орохгүй" value={fmt(stats.db + stats.missing)} tone={stats.db + stats.missing ? "bad" : "good"}
               hint={`${fmt(stats.missingAmount)}₮`} />
+            <Stat label="Өмчлөгчийн зөрүү" value={fmt(ownerRows)} tone={ownerRows ? "warn" : "good"} hint="нэр / регистр" />
           </div>
 
           {(view.projects ?? []).length > 0 && (
@@ -163,6 +167,7 @@ export function ValuationStep({
             {([
               ["attention", `Анхаарах (${view.rows.filter((r) => r.issues.some((i) => i.level !== "info")).length})`],
               ["skipped", `Орохгүй (${view.rows.filter(skipped).length})`],
+              ["owner", `Өмчлөгч (${ownerRows})`],
               ["all", `Бүгд (${view.rows.length})`],
             ] as [Filter, string][]).map(([key, label]) => (
               <button key={key} onClick={() => setFilter(key)}

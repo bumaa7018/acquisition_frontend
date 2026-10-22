@@ -34,8 +34,6 @@ const STEPS: Record<ImportMode, { key: StepKey; label: string }[]> = {
   ],
 };
 
-const MODE_LABEL: Record<ImportMode, string> = { full: "Бүтэн", valuation: "Зөвхөн үнэлгээ" };
-
 const modeOf = (state: ImportState | undefined): ImportMode => state?.session.mode ?? "full";
 
 const STATUS_LABEL: Record<ImportState["session"]["status"], string> = {
@@ -77,6 +75,24 @@ function reachable(state: ImportState | undefined, step: StepKey): boolean {
   if (!state.parcels?.canProceed || !state.parcels.gusDone) return false;
   if (step === "reports") return true;
   return !reportsPending(state) && !gusJob(state);
+}
+
+/** Чөлөөлөлтийн нэрс — олон бол эхний хэдийг харуулж, бусдыг дэлгэнэ. */
+function AcquisitionNames({ names, count }: { names: string[]; count: number }) {
+  const [open, setOpen] = useState(false);
+  if (names.length === 0) return <>{count || "—"}</>;
+  const limit = 3;
+  const shown = open ? names : names.slice(0, limit);
+  return (
+    <div className="min-w-[220px] max-w-[360px] space-y-0.5 whitespace-normal break-words">
+      {shown.map((n, i) => <div key={`${n}-${i}`}>{n}</div>)}
+      {names.length > limit && (
+        <button className="text-[11px] font-medium text-[#02c0ce] hover:underline" onClick={() => setOpen((o) => !o)}>
+          {open ? "Хураах" : `+${names.length - limit} бусад`}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function LegacyImportPage() {
@@ -169,6 +185,16 @@ function LegacyImportPage() {
     }
   };
 
+  // Ноорог жагсаалтад харагдахгүй тул гарахдаа шууд устгана. ГУС-ын шалгалт
+  // явж байвал сервер татгалзана — тэр нь дараа нь (1 цагийн дараа) цэвэрлэгдэнэ.
+  const leave = async () => {
+    if (state?.session.status === "draft") {
+      await legacyImportApi.remove(state.session.id).catch(() => undefined);
+    }
+    queryClient.invalidateQueries({ queryKey: ["legacy-import", "sessions"] });
+    router.push("/legacy_import");
+  };
+
   if (allowed === null) return null;
   if (!allowed) {
     return <div className="ap-card p-8 text-center text-[13px] text-slate-500">Энэ хуудсыг харах эрх байхгүй байна.</div>;
@@ -188,7 +214,10 @@ function LegacyImportPage() {
           </p>
         </div>
         {sessionID && (
-          <button className={secondaryButton} onClick={() => router.push("/legacy_import")}>Бүх импорт</button>
+          <button className={secondaryButton} onClick={leave}
+            title={state?.session.status === "draft" ? "Оруулаагүй импорт хадгалагдахгүй — устгагдана" : undefined}>
+            Бүх импорт
+          </button>
         )}
       </div>
 
@@ -218,12 +247,11 @@ function LegacyImportPage() {
           {sessions.data && sessions.data.length === 0 && <p className="text-[12px] text-slate-500">Одоогоор импорт алга.</p>}
           {sessions.data && sessions.data.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left">
+              <table className="w-full min-w-[820px] text-left">
                 <thead className={theadClass}>
                   <tr>
                     <th className={th}>Огноо</th>
                     <th className={th}>Хэрэглэгч</th>
-                    <th className={th}>Горим</th>
                     <th className={th}>Төлөв</th>
                     <th className={th}>Чөлөөлөлт</th>
                     <th className={th}>Нэгж талбар</th>
@@ -233,10 +261,9 @@ function LegacyImportPage() {
                 </thead>
                 <tbody>
                   {sessions.data.map((s) => (
-                    <tr key={s.id} className="border-b border-slate-50 dark:border-white/[0.04]">
+                    <tr key={s.id} className="border-b border-slate-50 align-top dark:border-white/[0.04]">
                       <td className={td}>{new Date(s.updatedAt).toLocaleString("mn-MN")}</td>
                       <td className={td}>{s.createdBy}</td>
-                      <td className={td}>{MODE_LABEL[s.mode ?? "full"]}</td>
                       <td className={td}>
                         {STATUS_LABEL[s.status]}
                         {s.rollback && (
@@ -245,7 +272,7 @@ function LegacyImportPage() {
                           </span>
                         )}
                       </td>
-                      <td className={td}>{s.acquisitions}</td>
+                      <td className={td}><AcquisitionNames names={s.acquisitionNames ?? []} count={s.acquisitions} /></td>
                       <td className={td}>{s.mode === "valuation" ? "—" : s.parcels}</td>
                       <td className={td}>{s.reportRows}</td>
                       <td className={td}>
@@ -265,7 +292,7 @@ function LegacyImportPage() {
                               <Trash2 className="h-3.5 w-3.5" /> Устгах
                             </button>
                           )}
-                          {(s.status === "draft" || s.status === "failed") && (
+                          {s.status === "failed" && (
                             <button title="Устгах" className="text-slate-400 hover:text-[#f8285a]" onClick={() => remove(s.id)}>
                               <Trash2 className="h-4 w-4" />
                             </button>

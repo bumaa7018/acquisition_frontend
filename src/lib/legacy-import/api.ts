@@ -174,6 +174,8 @@ export interface ReportView {
     areaDiffs: number;
     balanced: number;
     duplicates: number;
+    /** Өмчлөгчийн овог нэр/регистр дутуу эсвэл зөрүүтэй мөр. */
+    ownerIssues?: number;
     /** «Зөвхөн үнэлгээ» */
     excel?: number;
     synthetic?: number;
@@ -262,6 +264,8 @@ export interface SessionListItem {
   status: ImportState["session"]["status"];
   mode: ImportMode;
   acquisitions: number;
+  /** Оруулсан чөлөөлөлтийн нэрс (оруулж амжаагүй бол үүсэх байсных). */
+  acquisitionNames?: string[];
   parcels: number;
   reportRows: number;
   /** Оруулсан бөгөөд импортын бүртгэл (устгах жагсаалт) нь байгаа эсэх. */

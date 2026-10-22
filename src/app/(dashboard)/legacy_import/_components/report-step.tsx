@@ -9,7 +9,11 @@ import {
   ReadOnlyNotice,
 } from "./shared";
 
-type Filter = "diff" | "missing" | "area" | "all";
+type Filter = "diff" | "missing" | "area" | "owner" | "all";
+
+/** Өмчлөгчийн овог нэр/регистр дутуу эсвэл зөрүүтэй (backend: ownerIssues). */
+export const hasOwnerIssue = (row: ReportRow) =>
+  row.issues.some((i) => i.level === "warning" && i.code.startsWith("owner_"));
 
 const MATCH_LABEL: Partial<Record<ReportRow["match"], string>> = {
   staged: "нэгж талбарын файлд",
@@ -61,8 +65,11 @@ export function ReportStep({
     if (filter === "diff") return list.filter((r) => r.match !== "staged");
     if (filter === "missing") return list.filter((r) => r.match === "missing" || r.gusOrigin === "ub");
     if (filter === "area") return list.filter((r) => r.issues.some((i) => i.code === "area_diff"));
+    if (filter === "owner") return list.filter(hasOwnerIssue);
     return list;
   }, [view, filter]);
+  // Өмнө шалгасан (энэ шалгалтаас өмнөх) импортод stats.ownerIssues байхгүй.
+  const ownerRows = view?.stats.ownerIssues ?? (view?.rows ?? []).filter(hasOwnerIssue).length;
 
   return (
     <div className="space-y-4">
@@ -90,7 +97,7 @@ export function ReportStep({
       {view && (
         <div className="ap-card space-y-4 p-4">
           <FileResults files={view.files} />
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-9">
             <Stat label="Үнэлгээний мөр" value={fmt(view.stats.rows)} />
             <Stat label="Нийт дүн (₮)" value={fmt(view.stats.totalAmount)} />
             <Stat label="Файлд таарсан" value={fmt(view.stats.staged)} tone="good" />
@@ -100,6 +107,7 @@ export function ReportStep({
               hint={`${fmt(view.stats.missingAmount)}₮`} />
             <Stat label="Үнэлгээгүй нэгж талбар" value={fmt(view.stats.withoutReport)} tone={view.stats.withoutReport ? "warn" : "good"} />
             <Stat label="Талбайн зөрүү" value={fmt(view.stats.areaDiffs)} tone={view.stats.areaDiffs ? "warn" : "good"} />
+            <Stat label="Өмчлөгчийн зөрүү" value={fmt(ownerRows)} tone={ownerRows ? "warn" : "good"} hint="нэр / регистр" />
           </div>
 
           {view.parcelsWithoutReport.length > 0 && (
@@ -116,6 +124,7 @@ export function ReportStep({
               ["diff", `Нэгж талбарын зөрүү (${view.rows.filter((r) => r.match !== "staged").length})`],
               ["missing", `ГУС-аас татагдаагүй (${view.stats.missing + view.stats.gusFromUb})`],
               ["area", `Талбайн зөрүү (${view.stats.areaDiffs})`],
+              ["owner", `Өмчлөгч (${ownerRows})`],
               ["all", `Бүгд (${view.rows.length})`],
             ] as [Filter, string][]).map(([key, label]) => (
               <button key={key} onClick={() => setFilter(key)}
