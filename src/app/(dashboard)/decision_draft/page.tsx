@@ -24,6 +24,7 @@ import { DecisionDraftForm, type DecisionDraftFormValue } from "./_components/de
 import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { AmountHint } from "@/components/ui/amount-hint";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const EMPTY_FILTER = {
   proposal_no: "",
@@ -675,6 +676,7 @@ export default function DecisionDraftListPage() {
             <Search className="h-3.5 w-3.5" />
             Хайх
           </button>
+          <RefreshButton />
 
           {hasFilter && (
             <button

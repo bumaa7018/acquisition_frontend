@@ -10,11 +10,13 @@ import {
   type SortState,
 } from "@/components/ui/sortable-table-head";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertCircle, Check, Download, Info, RefreshCw, X } from "lucide-react";
 import { landApi, parcelStatusApi } from "@/lib/api";
 import { profApi } from "@/lib/prof-api";
 import { getApiError } from "@/lib/utils";
+import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { runSequentialWithDelay } from "@/lib/sequential-runner";
 import { canAccessParcel, getCurrentOrgId, isExternalSpecialRole, isFinanceSpecialist, isProfessionalOrg } from "@/lib/role-utils";
 import { VALUATION_STATUS_LABELS, VALUATION_TYPE_LABELS } from "@/types";
@@ -23,6 +25,7 @@ import type { ParcelDiscoveryResult, ParcelStatus, ValuationStatus, ValuationTyp
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
@@ -168,6 +171,7 @@ export function ParcelsTab({
   isBeforeFieldStage?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
   const statusStyle = useParcelStatusStyle();
   // «Үнэлгээний шат» — төлөвийн ТОХИРГООНООС (гадаад байгууллагын харагдах мөр).
@@ -551,6 +555,7 @@ export function ParcelsTab({
             >
               Хайх
             </button>
+            <RefreshButton className="h-8 w-8" />
             {hasFilter && (
               <button
                 onClick={() => {
@@ -601,11 +606,25 @@ export function ParcelsTab({
                   const cashAmt = Number(p.cash_amount) || 0;
                   const landGrantAmt = Number(p.land_grant_amount) || 0;
                   const landGrantCount = Number(p.land_grant_count) || 0;
+                  const locked = isMainProfOrg && isAcqLocked;
+                  const detailHref = `/parcel/${p.id}?acq=${id}`;
 
                   return (
                     <React.Fragment key={p.id}>
                       <tr
-                        className={`border-b transition-colors ${
+                        onClick={(e) => {
+                          if (locked) return;
+                          // Дотор нь байгаа холбоос/товч өөрөө ажиллана; текст сонгож байвал шилжихгүй.
+                          if ((e.target as HTMLElement).closest("a, button")) return;
+                          if (window.getSelection()?.toString()) return;
+                          if (e.metaKey || e.ctrlKey) {
+                            window.open(detailHref, "_blank");
+                            return;
+                          }
+                          notifyNavStart(undefined, detailHref);
+                          router.push(detailHref);
+                        }}
+                        className={`border-b transition-colors ${locked ? "" : "cursor-pointer "}${
                           p.has_overlap
                             // БАЙРШЛЫН ДАВХАРДАЛ — мөр бүхэлдээ улаанаар
                             // тодрох ёстой: давхардалтай хэвээр "Хээрийн
@@ -727,14 +746,15 @@ export function ParcelsTab({
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
-                            {isMainProfOrg && isAcqLocked ? (
+                            {locked ? (
                               <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 px-2.5 py-1 text-[11px] font-medium cursor-not-allowed select-none">
                                 🔒 Хаалттай
                               </span>
                             ) : (
                               <Link
                                 prefetch={false}
-                                href={`/parcel/${p.id}?acq=${id}`}
+                                href={detailHref}
+                                onClick={notifyNavStart}
                                 className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors"
                               >
                                 <Info className="h-3 w-3" /> Дэлгэрэнгүй

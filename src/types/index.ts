@@ -392,6 +392,58 @@ export interface LandAcquisitionUpdateResult extends LandAcquisition {
  * Судалгааны эх баримт нь ЗААВАЛ PDF — олон файл сонгосон бол browser дээр
  * НЭГ PDF болж нэгтгэгдэн хадгалагдана. file_url нь /api/files харьцангуй зам.
  */
+/** Шилжин суурьшсан байршил: Гэр хороолол | Орон сууц */
+export type RelocationType = "ger_district" | "apartment";
+
+/**
+ * Чөлөөлөгдсөн газрын судалгаа — нэгж талбарт НЭГ бүртгэл. Нэгж талбар
+ * үүсэхэд хоосон бүртгэл backend-д автоматаар үүснэ.
+ * Тоон хариулт 1 | 2 | 3 (3 = «3+»), хариулаагүй бол null.
+ */
+export interface ParcelSurvey {
+  id: string;
+  /** parcel.id (uuid) */
+  parcel_id: string;
+  /** Утаат яндангийн тоо */
+  chimney_count: number | null;
+  /** Нүхэн жорлон гаргасан тоо */
+  toilet_count: number | null;
+  /** Гэр сууцанд хамтран амьдрагчийн тоо */
+  cohabitant_count: number | null;
+  relocation_type: RelocationType | "";
+  relocation_address: string;
+  note: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string;
+}
+
+export type ParcelSurveyInput = Pick<
+  ParcelSurvey,
+  "chimney_count" | "toilet_count" | "cohabitant_count" | "relocation_type" | "relocation_address" | "note"
+>;
+
+export interface ParcelSurveyRow extends ParcelSurvey {
+  /** Нэгж талбарын дугаар */
+  parcel_code: string;
+  acquisition_id: string;
+  acquisition_name: string;
+  au3_code: string;
+}
+
+/** Асуулт бүрийн хариултын тоо — түлхүүр нь хариулт ("1" | "2" | "3" эсвэл RelocationType). */
+export interface ParcelSurveySummary {
+  /** Бүх нэгж талбарын судалгаа (хоосон нь орно) */
+  total: number;
+  /** Бөглөсөн судалгаа — хариултын хувийг үүнээс бодно */
+  answered: number;
+  chimney_counts: Record<string, number>;
+  toilet_counts: Record<string, number>;
+  cohabitant_counts: Record<string, number>;
+  relocation_counts: Record<string, number>;
+}
+
 export interface AcquisitionSocioSurvey {
   id: string;
   acquisition_id: string;

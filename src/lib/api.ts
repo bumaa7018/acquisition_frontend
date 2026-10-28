@@ -67,7 +67,7 @@ import type {
   AuditLog,
   FinanceDashboardData, FinanceDashboardFilter,
   Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
-  AcquisitionProgress, AcquisitionSocioSurvey, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
+  AcquisitionProgress, AcquisitionSocioSurvey, ParcelSurvey, ParcelSurveyInput, ParcelSurveyRow, ParcelSurveySummary, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
   ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, DocumentType,
@@ -1415,6 +1415,29 @@ export const parcelApi = {
 //
 // Уншилтыг нэвтэрсэн бүх хэрэглэгч хийнэ (газрын зураг ижил суурь зурагтай
 // байх ёстой), СОЛИХ нь admin:update эрхтэйд (backend хаалгална).
+// Чөлөөлөгдсөн газрын судалгаа — нэгж талбарт НЭГ бүртгэл (parcel.id-гаар).
+export const parcelSurveyApi = {
+  get: (parcelUuid: string) =>
+    api.get<ApiResponse<ParcelSurvey | null>>(`/parcels/${parcelUuid}/survey`).then(r => r.data.data ?? null),
+  save: (parcelUuid: string, body: ParcelSurveyInput) =>
+    api.put<ApiResponse<ParcelSurvey>>(`/parcels/${parcelUuid}/survey`, body).then(r => r.data.data),
+  // Хариултыг хоосолно — бүртгэл нэгж талбартайгаа үлдэнэ.
+  clear: (parcelUuid: string) =>
+    api.delete(`/parcels/${parcelUuid}/survey`),
+  list: (params?: { page?: number; page_size?: number; acquisition_id?: string; parcel_id?: string; answered?: boolean }) =>
+    api.get<PaginatedResponse<ParcelSurveyRow>>('/parcel-surveys', { params }).then(r => r.data),
+  // acquisition_ids — давтан `acquisition_id` болж очно (хоосон бол бүх нэгж талбар).
+  summary: (params?: { acquisition_ids?: string[]; parcel_id?: string }, opts?: { silent?: boolean }) => {
+    const q = new URLSearchParams()
+    params?.acquisition_ids?.forEach(id => q.append('acquisition_id', id))
+    if (params?.parcel_id) q.set('parcel_id', params.parcel_id)
+    const suffix = q.toString()
+    return api
+      .get<ApiResponse<ParcelSurveySummary>>(`/parcel-surveys/summary${suffix ? `?${suffix}` : ''}`, { _silent: opts?.silent })
+      .then(r => r.data.data)
+  },
+}
+
 export const settingsApi = {
   // Тохируулаагүй үед data=null ирнэ — дэлгэц өгөгдмөл суурь зургаа хэрэглэнэ.
   getBasemap: () =>

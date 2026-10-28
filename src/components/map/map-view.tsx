@@ -193,6 +193,11 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
   // 3D (cesium-3d.ts): Байршил табтай ижил зарчим — зөвхөн хэрэглэгч сонгоход л ачаална
   const cesium3D       = useRef<Cesium3DHandle | null>(null)
   const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(containerRef)
+  // Зумлалтын эффект нь бүтэн дэлгэц солигдоход ДАХИН ажиллахгүй байхаар ref-ээр уншина.
+  const fullscreenRef = useRef(isFullscreen)
+  fullscreenRef.current = isFullscreen
+  const hasOverlayRef = useRef(!!fullscreenOverlay)
+  hasOverlayRef.current = !!fullscreenOverlay
 
   const [layers, setLayers] = useState<LayerConfig[]>(
     STATIC_LAYER_DEFS.map(d => ({ id: d.id, label: d.label, color: d.color, visible: isDefaultVisible(d.id), group: d.group, hatch: d.hatch }))
@@ -561,6 +566,9 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
     // үлддэг байв. cqlFilter хоосон бол fitLayerToMap нь бүх чөлөөлөлтийн
     // хүрээгээр (max 500 объект) багтаана.
     if (olMap.current) {
+      // Бүтэн дэлгэцэд зүүн талын статистикийн самбар (~450px) зургийг халхалдаг
+      // тул зүүн зайг нэмнэ — эс бөгөөс чөлөөлөлт самбарын доор/хажууд багтана.
+      const overlayLeft = fullscreenRef.current && hasOverlayRef.current ? 470 : 48
       void fitLayerToMap({
         map: olMap.current,
         wfsUrl: GS_WFS,
@@ -569,9 +577,10 @@ export default function MapView({ acquisitionIds, years, au1Codes, au2Codes, au3
         // Хуучин бүртгэлд plan_geom хоосон байж болох тул geometry-г сонгов.
         layerId: 'v_acquisition_boundary',
         cqlFilter: acqCql || undefined,
-        padding: [48, 48, 48, 48],
-        // maxZoom заахгүй — хиймэл хязгаар (өмнө нь 16) байхгүй, олдсон
-        // хэсэг рүү бүрэн ойртоно.
+        padding: [72, 72, 72, overlayLeft],
+        // Ганц жижиг чөлөөлөлт (ж: самбараас нэгийг сонгосон) дэлгэц дүүрэн
+        // томрохгүй — орчин тойрон нь харагдах хэмжээнд хязгаарлана.
+        maxZoom: 17,
       })
     }
   }, [acquisitionIds, years, au1Codes, au2Codes, au3Codes, filterPending, employeeId, makeWmsLayer, layerDefs, chronosScoped])

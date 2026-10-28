@@ -38,6 +38,7 @@ const ROUTE_GUARDS: { match: (p: string) => boolean; allow: () => boolean }[] = 
   { match: (p) => p.startsWith("/roles"), allow: canViewRoles },
   { match: (p) => p.startsWith("/audit_logs"), allow: () => hasPermission("audit:read") },
   { match: (p) => p.startsWith("/legacy_import"), allow: canImportLegacyData },
+  { match: (p) => p.startsWith("/parcel_survey"), allow: () => hasPermission("land:read") },
   // Тайлан нь БҮХ чөлөөлөлтийг нэгтгэдэг тул backend дээр ахлах мэргэжилтнээр
   // хязгаарлагдсан (`/report/download`, `/report/summary`) — UI мөн тэгнэ.
   { match: (p) => p.startsWith("/report"), allow: isSeniorSpecialist },

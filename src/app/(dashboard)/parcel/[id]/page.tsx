@@ -17,6 +17,7 @@ import {
   UserCheck,
   Gavel,
   Landmark,
+  ClipboardList,
 } from "lucide-react";
 import Link from "next/link";
 import { type Tab } from "./_components/constants";
@@ -28,9 +29,11 @@ import { DocumentsTab } from "./_components/documents_tab";
 import { FinanceTab } from "./_components/finance_tab";
 import { PrintTemplatesTab } from "./_components/print_templates_tab";
 import { DecreeTab } from "./_components/decree_tab";
+import { SurveyTab } from "./_components/survey_tab";
 import {
   canAccessParcel,
   canViewParcelTab,
+  hasPermission,
   isExternalSpecialRole,
   isFinanceSpecialist,
   shouldUseProfessionalOrgApi,
@@ -133,6 +136,11 @@ export default function ParcelDetailPage() {
     { key: "decree", label: "Захирамж", icon: <Gavel className="h-4 w-4" /> },
     { key: "print", label: "Эх хэвлэл", icon: <Printer className="h-4 w-4" /> },
     { key: "progress", label: "Явц", icon: <Activity className="h-4 w-4" /> },
+    {
+      key: "survey",
+      label: "Судалгаа",
+      icon: <ClipboardList className="h-4 w-4" />,
+    },
   ];
   // Таб бүр хандах эрхийн бодлогоор (access-policy) харагдана.
   // mounted шалгалт — SSR/hydration үед localStorage-ийн токен байхгүй тул хойшлуулна.
@@ -357,6 +365,11 @@ export default function ParcelDetailPage() {
       )}
       {activeTab === "decree" && <DecreeTab parcelId={id} />}
       {activeTab === "print" && <PrintTemplatesTab parcel={parcel} />}
+      {/* Судалгааг нөхөх олговор олгосны ДАРАА авдаг тул баталгаажсан
+          чөлөөлөлтөд ч засна (backend мөн түгжээгүй) — зөвхөн land:update. */}
+      {activeTab === "survey" && (
+        <SurveyTab parcelId={id} canEdit={!isExternal && hasPermission("land:update")} />
+      )}
     </div>
   );
 }

@@ -1194,17 +1194,18 @@ export default function DashboardPage() {
   }, [appliedFilter]);
 
   /* ── Dashboard API — mount хийхэд одоогийн оноор, "Харах" дарахад шүүлтүүрээр дуудна ── */
+  const fetchDashboard = (f: typeof appliedFilter) => dashboardApi.get({
+    acquisition_id:     f.acqId || undefined,
+    plan_code:          f.planCode || undefined,
+    years:              f.years.map(Number).filter(Boolean),
+    general_category_id: f.genCatId || undefined,
+    sub_category_id:    f.subCatId || undefined,
+    assigned_user_id:   f.employeeId || undefined,
+    au2_code:           f.au2Code || undefined,
+  });
   const { data: dashDataRaw, isLoading } = useQuery({
     queryKey: ["dashboard", appliedFilter],
-    queryFn: () => dashboardApi.get({
-      acquisition_id:     appliedFilter.acqId || undefined,
-      plan_code:          appliedFilter.planCode || undefined,
-      years:              appliedFilter.years.map(Number).filter(Boolean),
-      general_category_id: appliedFilter.genCatId || undefined,
-      sub_category_id:    appliedFilter.subCatId || undefined,
-      assigned_user_id:   appliedFilter.employeeId || undefined,
-      au2_code:           appliedFilter.au2Code || undefined,
-    }),
+    queryFn: () => fetchDashboard(appliedFilter),
     staleTime: 60_000,
     enabled: roleReady && !isProfOrg && !isOtherExternal,
   });
@@ -1329,8 +1330,62 @@ export default function DashboardPage() {
     <ChronosTimeline months={chronos.months} counts={chronos.counts} value={asOfIdx} onChange={setAsOfIdx}
       loading={chronos.isLoading} variant={variant} />
   );
-  const mapOverview = (
+  // Нэг чөлөөлөлтийг ХАЙЖ олсон үед бүтэн дэлгэцийн самбар түүн дээр нээгдэх ч
+  // ←-ээр «бүх чөлөөлөлт» рүү буцаж болно: тэр жагсаалт нь чөлөөлөлтийн хайлтгүй,
+  // бусад шүүлт нь ижил хариу (хайлтгүй үеийн дашбоардтай ижил кэш түлхүүр).
+  const acqSearched = !!(appliedFilter.acqId || appliedFilter.acqName || appliedFilter.planCode);
+  const searchedAcqId = acqSearched ? perf.single?.id ?? null : null;
+  const allFilter = useMemo(() => ({ ...appliedFilter, acqId: "", acqName: "", planCode: "" }), [appliedFilter]);
+  const { data: allDashData, isLoading: allLoading } = useQuery({
+    queryKey: ["dashboard", allFilter],
+    queryFn: () => fetchDashboard(allFilter),
+    staleTime: 60_000,
+    enabled: !!searchedAcqId,
+  });
+  const allFinanceFilter = useMemo(
+    () =>
+      searchedAcqId && !appliedFilter.genCatId && !appliedFilter.subCatId && !appliedFilter.employeeId
+        ? { years: overviewYears, au2_code: appliedFilter.au2Code || undefined }
+        : null,
+    [searchedAcqId, appliedFilter, overviewYears],
+  );
+  const { data: allFinance } = useQuery({
+    queryKey: ["map-overview", "finance", allFinanceFilter],
+    queryFn: () => dashboardApi.finance(allFinanceFilter!, { silent: true }),
+    enabled: !!allFinanceFilter,
+    staleTime: 60_000,
+    retry: false,
+  });
+  // «Бүх» үеийн газрын зураг — commitMap-ийн дүрэмтэй ижил (шүүлтгүй бол бүх давхарга).
+  const allMapIds = useMemo(() => {
+    const hasF = !!(appliedFilter.years.length > 0 || appliedFilter.employeeId || appliedFilter.genCatId || appliedFilter.subCatId || appliedFilter.au2Code);
+    if (!hasF) return undefined;
+    const ids = allDashData?.acquisitions.map((a) => a.id) ?? [];
+    return ids.length > 0 ? ids : ["__none__"];
+  }, [appliedFilter, allDashData?.acquisitions]);
+
+  // Бүтэн дэлгэцийн самбараас нэг чөлөөлөлт рүү орсон үед газрын зураг зөвхөн
+  // түүнийг харуулна (бусад чөлөөлөлтийн давхарга нуугдана). Шүүлт солигдоход
+  // зураг дахин үүсэх (самбар ч шинээр) тул энд ч цэвэрлэнэ. Хайж орсон үед
+  // анхны утга нь тэр чөлөөлөлт; null = «бүх» рүү буцсан.
+  const [focusAcqId, setFocusAcqId] = useState<string | null>(null);
+  const focusAcqIds = useMemo(() => (focusAcqId ? [focusAcqId] : undefined), [focusAcqId]);
+  const showAllOnMap = !!searchedAcqId && !focusAcqId;
+  const mapOverview = searchedAcqId ? (
     <AcquisitionOverviewPanel
+      onSelectAcquisition={setFocusAcqId}
+      initialSelectedId={searchedAcqId}
+      data={allDashData}
+      finance={allFinanceFilter ? allFinance ?? null : null}
+      loading={allLoading}
+      title={`Нийт ${allDashData?.acquisitions.length ?? 0} чөлөөлөлт`}
+      years={overviewYears}
+      showYears
+      showSurvey
+    />
+  ) : (
+    <AcquisitionOverviewPanel
+      onSelectAcquisition={setFocusAcqId}
       data={dashData}
       finance={overviewFinanceView}
       loading={isLoading}
@@ -1338,6 +1393,7 @@ export default function DashboardPage() {
       subtitle={perf.single?.plan_code}
       years={overviewYears}
       showYears
+      showSurvey
     />
   );
 
@@ -1381,7 +1437,10 @@ export default function DashboardPage() {
 
     const employeeId = appliedFilter.employeeId || undefined;
 
+    // Нэг чөлөөлөлт хайж олсон бол самбар түүн дээр нээгдэнэ (газрын зураг ч зөвхөн түүнийг).
+    const searched = appliedFilter.acqId || appliedFilter.acqName || appliedFilter.planCode;
     mapCommitKeyRef.current += 1;
+    setFocusAcqId(searched && rawAcqs.length === 1 ? rawAcqs[0].id : null);
     setMapCommit({ key: mapCommitKeyRef.current, acqIds, years, au1Codes, au2Codes, au3Codes, employeeId });
   }, [appliedFilter, rawAcqs, dashDataRaw]);
 
@@ -1888,7 +1947,7 @@ export default function DashboardPage() {
             ) : (
               <MapView
                 key={mapCommit.key}
-                acquisitionIds={mapCommit.acqIds}
+                acquisitionIds={focusAcqIds ?? (showAllOnMap ? allMapIds : mapCommit.acqIds)}
                 years={mapCommit.years}
                 au1Codes={mapCommit.au1Codes}
                 au2Codes={mapCommit.au2Codes}

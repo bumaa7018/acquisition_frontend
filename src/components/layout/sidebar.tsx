@@ -51,6 +51,7 @@ import {
   Hammer,
   Wallet,
   FileUp,
+  ClipboardList,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 
@@ -60,6 +61,8 @@ const NAV_MAIN = [
   { href: "/report", label: "Тайлан", icon: BarChart3 },
   { href: "/map", label: "Газрын зураг", icon: Map },
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
+  // Чөлөөлөгдсөн газрын судалгааны дүн — land:read эрхтэй ажилтанд.
+  { href: "/parcel_survey", label: "Газрын судалгаа", icon: ClipboardList },
   { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   // «Нөхөх олговрын түүх» цэсийг хассан — хуудас нь хуваарилалтаар хязгаарлагдахгүй
   // бүх чөлөөлөлтийн олговрыг харуулдаг байв. Мэдэгдлээс дэлгэрэнгүй
@@ -289,7 +292,12 @@ export function Sidebar() {
   const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
   // Захирамжийн төсөл — decision:read эрхтэй ажилтанд л харагдана.
   const [mainNav, setMainNav] = useState<typeof NAV_MAIN>(
-    NAV_MAIN.filter((item) => item.href !== "/decision_draft" && item.href !== "/legacy_import"),
+    NAV_MAIN.filter(
+      (item) =>
+        item.href !== "/decision_draft" &&
+        item.href !== "/legacy_import" &&
+        item.href !== "/parcel_survey",
+    ),
   );
 
   const allAdminHrefs = [...NAV_ADMIN, ...NAV_AUDIT, ...NAV_CONFIG, ...NAV_HR].map((i) => i.href);
@@ -328,12 +336,14 @@ export function Sidebar() {
     // backend дээр ахлах мэргэжилтнээр хязгаарлагдсан — цэсийг мөн тэгш байлгана.
     const showReport = isSeniorSpecialist();
     const showImport = canImportLegacyData();
+    const showSurvey = hasPermission("land:read");
     setMainNav(
       NAV_MAIN.filter(
         (item) =>
           (item.href !== "/decision_draft" || showDecision) &&
           (item.href !== "/report" || showReport) &&
-          (item.href !== "/legacy_import" || showImport),
+          (item.href !== "/legacy_import" || showImport) &&
+          (item.href !== "/parcel_survey" || showSurvey),
       ),
     );
     setReady(true);
@@ -369,7 +379,8 @@ export function Sidebar() {
   };
 
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    // Зөвхөн яг ижил эсвэл "/"-ээр үргэлжилсэн зам — "/parcel" нь "/parcel_survey"-д идэвхжихгүй.
+    href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 
   // Дэд цэс сонгогдсон үед эцэг цэс (Удирдлага / Хүний нөөц / Тохиргоо)
   // хураалттай байсан ч идэвхтэй өнгөөр ялгарч харагдана.

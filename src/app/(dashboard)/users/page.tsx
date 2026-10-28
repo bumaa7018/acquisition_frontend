@@ -35,6 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { EmployeeSelect } from "@/components/ui/employee-select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const PAGE_SIZE = 20;
 
@@ -580,6 +581,7 @@ export default function UsersPage() {
               <Search className="h-3.5 w-3.5" />
               Хайх
             </button>
+            <RefreshButton />
 
             {hasFilter && (
               <button

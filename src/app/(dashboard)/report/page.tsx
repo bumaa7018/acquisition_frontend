@@ -30,6 +30,7 @@ import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { AbbrevAmount, AmountHint } from "@/components/ui/amount-hint";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -1136,6 +1137,7 @@ export default function ReportPage() {
             <Search className="h-3.5 w-3.5" />
             Хайх
           </button>
+          <RefreshButton />
 
           {(hasActiveFilter ||
             inPlanCode ||

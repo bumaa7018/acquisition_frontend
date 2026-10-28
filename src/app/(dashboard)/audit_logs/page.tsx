@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { auditApi } from "@/lib/api";
 import { hasPermission } from "@/lib/role-utils";
 import { Activity, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const PAGE_SIZE = 20;
 
@@ -198,6 +199,7 @@ export default function AuditLogsPage() {
             <Search className="h-4 w-4" />
             Хайх
           </button>
+          <RefreshButton className="h-10 w-10" />
         </div>
       </form>
 

@@ -77,7 +77,8 @@ export type ParcelTabKey =
   | "documents"
   | "finance"
   | "decree"
-  | "print";
+  | "print"
+  | "survey";
 
 export type ValuationSubTabKey = "asset" | "independent" | "mika";
 
@@ -241,6 +242,10 @@ export function canViewParcelTabForActor(
   // "Захирамж" таб нь захирамжийн төслийн өгөгдлийг татдаг (decision:read)
   // — эрхгүй ажилтанд хоосон, 403-той таб харуулахгүй.
   if (tab === "decree") return canViewDecisionDraftsForActor(actor);
+  // «Судалгаа» — backend нь land:read шаарддаг; гадаад ролиудад хаалттай.
+  if (tab === "survey") {
+    return !isExternalSpecialActor(actor) && actorHasPermission(actor, "land:read");
+  }
   if (!isExternalSpecialActor(actor)) return true;
   // Мэргэжлийн байгууллага эзэмшигчийн мэдээллийг нэмж харна
   if (isProfessionalOrgActor(actor) && tab === "holder") return true;

@@ -2,7 +2,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, FileSpreadsheet, Loader2, Paperclip, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Eye, FileSpreadsheet, Loader2, Paperclip, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { canImportLegacyData } from "@/lib/role-utils";
@@ -203,22 +203,52 @@ function LegacyImportPage() {
   const locked = state?.session.status === "committed" || state?.session.status === "committing" || state?.session.status === "rolled_back";
   const steps = STEPS[modeOf(state)];
   const nextStep = steps[steps.findIndex((s) => s.key === step) + 1];
+  // Дэлгэрэнгүйн гарчиг — импортын чөлөөлөлтийн нэр (файл оруулаагүй ноорогт хоосон).
+  const acquisitionNames = Array.from(
+    new Set(
+      state?.result?.acquisitions?.names?.length
+        ? state.result.acquisitions.names
+        : state?.summary?.acquisitions?.length
+          ? state.summary.acquisitions.map((a) => a.name)
+          : state?.boundary?.rows.length
+            ? state.boundary.rows.map((r) => r.name)
+            : (state?.reports?.projects ?? []).map((p) => p.name),
+    ),
+  ).filter(Boolean);
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white">Хуучин мэдээлэл оруулах</h1>
-          <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
-            Чөлөөлөлтийн хил, нэгж талбар, үнэлгээний файлыг шалгаж түр хадгална. «Оруулах» дарсны дараа л системд бүртгэгдэнэ.
-          </p>
-        </div>
+      <div className="flex items-start gap-3">
         {sessionID && (
-          <button className={secondaryButton} onClick={leave}
-            title={state?.session.status === "draft" ? "Оруулаагүй импорт хадгалагдахгүй — устгагдана" : undefined}>
-            Бүх импорт
+          <button
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-medium text-slate-600 transition-colors hover:border-[#02c0ce] hover:text-[#02c0ce] dark:border-[#37394d] dark:bg-[#1e1f27] dark:text-slate-300"
+            onClick={leave}
+            title={state?.session.status === "draft" ? "Импортын жагсаалт руу буцна. Оруулаагүй импорт хадгалагдахгүй — устгагдана" : "Импортын жагсаалт руу буцах"}>
+            <ArrowLeft className="h-4 w-4" /> Буцах
           </button>
         )}
+        <div className="min-w-0 flex-1">
+          {sessionID && acquisitionNames.length > 0 ? (
+            <>
+              <h1 className="break-words text-xl font-bold text-slate-800 dark:text-white" title={acquisitionNames.join("\n")}>
+                {acquisitionNames[0]}
+                {acquisitionNames.length > 1 && (
+                  <span className="ml-2 text-[13px] font-medium text-slate-400">+{acquisitionNames.length - 1} чөлөөлөлт</span>
+                )}
+              </h1>
+              <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+                Хуучин мэдээлэл оруулах{state && ` · ${STATUS_LABEL[state.session.status]}`}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-800 dark:text-white">Хуучин мэдээлэл оруулах</h1>
+              <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+                Чөлөөлөлтийн хил, нэгж талбар, үнэлгээний файлыг шалгаж түр хадгална. «Оруулах» дарсны дараа л системд бүртгэгдэнэ.
+              </p>
+            </>
+          )}
+        </div>
       </div>
 
       {!sessionID && showAttachments && <AttachmentsImport onClose={() => setShowAttachments(false)} />}
@@ -261,7 +291,21 @@ function LegacyImportPage() {
                 </thead>
                 <tbody>
                   {sessions.data.map((s) => (
-                    <tr key={s.id} className="border-b border-slate-50 align-top dark:border-white/[0.04]">
+                    <tr
+                      key={s.id}
+                      onClick={(e) => {
+                        // Дотор нь байгаа товч өөрөө ажиллана; текст сонгож байвал шилжихгүй.
+                        if ((e.target as HTMLElement).closest("a, button")) return;
+                        if (window.getSelection()?.toString()) return;
+                        const href = `/legacy_import?session=${s.id}`;
+                        if (e.metaKey || e.ctrlKey) {
+                          window.open(href, "_blank");
+                          return;
+                        }
+                        router.push(href);
+                      }}
+                      className="cursor-pointer border-b border-slate-50 align-top transition-colors hover:bg-[#02c0ce]/[0.07] dark:border-white/[0.04] dark:hover:bg-[#02c0ce]/[0.12]"
+                    >
                       <td className={td}>{new Date(s.updatedAt).toLocaleString("mn-MN")}</td>
                       <td className={td}>{s.createdBy}</td>
                       <td className={td}>

@@ -1,10 +1,15 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { BarChart3, LayoutDashboard, X } from "lucide-react";
-import { dashboardApi, type DashboardData } from "@/lib/api";
-import { getParcelStatusStyle, type FinanceDashboardData } from "@/types";
+import { ArrowLeft, BarChart3, LayoutDashboard, X } from "lucide-react";
+import { dashboardApi, parcelSurveyApi, type DashboardData } from "@/lib/api";
+import { getParcelStatusStyle, type FinanceDashboardData, type ParcelSurveySummary, type RelocationType } from "@/types";
+import {
+  RELOCATION_LABELS,
+  SURVEY_COUNT_OPTIONS,
+  SURVEY_COUNT_QUESTIONS,
+} from "@/lib/parcel-survey";
 import { StatusDot } from "@/components/ui/status-label";
 import { monthlyTimeline } from "@/lib/timeline-months";
 import { cn, formatBillion } from "@/lib/utils";
@@ -31,6 +36,14 @@ const VALUATION_TYPE_LABEL: Record<string, string> = {
   mika: "МИКА үнэлгээ",
 };
 
+type AcqBucket = "full" | "partial" | "fresh";
+const ACQ_BUCKETS: { key: AcqBucket; label: string; color: string }[] = [
+  { key: "full", label: "Бүрэн чөлөөлсөн", color: "#0acf97" },
+  { key: "partial", label: "Хэрэгжиж буй", color: "#f9bc0b" },
+  { key: "fresh", label: "Эхлээгүй", color: "#98a6ad" },
+];
+const bucketOf = (pct: number): AcqBucket => (pct >= 100 ? "full" : pct > 0 ? "partial" : "fresh");
+
 const fmtDate = (d?: string) => (d ? d.slice(0, 10) : "");
 
 const pct = (part: number, total: number) => (total > 0 ? Math.round((part * 100) / total) : 0);
@@ -44,15 +57,18 @@ const ha = (m2: number) => (m2 / 10_000).toLocaleString("mn-MN", { maximumFracti
  * `useAcquisitionOverview`-ээр).
  */
 export function AcquisitionOverviewPanel({
-  data,
-  finance,
-  loading,
-  title,
-  subtitle,
+  data: rootData,
+  finance: rootFinance,
+  loading: rootLoading,
+  title: rootTitle,
+  subtitle: rootSubtitle,
   years = [],
   showYears = false,
   embedded = false,
   onClose,
+  onSelectAcquisition,
+  initialSelectedId,
+  showSurvey = false,
 }: {
   data?: DashboardData;
   /** Санхүүжилт — нэг чөлөөлөлт сонгосон үед (эрхгүй бол null). */
@@ -70,10 +86,56 @@ export function AcquisitionOverviewPanel({
    */
   embedded?: boolean;
   onClose?: () => void;
+  /**
+   * «Чөлөөлөлтүүд» жагсаалтаас нэгийг сонгох/буцах үед (null) — газрын зураг
+   * бусад чөлөөлөлтийн давхаргыг нуухад. Самбар хаагдах (бүтэн дэлгэцээс гарах) үед
+   * initialSelectedId (байхгүй бол null).
+   */
+  onSelectAcquisition?: (id: string | null) => void;
+  /**
+   * Самбар нээгдэхэд шууд энэ чөлөөлөлтийн дэлгэрэнгүйг харуулна (← нь `data`-гийн
+   * бүх чөлөөлөлт рүү буцна). Хаагдах үед onSelectAcquisition-д энэ утгыг буцааж өгнө.
+   */
+  initialSelectedId?: string | null;
+  /** «Захирамжийн төсөл»-ийн доор газрын судалгааны (санал асуулга) статистик. */
+  showSurvey?: boolean;
 }) {
   // Бүтэн дэлгэцэд орохтой зэрэг НЭЭЛТТЭЙ; ✕-ээр хаавал «Статистик» товчоор дахин нээнэ.
   const [openState, setOpen] = useState(true);
   const open = embedded || openState;
+
+  // «Чөлөөлөлтүүд» жагсаалтаас нэгийг сонгоход тэр чөлөөлөлтийн дэлгэрэнгүй (←-ээр буцна).
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
+  const rootAcqs = rootData?.acquisitions ?? [];
+  const drillAcq = selectedId ? rootAcqs.find((a) => a.id === selectedId) : undefined;
+  const drill = useAcquisitionOverview(drillAcq?.id ?? "", !!drillAcq, years);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // «Чөлөөлөлтүүд» жагсаалтыг гүйцэтгэлийн ангиллаар шүүх — олныг зэрэг сонгож болно
+  // (чип дээр дахин дарвал тэр ангиллыг хасна; хоосон бол бүгд).
+  const [bucketFilter, setBucketFilter] = useState<Set<AcqBucket>>(() => new Set());
+  const toggleBucket = (b: AcqBucket) =>
+    setBucketFilter((cur) => {
+      const next = new Set(cur);
+      if (next.has(b)) next.delete(b);
+      else next.add(b);
+      return next;
+    });
+  const filtering = bucketFilter.size > 0;
+  const onSelectRef = useRef(onSelectAcquisition);
+  onSelectRef.current = onSelectAcquisition;
+  const initialIdRef = useRef(initialSelectedId ?? null);
+  useEffect(() => () => onSelectRef.current?.(initialIdRef.current), []);
+  const selectAcq = (id: string | null) => {
+    setSelectedId(id);
+    onSelectAcquisition?.(id);
+    bodyRef.current?.scrollTo({ top: 0 });
+  };
+
+  const data = drillAcq ? drill.data : rootData;
+  const finance = drillAcq ? drill.finance : rootFinance;
+  const loading = drillAcq ? drill.loading : rootLoading;
+  const title = drillAcq ? drillAcq.acquisition_name || drillAcq.plan_code : rootTitle;
+  const subtitle = drillAcq ? rootTitle : rootSubtitle;
 
   const statuses = useMemo(() => {
     const colors = new Map((data?.parcel_statuses ?? []).map((s) => [s.id, s.color]));
@@ -92,6 +154,14 @@ export function AcquisitionOverviewPanel({
   const monthTotal = months.reduce((s, m) => s + m.count, 0);
 
   const acqs = useMemo(() => data?.acquisitions ?? [], [data?.acquisitions]);
+  const surveyAcqIds = useMemo(() => acqs.map((a) => a.id).sort(), [acqs]);
+  const { data: survey } = useQuery({
+    queryKey: ["parcel-surveys", "summary", "overview", surveyAcqIds],
+    queryFn: () => fetchSurveySummary(surveyAcqIds),
+    enabled: showSurvey && surveyAcqIds.length > 0,
+    staleTime: 60_000,
+    retry: false,
+  });
   const single = acqs.length === 1 ? acqs[0] : null;
   const total = data?.total_parcels ?? 0;
   const finalCount = acqs.reduce((s, a) => s + (a.final_parcel_count ?? 0), 0);
@@ -114,9 +184,10 @@ export function AcquisitionOverviewPanel({
     [acqs],
   );
   const acqBuckets = acqProgress.reduce(
-    (c, a) => (a.pct >= 100 ? { ...c, full: c.full + 1 } : a.pct > 0 ? { ...c, partial: c.partial + 1 } : { ...c, fresh: c.fresh + 1 }),
-    { full: 0, partial: 0, fresh: 0 },
+    (c, a) => ({ ...c, [bucketOf(a.pct)]: c[bucketOf(a.pct)] + 1 }),
+    { full: 0, partial: 0, fresh: 0 } as Record<AcqBucket, number>,
   );
+  const visibleAcqs = filtering ? acqProgress.filter((a) => bucketFilter.has(bucketOf(a.pct))) : acqProgress;
   const structure = finance
     ? [
         { label: "Газар", color: "#0acf97", value: finance.land_amount },
@@ -152,7 +223,19 @@ export function AcquisitionOverviewPanel({
       onWheel={(e) => e.stopPropagation()}
     >
       <div className="flex items-start gap-2 border-b border-slate-100 px-4 py-3 dark:border-[#37394d]">
-        <LayoutDashboard className="mt-0.5 h-4 w-4 shrink-0 text-[#02c0ce]" />
+        {drillAcq ? (
+          <button
+            type="button"
+            onClick={() => selectAcq(null)}
+            title="Бүх чөлөөлөлт рүү буцах"
+            aria-label="Буцах"
+            className="-ml-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#02c0ce] dark:text-slate-300 dark:hover:bg-[#252630]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+        ) : (
+          <LayoutDashboard className="mt-0.5 h-4 w-4 shrink-0 text-[#02c0ce]" />
+        )}
         <div className="min-w-0 flex-1">
           <p className="break-words text-[13px] font-bold leading-snug text-slate-800 dark:text-white">{title}</p>
           {showYears && (
@@ -177,7 +260,7 @@ export function AcquisitionOverviewPanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div ref={bodyRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
           {loading && !data ? (
             <div className="space-y-2">
               {[0, 1, 2, 3].map((i) => (
@@ -243,26 +326,43 @@ export function AcquisitionOverviewPanel({
 
               {/* Олон чөлөөлөлт — гүйцэтгэлээр */}
               {acqProgress.length > 0 && (
-                <Section title="Чөлөөлөлтүүд" right={`${acqProgress.length}`}>
+                <Section
+                  title="Чөлөөлөлтүүд"
+                  right={filtering ? `${visibleAcqs.length} / ${acqProgress.length}` : `${acqProgress.length}`}
+                >
                   <div className="mb-2 grid grid-cols-3 gap-1.5 text-center">
-                    <DecisionChip label="Бүрэн чөлөөлсөн" value={acqBuckets.full} color="#0acf97" />
-                    <DecisionChip label="Хэрэгжиж буй" value={acqBuckets.partial} color="#f9bc0b" />
-                    <DecisionChip label="Эхлээгүй" value={acqBuckets.fresh} color="#98a6ad" />
+                    {ACQ_BUCKETS.map((b) => (
+                      <DecisionChip
+                        key={b.key}
+                        label={b.label}
+                        value={acqBuckets[b.key]}
+                        color={b.color}
+                        active={bucketFilter.has(b.key)}
+                        dimmed={filtering && !bucketFilter.has(b.key)}
+                        onClick={() => toggleBucket(b.key)}
+                      />
+                    ))}
                   </div>
-                  <ul className="space-y-1.5">
-                    {acqProgress.slice(0, 10).map((a) => (
-                      <li key={a.id} className="text-[12px]">
-                        <div className="flex items-start justify-between gap-2">
-                          <span className="min-w-0 flex-1 break-words text-slate-600 dark:text-slate-300">{a.name}</span>
-                          <span className="shrink-0 tabular-nums font-semibold text-slate-800 dark:text-white">{a.pct}%</span>
-                        </div>
-                        <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
-                          <div className="h-full bg-[#02c0ce]" style={{ width: `${Math.min(100, a.pct)}%` }} />
-                        </div>
+                  {visibleAcqs.length === 0 && <p className="px-1.5 text-[12px] text-slate-500">Чөлөөлөлт алга</p>}
+                  <ul className="max-h-64 space-y-0.5 overflow-y-auto pr-1">
+                    {visibleAcqs.map((a) => (
+                      <li key={a.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectAcq(a.id)}
+                          className="group block w-full rounded-md px-1.5 py-1 text-left text-[12px] hover:bg-slate-50 dark:hover:bg-white/[0.04]"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <span className="min-w-0 flex-1 break-words text-slate-600 group-hover:text-[#02c0ce] dark:text-slate-300">{a.name}</span>
+                            <span className="shrink-0 tabular-nums font-semibold text-slate-800 dark:text-white">{a.pct}%</span>
+                          </div>
+                          <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                            <div className="h-full bg-[#02c0ce]" style={{ width: `${Math.min(100, a.pct)}%` }} />
+                          </div>
+                        </button>
                       </li>
                     ))}
                   </ul>
-                  {acqProgress.length > 10 && <p className="mt-1 text-[11px] text-slate-400">… бусад {acqProgress.length - 10}</p>}
                 </Section>
               )}
 
@@ -379,6 +479,34 @@ export function AcquisitionOverviewPanel({
                 </Section>
               )}
 
+              {/* Газрын судалгаа (санал асуулга) — хариулт бүрийн тоо */}
+              {showSurvey && survey && survey.total > 0 && (
+                <Section title="Газрын судалгаа" right={`${survey.answered.toLocaleString()} / ${survey.total.toLocaleString()} бөглөсөн`}>
+                  <div className="space-y-1.5">
+                    {SURVEY_COUNT_QUESTIONS.map((q) => (
+                      <SurveyRow
+                        key={q.field}
+                        title={q.title}
+                        // Хариулт бүрийг тоогоор нь үржүүлж нийлбэрийг харуулна («3+» нь 3-аар бодогдоно)
+                        options={[
+                          {
+                            label: "Нийт",
+                            value: SURVEY_COUNT_OPTIONS.reduce((s, n) => s + n * (survey[q.summaryKey][String(n)] ?? 0), 0),
+                          },
+                        ]}
+                      />
+                    ))}
+                    <SurveyRow
+                      title="Шилжин суурьшсан"
+                      options={(Object.keys(RELOCATION_LABELS) as RelocationType[]).map((v) => ({
+                        label: RELOCATION_LABELS[v],
+                        value: survey.relocation_counts[v] ?? 0,
+                      }))}
+                    />
+                  </div>
+                </Section>
+              )}
+
               {/* Сараар чөлөөлсөн */}
               <Section title="Сараар чөлөөлсөн нэгж талбар" right={monthTotal > 0 ? `${monthTotal}` : undefined}>
                 {monthTotal === 0 ? (
@@ -419,6 +547,48 @@ function Section({ title, right, children }: { title: string; right?: string; ch
   );
 }
 
+function SurveyRow({ title, options }: { title: string; options: { label: string; value: number }[] }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-[120px] shrink-0 text-[12px] leading-tight text-slate-500 dark:text-slate-400">{title}</span>
+      <div className="grid flex-1 gap-1.5 text-center" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+        {options.map((o) => (
+          <DecisionChip key={o.label} label={o.label} value={o.value} color="#02c0ce" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// URL хэт урт болохоос сэргийлж чөлөөлөлтүүдийг багцлан татаж нийлбэрийг нь авна.
+const SURVEY_ID_CHUNK = 100;
+
+async function fetchSurveySummary(acquisitionIds: string[]): Promise<ParcelSurveySummary> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < acquisitionIds.length; i += SURVEY_ID_CHUNK) chunks.push(acquisitionIds.slice(i, i + SURVEY_ID_CHUNK));
+  const parts = await Promise.all(chunks.map((ids) => parcelSurveyApi.summary({ acquisition_ids: ids }, { silent: true })));
+  const sum: ParcelSurveySummary = {
+    total: 0,
+    answered: 0,
+    chimney_counts: {},
+    toilet_counts: {},
+    cohabitant_counts: {},
+    relocation_counts: {},
+  };
+  const add = (into: Record<string, number>, from: Record<string, number> | undefined) => {
+    for (const [k, n] of Object.entries(from ?? {})) into[k] = (into[k] ?? 0) + n;
+  };
+  for (const p of parts) {
+    sum.total += p.total;
+    sum.answered += p.answered;
+    add(sum.chimney_counts, p.chimney_counts);
+    add(sum.toilet_counts, p.toilet_counts);
+    add(sum.cohabitant_counts, p.cohabitant_counts);
+    add(sum.relocation_counts, p.relocation_counts);
+  }
+  return sum;
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-2">
@@ -452,12 +622,43 @@ function MoneyRow({ color, label, value }: { color: string; label: string; value
   );
 }
 
-function DecisionChip({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="rounded-lg bg-slate-50 px-1 py-1.5 dark:bg-white/[0.03]">
+function DecisionChip({
+  label,
+  value,
+  color,
+  active,
+  dimmed,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  active?: boolean;
+  dimmed?: boolean;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
       <p className="text-[15px] font-bold tabular-nums" style={{ color }}>{value}</p>
       <p className="text-[10px] leading-tight text-slate-500 dark:text-slate-400">{label}</p>
-    </div>
+    </>
+  );
+  if (!onClick) return <div className="rounded-lg bg-slate-50 px-1 py-1.5 dark:bg-white/[0.03]">{body}</div>;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? `${label} — шүүлтээс хасах` : `${label} — шүүлтэд нэмэх`}
+      className={cn(
+        "rounded-lg border bg-slate-50 px-1 py-1.5 transition-all hover:bg-slate-100 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]",
+        active ? "shadow-sm" : "border-transparent",
+        dimmed && "opacity-50",
+      )}
+      style={active ? { borderColor: color, background: `${color}14` } : undefined}
+    >
+      {body}
+    </button>
   );
 }
 
@@ -465,16 +666,17 @@ function DecisionChip({ label, value, color }: { label: string; value: number; c
  * Нэг чөлөөлөлтийн хураангуй (чөлөөлөлтийн хуудасны газрын зураг) — газрын
  * зураг бүтэн дэлгэцэд орох үед л татна. Санхүүгийн хэсэг эрхгүй бол (403) нуугдана.
  */
-export function useAcquisitionOverview(acquisitionId: string, enabled: boolean) {
+export function useAcquisitionOverview(acquisitionId: string, enabled: boolean, years?: number[]) {
+  const yearKey = years?.length ? [...years].sort((a, b) => a - b) : [];
   const dash = useQuery({
-    queryKey: ["map-overview", "dashboard", acquisitionId],
-    queryFn: () => dashboardApi.get({ acquisition_id: acquisitionId }, { silent: true }),
+    queryKey: ["map-overview", "dashboard", acquisitionId, yearKey],
+    queryFn: () => dashboardApi.get({ acquisition_id: acquisitionId, years: yearKey }, { silent: true }),
     enabled: enabled && !!acquisitionId,
     staleTime: 60_000,
   });
   const finance = useQuery({
-    queryKey: ["map-overview", "finance", acquisitionId],
-    queryFn: () => dashboardApi.finance({ acquisition_id: acquisitionId }, { silent: true }),
+    queryKey: ["map-overview", "finance", acquisitionId, yearKey],
+    queryFn: () => dashboardApi.finance({ acquisition_id: acquisitionId, years: yearKey }, { silent: true }),
     enabled: enabled && !!acquisitionId,
     staleTime: 60_000,
     retry: false,

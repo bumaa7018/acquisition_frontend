@@ -8,6 +8,7 @@ import { StatusLabel } from "@/components/ui/status-label";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AcquisitionSelect } from "./_components/acquisition_select";
 import { PlanSelect } from "./_components/plan_select";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
@@ -20,6 +21,7 @@ import {
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { YearMultiSelect } from "@/components/ui/year-multi-select";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -57,6 +59,7 @@ const COLUMNS: SortColumn[] = [
 ];
 
 export default function ParcelListPage() {
+  const router = useRouter();
   const [draft, setDraft] = useState(EMPTY);
   // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
   const statusStyle = useParcelStatusStyle();
@@ -226,6 +229,7 @@ export default function ParcelListPage() {
             <Search className="h-3.5 w-3.5" />
             Хайх
           </button>
+          <RefreshButton />
 
           {hasFilter && (
             <button
@@ -270,10 +274,22 @@ export default function ParcelListPage() {
                   const cashAmt = Number(p.cash_amount) || 0;
                   const landGrantAmt = Number(p.land_grant_amount) || 0;
                   const landGrantCount = Number(p.land_grant_count) || 0;
+                  const detailHref = `/parcel/${p.id}?acq=${p.acquisition_id}`;
                   return (
                     <tr
                       key={p.id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                      onClick={(e) => {
+                        // Дотор нь байгаа холбоос/товч өөрөө ажиллана; текст сонгож байвал шилжихгүй.
+                        if ((e.target as HTMLElement).closest("a, button")) return;
+                        if (window.getSelection()?.toString()) return;
+                        if (e.metaKey || e.ctrlKey) {
+                          window.open(detailHref, "_blank");
+                          return;
+                        }
+                        notifyNavStart(undefined, detailHref);
+                        router.push(detailHref);
+                      }}
+                      className="cursor-pointer transition-colors hover:bg-[#02c0ce]/[0.07] dark:hover:bg-[#02c0ce]/[0.12]"
                     >
                       <td className="px-4 py-3 align-top font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                         {p.parcel_id}
@@ -347,7 +363,7 @@ export default function ParcelListPage() {
                         {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                         <Link
                           prefetch={false}
-                          href={`/parcel/${p.id}?acq=${p.acquisition_id}`}
+                          href={detailHref}
                           onClick={notifyNavStart}
                           className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                         >

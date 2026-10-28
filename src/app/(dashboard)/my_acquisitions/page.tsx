@@ -8,6 +8,7 @@ import { formatDate, formatArea } from "@/lib/utils";
 import { Search, MapPin, ChevronLeft, ChevronRight, X, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -96,6 +97,7 @@ export default function MyAcquisitionsPage() {
         >
           Хайх
         </button>
+        <RefreshButton />
       </div>
 
       {/* Table */}

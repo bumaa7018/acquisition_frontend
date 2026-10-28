@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sortable-table-head";
 
 import Link from "next/link";
+import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { ProgressBadge } from "@/components/ui/progress-badge";
 
@@ -48,6 +49,7 @@ import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/components/ui/plan-code-search";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { YearMultiSelect } from "@/components/ui/year-multi-select";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
@@ -718,6 +720,7 @@ export default function LandPage() {
             <Search className="h-3.5 w-3.5" />
             Хайх
           </button>
+          <RefreshButton />
           {hasFilter && (
             <button
               onClick={clearAll}
@@ -764,10 +767,30 @@ export default function LandPage() {
               ) : (
                 displayData.map((land) => {
                   const sc = STATUS_CFG[land.status] ?? STATUS_CFG[1];
+                  // Гадны эрхтэнд баталгаажсан чөлөөлөлтийн дэлгэрэнгүй хаалттай.
+                  const locked = isExternal && land.status === ACQ_STATUS.CONFIRMED;
+                  const detailHref = `/acquisition/${land.id}`;
                   return (
                     <tr
                       key={land.id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
+                      onClick={(e) => {
+                        if (locked) return;
+                        // Дотор нь байгаа холбоос/товч өөрөө ажиллана; текст сонгож байвал шилжихгүй.
+                        if ((e.target as HTMLElement).closest("a, button")) return;
+                        if (window.getSelection()?.toString()) return;
+                        if (e.metaKey || e.ctrlKey) {
+                          window.open(detailHref, "_blank");
+                          return;
+                        }
+                        notifyNavStart(undefined, detailHref);
+                        router.push(detailHref);
+                      }}
+                      className={cn(
+                        "transition-colors",
+                        locked
+                          ? "hover:bg-slate-50/60 dark:hover:bg-[#252630]"
+                          : "cursor-pointer hover:bg-[#02c0ce]/[0.07] dark:hover:bg-[#02c0ce]/[0.12]",
+                      )}
                     >
                       {/* Нэр, ангиллын баганууд ТАСРАХГҮЙ: өмнө нь truncate
                           хийгдэж, урт нэрийг огт уншиж чаддаггүй байв. Одоо
@@ -869,7 +892,7 @@ export default function LandPage() {
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <div className="flex items-center gap-1">
-                          {isExternal && land.status === ACQ_STATUS.CONFIRMED ? (
+                          {locked ? (
                             <span
                               title="Баталгаажсан чөлөөлөлтийн дэлгэрэнгүй мэдээлэлд хандах боломжгүй"
                               className="inline-flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap cursor-not-allowed select-none"
@@ -879,7 +902,8 @@ export default function LandPage() {
                           ) : (
                             <Link
                               prefetch={false}
-                              href={`/acquisition/${land.id}`}
+                              href={detailHref}
+                              onClick={notifyNavStart}
                               className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                             >
                               Дэлгэрэнгүй

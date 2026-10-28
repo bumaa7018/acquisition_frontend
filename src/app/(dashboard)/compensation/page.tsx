@@ -10,6 +10,7 @@ import {
 import { cn, formatDate } from "@/lib/utils";
 import { AcquisitionSelect } from "@/app/(dashboard)/parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { RefreshButton } from "@/components/ui/refresh-button";
 
 type CompStatus = "pending" | "approved" | "rejected" | "";
 type CompType   = "cash" | "land_grant" | "";
@@ -196,6 +197,7 @@ export default function CompensationsPage() {
             <Search className="h-3.5 w-3.5" />
             Хайх
           </button>
+          <RefreshButton />
 
           {hasFilter && (
             <button
