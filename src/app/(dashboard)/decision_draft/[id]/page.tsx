@@ -234,7 +234,12 @@ export default function DecisionDraftDetailPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <button
-            onClick={() => router.push("/decision_draft")}
+            // Баталгаажсан бол «Шийдвэр», үгүй бол «Захирамжийн төсөл» жагсаалт руу.
+            onClick={() =>
+              router.push(
+                item.status === DECISION_DRAFT_STATUS_CONFIRMED ? "/decision" : "/decision_draft",
+              )
+            }
             className="mt-1 rounded-lg border border-slate-200 dark:border-[#37394d] p-1.5 text-slate-500 hover:bg-slate-50 dark:hover:bg-[#252630] transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

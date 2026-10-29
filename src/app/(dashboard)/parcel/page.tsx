@@ -2,8 +2,9 @@
 import { CompensationPaymentBadge } from "@/components/ui/compensation-payment-badge";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { parcelApi } from "@/lib/api";
+import { parcelApi, parcelStatusApi } from "@/lib/api";
 import { STATUS_LABELS, RIGHT_TYPE_LABELS } from "@/types";
+import type { ParcelStatus } from "@/types";
 import { StatusLabel } from "@/components/ui/status-label";
 import { formatDate, formatArea } from "@/lib/utils";
 import { Search, X } from "lucide-react";
@@ -38,6 +39,8 @@ const EMPTY = {
   right_type: 0,
   landuse: "",
   status: 0,
+  // Нэгж талбарын төлөв (parcel_status.id). `status` нь ЧӨЛӨӨЛӨЛТИЙН төлөв.
+  status_id: 0,
   // ОЛОН он сонгож болно (чөлөөлөлтийн эхэлсэн оноор шүүнэ).
   years: [] as number[],
 };
@@ -63,6 +66,12 @@ export default function ParcelListPage() {
   const [draft, setDraft] = useState(EMPTY);
   // Төлөвийн өнгө нь `parcel_status` БҮРТГЭЛЭЭС (хатуу хүснэгтэд шинэ төлөв байхгүй).
   const statusStyle = useParcelStatusStyle();
+  // Нэгж талбарын төлөвийн жагсаалт — `parcel_status` бүртгэлээс (шүүлтийн сонголт).
+  const { data: parcelStatuses = [] } = useQuery<ParcelStatus[]>({
+    queryKey: ["parcel-statuses"],
+    queryFn: () => parcelStatusApi.list(),
+    staleTime: 5 * 60_000,
+  });
 
   const [filter, setFilter] = useState(EMPTY);
   const [page, setPage] = useState(1);
@@ -104,6 +113,7 @@ export default function ParcelListPage() {
         right_type: filter.right_type || undefined,
         landuse: filter.landuse || undefined,
         status: filter.status || undefined,
+        status_id: filter.status_id || undefined,
         years: filter.years.length ? filter.years : undefined,
       }),
   });
@@ -117,6 +127,7 @@ export default function ParcelListPage() {
     draft.right_type !== 0 ||
     draft.landuse ||
     draft.status !== 0 ||
+    draft.status_id !== 0 ||
     draft.years.length > 0;
 
   return (
@@ -211,6 +222,23 @@ export default function ParcelListPage() {
             {Object.entries(STATUS_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
                 {v}
+              </option>
+            ))}
+          </select>
+          <select
+            value={draft.status_id}
+            onChange={(e) =>
+              setDraft((f) => ({
+                ...f,
+                status_id: e.target.value ? Number(e.target.value) : 0,
+              }))
+            }
+            className={`${inp} w-48`}
+          >
+            <option value={0}>Нэгж талбарын төлөв</option>
+            {parcelStatuses.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
           </select>

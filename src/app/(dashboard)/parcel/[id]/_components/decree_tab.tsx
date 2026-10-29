@@ -6,6 +6,7 @@ import {
   DECISION_DRAFT_STATUS_LABELS,
   DECISION_DRAFT_STATUS_STYLES,
   DECISION_DRAFT_STATUS_DRAFT,
+  DECISION_DRAFT_STATUS_CONFIRMED,
 } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
@@ -139,7 +140,8 @@ export function DecreeTab({ parcelId }: { parcelId: string }) {
                     {/* prefetch=false — мөр бүрийн RSC prefetch browser-ийн 6 холболтыг дүүргэдэг */}
                     <Link
                       prefetch={false}
-                      href={`/decision_draft/${d.decision_draft_id}`}
+                      // Баталгаажсан бол «Шийдвэр», үгүй бол «Захирамжийн төсөл» цэсэд нээгдэнэ.
+                      href={`${status === DECISION_DRAFT_STATUS_CONFIRMED ? "/decision" : "/decision_draft"}/${d.decision_draft_id}`}
                       onClick={notifyNavStart}
                       className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                     >

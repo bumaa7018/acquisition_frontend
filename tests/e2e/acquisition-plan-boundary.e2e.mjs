@@ -8,10 +8,10 @@
 //      хилийг шинэ хил болгож тохируулна.
 //   3. Төлөвлөгөөнд хил байхгүй бол үүсгэх/солих аль аль нь 422-оор зогсоно.
 //   4. ҮҮСГЭХ үед илгээсэн shapefile ҮЛ ХЭРЭГСЭГДЭНЭ (хил төлөвлөгөөнийх).
-//   5. Хил солиход чөлөөлөлтийн хил өөрчлөгдөж (түүх бичигдэнэ), БҮХ нэгж
-//      талбарын нөлөөлөлд өртсөн талбай шинэ хилээр дахин бодогдоно; өөр
-//      багана өөрчлөгдөхгүй («Чөлөөлсөн» ч). Төлөвлөгөөгөөр солиход
-//      төлөвлөгөөг ГУС-аас татна; файлаар солиход ГУС дуудагдахгүй. Шинэ хилээс гарах талбарыг солихоос ӨМНӨ
+//   5. Хил солиход ЗӨВХӨН чөлөөлөлтийн хил өөрчлөгдөнө (түүх бичигдэнэ):
+//      нэгж талбарын мөр нэг ч байт өөрчлөгдөхгүй («Чөлөөлсөн» ч, нөлөөлөлд
+//      өртсөн хил/талбай ч). Төлөвлөгөөгөөр солиход төлөвлөгөөг ГУС-аас
+//      татна; файлаар солиход ГУС дуудагдахгүй. Шинэ хилээс гарах талбарыг солихоос ӨМНӨ
 //      (boundary-outside-parcels / boundary-preview) дугаартай нь харуулна.
 //      Шинэ хилийн нэгж талбарыг "Нэгж талбар татах" бүртгэнэ.
 //   6. ЗАСВАРЛАХ үед хилийг ГАРААС (.shp) оруулж болно: талбайн зөрүү
@@ -819,9 +819,9 @@ test("илгээсэн shapefile-ыг үл хэрэгсэж, хилийг төл
 // ── 6. Хил солиход нэгж талбарын өөрчлөлт ─────────────────────────────────
 //
 //   а) шинэ хилтэй давхцах нэгж талбар "Нэгж талбар татах"-аар бүртгэгдэх
-//   б) хил солиход нөлөөлөлд өртсөн талбай шинэ хилээр дахин бодогдож
-//      (гарсан нь 0), бусад багана өөрчлөгдөхгүй (устгах/нэмэх үгүй) —
-//      «Чөлөөлсөн» ч адил
+//   б) хил солиход ЗӨВХӨН хил өөрчлөгдөж, нэгж талбарын мөр БАЙТ ч
+//      өөрчлөгдөхгүй (устгах/нэмэх, нөлөөлөлд өртсөн талбайг дахин бодох
+//      үгүй) — «Чөлөөлсөн» ч адил
 //   в) шинэ хилээс гарах талбарыг хил СОЛИХООС ӨМНӨ
 //      (boundary-outside-parcels / boundary-preview) ШИНЭ хилээр харуулах
 //   г) хилийн өөрчлөлтийн түүх бичигдэх
@@ -844,46 +844,17 @@ test("бүртгэгдсэн нэгж талбарууд шинэ хилээр �
 });
 
 /**
- * Чөлөөлөлтийн БҮХ нэгж талбарын мөрийн (устгагдсан ч) хурууны хээ —
- * НӨЛӨӨЛӨЛД ӨРТСӨН хэсгийн баганаас (acquisition_geom, acquisition_area_m2,
- * remaining_area_m2, updated_at/by) БУСАД нь хил солиход өөрчлөгдөөгүйг
+ * Чөлөөлөлтийн БҮХ нэгж талбарын мөрийн (устгагдсан ч) хурууны хээ — хил
+ * солиход нэгж талбарт ЮУ Ч өөрчлөгдөөгүйг (нөлөөлөлд өртсөн хил/талбай ч)
  * батлахад.
  */
 async function parcelSnapshot() {
   const { rows } = await pool.query(
-    `SELECT count(*)::int AS n,
-            md5(coalesce(string_agg(
-              (to_jsonb(p) - 'acquisition_geom' - 'acquisition_area_m2' - 'remaining_area_m2'
-                           - 'updated_at' - 'updated_by')::text,
-              '|' ORDER BY p.id), '')) AS h
+    `SELECT count(*)::int AS n, md5(coalesce(string_agg(p::text, '|' ORDER BY p.id), '')) AS h
        FROM parcel p WHERE p.acquisition_id = $1`,
     [acquisitionId],
   );
   return rows[0];
-}
-
-/**
- * Хил солисны дараа геометртэй БҮХ нэгж талбарын нөлөөлөлд өртсөн талбай нь
- * тухайн хилтэй давхцах хэсгийн (UTM) талбай, давхцахгүй бол 0 байх ёстой;
- * үлдэх талбай = нэгж талбарын талбай − нөлөөлөлд өртсөн.
- */
-async function assertAffectedAreas(boundaryWKT) {
-  const { rows } = await pool.query(
-    `WITH b AS (SELECT ST_MakeValid(ST_GeomFromText($2, 4326)) AS geom),
-     x AS (
-       SELECT p.parcel_id, p.acquisition_area_m2, p.remaining_area_m2,
-              COALESCE(NULLIF(p.area_m2, 0), public.calculate_area_utm(p.geometry)) AS full_area,
-              COALESCE(public.calculate_area_utm(ST_GeometryN(ST_CollectionExtract(
-                ST_Intersection(ST_MakeValid(p.geometry), b.geom), 3), 1)), 0) AS expected
-         FROM parcel p CROSS JOIN b
-        WHERE p.acquisition_id = $1 AND p.deleted_at IS NULL AND p.geometry IS NOT NULL
-     )
-     SELECT parcel_id, acquisition_area_m2, expected, remaining_area_m2, full_area FROM x
-      WHERE abs(COALESCE(acquisition_area_m2, -1) - expected) > 0.5
-         OR abs(COALESCE(remaining_area_m2, -1) - GREATEST(full_area - expected, 0)) > 0.5`,
-    [acquisitionId, boundaryWKT],
-  );
-  assert.deepEqual(rows, [], `нөлөөлөлд өртсөн талбай шинэ хилээр бодогдоогүй: ${JSON.stringify(rows)}`);
 }
 
 /** Хил солихын ӨМНӨ: шинэ хилээс гарах нэгж талбар (ХАДГАЛАЛГҮЙ). */
@@ -931,21 +902,13 @@ test("хил АГШИХАД: солихоос өмнө хилээс гарах �
 
   assert.equal(res.status, 200, `засах амжилтгүй: ${res.status} ${JSON.stringify(json)}`);
   assert.ok(await geomEquals(json.data.geometry_wkt, boundaryC), "хил солигдоогүй");
-  for (const k of ["outside_parcel_ids", "removed_parcels", "added_parcels"]) {
+  for (const k of ["outside_parcel_ids", "removed_parcels", "added_parcels", "affected_area_updated"]) {
     assert.equal(json.data[k], undefined, `хил солих хариунд ${k} байх ёсгүй`);
   }
 
-  // Нөлөөлөлд өртсөн талбай ШИНЭ (C) хилээр бодогдсон; хилээс гарсан нь 0.
-  assert.equal(json.data.affected_area_updated, beforeIDs.length, "бүх нэгж талбарын талбай шинэчлэгдээгүй");
-  await assertAffectedAreas(boundaryC);
-  const { rows: zero } = await pool.query(
-    `SELECT parcel_id FROM parcel WHERE acquisition_id = $1 AND parcel_id = ANY($2::text[])
-        AND (acquisition_area_m2 <> 0 OR acquisition_geom IS NOT NULL)`,
-    [acquisitionId, goneIDs],
-  );
-  assert.deepEqual(zero, [], "хилээс гарсан нэгж талбарын нөлөөлөлд өртсөн талбай 0 болоогүй");
-  // Үүнээс бусад багана нэг ч байт өөрчлөгдөөгүй (устгах/нэмэх үгүй).
-  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбарын өөр багана өөрчлөгдөв");
+  // Нэгж талбарын мөр нэг ч байт өөрчлөгдөөгүй (устгах/нэмэх, нөлөөлөлд
+  // өртсөн хил/талбайг дахин бодох үгүй).
+  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбар өөрчлөгдөв");
   assert.deepEqual(await registeredParcelIDs(), beforeIDs, "хилээс гарсан нэгж талбар устгагдав");
 
   // Хилийн түүх хоёр дахь бичлэгээ авсан байна.
@@ -1032,11 +995,9 @@ test("«Чөлөөлсөн» талбар шинэ хилээс гарвал т�
 
   assert.equal(res.status, 200, `хил солигдсонгүй: ${JSON.stringify(json)}`);
 
-  // Хил солигдож, нөлөөлөлд өртсөн талбай (Чөлөөлсөн ч) шинэ хилээр 0 болно;
-  // бусад багана (төлөв г.м) хэвээр.
+  // Хил солигдсон ч нэгж талбар (Чөлөөлсөн нь төлөвтэйгээ) БҮРЭН хэвээр.
   assert.ok(await geomEquals((await currentBoundary()).geom, farRows[0].wkt), "хил солигдоогүй");
-  await assertAffectedAreas(farRows[0].wkt);
-  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбарын өөр багана өөрчлөгдөв");
+  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбар өөрчлөгдөв");
   const { rows } = await pool.query(
     `SELECT status FROM parcel WHERE acquisition_id = $1 AND parcel_id = $2`,
     [acquisitionId, staying[0]],
@@ -1259,9 +1220,8 @@ test("зөрүү 30%-иас бага файлаар хил СОЛИГДОЖ, т�
   );
   assert.ok(latest.new_area_m2 > latest.old_area_m2, "хил томорсон ч талбай өсөөгүй");
 
-  // Нөлөөлөлд өртсөн талбай ФАЙЛЫН хилээр бодогдсон; өөр багана өөрчлөгдөөгүй.
-  await assertAffectedAreas(expectedWKT);
-  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбарын өөр багана өөрчлөгдөв");
+  // Файлаар хил солиход ч нэгж талбар нэг ч байт өөрчлөгдөхгүй.
+  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбар өөрчлөгдөв");
   assert.equal(json.data.outside_parcel_ids, undefined);
 });
 
@@ -1301,8 +1261,7 @@ test("файлаар ч «Чөлөөлсөн» талбар хилээс гар�
   });
 
   assert.equal(res.status, 200, `файлаар хил солигдсонгүй: ${JSON.stringify(json)}`);
-  await assertAffectedAreas(far[0].wkt);
-  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбарын өөр багана өөрчлөгдөв");
+  assert.deepEqual(await parcelSnapshot(), snapBefore, "хил солиход нэгж талбар өөрчлөгдөв");
   assert.equal(await historyCount(), historyBefore + 1, "хил солиход түүх бичигдээгүй");
 
   // Төлвийг эгүүлнэ («Чөлөөлсөн» талбартай чөлөөлөлтийг цэвэрлэгээ устгаж чадахгүй).

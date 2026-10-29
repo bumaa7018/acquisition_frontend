@@ -28,7 +28,7 @@ export function outsideParcelGeometries(outside: BoundaryOutsideParcel[]): Previ
 
 /**
  * Хил СОЛИХ үеийн анхааруулга: шинэ хилтэй давхцахгүй болох нэгж талбарууд.
- * Хадгалахад тэдгээрийн нөлөөлөлд өртсөн талбай 0 болно; устгагдахгүй.
+ * Хил солиход нэгж талбарт юу ч хийгдэхгүй — зөвхөн мэдээлэл.
  */
 export function OutsideParcelsNotice({ outside }: { outside: BoundaryOutsideParcel[] }) {
   if (outside.length === 0) return null;
@@ -38,9 +38,9 @@ export function OutsideParcelsNotice({ outside }: { outside: BoundaryOutsideParc
         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
         <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
           <span className="font-semibold">{outside.length}</span> нэгж талбар шинэ
-          хилтэй давхцахгүй болно. Хадгалахад тэдгээрийн нөлөөлөлд өртсөн талбай{" "}
-          <span className="font-semibold">0</span> болно — нэгж талбар
-          устгагдахгүй.
+          хилтэй давхцахгүй болно. Хил солиход нэгж талбарт{" "}
+          <span className="font-semibold">өөрчлөлт орохгүй</span> — зөвхөн
+          чөлөөлөлтийн хил солигдоно.
         </p>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">

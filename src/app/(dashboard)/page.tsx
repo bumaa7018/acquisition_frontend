@@ -18,6 +18,7 @@ import {
   Cell,
 } from "recharts";
 import { dashboardApi, landApi, usersApi } from "@/lib/api";
+import { useDepartmentGeneralCategory } from "@/hooks/use-department-category";
 import { profApi } from "@/lib/prof-api";
 import { hasPermission, isExternalSpecialRole, isFinanceSpecialist, isMika, isProfessionalOrg, isSeniorSpecialist } from "@/lib/role-utils";
 import { useChronosData } from "@/components/map/chronos/use-chronos";
@@ -1142,6 +1143,23 @@ export default function DashboardPage() {
     employeeId: "", employeeName: "", au2Code: "",
   });
 
+  // Хэрэглэгчийн хэлтэст холбогдсон ерөнхий ангилал байвал АНХ нээхэд шууд
+  // сонгогдож, самбар тэр ангиллаар шүүгдэнэ. Нэг л удаа — «Цэвэрлэх» дарвал
+  // дахин сонгогдохгүй. Анхдагч тодорхой болтол самбарын өгөгдлийг татахгүй.
+  const internalDash = roleReady && !isProfOrg && !isOtherExternal;
+  const deptCat = useDepartmentGeneralCategory(internalDash);
+  const [deptDefaultApplied, setDeptDefaultApplied] = useState(false);
+  useEffect(() => {
+    // Гадаад ролиудад анхдагч ангилал байхгүй — role тодормогц шууд «шийдэгдсэн».
+    if (deptDefaultApplied || !roleReady || (internalDash && !deptCat.ready)) return;
+    if (internalDash && deptCat.categoryId) {
+      const genCatId = deptCat.categoryId;
+      setInGenCatId((cur) => cur || genCatId);
+      setAppliedFilter((f) => (f.genCatId ? f : { ...f, genCatId, subCatId: 0 }));
+    }
+    setDeptDefaultApplied(true);
+  }, [roleReady, internalDash, deptCat.ready, deptCat.categoryId, deptDefaultApplied]);
+
   const handleView = () => {
     setAppliedFilter({ acqId: inAcqId, acqName: inAcqName, planCode: inPlanCode, years: inYears, genCatId: inGenCatId, subCatId: inSubCatId, employeeId: inEmployeeId, employeeName: inEmployeeName, au2Code: inAu2Code });
   };
@@ -1207,7 +1225,7 @@ export default function DashboardPage() {
     queryKey: ["dashboard", appliedFilter],
     queryFn: () => fetchDashboard(appliedFilter),
     staleTime: 60_000,
-    enabled: roleReady && !isProfOrg && !isOtherExternal,
+    enabled: roleReady && !isProfOrg && !isOtherExternal && deptDefaultApplied,
   });
 
   /* ── «Он цагийн зураг» — цагийн голоор сар сонгоход дашбоардын БҮХ тоо
@@ -1317,7 +1335,9 @@ export default function DashboardPage() {
   const { data: overviewFinance } = useQuery({
     queryKey: ["map-overview", "finance", financeFilter],
     queryFn: () => dashboardApi.finance(financeFilter!, { silent: true }),
-    enabled: !!financeFilter,
+    // Анхдагч (хэлтсийн) ангилал тодорхой болтол хүлээнэ — эс бөгөөс ангилалгүй
+    // нийлбэрийг дэмий татна.
+    enabled: !!financeFilter && deptDefaultApplied,
     staleTime: 60_000,
     retry: false,
   });

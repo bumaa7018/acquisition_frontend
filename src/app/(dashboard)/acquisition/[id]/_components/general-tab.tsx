@@ -194,31 +194,16 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       }
       return updated;
     },
-    onSuccess: (updated) => {
+    onSuccess: () => {
       // Хилээс гарсан нэгж талбарын анхааруулга ЗӨВХӨН хил солих үед
       // (хадгалахаас өмнө) харагдана — хадгалсны дараа дахин гаргахгүй.
-      // Хил солигдсон бол нөлөөлөлд өртсөн талбай хэдэн нэгж талбарт дахин
-      // бодогдсоныг хэлнэ.
-      if (updated?.affected_area_updated != null) {
-        const skipped = updated.affected_area_skipped ?? 0;
-        toast.success(
-          `Хадгалагдлаа. ${updated.affected_area_updated} нэгж талбарын нөлөөлөлд өртсөн талбай шинэчлэгдлээ` +
-            (skipped > 0 ? ` (геометргүй ${skipped} нэгж талбар бодогдсонгүй)` : ""),
-        );
-      } else {
-        toast.success("Хадгалагдлаа");
-      }
+      toast.success("Хадгалагдлаа");
       setEditing(false);
       setAreaAutoCalc(false);
       setBoundaryPlan(null);
       setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
-      // Хил солиход нөлөөлөлд өртсөн талбай өөрчлөгдөх тул нэгж талбарын
-      // жагсаалт ба хилийн түүх хуучирна.
-      queryClient.invalidateQueries({
-        queryKey: ["land-parcels", id],
-        refetchType: "all",
-      });
+      // Хил солиход нэгж талбар хөндөгдөхгүй — зөвхөн хилийн түүх шинэчлэгдэнэ.
       queryClient.invalidateQueries({
         queryKey: ["land-boundary-history", id],
       });
@@ -226,9 +211,8 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
-  // Хил солиход чөлөөлөлтийн хил өөрчлөгдөж, нэгж талбаруудын нөлөөлөлд
-  // өртсөн талбай дахин бодогдоно. Шинэ хилээс гарах нэгж талбар байвал
-  // хадгалахаас өмнө зөвшөөрөл авна; байхгүй бол шууд хадгална.
+  // Хил солиход ЗӨВХӨН чөлөөлөлтийн хил өөрчлөгдөнө. Шинэ хилээс гарах нэгж
+  // талбар байвал хадгалахаас өмнө зөвшөөрөл авна; байхгүй бол шууд хадгална.
   const confirmOutsideThenSave = (
     outside: BoundaryOutsideParcel[],
     source: string,
@@ -241,7 +225,7 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     const more = outside.length > 10 ? ` … (+${outside.length - 10})` : "";
     setPendingConfirm({
       title: "Хилээс гарах нэгж талбар байна",
-      description: `${source} хилээр солиход ${outside.length} нэгж талбар шинэ хилтэй давхцахгүй болно: ${shown}${more}. Тэдгээрийн нөлөөлөлд өртсөн талбай 0 болно (нэгж талбар устгагдахгүй). Бусад нэгж талбарын нөлөөлөлд өртсөн талбай шинэ хилээр дахин бодогдоно. Хадгалах уу?`,
+      description: `${source} хилээр солиход ${outside.length} нэгж талбар шинэ хилтэй давхцахгүй болно: ${shown}${more}. Нэгж талбарт өөрчлөлт орохгүй — зөвхөн чөлөөлөлтийн хил солигдоно. Хадгалах уу?`,
       confirmLabel: "Хадгалах",
       confirmColor: "#f59e0b",
       onConfirm: () => saveMutation.mutate(),

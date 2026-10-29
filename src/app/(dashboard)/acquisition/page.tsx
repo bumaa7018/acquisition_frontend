@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { landApi, authApi } from "@/lib/api";
+import { useDepartmentGeneralCategory } from "@/hooks/use-department-category";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
@@ -524,6 +525,22 @@ export default function LandPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meData]);
 
+  // Хэрэглэгчийн хэлтэст холбогдсон ерөнхий ангилал байвал АНХ нээхэд шууд
+  // сонгогдож, жагсаалт тэр ангиллаар шүүгдэнэ. Нэг л удаа — «Цэвэрлэх» дарвал
+  // дахин сонгогдохгүй. Анхдагч тодорхой болтол жагсаалтыг татахгүй (эс бөгөөс
+  // шүүлтгүй, дараа нь шүүлттэй гэж хоёр удаа ачаалж анивчина).
+  const deptCat = useDepartmentGeneralCategory(!isProfOrg);
+  const [deptDefaultApplied, setDeptDefaultApplied] = useState(false);
+  useEffect(() => {
+    if (deptDefaultApplied || !deptCat.ready) return;
+    if (deptCat.categoryId) {
+      const genCat = deptCat.categoryId;
+      setDraft(d => (d.genCat ? d : { ...d, genCat, subCat: 0 }));
+      setFilter(f => (f.genCat ? f : { ...f, genCat, subCat: 0 }));
+    }
+    setDeptDefaultApplied(true);
+  }, [deptCat.ready, deptCat.categoryId, deptDefaultApplied]);
+
   const { data: genCats = [] } = useQuery({
     queryKey: ["acquisition-categories"],
     queryFn: () => landApi.listCategories(),
@@ -582,7 +599,7 @@ export default function LandPage() {
         au2_code: filter.au2Code || undefined,
         years: filter.years.length ? filter.years : undefined,
       }),
-    enabled: !isProfOrg,
+    enabled: !isProfOrg && deptDefaultApplied,
   });
 
   const filteredAcquisitions: LandAcquisition[] = rawData?.data ?? [];
