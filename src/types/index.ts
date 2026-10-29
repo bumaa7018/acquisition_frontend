@@ -1364,6 +1364,11 @@ export interface GlobalParcel extends CompensationPaymentInfo {
   cash_amount: number;
   land_grant_amount: number;
   land_grant_count: number;
+  /** Идэвхтэй захирамжийн холбоос — холбоогүй бол ирэхгүй. */
+  linked_decision_id?: string;
+  /** Захирамжийн дугаар (эсвэл саналын хуудасны дугаар). */
+  linked_decision_no?: string;
+  linked_decision_status?: number;
 }
 
 export interface ReportParcelRow {
@@ -1856,6 +1861,17 @@ export interface DecisionOption {
   sort_order: number;
 }
 
+/** Баталгаажсан захирамжийн хавсралт (захирамжийн эх баримт, «Захирамж» төрөл). */
+export interface DecisionDraftDocument {
+  id: string;
+  name: string;
+  file_type: string;
+  file_url: string;
+  size_bytes: number;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
 export interface DecisionDraft {
   id: string;
   proposal_no: string;
@@ -1892,6 +1908,8 @@ export interface DecisionDraft {
   funding_source_parcel_counts: Record<string, number>;
   funding_source_parcel_areas: Record<string, number>;
   funding_sources?: DecisionDraftFundingLink[];
+  /** Баталгаажуулахад хавсаргасан файл — зөвхөн дэлгэрэнгүйд ирнэ. */
+  document?: DecisionDraftDocument;
   current_progress_type: string;
   current_progress_type_name: string;
   current_progress_recipient: string;

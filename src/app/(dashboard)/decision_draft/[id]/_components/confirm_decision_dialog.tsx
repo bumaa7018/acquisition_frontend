@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { X, AlertTriangle, CheckCircle2, Clock3 } from "lucide-react";
+import { X, AlertTriangle, CheckCircle2, Clock3, FileUp } from "lucide-react";
 import { decisionDraftApi, decisionReviewUnitApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import {
@@ -35,6 +35,9 @@ export function ConfirmDecisionDialog({
   const [note, setNote] = useState("");
   const [decreeNumber, setDecreeNumber] = useState("");
   const [decisionDate, setDecisionDate] = useState("");
+  // Захирамжийн хавсралт (PDF) — баталгаажуулахад ЗААВАЛ.
+  const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const addProgress = useMutation({
     mutationFn: () =>
@@ -53,11 +56,15 @@ export function ConfirmDecisionDialog({
 
   const confirm = useMutation({
     mutationFn: () =>
-      decisionDraftApi.confirm(draftId, {
-        decree_number: decreeNumber.trim(),
-        decision_date: decisionDate,
-        note: note.trim(),
-      }),
+      decisionDraftApi.confirm(
+        draftId,
+        {
+          decree_number: decreeNumber.trim(),
+          decision_date: decisionDate,
+          note: note.trim(),
+        },
+        file!,
+      ),
     onSuccess: () => {
       toast.success("Захирамж баталгаажлаа");
       onConfirmed();
@@ -73,7 +80,7 @@ export function ConfirmDecisionDialog({
   const isReviewing = mode === DECISION_DRAFT_PROGRESS_REVIEWING;
   const isValid = isReviewing
     ? reviewUnitId !== "" && progressDate !== ""
-    : decreeNumber.trim() !== "" && decisionDate !== "";
+    : decreeNumber.trim() !== "" && decisionDate !== "" && !!file;
 
   function handleSave() {
     if (isReviewing) {
@@ -189,6 +196,36 @@ export function ConfirmDecisionDialog({
                   onChange={(e) => setDecisionDate(e.target.value)}
                   className={inp}
                 />
+              </div>
+              <div>
+                <label className={lbl}>Захирамжийн хавсралт (PDF) *</label>
+                <label className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 text-[13px] text-slate-600 transition-colors hover:border-[#0acf97] hover:text-[#0acf97] dark:border-[#37394d] dark:text-slate-300">
+                  <FileUp className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{file ? file.name : "Файл сонгох"}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      if (f && !f.name.toLowerCase().endsWith(".pdf") && f.type !== "application/pdf") {
+                        setFile(null);
+                        setFileError("Зөвхөн PDF файл хавсаргана");
+                        return;
+                      }
+                      setFileError(null);
+                      setFile(f);
+                    }}
+                  />
+                </label>
+                {fileError ? (
+                  <p className="mt-1.5 text-[11px] text-[#f1556c]">{fileError}</p>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                    «Захирамж» төрлөөр захирамжид холбогдсон бүх нэгж талбарын хавсралтад нэмэгдэнэ.
+                  </p>
+                )}
               </div>
               <div>
                 <label className={lbl}>Тайлбар</label>

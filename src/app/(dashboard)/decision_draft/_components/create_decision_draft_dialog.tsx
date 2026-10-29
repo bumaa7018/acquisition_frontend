@@ -37,8 +37,8 @@ async function listAllParcels(params: { general_category_id?: number }) {
   for (let page = 1; page <= MAX_PAGES; page++) {
     const res = await parcelApi.list({
       ...params,
+      // Холбогдсоныг ч татна — попапд саарал (сонгох боломжгүй) харагдана.
       released_only: true,
-      unlinked_only: true,
       page,
       page_size: PAGE_SIZE,
       sort: "parcel_id",
@@ -54,7 +54,8 @@ async function listAllParcels(params: { general_category_id?: number }) {
  * Захирамжийн төсөл ҮҮСГЭХ попап.
  *
  * Төслийн мэдээллийн хамт «Захирамжид холбогдоно» тэмдэгтэй (Нэгж талбарын
- * статус тохиргоо) төлөвтэй, ямар ч захирамжид холбогдоогүй нэгж талбаруудыг
+ * статус тохиргоо) төлөвтэй нэгж талбаруудыг (аль хэдийн захирамжид холбогдсон
+ * нь саарал, сонгох боломжгүй)
  * жагсааж, checkbox-оор сонгосныг үүсгэхдээ ХАМТ
  * холбоно. Нэгж талбар холбоход санхүүгийн эх үүсвэр заавал шаардлагатай
  * (backend дүрэм) тул нэг эх үүсвэр + дүн сонгуулж, сонгосон бүх талбарыг тэр
@@ -119,6 +120,8 @@ export function CreateDecisionDraftDialog({
     });
   }, [parcels]);
 
+  // Аль хэдийн захирамжид холбогдсон — сонгох боломжгүй.
+  const isLinked = (p: GlobalParcel) => !!p.linked_decision_id;
   const visible = useMemo(() => {
     const q = term.trim().toLocaleLowerCase();
     if (!q) return parcels;
@@ -128,7 +131,8 @@ export function CreateDecisionDraftDialog({
         (p.acquisition_name ?? "").toLocaleLowerCase().includes(q),
     );
   }, [parcels, term]);
-  const allVisibleSelected = visible.length > 0 && visible.every((p) => selected.has(p.id));
+  const selectable = visible.filter((p) => !p.linked_decision_id);
+  const allVisibleSelected = selectable.length > 0 && selectable.every((p) => selected.has(p.id));
 
   const toggle = (id: string) =>
     setSelected((cur) => {
@@ -140,8 +144,8 @@ export function CreateDecisionDraftDialog({
   const toggleAllVisible = () =>
     setSelected((cur) => {
       const next = new Set(cur);
-      if (allVisibleSelected) visible.forEach((p) => next.delete(p.id));
-      else visible.forEach((p) => next.add(p.id));
+      if (allVisibleSelected) selectable.forEach((p) => next.delete(p.id));
+      else selectable.forEach((p) => next.add(p.id));
       return next;
     });
 
@@ -294,8 +298,8 @@ export function CreateDecisionDraftDialog({
                 <p className={section}>Нэгж талбар</p>
                 <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
                   {releasedNames.length > 0
-                    ? `${releasedNames.map((n) => `«${n}»`).join(", ")} төлөвтэй, захирамжид холбогдоогүй нэгж талбарууд`
-                    : "«Захирамжид холбогдоно» тэмдэгтэй төлөвтэй, захирамжид холбогдоогүй нэгж талбарууд"}
+                    ? `${releasedNames.map((n) => `«${n}»`).join(", ")} төлөвтэй нэгж талбарууд. Аль хэдийн захирамжид холбогдсон нь саарал харагдана.`
+                    : "«Захирамжид холбогдоно» тэмдэгтэй төлөвтэй нэгж талбарууд. Аль хэдийн захирамжид холбогдсон нь саарал харагдана."}
                 </p>
               </div>
               <span className="rounded-md bg-[#02c0ce]/10 px-2 py-1 text-[12px] font-semibold text-[#02c0ce]">
@@ -337,9 +341,17 @@ export function CreateDecisionDraftDialog({
                   {getApiError(parcelsQuery.error, "Нэгж талбарыг татаж чадсангүй")}
                 </p>
               ) : visible.length === 0 ? (
-                <p className="py-10 text-center text-[13px] text-slate-400 dark:text-slate-500">
-                  Нэгж талбар олдсонгүй
-                </p>
+                <div className="space-y-1 px-4 py-10 text-center text-[13px] text-slate-400 dark:text-slate-500">
+                  <p>Нэгж талбар олдсонгүй</p>
+                  {/* Хоосон байх шалтгааныг тайлбарлана — алдаа биш, өгөгдлийн байдал. */}
+                  <p className="text-[12px]">
+                    {term.trim()
+                      ? "Хайлтын үгээ шалгана уу."
+                      : genCat
+                        ? "Сонгосон ерөнхий ангилалд захирамжид холбогдох төлөвтэй нэгж талбар алга — «Бүх ерөнхий ангилал»-аар шалгана уу."
+                        : "Захирамжид холбогдох төлөвтэй нэгж талбар алга. Нэгж талбарыг явцаар нь тэр төлөвт шилжүүлнэ үү."}
+                  </p>
+                </div>
               ) : (
                 <table className="w-full text-[13px]">
                   <thead className="sticky top-0 z-10">
@@ -367,23 +379,36 @@ export function CreateDecisionDraftDialog({
                     {visible.map((p) => (
                       <tr
                         key={p.id}
-                        onClick={() => toggle(p.id)}
-                        className={`cursor-pointer transition-colors ${
-                          selected.has(p.id)
-                            ? "bg-[#02c0ce]/[0.07]"
-                            : "hover:bg-slate-50/60 dark:hover:bg-[#252630]"
+                        onClick={() => !isLinked(p) && toggle(p.id)}
+                        title={
+                          isLinked(p)
+                            ? `«${p.linked_decision_no}» захирамжид холбогдсон тул сонгох боломжгүй`
+                            : undefined
+                        }
+                        className={`transition-colors ${
+                          isLinked(p)
+                            ? "cursor-not-allowed bg-slate-50/70 opacity-60 dark:bg-white/[0.02]"
+                            : selected.has(p.id)
+                              ? "cursor-pointer bg-[#02c0ce]/[0.07]"
+                              : "cursor-pointer hover:bg-slate-50/60 dark:hover:bg-[#252630]"
                         }`}
                       >
                         <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selected.has(p.id)}
+                            disabled={isLinked(p)}
                             onChange={() => toggle(p.id)}
-                            className="h-4 w-4 accent-[#02c0ce]"
+                            className="h-4 w-4 accent-[#02c0ce] disabled:cursor-not-allowed"
                           />
                         </td>
                         <td className="px-3 py-2.5 font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                           {p.parcel_id}
+                          {isLinked(p) && (
+                            <span className="ml-1.5 whitespace-nowrap rounded bg-slate-200 px-1.5 py-0.5 font-sans text-[10px] font-semibold text-slate-600 dark:bg-[#37394d] dark:text-slate-300">
+                              {p.linked_decision_no}-д холбогдсон
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2.5 text-slate-600 dark:text-slate-300">
                           <p className="max-w-[340px] whitespace-normal break-words">{p.acquisition_name || "—"}</p>
