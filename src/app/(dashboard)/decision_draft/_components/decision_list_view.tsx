@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import {
   decisionDraftApi,
@@ -20,7 +21,7 @@ import { toast } from "sonner";
 import Link from "next/link";
 import { authStorage } from "@/lib/auth";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
-import { DecisionDraftForm, type DecisionDraftFormValue } from "./decision_draft_form";
+import { CreateDecisionDraftDialog } from "./create_decision_draft_dialog";
 import { AcquisitionSelect } from "../../parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { AmountHint } from "@/components/ui/amount-hint";
@@ -131,6 +132,7 @@ export function DecisionListView({
   subtitle,
   allowCreate,
   detailBase,
+  summaryMode = "full",
 }: {
   /** DECISION_DRAFT_STATUS_DRAFT | DECISION_DRAFT_STATUS_CONFIRMED */
   status: number;
@@ -140,6 +142,13 @@ export function DecisionListView({
   allowCreate: boolean;
   /** Дэлгэрэнгүй хуудасны зам (ж: "/decision_draft"). */
   detailBase: string;
+  /**
+   * Дээд хэсгийн тоон мэдээлэл:
+   *  - "full" — төсөв / захирамж гарсан / хянагдаж байгаа / бүгд / зөрүү (Шийдвэр)
+   *  - "reviewing" — ЗӨВХӨН «Захирамжийн төсөлд хянагдаж байгаа» дүн
+   *    (Захирамжийн төсөл). Тооцоо нь "full"-ийн тэр мөртэй ИЖИЛ.
+   */
+  summaryMode?: "full" | "reviewing";
 }) {
   const [draft, setDraft] = useState(EMPTY_FILTER);
   const [filter, setFilter] = useState(EMPTY_FILTER);
@@ -303,6 +312,27 @@ export function DecisionListView({
     [fundingSummary, summaryTotals],
   );
 
+  // «Захирамжийн төсөл» цэс — зөвхөн хянагдаж буй дүнтэй эх үүсвэрүүд, нэг мөр.
+  const reviewingOnly = summaryMode === "reviewing";
+  const displaySources = useMemo(
+    () => (reviewingOnly ? fundingSummary.filter((item) => item.reviewing > 0) : fundingSummary),
+    [reviewingOnly, fundingSummary],
+  );
+  const displayRows = useMemo(
+    () =>
+      reviewingOnly
+        ? [
+            {
+              label: "Захирамжийн төсөлд хянагдаж байгаа",
+              values: displaySources.map((item) => item.reviewing),
+              total: summaryTotals.reviewing,
+            },
+          ]
+        : helperSummaryRows,
+    [reviewingOnly, displaySources, summaryTotals, helperSummaryRows],
+  );
+  const headlineTotal = reviewingOnly ? summaryTotals.reviewing : summaryTotals.budget;
+
   // Сонголтын жагсаалтууд — шүүлтүүр болон үүсгэх формд хамт хэрэглэнэ
   const { data: workTypes = [] } = useQuery({
     queryKey: ["decision-work-types"],
@@ -314,22 +344,7 @@ export function DecisionListView({
     queryFn: () => decisionBudgetApi.list(),
     enabled: ready && perms.view,
   });
-  const createMutation = useMutation({
-    mutationFn: (value: DecisionDraftFormValue) =>
-      decisionDraftApi.create({
-        proposal_no: value.proposal_no.trim(),
-        location: value.location.trim(),
-        duration_year: value.duration_year ? Number(value.duration_year) : null,
-        work_type_id: value.work_type_id || null,
-        budget_id: value.budget_id || null,
-      }),
-    onSuccess: () => {
-      toast.success("Захирамжийн төсөл үүслээ");
-      queryClient.invalidateQueries({ queryKey: ["decision-drafts"] });
-      setShowCreate(false);
-    },
-    onError: (err) => toast.error(getApiError(err, "Үүсгэхэд алдаа гарлаа")),
-  });
+  const router = useRouter();
 
   const inp =
     "h-9 w-full min-w-0 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
@@ -381,34 +396,31 @@ export function DecisionListView({
           </button>
           {canCreate && (
             <button
-              onClick={() => setShowCreate((v) => !v)}
+              onClick={() => setShowCreate(true)}
               className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
             >
-              {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {showCreate ? "Болих" : "Шинээр үүсгэх"}
+              <Plus className="h-4 w-4" />
+              Шинээр үүсгэх
             </button>
           )}
         </div>
       </div>
 
-      {/* Create form */}
+      {/* Үүсгэх попап — төслийн мэдээлэл + эх үүсвэр + нэгж талбар сонгож хамт холбоно */}
       {showCreate && (
-        <div className="ap-card p-5">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white mb-4">
-            Шинэ захирамжийн төсөл
-          </p>
-          <p className="text-[12px] text-slate-400 dark:text-slate-500 mb-4">
-            Захирамжийн дугаар болон огноог &quot;Явц нэмэх&quot; үед бөглөнө.
-          </p>
-          <DecisionDraftForm
-            workTypes={workTypes}
-            budgets={budgets}
-            submitLabel="Үүсгэх"
-            isPending={createMutation.isPending}
-            onSubmit={(v) => createMutation.mutate(v)}
-            onCancel={() => setShowCreate(false)}
-          />
-        </div>
+        <CreateDecisionDraftDialog
+          workTypes={workTypes}
+          budgets={budgets}
+          onClose={() => setShowCreate(false)}
+          onCreated={(created) => {
+            setShowCreate(false);
+            queryClient.invalidateQueries({ queryKey: ["decision-drafts"] });
+            queryClient.invalidateQueries({ queryKey: ["decision-drafts-summary"] });
+            queryClient.invalidateQueries({ queryKey: ["decision-create-parcels"] });
+            notifyNavStart();
+            router.push(`${detailBase}/${created.id}`);
+          }}
+        />
       )}
 
       <div className="ap-card w-full min-w-0 overflow-hidden">
@@ -417,15 +429,15 @@ export function DecisionListView({
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
-                  Санхүүгийн эх үүсвэрийн ашиглалт
+                  {reviewingOnly ? "Захирамжийн төсөлд хянагдаж буй дүн" : "Санхүүгийн эх үүсвэрийн ашиглалт"}
                 </p>
                 <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
                   Хайлтын үр дүнд гарсан {summaryRows.length.toLocaleString("mn-MN")} захирамж
                 </p>
               </div>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-white/[0.06] dark:text-slate-300">
-                Нийт {formatBillion(summaryTotals.budget)}
-                <AmountHint value={summaryTotals.budget} className="ml-1" />
+                Нийт {formatBillion(headlineTotal)}
+                <AmountHint value={headlineTotal} className="ml-1" />
               </span>
             </div>
 
@@ -435,10 +447,39 @@ export function DecisionListView({
                   <div key={i} className="h-40 animate-pulse rounded-lg bg-slate-100 dark:bg-white/[0.05]" />
                 ))}
               </div>
-            ) : fundingSummary.length === 0 ? (
+            ) : displaySources.length === 0 ? (
               <p className="py-14 text-center text-[13px] text-slate-400 dark:text-slate-500">
-                Санхүүгийн эх үүсвэрийн мэдээлэл алга
+                {reviewingOnly ? "Хянагдаж буй захирамжийн төсөл алга" : "Санхүүгийн эх үүсвэрийн мэдээлэл алга"}
               </p>
+            ) : reviewingOnly ? (
+              <div className="grid grid-cols-1 gap-x-4 gap-y-4 2xl:grid-cols-2">
+                {displaySources.map((item, index) => {
+                  const accent = sourceColor(index);
+                  return (
+                    <div
+                      key={item.source}
+                      className="min-w-0 rounded-lg border bg-white/60 p-3 shadow-sm dark:bg-white/[0.03]"
+                      style={{ borderColor: `${accent}55` }}
+                    >
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: accent }} />
+                        <p className="min-w-0 whitespace-normal break-words text-[13px] font-semibold leading-snug text-slate-700 dark:text-slate-200">
+                          {item.source}
+                        </p>
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">Хянагдаж буй</p>
+                      <p
+                        title={formatMoneyExact(item.reviewing)}
+                        className="text-[15px] font-bold tabular-nums"
+                        style={{ color: accent }}
+                      >
+                        {formatBillion(item.reviewing)}
+                        <AmountHint value={item.reviewing} className="ml-1" />
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-x-4 gap-y-4 2xl:grid-cols-2">
                 {fundingSummary.map((item, index) => {
@@ -520,7 +561,9 @@ export function DecisionListView({
                 Туслах хүснэгт
               </p>
               <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
-                Санхүүгийн эх үүсвэр бүрийн батлагдсан болон зарцуулсан дүн
+                {reviewingOnly
+                  ? "Санхүүгийн эх үүсвэр бүрээр захирамжийн төсөлд хянагдаж буй дүн"
+                  : "Санхүүгийн эх үүсвэр бүрийн батлагдсан болон зарцуулсан дүн"}
               </p>
             </div>
 
@@ -530,7 +573,7 @@ export function DecisionListView({
                   <div key={i} className="h-9 animate-pulse rounded bg-slate-100 dark:bg-white/[0.05]" />
                 ))}
               </div>
-            ) : fundingSummary.length === 0 ? (
+            ) : displaySources.length === 0 ? (
               <p className="py-14 text-center text-[13px] text-slate-400 dark:text-slate-500">
                 Хүснэгтийн мэдээлэл алга
               </p>
@@ -542,7 +585,7 @@ export function DecisionListView({
                       <th className="sticky left-0 z-10 min-w-[190px] bg-[#02c0ce]/10 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-[#028995] dark:text-[#7ddfe7]">
                         Үзүүлэлт
                       </th>
-                      {fundingSummary.map((item, index) => (
+                      {displaySources.map((item, index) => (
                         <th
                           key={item.source}
                           className="min-w-[150px] px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider"
@@ -557,7 +600,7 @@ export function DecisionListView({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-[#37394d]">
-                    {helperSummaryRows.map((row) => (
+                    {displayRows.map((row) => (
                       <tr
                         key={row.label}
                         className={`${
@@ -585,7 +628,7 @@ export function DecisionListView({
                         </td>
                         {row.values.map((value, i) => (
                           <td
-                            key={`${row.label}-${fundingSummary[i]?.source ?? i}`}
+                            key={`${row.label}-${displaySources[i]?.source ?? i}`}
                             className={`px-3 py-2 text-right tabular-nums ${
                               row.label === "Зөрүү дүн" && value < 0
                                 ? "font-semibold text-rose-500"

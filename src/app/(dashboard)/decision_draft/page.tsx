@@ -11,6 +11,7 @@ export default function DecisionDraftListPage() {
       subtitle="Саналын хуудаснаас захирамж болтол явагдах бүртгэл — Төсөл төлөвтэй"
       allowCreate
       detailBase="/decision_draft"
+      summaryMode="reviewing"
     />
   );
 }

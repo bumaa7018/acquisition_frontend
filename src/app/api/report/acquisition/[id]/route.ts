@@ -177,7 +177,11 @@ export async function GET(
           acq.acquisition_name || "", // D
           decreePart, // E
           holderFull, // F
-          "", // G Хаяг
+          // G Хаяг — нэгж талбарын табтай ижил: нэгжийн НЭР, гудамж, хашаа.
+          [p.au1_name, p.au2_name, p.au3_name, p.address_streetname, p.address_khashaa]
+            .map((v) => (typeof v === "string" ? v.trim() : ""))
+            .filter(Boolean)
+            .join(", "),
           p.parcel_id ?? "", // H
           p.area_m2 ?? 0, // I
           RIGHT_TYPE_LABELS[p.right_type as number] ?? "", // J

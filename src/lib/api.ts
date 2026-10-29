@@ -119,6 +119,8 @@ type ParcelListParams = {
   plan_code?: string
   status?: number
   status_id?: number
+  /** Чөлөөлөлтийн ЕРӨНХИЙ ангилал. */
+  general_category_id?: number
   unlinked_only?: boolean
   /** Зөвхөн «Захирамжид холбогдоно» (is_released) төлөвтэй. */
   released_only?: boolean
@@ -178,6 +180,7 @@ function parcelListSearchParams(params?: ParcelListParams): URLSearchParams {
   if (params.plan_code) q.set('plan_code', params.plan_code)
   if (params.status != null) q.set('status', String(params.status))
   if (params.status_id != null) q.set('status_id', String(params.status_id))
+  if (params.general_category_id) q.set('general_category_id', String(params.general_category_id))
   if (params.unlinked_only) q.set('unlinked_only', 'true')
   if (params.released_only) q.set('released_only', 'true')
   if (params.sort) q.set('sort', params.sort)

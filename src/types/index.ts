@@ -1374,6 +1374,8 @@ export interface ReportParcelRow {
   right_type: number;
   db_changed: string;
   changed_parcel_id: string;
+  /** Аймаг/хот, сум/дүүрэг, баг/хорооны нэр, гудамж, хашаа (", "-ээр залгасан). */
+  address: string;
   status: number;
   status_name: string;
   status_date?: string;

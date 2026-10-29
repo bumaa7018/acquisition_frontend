@@ -24,22 +24,13 @@ function AdvanceModal({
   const [selectedStatus, setSelectedStatus] = useState<number | "">(
     availableStatuses[0]?.id ?? "",
   );
-  const [decreeNumber, setDecreeNumber] = useState("");
-  const [decreeDate, setDecreeDate] = useState("");
   const sel =
-    "w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
-  const inp =
     "w-full h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
 
   const advanceMutation = useMutation({
     mutationFn: () =>
-      landApi.advanceStatus(
-        id,
-        selectedStatus as number,
-        note,
-        decreeNumber,
-        decreeDate || undefined,
-      ),
+      // «Баталгаажсан» руу шилжихэд НЗД-ын захирамжийн дугаар/огноо авахгүй.
+      landApi.advanceStatus(id, selectedStatus as number, note),
     onSuccess: () => {
       toast.success("Явц шинэчлэгдлээ");
       queryClient.invalidateQueries({ queryKey: ["land", id] });
@@ -50,7 +41,8 @@ function AdvanceModal({
     onError: (err) => toast.error(getApiError(err, "Явц шинэчлэхэд алдаа гарлаа")),
   });
 
-  const needsDecree = selectedStatus === ACQ_STATUS.CONFIRMED;
+  // «Баталгаажсан» руу — бүх нэгж талбар эцсийн төлөвт байгааг шалгана.
+  const goingToConfirmed = selectedStatus === ACQ_STATUS.CONFIRMED;
 
   // ── "ХЭЭРИЙН СУДАЛГАА" руу шилжихийн ӨМНӨХ ШАЛГАЛТ ─────────────────────
   //
@@ -80,7 +72,7 @@ function AdvanceModal({
   const { data: parcels, isLoading: parcelsLoading } = useQuery({
     queryKey: ["land-parcels-final-status-check", id],
     queryFn: () => landApi.getParcels(id, { page: 1, page_size: 10000 }),
-    enabled: needsDecree,
+    enabled: goingToConfirmed,
   });
   // «Эцсийн төлөв» — «Нэгж талбарын төлөв» тохиргооноос (backend-ийн
   // HasNonFinalParcels-тай ИЖИЛ шалгуур; өмнө дугаар/нэрээр).
@@ -89,11 +81,11 @@ function AdvanceModal({
     (parcel) => !statusRules(parcel.status_id ?? parcel.status).is_final,
   );
   const blocksForIncompleteParcelCheck =
-    needsDecree &&
+    goingToConfirmed &&
     !parcelsLoading &&
     !!parcels &&
     parcels.data.length < parcels.total;
-  const blocksForUnfinalizedParcels = needsDecree && !parcelsLoading && invalidParcels.length > 0;
+  const blocksForUnfinalizedParcels = goingToConfirmed && !parcelsLoading && invalidParcels.length > 0;
 
   function handleAdvance() {
     if (blocksNoParcels) {
@@ -153,36 +145,7 @@ function AdvanceModal({
               ))}
             </select>
           </div>
-          {needsDecree && (
-            <>
-              <div>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-                  НЗД-ын захирамжийн дугаар{" "}
-                  <span className="text-red-400">*</span>
-                </p>
-                <input
-                  type="text"
-                  value={decreeNumber}
-                  onChange={(e) => setDecreeNumber(e.target.value)}
-                  placeholder="А/ХХХ-2024"
-                  className={inp}
-                />
-              </div>
-              <div>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400 mb-1.5">
-                  НЗД-ын захирамжийн огноо{" "}
-                  <span className="text-red-400">*</span>
-                </p>
-                <input
-                  type="date"
-                  value={decreeDate}
-                  onChange={(e) => setDecreeDate(e.target.value)}
-                  className={inp}
-                />
-              </div>
-            </>
-          )}
-          {needsDecree && parcelsLoading && (
+          {goingToConfirmed && parcelsLoading && (
             <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/15 px-4 py-3 text-[12px] text-amber-700 dark:text-amber-300">
               Нэгж талбаруудын төлөвийг шалгаж байна...
             </div>
@@ -276,8 +239,7 @@ function AdvanceModal({
               onClick={handleAdvance}
               disabled={
                 !selectedStatus ||
-                (needsDecree && (!decreeNumber || !decreeDate)) ||
-                (needsDecree && parcelsLoading) ||
+                (goingToConfirmed && parcelsLoading) ||
                 blocksForIncompleteParcelCheck ||
                 blocksForUnfinalizedParcels ||
                 advanceMutation.isPending

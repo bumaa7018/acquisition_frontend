@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
           r.acquisition_name || "",
           decreePart,
           holderFull,
-          "",
+          r.address || "",
           r.parcel_id ?? "",
           r.area_m2 ?? 0,
           RIGHT_TYPE_LABELS[r.right_type as number] ?? "",

@@ -63,13 +63,20 @@ const NAV_MAIN = [
   { href: "/parcel", label: "Нэгж талбар", icon: Grid2x2 },
   // Чөлөөлөгдсөн газрын судалгааны дүн — land:read эрхтэй ажилтанд.
   { href: "/parcel_survey", label: "Газрын судалгаа", icon: ClipboardList },
-  { href: "/decision_draft", label: "Захирамжийн төсөл", icon: Gavel },
   // «Нөхөх олговрын түүх» цэсийг хассан — хуудас нь хуваарилалтаар хязгаарлагдахгүй
   // бүх чөлөөлөлтийн олговрыг харуулдаг байв. Мэдэгдлээс дэлгэрэнгүй
   // (/compensation/[id]) руу орох холбоос хэвээр.
   // Хуучин мэдээллийн импорт — ЗӨВХӨН админ (proxy ба импортын үйлчилгээ
   // backend-ээр дахин шалгана).
   { href: "/legacy_import", label: "Хуучин мэдээлэл оруулах", icon: FileUp },
+];
+
+// «Захирамж» бүлэг — төлөвөөр тусгаарласан хоёр жагсаалт (decision:read эрхтэй
+// ажилтанд). Үндсэн цэсэнд «Газрын судалгаа»-ны дараа, «Хуучин мэдээлэл
+// оруулах»-ын өмнө байрлана.
+const NAV_DECISION = [
+  { href: "/decision_draft", label: "Захирамжийн төсөл", icon: FileText },
+  { href: "/decision", label: "Шийдвэр", icon: BadgeCheck },
 ];
 
 // Хэрэглэгч/ролийн цэс нь эрхээр шүүгдэнэ (доорх canViewUsers/canViewRoles).
@@ -141,6 +148,7 @@ const NAV_EXTRA: NavEntry[] = [
 
 const NAV_ALL: NavEntry[] = [
   ...NAV_MAIN,
+  ...NAV_DECISION,
   ...NAV_ADMIN,
   ...NAV_AUDIT,
   ...NAV_CONFIG,
@@ -290,13 +298,18 @@ export function Sidebar() {
   const [canViewHrNav, setCanViewHrNav] = useState(false);
   const [canViewAudit, setCanViewAudit] = useState(false);
   const [adminNav, setAdminNav] = useState<typeof NAV_ADMIN>([]);
-  // Захирамжийн төсөл — decision:read эрхтэй ажилтанд л харагдана.
   const [mainNav, setMainNav] = useState<typeof NAV_MAIN>(
     NAV_MAIN.filter(
       (item) =>
-        item.href !== "/decision_draft" &&
         item.href !== "/legacy_import" &&
         item.href !== "/parcel_survey",
+    ),
+  );
+  // «Захирамж» бүлэг — decision:read эрхтэй ажилтанд л харагдана.
+  const [showDecision, setShowDecision] = useState(false);
+  const [decisionOpen, setDecisionOpen] = useState(
+    NAV_DECISION.some(
+      (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
     ),
   );
 
@@ -331,7 +344,7 @@ export function Sidebar() {
     );
     // Захирамжийн төсөл нь тусдаа decision:* эрхтэй — эрхгүй ажилтанд цэс
     // харуулбал 403-той хоосон хуудас нээгдэнэ.
-    const showDecision = canViewDecisionDrafts();
+    setShowDecision(canViewDecisionDrafts());
     // Тайлан нь БҮХ чөлөөлөлтийг хуваарилалт үл харгалзан нэгтгэдэг тул
     // backend дээр ахлах мэргэжилтнээр хязгаарлагдсан — цэсийг мөн тэгш байлгана.
     const showReport = isSeniorSpecialist();
@@ -340,7 +353,6 @@ export function Sidebar() {
     setMainNav(
       NAV_MAIN.filter(
         (item) =>
-          (item.href !== "/decision_draft" || showDecision) &&
           (item.href !== "/report" || showReport) &&
           (item.href !== "/legacy_import" || showImport) &&
           (item.href !== "/parcel_survey" || showSurvey),
@@ -385,6 +397,7 @@ export function Sidebar() {
   // Дэд цэс сонгогдсон үед эцэг цэс (Удирдлага / Хүний нөөц / Тохиргоо)
   // хураалттай байсан ч идэвхтэй өнгөөр ялгарч харагдана.
   const hrActive = NAV_HR.some((item) => isActive(item.href));
+  const decisionActive = NAV_DECISION.some((item) => isActive(item.href));
   const configActive = NAV_CONFIG.some((item) => isActive(item.href));
   const adminActive =
     hrActive ||
@@ -459,14 +472,85 @@ export function Sidebar() {
                         (item.href === "/parcel" && isFinance),
                     )
                 : mainNav
-              ).map((item) => (
-                <NavItem
-                  key={item.href}
-                  {...item}
-                  active={isActive(item.href)}
-                  collapsed={collapsed}
-                />
-              ))}
+              )
+                .filter((item) => isExternal || item.href !== "/legacy_import")
+                .map((item) => (
+                  <NavItem
+                    key={item.href}
+                    {...item}
+                    active={isActive(item.href)}
+                    collapsed={collapsed}
+                  />
+                ))}
+
+              {/* «Захирамж» бүлэг — Захирамжийн төсөл (Төсөл) / Шийдвэр (Баталгаажсан) */}
+              {!isExternal && showDecision && (
+                <div>
+                  <CollapsedTip label="Захирамж" collapsed={collapsed}>
+                    <button
+                      onClick={() => setDecisionOpen((v) => !v)}
+                      className={cn(
+                        "relative flex w-full items-center rounded-lg py-2.5 text-[13px] font-medium transition-colors hover:bg-slate-50 dark:hover:bg-[#252630]",
+                        collapsed ? "justify-center px-3" : "gap-3 px-3",
+                      )}
+                    >
+                      <Gavel className={cn("h-[17px] w-[17px] shrink-0", decisionActive ? parentActive : parentIdle)} />
+                      {!collapsed && (
+                        <>
+                          <span className={cn("flex-1 text-left", decisionActive ? parentActive : parentIdleLabel)}>
+                            Захирамж
+                          </span>
+                          <ChevronDown
+                            className={cn(
+                              "h-3 w-3 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                              decisionOpen ? "rotate-180" : "rotate-0",
+                            )}
+                          />
+                        </>
+                      )}
+                      {/* Хураасан үед дэд цэстэйг илтгэх жижиг сум */}
+                      {collapsed && (
+                        <ChevronDown
+                          className={cn(
+                            "absolute right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-slate-400 dark:text-[#8391a2] transition-transform duration-200",
+                            decisionOpen ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      )}
+                    </button>
+                  </CollapsedTip>
+                  <div
+                    className={cn(
+                      "grid transition-[grid-template-rows] duration-200",
+                      decisionOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                    )}
+                  >
+                    <div className="overflow-hidden space-y-0.5">
+                      {NAV_DECISION.map((item) => (
+                        <NavItem
+                          key={item.href}
+                          {...item}
+                          active={isActive(item.href)}
+                          collapsed={collapsed}
+                          indent
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isExternal &&
+                mainNav
+                  .filter((item) => item.href === "/legacy_import")
+                  .map((item) => (
+                    <NavItem
+                      key={item.href}
+                      {...item}
+                      active={isActive(item.href)}
+                      collapsed={collapsed}
+                    />
+                  ))}
             </nav>
           </div>
         )}

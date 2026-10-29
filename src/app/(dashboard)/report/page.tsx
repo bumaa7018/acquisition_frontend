@@ -1246,7 +1246,11 @@ export default function ReportPage() {
                           {holderFull || "—"}
                         </p>
                       </td>
-                      <td className="px-3 py-3.5 text-slate-400">—</td>
+                      <td className="px-3 py-3.5 text-[12px] text-slate-600 dark:text-slate-300">
+                        <span className="block min-w-[160px] max-w-[260px] whitespace-normal break-words leading-snug">
+                          {p.address || "—"}
+                        </span>
+                      </td>
                       <td className="px-3 py-3.5 font-mono text-[12px] text-slate-700 dark:text-slate-200">
                         {p.parcel_id}
                       </td>
