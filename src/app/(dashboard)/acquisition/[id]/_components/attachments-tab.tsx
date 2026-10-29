@@ -26,7 +26,6 @@ export function AttachmentsTab({ id, canEdit }: { id: string; canEdit: boolean }
   const { data: docTypes = [] } = useQuery({
     queryKey: ["document-types", "acquisition"],
     queryFn: () => documentTypeApi.list("acquisition"),
-    staleTime: 60_000,
   });
 
   const uploadMutation = useMutation({

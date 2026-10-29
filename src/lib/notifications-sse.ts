@@ -19,6 +19,9 @@ import type { AppNotification } from "@/types";
 const STREAM_URL = "/api/v1/notifications/stream";
 const RETRY_MIN_MS = 2_000;
 const RETRY_MAX_MS = 30_000;
+// Тогтсон стрийм тасрах (backend restart, унтах горим, сүлжээ солигдох) нь хэвийн —
+// дахин холбогддог тул логлохгүй. Зөвхөн дараалан ингэтэл холбогдож чадаагүй үед WARN.
+const WARN_AFTER_FAILURES = 3;
 
 export type NotificationStreamHandlers = {
   onNotification: (n: AppNotification) => void;
@@ -38,6 +41,8 @@ export function subscribeNotifications(
   // "сэргээлт амжилттай ч стрийм дахиад 401" гэсэн тохиолдолд хүлээлтгүй
   // гогцоо үүсч, өмнөх 30 секундын давтамжаас ч дор болно.
   let refreshedForThisAttempt = false;
+  // Дараалсан амжилтгүй холболтын тоо (стрийм нээгдвэл тэглэнэ).
+  let failures = 0;
 
   async function connect() {
     if (stopped || connecting) return;
@@ -49,6 +54,7 @@ export function subscribeNotifications(
       return;
     }
     controller = new AbortController();
+    let established = false;
     try {
       const res = await fetch(STREAM_URL, {
         headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
@@ -74,6 +80,9 @@ export function subscribeNotifications(
       }
 
       retryMs = RETRY_MIN_MS; // амжилттай холболт — хүлээлтийг тэглэнэ
+      established = true;
+      if (failures >= WARN_AFTER_FAILURES) logger.info("notification stream reconnected", { failures });
+      failures = 0;
       refreshedForThisAttempt = false; // дараагийн тасралтад дахин сэргээж болно
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -94,10 +103,13 @@ export function subscribeNotifications(
       }
     } catch (err) {
       // AbortError (unmount дээр controller.abort()) — санаатай, логлохгүй.
-      // Бусад бүх тохиолдол (сүлжээний алдаа г.м.) — доор дахин холбогдох
-      // хэдий ч, ямар шалтгаанаар тасарснаа логлоно.
-      if ((err as Error)?.name !== "AbortError") {
-        logger.warn("notification stream connection failed", { error: String(err) });
+      // Нээгдсэн стрийм тасрах нь хэвийн (доор дахин холбогдоно). Холбогдож
+      // чадахгүй байдал WARN_AFTER_FAILURES удаа давтагдвал НЭГ удаа логлоно.
+      if ((err as Error)?.name !== "AbortError" && !established) {
+        failures++;
+        if (failures === WARN_AFTER_FAILURES) {
+          logger.warn("notification stream connection failed", { error: String(err), failures });
+        }
       }
     }
     connecting = false;

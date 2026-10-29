@@ -131,7 +131,6 @@ export default function PrintMapDialog({
   const { data: acq, isFetched: acqFetched } = useQuery({
     queryKey: ["land", acquisitionId],
     queryFn: () => landApi.getById(acquisitionId),
-    staleTime: 60_000,
   });
   const { data: categories = [], isFetched: categoriesFetched } = useQuery({
     queryKey: ["acquisition-categories"],
@@ -146,7 +145,6 @@ export default function PrintMapDialog({
   const { data: droneImages = [] } = useQuery({
     queryKey: ["drone-images", acquisitionId],
     queryFn: () => landApi.listDroneImages(acquisitionId),
-    staleTime: 60_000,
   });
 
   // Хүрээ мэдэгдэж буй, GeoServer-т нийтлэгдсэн зургууд л сонгогдоно
@@ -221,6 +219,8 @@ export default function PrintMapDialog({
   /* ── Зураг авч, хуудас бүрдүүлэх ─────────────────────────────── */
   // Таних тэмдэг — ХЭРЭГЖҮҮЛЖ буй тохиргооны давхаргуудаар (ноорогоор биш).
   const buildLegend = (hidden: Set<string>): PrintLegendItem[] => [
+    // Төлөв тус бүрийн тооны ӨМНӨ — төсөл арга хэмжээний нийт нэгж талбар.
+    ...(acq ? [{ color: "", label: `Нийт нэгж талбар (${acq.parcel_count})`, total: true }] : []),
     // Төлөвүүд БҮРТГЭЛЭЭС ирнэ (хатуу жагсаалт биш) бөгөөд хэрэглэгчийн
     // ХАССАН давхарга таних тэмдэгт гарахгүй.
     ...statusLayerDefs
@@ -298,7 +298,7 @@ export default function PrintMapDialog({
       planName: acq?.plan_name,
       acquisitionAreaM2: acq?.area_m2,
       parcelsAreaM2,
-      orgName: "Нийслэлийн газрын алба",
+      orgName: "Нийслэлийн газар зохион байгуулалтын алба",
       logo: logoRef.current,
       departmentName: dept?.name,
       departmentCode: dept?.code,

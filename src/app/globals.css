@@ -118,6 +118,28 @@
   }
 }
 
+/* ── Select ───────────────────────────────────────────── */
+/* Browser-ийн сум баруун ирмэгт наалддаг тул өөрийн сумаар солиж зай авна.
+   `select:not(...)` нь `.px-3` г.м. utility-аас өндөр specificity-тэй тул
+   баруун padding дарагдахгүй. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238391a2' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.6rem center;
+  background-repeat: no-repeat;
+  background-size: 1.1em 1.1em;
+  padding-right: 2.1rem;
+}
+
+/* Сонголт хийгээгүй (эхний "placeholder" сонголт: value="" эсвэл 0) үед
+   бусад input-ийн placeholder шиг саарал. Жагсаалтын сонголтууд хэвийн өнгөтэй. */
+select:has(> option:first-child:checked:is([value=""], [value="0"])) {
+  color: hsl(var(--muted-foreground));
+}
+select option {
+  color: hsl(var(--foreground));
+}
+
 /* ── Card ─────────────────────────────────────────────── */
 .ap-card {
   background: var(--clr-card);
@@ -244,4 +266,23 @@
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* Хуудасны табын мөр — scrollbar нь табуудын доорх 8px зурваст багтана. */
+.page-tabs-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.6) transparent;
+}
+.page-tabs-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.page-tabs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-tabs-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(148 163 184 / 0.6);
+}
+.page-tabs-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(100 116 139 / 0.8);
 }

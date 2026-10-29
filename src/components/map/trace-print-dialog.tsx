@@ -488,7 +488,7 @@ export default function TracePrintDialog({
   // Лого (ref) нь хуудас бүрдүүлэх үед нэмэгдэнэ — тэр үед ачаалагдсан байна
   const info = useMemo<TraceInfo>(
     () => ({
-      orgName: "Нийслэлийн газрын алба",
+      orgName: "Нийслэлийн газар зохион байгуулалтын алба",
       parcelCode: parcel.code,
       location: parcel.location,
       address: parcel.address,
@@ -705,7 +705,6 @@ export default function TracePrintDialog({
       const types = await queryClient.fetchQuery({
         queryKey: ["document-types", "parcel"],
         queryFn: () => documentTypeApi.list("parcel"),
-        staleTime: 60_000,
       });
       const docType = types.find((t) => t.type === TRACE_DOC_TYPE);
       if (!docType) {

@@ -48,6 +48,14 @@ export function surveyBucketLabel(value: number): string {
   return value >= SURVEY_COUNT_OPTIONS[SURVEY_COUNT_OPTIONS.length - 1] ? `${value}+` : String(value);
 }
 
+/**
+ * Тоон асуултын нийт тоо — ангилал бүрийн тоог хариултаар нь үржүүлж нэмнэ.
+ * «3+» нь 3-аар бодогдох тул бодит тооноос бага гарч болно.
+ */
+export function surveyCountTotal(counts: Record<string, number>): number {
+  return SURVEY_COUNT_OPTIONS.reduce((sum, n) => sum + n * (counts[String(n)] ?? 0), 0);
+}
+
 export const RELOCATION_LABELS: Record<RelocationType, string> = {
   ger_district: "Гэр хороолол",
   apartment: "Орон сууц",

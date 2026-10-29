@@ -20,6 +20,7 @@ import { Header } from "@/components/layout/header";
 import { BlockingLoaderProvider, ContentLoader } from "@/lib/blocking-loader";
 import { NavigationEvents } from "@/components/layout/navigation-events";
 import { PageTabs } from "@/components/layout/page-tabs";
+import { KeepAliveTabs } from "@/components/layout/keep-alive-tabs";
 
 /**
  * Хуудасны түвшний эрхийн бодлого.
@@ -123,13 +124,14 @@ export default function DashboardLayout({
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
           {/* useSearchParams — Suspense-гүй бол Next build CSR bailout алдаа өгнө */}
-          <Suspense fallback={<div className="h-11 shrink-0 border-b border-slate-200/80 dark:border-[#37394d]" />}>
+          <Suspense fallback={<div className="h-[52px] shrink-0" />}>
             <PageTabs />
           </Suspense>
           {/* Loader нь гүйлгэх элементийн ГАДНА — гүйлгэсэн үед ч харагдах хэсгийг бүрхэнэ */}
           <div className="relative flex-1 overflow-hidden">
-            <main className="h-full overflow-y-auto bg-background p-6">
-              {mounted ? children : null}
+            {/* Таб бүр өөрийн гүйлгэх хэсэгтэй, нээлттэй байх хугацаандаа mount-тай үлдэнэ */}
+            <main className="relative h-full bg-background">
+              {mounted ? <KeepAliveTabs>{children}</KeepAliveTabs> : null}
             </main>
             <ContentLoader />
           </div>

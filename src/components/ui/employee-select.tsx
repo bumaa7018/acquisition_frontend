@@ -57,7 +57,6 @@ export function EmployeeSelect({
     queryKey: ["employee-select", debounced],
     queryFn: () => employeeApi.list({ search: debounced.trim() || undefined, page_size: 40 }),
     enabled: open,
-    staleTime: 30_000,
   });
 
   const results = data?.data ?? [];

@@ -10,7 +10,6 @@ import { authStorage } from "@/lib/auth";
 import { RIGHT_TYPE_LABELS } from "@/types";
 import type { ReportParcelRow } from "@/types";
 import {
-  Search,
   Download,
   X,
   ChevronLeft,
@@ -31,6 +30,7 @@ import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { AbbrevAmount, AmountHint } from "@/components/ui/amount-hint";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 // Тайлангийн хүснэгтийн толгойг татаж буй Excel тайлангийн (report_template.xlsx)
 // толгойтой яг ижилхэн байлгана — эх сурвалж: тухайн xlsx-ийн B2:S3 нүднүүд.
@@ -631,18 +631,6 @@ export default function ReportPage() {
     genCatId ||
     subCatId
   );
-  const hasPendingChange =
-    inPlanCode !== planCode ||
-    inAcqId !== acqId ||
-    inAcqName !== acqName ||
-    inAcqYears.join(",") !== acqYears.join(",") ||
-    inAu3Code !== au3Code ||
-    inRightType !== rightType ||
-    inLanduse !== landuse ||
-    inCompType !== compType ||
-    inGenCatId !== genCatId ||
-    inSubCatId !== subCatId;
-
   const filter = {
     plan_code: planCode || undefined,
     acquisition_id: acqId || undefined,
@@ -661,7 +649,6 @@ export default function ReportPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["report-parcel-list", filter],
     queryFn: () => reportApi.list(filter),
-    staleTime: 30_000,
   });
 
   const parcels: ReportParcelRow[] = data?.data ?? [];
@@ -677,7 +664,6 @@ export default function ReportPage() {
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ["report-summary", summaryFilter],
     queryFn: () => reportApi.summary(summaryFilter),
-    staleTime: 30_000,
   });
 
   const stats = useMemo(
@@ -1125,30 +1111,22 @@ export default function ReportPage() {
             </div>
           )}
 
-          <button
-            onClick={handleSearch}
-            className={cn(
-              "flex items-center gap-1.5 h-9 px-4 rounded-lg text-[13px] font-medium transition-colors",
-              hasPendingChange
-                ? "bg-[#02c0ce] text-white hover:bg-[#00a8b5]"
-                : "bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.1]",
-            )}
-          >
-            <Search className="h-3.5 w-3.5" />
-            Хайх
-          </button>
+          <SearchButton onClick={handleSearch} />
           <RefreshButton />
 
-          {(hasActiveFilter ||
-            inPlanCode ||
-            inAcqId ||
-            inAcqName ||
-            inAcqYears.length ||
-            inAu3Code ||
-            inRightType ||
-            inLanduse ||
-            inCompType ||
-            inGenCatId) && (
+          {/* Boolean() — эс бөгөөс `inGenCatId === 0` үед товчны оронд "0" зурагддаг. */}
+          {Boolean(
+            hasActiveFilter ||
+              inPlanCode ||
+              inAcqId ||
+              inAcqName ||
+              inAcqYears.length ||
+              inAu3Code ||
+              inRightType ||
+              inLanduse ||
+              inCompType ||
+              inGenCatId,
+          ) && (
             <button
               onClick={handleReset}
               className="flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 dark:border-white/[0.08] text-[13px] text-slate-500 hover:text-slate-700 dark:hover:text-white transition-colors"

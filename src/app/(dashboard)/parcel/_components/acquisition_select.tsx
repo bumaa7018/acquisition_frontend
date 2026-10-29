@@ -87,6 +87,7 @@ export function AcquisitionSelect({
         )}
         {hasValue ? (
           <button
+            type="button"
             onClick={clear}
             className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
           >
@@ -107,6 +108,7 @@ export function AcquisitionSelect({
             ) : (
               filtered.map((acq) => (
                 <button
+                  type="button"
                   key={acq.id}
                   onMouseDown={(e) => {
                     e.preventDefault();

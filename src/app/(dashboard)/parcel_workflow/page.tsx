@@ -44,7 +44,6 @@ export default function ParcelWorkflowPage() {
   const { data: docTypes = [] } = useQuery({
     queryKey: ["document-types", "parcel"],
     queryFn: () => documentTypeApi.list("parcel"),
-    staleTime: 60_000,
   });
   const sortedDocTypes = useMemo(() => sortDocumentTypes(docTypes), [docTypes]);
 

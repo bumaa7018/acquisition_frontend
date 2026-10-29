@@ -7,6 +7,8 @@ import { logger } from "@/lib/logger";
 import { authStorage } from "@/lib/auth";
 import { startSessionRefresh } from "@/lib/session-refresh";
 import { useBasemapSync } from "@/components/map/use-basemap-sync";
+import { clearGeoServerCache } from "@/lib/geoserver";
+import { PAGE_TAB_TTL_MS } from "@/lib/page-tabs";
 
 // axios interceptor нь HTTP хүсэлт бүрийг логлодог, гэхдээ query/mutation-ий
 // `onError` бичээгүй компонент query-г interceptor-ийн лог дараа юу болсныг
@@ -46,7 +48,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
         mutationCache: new MutationCache({ onError: logMutationError }),
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
+            // Цэсээр нэг удаа нээсэн хуудас таб руу буцахад (хэдэн минутын дараа
+            // ч) серверт ДАХИН хандахгүй — хугацаагаар хуучрахгүй. Шинэчлэлт нь
+            // зөвхөн: хадгалах үйлдлийн invalidate, эсвэл ⟳ товч.
+            staleTime: Infinity,
+            // Кэш нээлттэй табын хугацаанаас (PAGE_TAB_TTL_MS) өмнө устахгүй.
+            gcTime: PAGE_TAB_TTL_MS,
+            // Сүлжээ түр тасраад сэргэхэд нуугдсан табуудын бүх query зэрэг дахин
+            // татагдаж хуудас "reload" болсон мэт харагддаг байв.
+            refetchOnReconnect: false,
             // Алдаа гарахад хэрэглэгчийг алдааны хуудас руу ШИДЭХЭЭ больсон тул
             // (lib/api.ts — зөвхөн toast) түр зуурын алдаа өөрөө сэргэх ёстой:
             //   - 401/403: эрхийн алдаа, дахин оролдох нь дэмий
@@ -78,6 +88,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // тутам хуудасны бүх хүсэлт зэрэг 401 аваад, зэрэгцсэн refresh-үүд нэг
   // удаагийн refresh token-ыг эргүүлж сесс тасардаг байв.
   useEffect(() => startSessionRefresh(), []);
+
+  // Өгөгдөл өөрчлөгдсөн (хадгалах үйлдлийн дараах invalidate) бол газрын зургийн
+  // WMS/WFS кэш ч хуучирсан — дараагийн зураг GeoServer-ээс шинээр татна.
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((e) => {
+        if (e.type === "updated" && e.action.type === "invalidate") clearGeoServerCache();
+      }),
+    [queryClient],
+  );
 
   return (
     <ThemeProvider

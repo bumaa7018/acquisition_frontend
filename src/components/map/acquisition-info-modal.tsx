@@ -97,7 +97,6 @@ export default function AcquisitionInfoModal({
     queryFn: () => landApi.getById(acquisitionId, { allow403: true }),
     enabled: !!acquisitionId,
     retry: false,
-    staleTime: 60_000,
   });
 
   const color = layerColor;

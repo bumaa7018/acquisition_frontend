@@ -1,19 +1,20 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowLeft, BarChart3, LayoutDashboard, X } from "lucide-react";
 import { dashboardApi, parcelSurveyApi, type DashboardData } from "@/lib/api";
 import { getParcelStatusStyle, type FinanceDashboardData, type ParcelSurveySummary, type RelocationType } from "@/types";
 import {
   RELOCATION_LABELS,
-  SURVEY_COUNT_OPTIONS,
   SURVEY_COUNT_QUESTIONS,
+  surveyCountTotal,
 } from "@/lib/parcel-survey";
 import { StatusDot } from "@/components/ui/status-label";
 import { monthlyTimeline } from "@/lib/timeline-months";
 import { cn, formatBillion } from "@/lib/utils";
 import { AbbrevAmount } from "@/components/ui/amount-hint";
+import { YearMultiSelect } from "@/components/ui/year-multi-select";
 
 const ACQ_STATUS_LABEL: Record<number, string> = {
   1: "Шинэ",
@@ -69,6 +70,8 @@ export function AcquisitionOverviewPanel({
   onSelectAcquisition,
   initialSelectedId,
   showSurvey = false,
+  surveyAll = false,
+  rootYears,
 }: {
   data?: DashboardData;
   /** Санхүүжилт — нэг чөлөөлөлт сонгосон үед (эрхгүй бол null). */
@@ -99,6 +102,22 @@ export function AcquisitionOverviewPanel({
   initialSelectedId?: string | null;
   /** «Захирамжийн төсөл»-ийн доор газрын судалгааны (санал асуулга) статистик. */
   showSurvey?: boolean;
+  /**
+   * `data` нь шүүлтгүй «бүх чөлөөлөлт» бол судалгааг чөлөөлөлтөөр хязгаарлалгүй — бүх
+   * нэгж талбараар татна. Нэг чөлөөлөлт рүү орсон үед зөвхөн түүнийх.
+   */
+  surveyAll?: boolean;
+  /**
+   * Толгойн оныг «бүх чөлөөлөлт» дээр ч сольж болгоно: өгсөн онуудаар `data`/`finance`-ийг
+   * хэрхэн татахыг (дашбоардын бусад шүүлттэй) буцаана. Газрын зураг, дашбоардын
+   * шүүлт өөрчлөгдөхгүй. Байхгүй бол зөвхөн нэг чөлөөлөлт рүү орсон үед сольж болно.
+   */
+  rootYears?: (years: number[]) => {
+    key: unknown[];
+    data: () => Promise<DashboardData>;
+    financeKey: unknown[] | null;
+    finance: () => Promise<FinanceDashboardData>;
+  };
 }) {
   // Бүтэн дэлгэцэд орохтой зэрэг НЭЭЛТТЭЙ; ✕-ээр хаавал «Статистик» товчоор дахин нээнэ.
   const [openState, setOpen] = useState(true);
@@ -106,9 +125,30 @@ export function AcquisitionOverviewPanel({
 
   // «Чөлөөлөлтүүд» жагсаалтаас нэгийг сонгоход тэр чөлөөлөлтийн дэлгэрэнгүй (←-ээр буцна).
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId ?? null);
-  const rootAcqs = rootData?.acquisitions ?? [];
+  // Толгойн он — шүүлтийн онгоос эхэлж, ЭНД сольж болно (дашбоардын шүүлт, газрын
+  // зураг өөрчлөгдөхгүй). Шүүлтийн он солигдоход түүн рүү буцна.
+  const yearsKey = sortedYearsKey(years);
+  const [panelYears, setPanelYears] = useState(years);
+  useEffect(() => {
+    setPanelYears(yearsKey ? yearsKey.split(",").map(Number) : []);
+  }, [yearsKey]);
+  const rootOverride = rootYears && sortedYearsKey(panelYears) !== yearsKey ? rootYears(panelYears) : null;
+  const overrideData = useQuery({
+    queryKey: rootOverride?.key ?? ["map-overview", "root-years", "off"],
+    queryFn: rootOverride ? rootOverride.data : skipToken,
+  });
+  const overrideFinance = useQuery({
+    queryKey: rootOverride?.financeKey ?? ["map-overview", "root-years-finance", "off"],
+    queryFn: rootOverride?.financeKey ? rootOverride.finance : skipToken,
+    retry: false,
+  });
+  const baseData = rootOverride ? overrideData.data : rootData;
+  const baseFinance = rootOverride ? (rootOverride.financeKey ? overrideFinance.data ?? null : null) : rootFinance;
+  const baseLoading = rootOverride ? overrideData.isLoading : rootLoading;
+
+  const rootAcqs = baseData?.acquisitions ?? [];
   const drillAcq = selectedId ? rootAcqs.find((a) => a.id === selectedId) : undefined;
-  const drill = useAcquisitionOverview(drillAcq?.id ?? "", !!drillAcq, years);
+  const drill = useAcquisitionOverview(drillAcq?.id ?? "", !!drillAcq, panelYears);
   const bodyRef = useRef<HTMLDivElement>(null);
   // «Чөлөөлөлтүүд» жагсаалтыг гүйцэтгэлийн ангиллаар шүүх — олныг зэрэг сонгож болно
   // (чип дээр дахин дарвал тэр ангиллыг хасна; хоосон бол бүгд).
@@ -131,9 +171,9 @@ export function AcquisitionOverviewPanel({
     bodyRef.current?.scrollTo({ top: 0 });
   };
 
-  const data = drillAcq ? drill.data : rootData;
-  const finance = drillAcq ? drill.finance : rootFinance;
-  const loading = drillAcq ? drill.loading : rootLoading;
+  const data = drillAcq ? drill.data : baseData;
+  const finance = drillAcq ? drill.finance : baseFinance;
+  const loading = drillAcq ? drill.loading : baseLoading;
   const title = drillAcq ? drillAcq.acquisition_name || drillAcq.plan_code : rootTitle;
   const subtitle = drillAcq ? rootTitle : rootSubtitle;
 
@@ -150,16 +190,26 @@ export function AcquisitionOverviewPanel({
       }));
   }, [data?.parcel_statuses, data?.status_breakdown]);
 
-  const months = useMemo(() => monthlyTimeline(data?.timeline ?? [], years), [data?.timeline, years]);
+  const months = useMemo(
+    () => monthlyTimeline(data?.timeline ?? [], panelYears),
+    [data?.timeline, panelYears],
+  );
   const monthTotal = months.reduce((s, m) => s + m.count, 0);
 
   const acqs = useMemo(() => data?.acquisitions ?? [], [data?.acquisitions]);
-  const surveyAcqIds = useMemo(() => acqs.map((a) => a.id).sort(), [acqs]);
+  // Судалгааны хамрах хүрээ: сонгосон чөлөөлөлт → зөвхөн түүнийх; шүүлтгүй «бүх» → бүх
+  // нэгж талбар (null); бусад үед харагдаж буй чөлөөлөлтүүдийнх. selectedId-аар (drillAcq биш)
+  // шалгана — rootData ачаалагдаж амжаагүй/тэр чөлөөлөлт жагсаалтад байхгүй үед бүх нэгж
+  // талбарынх гарч ирэхээс сэргийлнэ.
+  const surveyAcqIds = useMemo(
+    () => (selectedId ? [selectedId] : surveyAll ? null : acqs.map((a) => a.id).sort()),
+    [selectedId, surveyAll, acqs],
+  );
   const { data: survey } = useQuery({
-    queryKey: ["parcel-surveys", "summary", "overview", surveyAcqIds],
-    queryFn: () => fetchSurveySummary(surveyAcqIds),
-    enabled: showSurvey && surveyAcqIds.length > 0,
-    staleTime: 60_000,
+    queryKey: ["parcel-surveys", "summary", "overview", surveyAcqIds ?? "all"],
+    queryFn: () =>
+      surveyAcqIds ? fetchSurveySummary(surveyAcqIds) : parcelSurveyApi.summary(undefined, { silent: true }),
+    enabled: showSurvey && (surveyAcqIds === null || surveyAcqIds.length > 0),
     retry: false,
   });
   const single = acqs.length === 1 ? acqs[0] : null;
@@ -222,7 +272,8 @@ export function AcquisitionOverviewPanel({
       onPointerDown={(e) => e.stopPropagation()}
       onWheel={(e) => e.stopPropagation()}
     >
-      <div className="flex items-start gap-2 border-b border-slate-100 px-4 py-3 dark:border-[#37394d]">
+      <div className="border-b border-slate-100 px-4 py-3 dark:border-[#37394d]">
+      <div className="flex items-start gap-2">
         {drillAcq ? (
           <button
             type="button"
@@ -238,11 +289,6 @@ export function AcquisitionOverviewPanel({
         )}
         <div className="min-w-0 flex-1">
           <p className="break-words text-[13px] font-bold leading-snug text-slate-800 dark:text-white">{title}</p>
-          {showYears && (
-            <span className="mt-1.5 inline-flex items-center rounded-md bg-[#02c0ce] px-2 py-0.5 text-[13px] font-bold tabular-nums text-white shadow-sm">
-              {years.length > 0 ? `${[...years].sort((a, b) => a - b).join(", ")} он` : "Бүх он"}
-            </span>
-          )}
           {(subtitle || single) && (
             <p className="mt-0.5 break-words text-[11px] text-slate-500 dark:text-slate-400">
               {[subtitle, single ? ACQ_STATUS_LABEL[single.status] : ""].filter(Boolean).join(" · ")}
@@ -258,6 +304,42 @@ export function AcquisitionOverviewPanel({
         >
           <X className="h-4 w-4" />
         </button>
+      </div>
+      {/* Оны сонголт зүүн захаас, сонгосон онууд ард нь жагсана */}
+      {showYears && (drillAcq || rootYears) ? (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <YearMultiSelect value={panelYears} onChange={setPanelYears} className="w-36" />
+          {[...panelYears].sort((a, b) => a - b).map((y) => (
+            <span
+              key={y}
+              className="inline-flex h-6 items-center gap-1 rounded-md bg-[#02c0ce] pl-2 pr-1 text-[12px] font-bold tabular-nums text-white shadow-sm"
+            >
+              {y}
+              <button
+                type="button"
+                onClick={() => setPanelYears(panelYears.filter((p) => p !== y))}
+                title="Хасах"
+                aria-label={`${y} он хасах`}
+                className="flex h-4 w-4 items-center justify-center rounded hover:bg-white/20"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : showYears && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {years.length > 0 ? (
+            [...years].sort((a, b) => a - b).map((y) => (
+              <span key={y} className="inline-flex h-6 items-center rounded-md bg-[#02c0ce] px-2 text-[12px] font-bold tabular-nums text-white shadow-sm">
+                {y}
+              </span>
+            ))
+          ) : (
+            <span className="inline-flex h-6 items-center rounded-md bg-[#02c0ce] px-2 text-[12px] font-bold text-white shadow-sm">Бүх он</span>
+          )}
+        </div>
+      )}
       </div>
 
       <div ref={bodyRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -487,13 +569,7 @@ export function AcquisitionOverviewPanel({
                       <SurveyRow
                         key={q.field}
                         title={q.title}
-                        // Хариулт бүрийг тоогоор нь үржүүлж нийлбэрийг харуулна («3+» нь 3-аар бодогдоно)
-                        options={[
-                          {
-                            label: "Нийт",
-                            value: SURVEY_COUNT_OPTIONS.reduce((s, n) => s + n * (survey[q.summaryKey][String(n)] ?? 0), 0),
-                          },
-                        ]}
+                        options={[{ label: "Нийт", value: surveyCountTotal(survey[q.summaryKey]) }]}
                       />
                     ))}
                     <SurveyRow
@@ -666,19 +742,21 @@ function DecisionChip({
  * Нэг чөлөөлөлтийн хураангуй (чөлөөлөлтийн хуудасны газрын зураг) — газрын
  * зураг бүтэн дэлгэцэд орох үед л татна. Санхүүгийн хэсэг эрхгүй бол (403) нуугдана.
  */
+function sortedYearsKey(years: number[]): string {
+  return [...years].sort((a, b) => a - b).join(",");
+}
+
 export function useAcquisitionOverview(acquisitionId: string, enabled: boolean, years?: number[]) {
   const yearKey = years?.length ? [...years].sort((a, b) => a - b) : [];
   const dash = useQuery({
     queryKey: ["map-overview", "dashboard", acquisitionId, yearKey],
     queryFn: () => dashboardApi.get({ acquisition_id: acquisitionId, years: yearKey }, { silent: true }),
     enabled: enabled && !!acquisitionId,
-    staleTime: 60_000,
   });
   const finance = useQuery({
     queryKey: ["map-overview", "finance", acquisitionId, yearKey],
     queryFn: () => dashboardApi.finance({ acquisition_id: acquisitionId, years: yearKey }, { silent: true }),
     enabled: enabled && !!acquisitionId,
-    staleTime: 60_000,
     retry: false,
   });
   return { data: dash.data, finance: finance.data ?? null, loading: dash.isLoading };

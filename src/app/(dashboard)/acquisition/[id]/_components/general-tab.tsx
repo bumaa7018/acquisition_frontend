@@ -57,7 +57,6 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     queryKey: ["valuation-orgs", "options"],
     queryFn: () => landApi.listValuationOrgs(),
     enabled: canEdit,
-    staleTime: 60_000,
   });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({

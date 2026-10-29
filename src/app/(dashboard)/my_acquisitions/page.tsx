@@ -9,6 +9,7 @@ import { Search, MapPin, ChevronLeft, ChevronRight, X, AlertCircle } from "lucid
 import Link from "next/link";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -91,12 +92,7 @@ export default function MyAcquisitionsPage() {
             </button>
           )}
         </div>
-        <button
-          onClick={applySearch}
-          className="h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-medium hover:bg-[#02c0ce]/90 transition-colors"
-        >
-          Хайх
-        </button>
+        <SearchButton onClick={applySearch} />
         <RefreshButton />
       </div>
 

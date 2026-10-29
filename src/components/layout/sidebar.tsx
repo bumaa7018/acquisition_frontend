@@ -54,6 +54,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
+import { loadPageTabs } from "@/lib/page-tabs";
 
 const NAV_MAIN = [
   { href: "/", label: "Хяналтын самбар", icon: LayoutDashboard },
@@ -232,6 +233,24 @@ function NavItem({
   collapsed: boolean;
   indent?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  // ӨӨР таб нээлттэй бол (ж: `/parcel/12` дэлгэрэнгүй дээр) цэс дарахад жагсаалт
+  // руу ШИНЭЭР орохгүй — таб дарсантай адил орхисон хуудас руу нь буцна. Одоо
+  // харж буй таб бол цэс хэвийнээрээ (жагсаалт руу) шилжинэ.
+  const onClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const plain =
+      e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey &&
+      (resolveNavItem(pathname)?.href ?? pathname) !== href;
+    const tabPath = plain ? loadPageTabs().find((t) => t.key === href)?.path : undefined;
+    if (tabPath && tabPath !== href) {
+      e.preventDefault();
+      notifyNavStart(undefined, tabPath);
+      router.push(tabPath);
+      return;
+    }
+    notifyNavStart(e);
+  };
   return (
     <CollapsedTip label={label} collapsed={collapsed} className="relative">
       {active && (
@@ -251,7 +270,7 @@ function NavItem({
       <Link
         prefetch={false}
         href={href}
-        onClick={notifyNavStart}
+        onClick={onClick}
         className={cn(
           "flex items-center rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors",
           collapsed ? "justify-center" : "gap-3",

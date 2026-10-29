@@ -9,7 +9,6 @@ import type { Plan, LandAcquisition } from "@/types";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
-  Search,
   Trash2,
   MapPin,
   ChevronLeft,
@@ -51,6 +50,7 @@ import { PlanCodeSearch, PlanBoundaryPreview, planHasBoundary } from "@/componen
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { YearMultiSelect } from "@/components/ui/year-multi-select";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 // ── Create Modal ──────────────────────────────────────────────────────────────
 
@@ -730,13 +730,7 @@ export default function LandPage() {
             onChange={(years) => setDraft(d => ({ ...d, years }))}
             className="w-32 shrink-0"
           />
-          <button
-            onClick={applySearch}
-            className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#02c0ce] text-white text-[13px] font-semibold hover:bg-[#02c0ce]/90 transition-colors shrink-0"
-          >
-            <Search className="h-3.5 w-3.5" />
-            Хайх
-          </button>
+          <SearchButton onClick={applySearch} />
           <RefreshButton />
           {hasFilter && (
             <button

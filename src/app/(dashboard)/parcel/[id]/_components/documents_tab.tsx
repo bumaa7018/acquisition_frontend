@@ -86,7 +86,6 @@ export function DocumentsTab({
   const { data: docTypes = [] } = useQuery({
     queryKey: ["document-types", "parcel"],
     queryFn: () => documentTypeApi.list("parcel"),
-    staleTime: 60_000,
   });
 
 

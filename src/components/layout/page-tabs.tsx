@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CopyX, ListX, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getNavTarget, notifyNavStart, subscribe } from "@/lib/blocking-loader-state";
+import { getNavTarget, isWarmPath, notifyNavStart, subscribe } from "@/lib/blocking-loader-state";
 import {
   PAGE_TABS_MAX,
   loadPageTabs,
@@ -13,6 +13,7 @@ import {
   type PageTab,
 } from "@/lib/page-tabs";
 import { resolveNavItem } from "./sidebar";
+import { pageTabKey } from "./keep-alive-tabs";
 
 const HOME = resolveNavItem("/")!;
 /** Root layout-ийн metadata-тай ижил. */
@@ -41,7 +42,7 @@ export function PageTabs() {
   const navTarget = useSyncExternalStore(subscribe, getNavTarget, () => null);
 
   const fullPath = search ? `${pathname}?${search}` : pathname;
-  const currentKey = resolveNavItem(pathname)?.href ?? pathname;
+  const currentKey = pageTabKey(pathname);
   const prevKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -164,12 +165,21 @@ export function PageTabs() {
   const hasOthers = !!menuTab && tabs.some((t) => t.key !== menuTab.key);
 
   return (
-    <div className="flex h-11 shrink-0 items-end border-b border-slate-200/80 bg-white px-3 dark:border-[#37394d] dark:bg-[#1e1f27]">
-      <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto">
+    // Хэвтээ scrollbar табуудыг дарахгүйн тулд доод зураасны ДООР тусдаа
+    // зурваст гарна (өндөр нь тогтмол — таб олширход layout үсрэхгүй).
+    <div className="relative flex h-[52px] shrink-0 items-start px-3">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-11 border-b-2 border-[#0891b2] bg-slate-50 dark:bg-[#1a1b22]"
+      />
+      <div className="page-tabs-scroll relative flex h-[52px] min-w-0 flex-1 items-start gap-1 overflow-x-auto overflow-y-hidden">
         {items.map((tab) => {
           const Icon = resolveNavItem(tab.key)?.icon;
           const active = tab.key === activeKey;
-          const loading = active && pendingKey !== null;
+          // Нээлттэй таб руу шилжвэл хуудас нь шууд харагддаг — router-ийн
+          // шилжилт дуустал spinner эргүүлэх нь "юу ч болохгүй атал ачаалж
+          // байна" мэт харагддаг байв.
+          const loading = active && pendingKey !== null && !(navTarget && isWarmPath(navTarget));
           // Ачаалж буй табыг хаавал шилжилт дуусмагц дахин нээгдэнэ — хаах товч нуугдана.
           const closable = tab.key !== HOME.href && !loading;
           return (
@@ -191,10 +201,10 @@ export function PageTabs() {
                 }
               }}
               className={cn(
-                "group flex h-9 max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-t-lg px-3 text-[13px] font-medium transition-colors",
+                "group mt-1.5 flex h-9 max-w-[220px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-t-lg px-3 text-[13px] font-medium transition-colors",
                 active
-                  ? "bg-[#02c0ce] text-white"
-                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
+                  ? "bg-[#0891b2] text-white shadow-sm"
+                  : "text-slate-500 hover:bg-slate-200/70 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]",
               )}
             >
               {loading ? (
@@ -229,7 +239,7 @@ export function PageTabs() {
           title="Бүх табыг хаах"
           aria-label="Бүх табыг хаах"
           onClick={() => closeAllExcept(null)}
-          className="mb-1 ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]"
+          className="relative ml-2 mt-[5px] flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:text-[#97aac1] dark:hover:bg-[#252630] dark:hover:text-[#e2eeff]"
         >
           <ListX className="h-4 w-4" />
         </button>

@@ -133,7 +133,6 @@ function AcquisitionSelect({
       return landApi.suggest(debounced);
     },
     enabled: debounced.trim().length > 0,
-    staleTime: 30_000,
   });
 
   const results = data ?? [];
@@ -275,7 +274,6 @@ function EmployeeSelect({
     queryKey: ["employee-suggest", debounced],
     queryFn: () => usersApi.list({ search: debounced.trim(), page_size: 30 }),
     enabled: open,
-    staleTime: 30_000,
   });
 
   const results = data?.data ?? [];
@@ -422,7 +420,6 @@ function PlanSelect({
       return landApi.suggest(debounced);
     },
     enabled: debounced.trim().length > 0,
-    staleTime: 30_000,
   });
 
   const plans = Array.from(
@@ -736,7 +733,6 @@ function ExternalDashboard() {
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", "external"],
     queryFn: () => dashboardApi.get(),
-    staleTime: 60_000,
   });
 
   const acquisitions = data?.acquisitions ?? [];
@@ -1224,7 +1220,6 @@ export default function DashboardPage() {
   const { data: dashDataRaw, isLoading } = useQuery({
     queryKey: ["dashboard", appliedFilter],
     queryFn: () => fetchDashboard(appliedFilter),
-    staleTime: 60_000,
     enabled: roleReady && !isProfOrg && !isOtherExternal && deptDefaultApplied,
   });
 
@@ -1338,7 +1333,6 @@ export default function DashboardPage() {
     // Анхдагч (хэлтсийн) ангилал тодорхой болтол хүлээнэ — эс бөгөөс ангилалгүй
     // нийлбэрийг дэмий татна.
     enabled: !!financeFilter && deptDefaultApplied,
-    staleTime: 60_000,
     retry: false,
   });
   // Сар сонгосон бол үнэлгээний бүтэц ч тухайн сарын байдлаар.
@@ -1359,7 +1353,6 @@ export default function DashboardPage() {
   const { data: allDashData, isLoading: allLoading } = useQuery({
     queryKey: ["dashboard", allFilter],
     queryFn: () => fetchDashboard(allFilter),
-    staleTime: 60_000,
     enabled: !!searchedAcqId,
   });
   const allFinanceFilter = useMemo(
@@ -1373,7 +1366,6 @@ export default function DashboardPage() {
     queryKey: ["map-overview", "finance", allFinanceFilter],
     queryFn: () => dashboardApi.finance(allFinanceFilter!, { silent: true }),
     enabled: !!allFinanceFilter,
-    staleTime: 60_000,
     retry: false,
   });
   // «Бүх» үеийн газрын зураг — commitMap-ийн дүрэмтэй ижил (шүүлтгүй бол бүх давхарга).
@@ -1390,6 +1382,22 @@ export default function DashboardPage() {
   // анхны утга нь тэр чөлөөлөлт; null = «бүх» рүү буцсан.
   const [focusAcqId, setFocusAcqId] = useState<string | null>(null);
   const focusAcqIds = useMemo(() => (focusAcqId ? [focusAcqId] : undefined), [focusAcqId]);
+  // Самбарын толгойд он солиход: бусад шүүлт хэвээр, зөвхөн он өөр дашбоард/санхүү
+  // (газрын зураг, дашбоардын шүүлт өөрчлөгдөхгүй). Санхүүгийн дүрэм нь дээрхтэй ижил.
+  const panelRootYears = (base: typeof appliedFilter, financeById: string) => (years: number[]) => {
+    const f = { ...base, years: years.map(String) };
+    const financeArgs = financeById
+      ? { acquisition_id: financeById }
+      : !f.acqId && !f.planCode && !f.genCatId && !f.subCatId && !f.employeeId
+        ? { years, au2_code: f.au2Code || undefined }
+        : null;
+    return {
+      key: ["dashboard", f],
+      data: () => fetchDashboard(f),
+      financeKey: financeArgs ? ["map-overview", "finance", financeArgs] : null,
+      finance: () => dashboardApi.finance(financeArgs!, { silent: true }),
+    };
+  };
   const showAllOnMap = !!searchedAcqId && !focusAcqId;
   const mapOverview = searchedAcqId ? (
     <AcquisitionOverviewPanel
@@ -1402,6 +1410,8 @@ export default function DashboardPage() {
       years={overviewYears}
       showYears
       showSurvey
+      surveyAll={!allMapIds}
+      rootYears={panelRootYears(allFilter, "")}
     />
   ) : (
     <AcquisitionOverviewPanel
@@ -1414,6 +1424,8 @@ export default function DashboardPage() {
       years={overviewYears}
       showYears
       showSurvey
+      surveyAll={!acqSearched && !allMapIds}
+      rootYears={panelRootYears(appliedFilter, overviewAcqId)}
     />
   );
 

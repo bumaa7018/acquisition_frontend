@@ -56,7 +56,7 @@ import {
   type MapLayerDef,
   type MapLayerId,
 } from "./layers";
-import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders } from "@/lib/geoserver";
+import { GS_WMS, GS_WFS, wmsPostLoad, buildCodeCql, droneTileUrl, GS_GWC_MAX_ZOOM, gsAuthHeaders, fetchWfsJson } from "@/lib/geoserver";
 import { activateCesium3D, type Cesium3DHandle, type Cesium3DBounds, type Cesium3DParcel } from "./cesium-3d";
 import { ChronosView } from "./chronos/chronos-view";
 import { hasPermission, isExternalSpecialRole } from "@/lib/role-utils";
@@ -758,12 +758,11 @@ export function AcquisitionMap({
       propertyName: "geometry",
       maxFeatures: "1",
     });
-    fetch(GS_WFS, {
-      method: 'POST',
-      headers: gsAuthHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' }),
-      body: params.toString(),
-    })
-      .then((r) => r.json())
+    // Кэштэй (таб солиход дахин GeoServer руу очихгүй) — fetchWfsJson.
+    fetchWfsJson<{ bbox?: number[]; features?: { geometry?: { bbox?: number[]; coordinates?: unknown } }[] }>(
+      GS_WFS,
+      params.toString(),
+    )
       .then((json) => {
         const geometry = json?.features?.[0]?.geometry;
         const bbox: number[] | undefined =
@@ -803,8 +802,9 @@ export function AcquisitionMap({
       outputFormat: "application/json",
       propertyName: "geometry,parcel_id,status",
     });
-    fetch(`${GS_WFS}?${parcelParams.toString()}`, { headers: gsAuthHeaders() })
-      .then((r) => r.json())
+    fetchWfsJson<{ features?: { id?: string; properties?: { parcel_id?: string; status?: number }; geometry?: { type?: string; coordinates?: unknown } }[] }>(
+      `${GS_WFS}?${parcelParams.toString()}`,
+    )
       .then((json) => {
         const cesiumParcels: Cesium3DParcel[] = [];
         // Ring биш ФИЧЕР (нэгж талбар) тутамд нэг удаа тоологдоно — MultiPolygon

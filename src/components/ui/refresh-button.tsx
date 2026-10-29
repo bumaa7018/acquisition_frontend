@@ -2,11 +2,16 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { clearGeoServerCache } from "@/lib/geoserver";
+import { trackRefresh } from "@/lib/blocking-loader-state";
 
 /**
  * "Хайх" товчны ард байрлах шинэчлэх товч — шүүлтийг өөрчлөхгүйгээр
  * хуудсан дээр идэвхтэй байгаа БҮХ query-г серверээс дахин татна.
  * Query бүрийг тусад нь холбох шаардлагагүй.
+ *
+ * Татаж дуустал контентын хэсэгт саарал давхарга + spinner гарна
+ * (`ContentLoader`) — хуучин өгөгдөл доороо харагдсаар.
  */
 export function RefreshButton({ className }: { className?: string }) {
   const queryClient = useQueryClient();
@@ -15,7 +20,10 @@ export function RefreshButton({ className }: { className?: string }) {
   return (
     <button
       type="button"
-      onClick={() => queryClient.refetchQueries({ type: "active" })}
+      onClick={() => {
+        clearGeoServerCache();
+        void trackRefresh(queryClient.refetchQueries({ type: "active" }));
+      }}
       disabled={fetching}
       title="Шинэчлэх"
       aria-label="Шинэчлэх"

@@ -86,7 +86,6 @@ export function ChronosView({
     queryKey: ["chronos", acquisitionIds ?? "all"],
     queryFn: () => dashboardApi.chronos(acquisitionIds),
     enabled: !none,
-    staleTime: 60_000,
   });
 
   const months = useMemo(() => monthRange(data?.months ?? []), [data?.months]);

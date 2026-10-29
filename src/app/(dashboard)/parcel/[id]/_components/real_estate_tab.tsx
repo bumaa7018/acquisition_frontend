@@ -607,13 +607,11 @@ export function RealEstateTab({
   const { data: specTypes = [] } = useQuery({
     queryKey: ["asset-spec-types"],
     queryFn: () => assetSpecTypeApi.list(),
-    staleTime: 60_000,
   });
 
   const { data: calcTypes = [] } = useQuery({
     queryKey: ["asset-calc-types"],
     queryFn: () => assetCalcTypeApi.list(),
-    staleTime: 60_000,
   });
 
   const { data: parcelData } = useQuery({
@@ -679,7 +677,6 @@ export function RealEstateTab({
     queryKey: ["valuation-orgs", "options"],
     queryFn: () => landApi.listValuationOrgs(),
     enabled: isInternalActor,
-    staleTime: 60_000,
   });
 
   const { data: parcelListFallback } = useQuery({
@@ -692,7 +689,6 @@ export function RealEstateTab({
       }),
     enabled:
       !!acqId && !!effectiveParcelCode && !parcelData?.independent_org_id,
-    staleTime: 30_000,
   });
 
   const fallbackParcel = parcelListFallback?.data?.find(

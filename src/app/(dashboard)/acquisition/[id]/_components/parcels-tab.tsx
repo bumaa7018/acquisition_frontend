@@ -26,6 +26,7 @@ import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dial
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 const RIGHT_TYPE_OPTIONS = [
   { value: 1, label: "Ашиглах" },
@@ -549,12 +550,7 @@ export function ParcelsTab({
                 </option>
               ))}
             </select>
-            <button
-              onClick={applySearch}
-              className="h-8 shrink-0 px-3 rounded-lg text-[12px] font-medium text-white bg-[#02c0ce] hover:bg-[#02aebb] transition-colors"
-            >
-              Хайх
-            </button>
+            <SearchButton onClick={applySearch} className="h-8 px-3" />
             <RefreshButton className="h-8 w-8" />
             {hasFilter && (
               <button

@@ -15,15 +15,16 @@ import { formatDate } from "@/lib/utils";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 import {
   RELOCATION_LABELS,
-  SURVEY_COUNT_OPTIONS,
   SURVEY_COUNT_QUESTIONS,
   isSurveyAnswered,
-  surveyBucketLabel,
   surveyCountLabel,
+  surveyCountTotal,
 } from "@/lib/parcel-survey";
 import type { ParcelSurveyRow, ParcelSurveySummary, RelocationType } from "@/types";
 import { SurveyTab } from "../parcel/[id]/_components/survey_tab";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
+import { AcquisitionSelect } from "../parcel/_components/acquisition_select";
 
 const PAGE_SIZE = 20;
 
@@ -68,19 +69,22 @@ function DistributionCard({
   );
 }
 
+/** Тоон асуултын нийт тоо — 1 / 2 / 3+ задаргаагүй. */
+function TotalCard({ title, total }: { title: string; total: number }) {
+  return (
+    <div className="ap-card p-4">
+      <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+      <p className="mt-3 text-2xl font-bold tabular-nums text-[#02c0ce]">{total.toLocaleString()}</p>
+      <p className="text-[11px] text-slate-400">Нийт</p>
+    </div>
+  );
+}
+
 function SummaryCards({ summary }: { summary: ParcelSurveySummary }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {SURVEY_COUNT_QUESTIONS.map((q) => (
-        <DistributionCard
-          key={q.field}
-          title={q.title}
-          total={summary.answered}
-          options={SURVEY_COUNT_OPTIONS.map((n) => ({
-            label: surveyBucketLabel(n),
-            count: summary[q.summaryKey][String(n)] ?? 0,
-          }))}
-        />
+        <TotalCard key={q.field} title={q.title} total={surveyCountTotal(summary[q.summaryKey])} />
       ))}
       <DistributionCard
         title="Шилжин суурьшсан байршил"
@@ -141,22 +145,25 @@ export default function ParcelSurveyPage() {
   const [draftCode, setDraftCode] = useState("");
   const [parcelCode, setParcelCode] = useState("");
   const [answered, setAnswered] = useState<AnsweredFilter>("");
+  const [draftAcquisitionId, setDraftAcquisitionId] = useState("");
+  const [acquisitionId, setAcquisitionId] = useState("");
   const [selected, setSelected] = useState<ParcelSurveyRow | null>(null);
   const canView = hasPermission("land:read");
   // Parcel detail-ийн «Судалгаа» табтай ижил дүрэм.
   const canEdit = !isExternalSpecialRole() && hasPermission("land:update");
 
   const { data: summary } = useQuery({
-    queryKey: ["parcel-surveys", "summary"],
-    queryFn: () => parcelSurveyApi.summary(),
+    queryKey: ["parcel-surveys", "summary", acquisitionId],
+    queryFn: () => parcelSurveyApi.summary(acquisitionId ? { acquisition_ids: [acquisitionId] } : undefined),
     enabled: canView,
   });
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["parcel-surveys", "list", page, parcelCode, answered],
+    queryKey: ["parcel-surveys", "list", page, parcelCode, answered, acquisitionId],
     queryFn: () =>
       parcelSurveyApi.list({
         page,
         page_size: PAGE_SIZE,
+        acquisition_id: acquisitionId || undefined,
         parcel_id: parcelCode || undefined,
         answered: answered === "" ? undefined : answered === "true",
       }),
@@ -190,16 +197,23 @@ export default function ParcelSurveyPage() {
         onSubmit={(e) => {
           e.preventDefault();
           setParcelCode(draftCode.trim());
+          setAcquisitionId(draftAcquisitionId);
           setPage(1);
         }}
       >
+        <AcquisitionSelect
+          selectedId={draftAcquisitionId}
+          onSelect={(id) => setDraftAcquisitionId(id)}
+          onClear={() => setDraftAcquisitionId("")}
+          className="w-72"
+        />
         <div className="relative flex-1 max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             value={draftCode}
             onChange={(e) => setDraftCode(e.target.value)}
             placeholder="Нэгж талбарын дугаар"
-            className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
           />
         </div>
         <select
@@ -208,20 +222,14 @@ export default function ParcelSurveyPage() {
             setAnswered(e.target.value as AnsweredFilter);
             setPage(1);
           }}
-          className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
+          className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 dark:border-white/[0.08] dark:bg-[#1e1f27] dark:text-slate-200"
         >
           <option value="">Бүгд</option>
           <option value="true">Бөглөсөн</option>
           <option value="false">Бөглөөгүй</option>
         </select>
-        <button
-          type="submit"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#02a3af]"
-        >
-          <Search className="h-4 w-4" />
-          Хайх
-        </button>
-        <RefreshButton className="h-10 w-10" />
+        <SearchButton type="submit" />
+        <RefreshButton />
       </form>
 
       <div className="ap-card overflow-hidden">

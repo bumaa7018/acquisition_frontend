@@ -561,7 +561,6 @@ export function PrintTemplatesTab({ parcel }: { parcel?: ParcelFull }) {
   const { data: docTypes = [] } = useQuery({
     queryKey: ["document-types", "parcel"],
     queryFn: () => documentTypeApi.list("parcel"),
-    staleTime: 60_000,
   });
 
   const meetingMinutesAttachment = findMeetingMinutesDocxAttachment(docs, docTypes);

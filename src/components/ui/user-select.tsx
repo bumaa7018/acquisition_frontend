@@ -63,7 +63,6 @@ export function UserSelect({
     queryKey: ["user-select", debounced],
     queryFn: () => usersApi.list({ search: debounced.trim() || undefined, page_size: 40 }),
     enabled: open,
-    staleTime: 30_000,
   });
 
   const results = data?.data ?? [];

@@ -6,6 +6,7 @@ import { auditApi } from "@/lib/api";
 import { hasPermission } from "@/lib/role-utils";
 import { Activity, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 const PAGE_SIZE = 20;
 
@@ -191,14 +192,7 @@ export default function AuditLogsPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#02a3af] disabled:opacity-60"
-          >
-            <Search className="h-4 w-4" />
-            Хайх
-          </button>
+          <SearchButton type="submit" disabled={isLoading} className="h-10" />
           <RefreshButton className="h-10 w-10" />
         </div>
       </form>

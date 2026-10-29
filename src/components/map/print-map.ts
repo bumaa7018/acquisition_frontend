@@ -8,6 +8,8 @@ export interface PrintLegendItem {
   label: string;
   /** true бол дөрвөлжин биш ШУГАМ зурна (хилийн давхаргууд). */
   line?: boolean;
+  /** true бол тэмдэггүй, тод мөр — ж: "Нийт нэгж талбар (120)". */
+  total?: boolean;
 }
 
 export interface PrintMapViewInfo {
@@ -926,6 +928,15 @@ export function composePrintPage(
       const row = i % perCol;
       const x = legendX + 6 + col * colW;
       const swatchY = legendY + headerH + row * rowH + rowH / 2;
+      if (item.total) {
+        ctx.fillStyle = "#1e293b";
+        ctx.font = "bold 7px sans-serif";
+        ctx.textBaseline = "middle";
+        ctx.fillText(ellipsize(ctx, item.label, colW - 4), x, swatchY);
+        ctx.font = "7px sans-serif";
+        ctx.textBaseline = "top";
+        return;
+      }
       if (item.line) {
         // Хилийн давхарга — ШУГАМААР (хэвлэхэд дүүргэлт байхгүй тул
         // дөрвөлжин тэмдэг нь бодит харагдацтай таарахгүй).

@@ -107,7 +107,6 @@ export default function ParcelInfoModal({
     queryFn: () => landApi.getById(acquisitionId),
     enabled,
     retry: false,
-    staleTime: 60_000,
   });
 
   // Нөхөх олговор — тухайн нэгж талбарынх. parcel_id нь КОД (UUID биш).

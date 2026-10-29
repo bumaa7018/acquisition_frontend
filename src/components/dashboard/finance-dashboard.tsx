@@ -320,7 +320,6 @@ export function FinanceDashboard() {
         au2_code: district || undefined,
         acquisition_id: acquisitionId || undefined,
       }),
-    staleTime: 60_000,
   });
 
   const byYear = useMemo(() => data?.by_year ?? [], [data]);

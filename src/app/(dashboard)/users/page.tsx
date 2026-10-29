@@ -36,6 +36,7 @@ import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dial
 import { EmployeeSelect } from "@/components/ui/employee-select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 const PAGE_SIZE = 20;
 
@@ -574,13 +575,7 @@ export default function UsersPage() {
               <option value="false">Идэвхгүй</option>
             </select>
 
-            <button
-              onClick={applySearch}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#02c0ce]/90"
-            >
-              <Search className="h-3.5 w-3.5" />
-              Хайх
-            </button>
+            <SearchButton onClick={applySearch} />
             <RefreshButton />
 
             {hasFilter && (

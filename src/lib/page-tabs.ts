@@ -13,6 +13,8 @@
 export type PageTab = { key: string; path: string; label: string; lastActiveAt: number };
 
 const STORAGE_KEY = "gov_page_tabs";
+/** Табын жагсаалт өөрчлөгдөхөд (хаах г.м.) цацагдах event. */
+const CHANGE_EVENT = "gov-page-tabs-change";
 /** Таб бүрийн хугацаа — 3 цаг. */
 export const PAGE_TAB_TTL_MS = 3 * 60 * 60 * 1000;
 /** Хэт олон таб нээгдэхээс сэргийлнэ — хамгийн хуучныг нь хасна. */
@@ -47,6 +49,13 @@ export function savePageTabs(tabs: PageTab[]): void {
   } catch {
     // sessionStorage хаалттай (private горим г.м.) — табууд санах ойд л үлдэнэ.
   }
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+/** Табын жагсаалт хадгалагдах бүрд `cb` дуудагдана — unsubscribe буцаана. */
+export function subscribePageTabs(cb: () => void): () => void {
+  window.addEventListener(CHANGE_EVENT, cb);
+  return () => window.removeEventListener(CHANGE_EVENT, cb);
 }
 
 /** Хугацаа нь дууссан табуудыг хасна — `activeKey` (одоо харж буй) үлдэнэ. */
@@ -70,4 +79,5 @@ export function clearPageTabs(): void {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {}
+  window.dispatchEvent(new Event(CHANGE_EVENT));
 }

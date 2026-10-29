@@ -26,6 +26,7 @@ import { AcquisitionSelect } from "../../parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { AmountHint } from "@/components/ui/amount-hint";
 import { RefreshButton } from "@/components/ui/refresh-button";
+import { SearchButton } from "@/components/ui/search-button";
 
 const EMPTY_FILTER = {
   proposal_no: "",
@@ -720,13 +721,7 @@ export function DecisionListView({
             onKeyDown={(e) => e.key === "Enter" && applySearch()}
             className={inp}
           />
-          <button
-            onClick={applySearch}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#02c0ce]/90"
-          >
-            <Search className="h-3.5 w-3.5" />
-            Хайх
-          </button>
+          <SearchButton onClick={applySearch} />
           <RefreshButton />
 
           {hasFilter && (

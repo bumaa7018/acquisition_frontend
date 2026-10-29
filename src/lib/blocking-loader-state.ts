@@ -42,6 +42,16 @@ let _navPending = false;
 let _navTarget: string | null = null;
 let _navTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Зам руу шилжихэд хуудас нь аль хэдийн mount-тай эсэх (`KeepAliveTabs` тохируулна). */
+let _isWarm: (path: string) => boolean = () => false;
+
+export function setWarmCheck(fn: (path: string) => boolean): void {
+  _isWarm = fn;
+}
+
+/** ⟳ товчоор шинэчилж буй тоо — давхар дарахад зөв тоолно. */
+let _refreshing = 0;
+
 let _apiTimer: ReturnType<typeof setTimeout> | null = null;
 let _apiExpired = false;
 
@@ -80,12 +90,37 @@ export function getScreenBlocking(): boolean {
  * бүрэн далдална), "read" — өгөгдөл уншиж байна (агуулга бүдэг харагдана).
  */
 export function getContentLoading(): "nav" | "read" | null {
-  if (_navPending) return "nav";
+  // Аль хэдийн mount-тай (нээлттэй) таб руу шилжвэл шууд харагддаг — loader хэрэггүй.
+  if (_navPending && !(_navTarget && _isWarm(_navTarget))) return "nav";
   return hasPending("read") ? "read" : null;
+}
+
+/** ⟳ товчоор хуудсыг шинэчилж байгаа эсэх — агуулга дээр саарал давхарга. */
+export function getRefreshing(): boolean {
+  return _refreshing > 0;
+}
+
+/** `work` дуустал (амжилттай эсэхээс үл хамааран) шинэчлэх давхарга харагдана. */
+export async function trackRefresh(work: Promise<unknown>): Promise<void> {
+  _refreshing++;
+  emit();
+  try {
+    await work;
+  } catch {
+    // Алдааг query-ийн global onError логлоно — энд зөвхөн давхаргыг унтраана.
+  } finally {
+    _refreshing--;
+    emit();
+  }
 }
 
 export function getNavTarget(): string | null {
   return _navPending ? _navTarget : null;
+}
+
+/** Шилжиж буй зам аль хэдийн mount-тай (нээлттэй таб) эсэх — шууд харагдана. */
+export function isWarmPath(path: string): boolean {
+  return _isWarm(path);
 }
 
 function armApiWatchdog() {
