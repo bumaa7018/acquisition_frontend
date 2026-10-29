@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle, FileUp, Loader2, X } from "lucide-react";
 import { landApi } from "@/lib/api";
 import { formatArea, getApiError } from "@/lib/utils";
 import type { BoundaryPreview } from "@/types";
+import { OutsideParcelsNotice, outsideParcelGeometries } from "./boundary-outside-parcels";
 
 const GeometryPreviewMap = dynamic(() => import("@/components/map/geometry-preview-map"), {
   ssr: false,
@@ -28,8 +29,9 @@ export type BoundaryFileSelection = {
  * Урсгал: файл сонгомогц backend руу ХАДГАЛАЛГҮЙ шалгуулна
  * (`/boundary-preview`) — тэндээс хилийн WKT ба төлөвлөгөөний хилээс хэдэн
  * хувиар зөрснийг авч, газрын зураг дээр одоогийн хилтэй зэрэгцүүлж
- * харуулна. Хил солих нь БУЦААХ БОЛОМЖГҮЙ тул хэрэглэгч хадгалахаас өмнө
- * зөрүүг тоогоор ба нүдээрээ хардаг байх ёстой.
+ * харуулна. Шинэ хилтэй ОГТ давхцахгүй болох нэгж талбарууд дугаартайгаа
+ * өнгөөр ялгагдана — хил солиход нэгж талбарт юу ч хийгдэхгүй, зөвхөн
+ * анхааруулга.
  *
  * Файлыг browser дээр задлахгүй: shapefile-ийн бүтэц/проекцийн шалгалт ба
  * талбайн UTM тооцоо серверт байгаа тул давхардуулбал дэлгэц дээрх тоо
@@ -91,6 +93,7 @@ export function BoundaryShapefileInput({
 
   const preview = selection?.preview;
   const busy = previewMutation.isPending;
+  const outside = preview?.outside_parcels ?? [];
 
   return (
     <div className="space-y-2">
@@ -196,9 +199,10 @@ export function BoundaryShapefileInput({
             )}
           </div>
 
-          {/* Шинэ хил (тод) ба одоогийн хил (тасархай) — нүдээр харьцуулна. */}
+          {/* Шинэ хил (тод), одоогийн хил (тасархай) ба шинэ хилээс гарах
+              нэгж талбарууд (дугаартай) — нүдээр харьцуулна. */}
           <GeometryPreviewMap
-            height={220}
+            height={outside.length > 0 ? 280 : 220}
             geometries={[
               {
                 wkt: currentGeometryWKT,
@@ -212,9 +216,12 @@ export function BoundaryShapefileInput({
                 label: "Файлын шинэ хил",
                 filled: true,
               },
+              ...outsideParcelGeometries(outside),
             ]}
             emptyText="Файлын хилийг зураг дээр харуулах боломжгүй"
           />
+
+          <OutsideParcelsNotice outside={outside} />
         </div>
       )}
     </div>

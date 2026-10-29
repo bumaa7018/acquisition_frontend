@@ -9,7 +9,7 @@ import XYZ from "ol/source/XYZ";
 import WKT from "ol/format/WKT";
 import { fromLonLat } from "ol/proj";
 import { createEmpty, extend as extendExtent, isEmpty as isEmptyExtent } from "ol/extent";
-import { Fill, Stroke, Style } from "ol/style";
+import { Fill, Stroke, Style, Text } from "ol/style";
 // @ts-ignore: CSS side-effect import for OpenLayers styles
 import "ol/ol.css";
 import { MapPinOff } from "lucide-react";
@@ -25,6 +25,10 @@ export type PreviewGeometry = {
   dashed?: boolean;
   /** Дүүргэлттэй эсэх (доор орших хилийг бүрхэхээс сэргийлж анхдагчаар үгүй). */
   filled?: boolean;
+  /** Зураг ДЭЭР геометрийн голд бичих текст (ж: нэгж талбарын дугаар). */
+  text?: string;
+  /** Зураасны зузаан (анхдагч 3.5). */
+  width?: number;
 };
 
 /**
@@ -54,7 +58,10 @@ export default function GeometryPreviewMap({
   // компонент дахин render хийх бүрд массив шинээр үүсдэг тул түлхүүрээр
   // харьцуулна.
   const key = geometries
-    .map((g) => `${g.color}|${g.dashed ? "d" : ""}|${g.filled ? "f" : ""}|${g.wkt ?? ""}`)
+    .map(
+      (g) =>
+        `${g.color}|${g.dashed ? "d" : ""}|${g.filled ? "f" : ""}|${g.width ?? ""}|${g.text ?? ""}|${g.wkt ?? ""}`,
+    )
     .join("~");
 
   /* ── Зураг үүсгэх (нэг удаа) ── */
@@ -64,17 +71,28 @@ export default function GeometryPreviewMap({
     const layer = new VectorLayer({
       source: new VectorSource(),
       zIndex: 10,
-      style: (feature) =>
-        new Style({
+      style: (feature) => {
+        const color = (feature.get("color") as string) ?? "#ff7a00";
+        const text = feature.get("text") as string | undefined;
+        return new Style({
           stroke: new Stroke({
-            color: (feature.get("color") as string) ?? "#ff7a00",
-            width: 3.5,
+            color,
+            width: (feature.get("width") as number | undefined) ?? 3.5,
             lineDash: feature.get("dashed") ? [8, 6] : undefined,
           }),
-          fill: feature.get("filled")
-            ? new Fill({ color: `${(feature.get("color") as string) ?? "#ff7a00"}33` })
+          fill: feature.get("filled") ? new Fill({ color: `${color}33` }) : undefined,
+          text: text
+            ? new Text({
+                text,
+                font: "600 11px Inter, system-ui, sans-serif",
+                fill: new Fill({ color }),
+                stroke: new Stroke({ color: "#ffffff", width: 3 }),
+                // Жижиг талбар дээр ч дугаар харагдах ёстой.
+                overflow: true,
+              })
             : undefined,
-        }),
+        });
+      },
     });
     vectorLayer.current = layer;
 
@@ -128,6 +146,8 @@ export default function GeometryPreviewMap({
         feature.set("color", geom.color);
         feature.set("dashed", !!geom.dashed);
         feature.set("filled", !!geom.filled);
+        feature.set("text", geom.text);
+        feature.set("width", geom.width);
         source.addFeature(feature);
         const featureExtent = feature.getGeometry()?.getExtent();
         if (featureExtent) extendExtent(extent, featureExtent);
@@ -148,7 +168,14 @@ export default function GeometryPreviewMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  const legend = geometries.filter((g) => g.label && g.wkt?.trim());
+  // Олон геометр нэг тайлбартай байж болно (ж: хилээс гарах бүх нэгж талбар) —
+  // тайлбарт нэг л удаа гарна.
+  const legend = geometries.filter(
+    (g, i, all) =>
+      g.label &&
+      g.wkt?.trim() &&
+      all.findIndex((o) => o.label === g.label && o.color === g.color && o.wkt?.trim()) === i,
+  );
 
   return (
     <div className="space-y-1.5">

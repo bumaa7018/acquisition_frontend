@@ -12,7 +12,7 @@ import {
 } from "@/lib/role-utils";
 import { formatDate, formatArea, getApiError } from "@/lib/utils";
 import { STATUS_LABELS } from "@/types";
-import type { Plan } from "@/types";
+import type { BoundaryOutsideParcel, Plan } from "@/types";
 import {
   PlanCodeSearch,
   planHasBoundary,
@@ -26,6 +26,10 @@ import {
   BoundaryShapefileInput,
   type BoundaryFileSelection,
 } from "./boundary-shapefile-input";
+import {
+  OutsideParcelsNotice,
+  outsideParcelGeometries,
+} from "./boundary-outside-parcels";
 import { SocioSurveySection } from "./socio-survey-section";
 
 export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
@@ -112,6 +116,19 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
   const [boundaryFile, setBoundaryFile] =
     useState<BoundaryFileSelection | null>(null);
 
+  // Төлөвлөгөөний замд шинэ хилээс гарах нэгж талбарууд (ХАДГАЛАЛГҮЙ).
+  // Файлын замд энэ мэдээлэл /boundary-preview-ийн хариунд хамт ирдэг.
+  const planBoundaryWKT =
+    boundaryPlan && planHasBoundary(boundaryPlan)
+      ? boundaryPlan.boundary_wkt?.trim() ?? ""
+      : "";
+  const planOutside = useQuery({
+    queryKey: ["boundary-outside-parcels", id, planBoundaryWKT],
+    queryFn: () => landApi.boundaryOutsideParcels(id, planBoundaryWKT),
+    enabled: editing && !!planBoundaryWKT,
+    staleTime: 0,
+  });
+
   useEffect(() => {
     if (acq) {
       setForm({
@@ -178,28 +195,28 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       return updated;
     },
     onSuccess: (updated) => {
-      toast.success("Хадгалагдлаа");
-      // Хил солигдсон бол нэгж талбар нэмэгдэж/хасагдсаныг ХАРУУЛНА — хасалт
-      // нь буцаах боломжгүй тул чимээгүй өнгөрүүлж болохгүй.
-      const added = updated?.added_parcels ?? 0;
-      const removed = updated?.removed_parcels ?? 0;
-      if (added || removed) {
-        toast.info(
-          `Шинэ хилээр ${added} нэгж талбар нэмэгдэж, ${removed} нэгж талбар хасагдлаа`,
+      // Хилээс гарсан нэгж талбарын анхааруулга ЗӨВХӨН хил солих үед
+      // (хадгалахаас өмнө) харагдана — хадгалсны дараа дахин гаргахгүй.
+      // Хил солигдсон бол нөлөөлөлд өртсөн талбай хэдэн нэгж талбарт дахин
+      // бодогдсоныг хэлнэ.
+      if (updated?.affected_area_updated != null) {
+        const skipped = updated.affected_area_skipped ?? 0;
+        toast.success(
+          `Хадгалагдлаа. ${updated.affected_area_updated} нэгж талбарын нөлөөлөлд өртсөн талбай шинэчлэгдлээ` +
+            (skipped > 0 ? ` (геометргүй ${skipped} нэгж талбар бодогдсонгүй)` : ""),
         );
+      } else {
+        toast.success("Хадгалагдлаа");
       }
       setEditing(false);
       setAreaAutoCalc(false);
       setBoundaryPlan(null);
       setBoundaryFile(null);
       queryClient.invalidateQueries({ queryKey: ["land", id] });
+      // Хил солиход нөлөөлөлд өртсөн талбай өөрчлөгдөх тул нэгж талбарын
+      // жагсаалт ба хилийн түүх хуучирна.
       queryClient.invalidateQueries({
         queryKey: ["land-parcels", id],
-        refetchType: "all",
-      });
-      // Хил солиход нэгж талбарын НИЙТ тоо ба хилийн түүх хоёулаа хуучирна.
-      queryClient.invalidateQueries({
-        queryKey: ["land-parcels-total", id],
         refetchType: "all",
       });
       queryClient.invalidateQueries({
@@ -209,9 +226,28 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
     onError: (err) => toast.error(getApiError(err, "Хадгалахад алдаа гарлаа")),
   });
 
-  // Хил солих нь БУЦААХ БОЛОМЖГҮЙ үйлдэл (шинэ хилд ороогүй нэгж талбар
-  // үнэлгээ/олговор/баримттайгаа хамт устана) тул хил хөндөх сонголт хийсэн
-  // үед зөвшөөрөл авна. Хил хөндөөгүй ердийн засварт шууд хадгална.
+  // Хил солиход чөлөөлөлтийн хил өөрчлөгдөж, нэгж талбаруудын нөлөөлөлд
+  // өртсөн талбай дахин бодогдоно. Шинэ хилээс гарах нэгж талбар байвал
+  // хадгалахаас өмнө зөвшөөрөл авна; байхгүй бол шууд хадгална.
+  const confirmOutsideThenSave = (
+    outside: BoundaryOutsideParcel[],
+    source: string,
+  ) => {
+    if (outside.length === 0) {
+      saveMutation.mutate();
+      return;
+    }
+    const shown = outside.slice(0, 10).map((p) => p.parcel_id).join(", ");
+    const more = outside.length > 10 ? ` … (+${outside.length - 10})` : "";
+    setPendingConfirm({
+      title: "Хилээс гарах нэгж талбар байна",
+      description: `${source} хилээр солиход ${outside.length} нэгж талбар шинэ хилтэй давхцахгүй болно: ${shown}${more}. Тэдгээрийн нөлөөлөлд өртсөн талбай 0 болно (нэгж талбар устгагдахгүй). Бусад нэгж талбарын нөлөөлөлд өртсөн талбай шинэ хилээр дахин бодогдоно. Хадгалах уу?`,
+      confirmLabel: "Хадгалах",
+      confirmColor: "#f59e0b",
+      onConfirm: () => saveMutation.mutate(),
+    });
+  };
+
   const requestSave = () => {
     // Хоёр замыг зэрэг илгээвэл сервер татгалзана — UI-д ч гаргахгүй.
     if (boundaryPlan && boundaryFile) {
@@ -229,13 +265,10 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
         );
         return;
       }
-      setPendingConfirm({
-        title: "Чөлөөлөх хилийг файлаар солих уу?",
-        description: `«${boundaryFile.file.name}» файлын хилээр чөлөөлөлтийн хил солигдож (талбайн зөрүү ${boundaryFile.preview.deviation_percent.toFixed(1)}%), нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
-        confirmLabel: "Зөвшөөрөх",
-        confirmColor: "#f59e0b",
-        onConfirm: () => saveMutation.mutate(),
-      });
+      confirmOutsideThenSave(
+        boundaryFile.preview.outside_parcels ?? [],
+        `«${boundaryFile.file.name}» файлын`,
+      );
       return;
     }
     if (!boundaryPlan) {
@@ -246,18 +279,24 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
       toast.error("Төлөвлөгөөнд хил бүртгэгдээгүй тул хил солих боломжгүй");
       return;
     }
+    // Хилээс гарах нэгж талбарыг шалгаж дуусаагүй/чадаагүй бол анхааруулга
+    // алгасагдах тул хадгалахгүй.
+    if (planOutside.isPending || planOutside.isFetching) {
+      toast.info("Шинэ хилээс гарах нэгж талбарыг шалгаж байна, түр хүлээнэ үү");
+      return;
+    }
+    if (planOutside.isError || !planOutside.data) {
+      toast.error(
+        getApiError(planOutside.error, "Шинэ хилээс гарах нэгж талбарыг шалгаж чадсангүй"),
+      );
+      return;
+    }
     const planLabel =
       boundaryPlan.parcel_id ||
       boundaryPlan.plan_code ||
       boundaryPlan.code ||
       "";
-    setPendingConfirm({
-      title: "Чөлөөлөх хилийг солих уу?",
-      description: `«${planLabel}» төлөвлөгөөний хилээр чөлөөлөлтийн хил солигдож, нэгж талбар дахин тодорхойлогдоно. Шинэ хилд ОРООГҮЙ нэгж талбарууд үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт БҮРМӨСӨН устана (буцаах боломжгүй). "Чөлөөлсөн" төлөвтэй нэгж талбар шинэ хилээс гарч байвал хил хүлээгдэхгүй.`,
-      confirmLabel: "Зөвшөөрөх",
-      confirmColor: "#f59e0b",
-      onConfirm: () => saveMutation.mutate(),
-    });
+    confirmOutsideThenSave(planOutside.data, `«${planLabel}» төлөвлөгөөний`);
   };
 
   if (!acq) return null;
@@ -418,7 +457,9 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
                     label: "Одоогийн хил",
                     dashed: true,
                   }}
-                  mapHeight={220}
+                  // Шинэ хилээс гарах нэгж талбарууд — дугаартай, өнгөөр ялгана.
+                  overlayGeometries={outsideParcelGeometries(planOutside.data ?? [])}
+                  mapHeight={(planOutside.data?.length ?? 0) > 0 ? 280 : 220}
                 />
                 {!boundaryPlan && (
                   <p className="mt-1.5 text-[11.5px] text-slate-400 dark:text-slate-500">
@@ -455,21 +496,26 @@ export function GeneralTab({ id, canEdit }: { id: string; canEdit: boolean }) {
               </div>
             </div>
           )}
-          {/* Хил солих нь нэгж талбарыг УСТГАЖ болох тул анхааруулна */}
-          {editing &&
-            (boundaryFile?.preview.accepted ||
-              (boundaryPlan && planHasBoundary(boundaryPlan))) && (
-              <div className="flex items-start gap-2 rounded-lg border border-amber-300 dark:border-amber-400/40 bg-amber-50 dark:bg-amber-400/10 px-3 py-2.5 my-2.5">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
-                <p className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
-                  Шинэ хилээр нэгж талбар дахин тодорхойлогдоно. Шинэ хилд{" "}
-                  <span className="font-semibold">ороогүй</span> нэгж талбарууд
-                  үнэлгээ, нөхөх олговор, хөрөнгө, баримттайгаа хамт бүрмөсөн
-                  устана. &laquo;Чөлөөлсөн&raquo; төлөвтэй нэгж талбар шинэ
-                  хилээс гарч байвал хил хүлээгдэхгүй.
+          {/* Төлөвлөгөөний замд шинэ хилээс гарах нэгж талбарын анхааруулга
+              (файлын замд BoundaryShapefileInput дотроо харуулдаг). */}
+          {editing && !boundaryFile && planBoundaryWKT && (
+            <div className="my-2.5">
+              {planOutside.isFetching ? (
+                <p className="text-[11.5px] text-slate-400 dark:text-slate-500">
+                  Шинэ хилээс гарах нэгж талбарыг шалгаж байна…
                 </p>
-              </div>
-            )}
+              ) : planOutside.isError ? (
+                <div className="flex items-start gap-2 rounded-lg border border-[#f1556c]/20 bg-[#f1556c]/8 px-3 py-2">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#f1556c]" />
+                  <p className="text-[12px] text-[#f1556c]">
+                    {getApiError(planOutside.error, "Шинэ хилээс гарах нэгж талбарыг шалгаж чадсангүй")}
+                  </p>
+                </div>
+              ) : (
+                <OutsideParcelsNotice outside={planOutside.data ?? []} />
+              )}
+            </div>
+          )}
           {row(
             "Статус",
             <span

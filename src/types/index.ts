@@ -375,15 +375,15 @@ export interface LandAcquisition {
 /**
  * PUT /land-acquisitions/:id-ийн хариулт.
  *
- * Хил (төлөвлөгөөнөөс) солигдсон үед backend нь ГУС-аас нэгж талбарыг дахин
- * тодорхойлж, шинэ хилд ороогүй болсныг БҮРМӨСӨН устгадаг тул хэдэн талбар
- * нэмэгдэж/хасагдсаныг хариултад буцаана. Хил хөндөгдөөгүй үед эдгээр талбар
- * ирэхгүй (warning ч мөн адил).
+ * Хил солиход чөлөөлөлтийн хил өөрчлөгдөж, бүх нэгж талбарын нөлөөлөлд өртсөн
+ * талбай шинэ хилээр дахин бодогдоно. Доорх талбарууд хил солигдсон үед л ирнэ.
  */
 export interface LandAcquisitionUpdateResult extends LandAcquisition {
   warning?: string;
-  added_parcels?: number;
-  removed_parcels?: number;
+  /** Нөлөөлөлд өртсөн талбай нь дахин бодогдсон нэгж талбарын тоо. */
+  affected_area_updated?: number;
+  /** Геометргүй тул бодогдоогүй нэгж талбарын тоо. */
+  affected_area_skipped?: number;
 }
 
 /**
@@ -708,6 +708,15 @@ export interface BoundaryPreview {
   max_deviation_percent: number;
   /** false бол хадгалах үед сервер татгалзана. */
   accepted: boolean;
+  /** Шинэ хилтэй ОГТ давхцахгүй болох нэгж талбарууд (устгагдахгүй). */
+  outside_parcels?: BoundaryOutsideParcel[];
+}
+
+export interface BoundaryOutsideParcel {
+  parcel_id: string;
+  status_name: string;
+  released: boolean;
+  geometry_wkt: string;
 }
 
 export interface Document {

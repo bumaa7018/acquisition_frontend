@@ -36,6 +36,7 @@ export function PlanCodeSearch({
   autoFocus = false,
   notFoundHint = "Дугаарыг шалгаад дахин хайна уу — төлөвлөгөө олдохгүй бол чөлөөлөлт үүсгэх боломжгүй.",
   compareGeometry,
+  overlayGeometries,
   mapHeight,
 }: {
   plan: Plan | null;
@@ -49,6 +50,8 @@ export function PlanCodeSearch({
    * шинэтэй зэрэгцүүлж харуулахад.
    */
   compareGeometry?: PreviewGeometry;
+  /** Төлөвлөгөөний хилийн ДЭЭР зурах геометрүүд (ж: хилээс гарах нэгж талбар). */
+  overlayGeometries?: PreviewGeometry[];
   mapHeight?: number;
 }) {
   const [code, setCode] = useState("");
@@ -129,7 +132,12 @@ export function PlanCodeSearch({
       )}
 
       {plan && (
-        <PlanInfoCard plan={plan} compareGeometry={compareGeometry} mapHeight={mapHeight} />
+        <PlanInfoCard
+          plan={plan}
+          compareGeometry={compareGeometry}
+          overlayGeometries={overlayGeometries}
+          mapHeight={mapHeight}
+        />
       )}
     </div>
   );
@@ -150,10 +158,12 @@ export function PlanBoundaryPreview({
   plan,
   height = 200,
   compareGeometry,
+  overlayGeometries = [],
 }: {
   plan: Plan;
   height?: number;
   compareGeometry?: PreviewGeometry;
+  overlayGeometries?: PreviewGeometry[];
 }) {
   if (!planHasBoundary(plan)) return null;
   return (
@@ -167,6 +177,7 @@ export function PlanBoundaryPreview({
           label: "Төлөвлөгөөний хил",
           filled: true,
         },
+        ...overlayGeometries,
       ]}
       emptyText="Төлөвлөгөөний хил татагдсангүй"
     />
@@ -177,10 +188,12 @@ export function PlanBoundaryPreview({
 export function PlanInfoCard({
   plan,
   compareGeometry,
+  overlayGeometries,
   mapHeight = 200,
 }: {
   plan: Plan;
   compareGeometry?: PreviewGeometry;
+  overlayGeometries?: PreviewGeometry[];
   mapHeight?: number;
 }) {
   const rows: Array<[string, string | undefined | null]> = [
@@ -219,7 +232,12 @@ export function PlanInfoCard({
 
       {/* Олдсон төлөвлөгөөний ХИЛ — чөлөөлөлтийн хил ҮҮНЭЭС хуулагдана тул
           хэрэглэгч хадгалахаас ӨМНӨ нүдээрээ шалгах ёстой. */}
-      <PlanBoundaryPreview plan={plan} height={mapHeight} compareGeometry={compareGeometry} />
+      <PlanBoundaryPreview
+        plan={plan}
+        height={mapHeight}
+        compareGeometry={compareGeometry}
+        overlayGeometries={overlayGeometries}
+      />
 
       {/* Хилгүй төлөвлөгөөгөөр цааш үргэлжлэх боломжгүй — backend ч мөн 422
           буцаана. Хэрэглэгчид ЭНД (хадгалахаас өмнө) шалтгааныг харуулна. */}

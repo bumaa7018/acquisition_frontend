@@ -71,7 +71,7 @@ import type {
   ParcelEstimatedValueHistory,
   GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, DocumentType,
-  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, ParcelStatusRules, BoundaryHistory, BoundaryPreview, FundingSource,
+  AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, ParcelStatusRules, BoundaryHistory, BoundaryPreview, BoundaryOutsideParcel, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
   DroneImage,
   DroneUploadTicket,
@@ -863,18 +863,15 @@ export const landApi = {
     api.post<ApiResponse<LandAcquisition>>('/land-acquisitions', data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data),
-  // timeout: 0 — ХИЛ солиход (plan_parcel_id эсвэл shapefile илгээгдсэн үед)
-  // backend нь шинэ хилээр ГУС-аас нэгж талбарыг 100-гийн багцаар татаж, шинэ
-  // хилд ороогүй болсныг устгах ажлыг ДОТРОО хийдэг тул ердийн 30 сек-т
-  // багтахгүй байж болно. Хил хөндөөгүй ердийн засварт хязгаар хэвээр
-  // (алдааг эрт харуулах нь дээр).
+  // Хил солиход backend нь ГУС-аас нэгж талбар ТАТАХГҮЙ (шинэ хилийн нэгж
+  // талбарыг discoverParcels-ээр тусад нь татна) тул ердийн хугацааны хязгаар.
   update: (id: string, data: FormData) =>
     api.put<ApiResponse<LandAcquisitionUpdateResult>>(`/land-acquisitions/${id}`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      ...(data.has('plan_parcel_id') || data.has('shapefile') ? { timeout: 0 } : {}),
     }).then(r => r.data.data),
   // Гараас оруулах хилийг ХАДГАЛАЛГҮЙ шалгуулна: хилийн WKT (зураг дээр
-  // харуулах) ба төлөвлөгөөний хилээс хэдэн хувиар зөрснийг буцаана.
+  // харуулах), төлөвлөгөөний хилээс хэдэн хувиар зөрсөн, шинэ хилээс гарах
+  // нэгж талбарууд (outside_parcels) буцна.
   //
   // ЯАГААД сервер рүү: .shp-г browser дээр задлавал проекц/полигоны шалгалт,
   // талбайн тооцоо (UTM) хоёулаа хоёр газар давхардаж, дэлгэц дээрх тоо
@@ -886,6 +883,13 @@ export const landApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data.data);
   },
+  // Төлөвлөгөөний дугаараар хил солихын ӨМНӨ: шинэ хилтэй ОГТ давхцахгүй болох
+  // нэгж талбарууд (ХАДГАЛАЛГҮЙ, юу ч өөрчлөхгүй).
+  boundaryOutsideParcels: (id: string, geometryWKT: string) =>
+    api.post<ApiResponse<{ outside_parcels: BoundaryOutsideParcel[] }>>(
+      `/land-acquisitions/${id}/boundary-outside-parcels`,
+      { geometry_wkt: geometryWKT },
+    ).then(r => r.data.data?.outside_parcels ?? []),
   delete: (id: string) => api.delete(`/land-acquisitions/${id}`),
   // has_overlap — БАЙРШЛААР давхардсан эсэхээр шүүнэ: "1" зөвхөн давхардалтай,
   // "0" зөвхөн давхардалгүй, заахгүй бол бүгд.
