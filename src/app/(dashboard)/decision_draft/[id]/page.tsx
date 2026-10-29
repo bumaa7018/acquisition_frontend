@@ -14,7 +14,10 @@ import {
   History,
   CheckCircle2,
   Download,
+  Eye,
+  FileText,
 } from "lucide-react";
+import { documentLink } from "@/lib/document-url";
 import {
   decisionDraftApi,
   decisionWorkTypeApi,
@@ -305,6 +308,40 @@ export default function DecisionDraftDetailPage() {
             Энэ захирамж баталгаажсан тул өөрчлөлт оруулах боломжгүй.
             {item.confirmed_at && ` Баталгаажсан: ${formatDate(item.confirmed_at)}`}
           </p>
+        </div>
+      )}
+
+      {/* Захирамжийн хавсралт — баталгаажуулахад хавсаргасан эх баримт */}
+      {isConfirmed && (
+        <div className="ap-card flex items-center justify-between gap-3 px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <FileText className="h-5 w-5 shrink-0 text-[#0acf97]" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-slate-700 dark:text-white">
+                Захирамжийн хавсралт
+              </p>
+              <p className="truncate text-[12px] text-slate-500 dark:text-slate-400">
+                {item.document
+                  ? `${item.document.name} · ${formatDate(item.document.uploaded_at)}`
+                  : "Хавсралтгүй (хавсралт шаарддаг болохоос өмнө баталгаажсан)"}
+              </p>
+            </div>
+          </div>
+          {item.document && (() => {
+            const link = documentLink(item.document);
+            return (
+              <a
+                href={link.href}
+                download={link.download}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[#0acf97]/10 px-3 text-[12px] font-semibold text-[#0acf97] transition-colors hover:bg-[#0acf97]/20"
+              >
+                {link.view ? <Eye className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+                {link.view ? "Харах" : "Татах"}
+              </a>
+            );
+          })()}
         </div>
       )}
 

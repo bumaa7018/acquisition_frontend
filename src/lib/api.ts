@@ -1770,8 +1770,18 @@ export const decisionDraftApi = {
     api.put<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}`, body).then(r => r.data.data),
   delete: (id: string) => api.delete(`/decision-drafts/${id}`),
   // Явц нэмэх — захирамжийн дугаар/огноог бөглөж баталгаажуулна
-  confirm: (id: string, body: { decree_number: string; decision_date: string; note: string }) =>
-    api.post<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}/confirm`, body).then(r => r.data.data),
+  // Баталгаажуулах — захирамжийн хавсралт файл (PDF) ЗААВАЛ. Файл нь «Захирамж»
+  // төрлөөр захирамжид холбогдсон бүх нэгж талбарын хавсралт болно.
+  confirm: (id: string, body: { decree_number: string; decision_date: string; note: string }, file: File) => {
+    const fd = new FormData()
+    fd.append('decree_number', body.decree_number)
+    fd.append('decision_date', body.decision_date)
+    fd.append('note', body.note)
+    fd.append('file', file, file.name)
+    return api.post<ApiResponse<DecisionDraft>>(`/decision-drafts/${id}/confirm`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data.data)
+  },
   addProgress: (id: string, body: { progress_type: string; review_unit_id: number; progress_date: string; note: string }) =>
     api.post<ApiResponse<DecisionDraftProgressHistory>>(`/decision-drafts/${id}/progress`, body).then(r => r.data.data),
   listProgressHistory: (id: string) =>
