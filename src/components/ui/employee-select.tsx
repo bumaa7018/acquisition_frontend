@@ -45,6 +45,10 @@ export function EmployeeSelect({
   const [debounced, setDebounced] = useState("");
   const [displayLabel, setDisplayLabel] = useState(selectedLabel ?? "");
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Сонголт хийсний дараа input алга болж focus алдагддаг — тэгвэл Enter
+  // шүүлтийн мөрөнд хүрэхгүй. Сонгосон утгын шошго руу focus шилжүүлнэ.
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const refocusLabel = useRef(false);
 
   useEffect(() => {
     if (selectedLabel !== undefined) setDisplayLabel(selectedLabel);
@@ -77,6 +81,7 @@ export function EmployeeSelect({
     setQuery("");
     setDisplayLabel(label);
     onSelect(employee.id, label, employee);
+    refocusLabel.current = true;
     setOpen(false);
   }
 
@@ -88,6 +93,13 @@ export function EmployeeSelect({
     setOpen(false);
   }
 
+  useEffect(() => {
+    if (!open && refocusLabel.current) {
+      refocusLabel.current = false;
+      labelRef.current?.focus();
+    }
+  }, [open]);
+
   return (
     <div ref={wrapRef} className={`relative ${className ?? ""}`}>
       <div
@@ -96,8 +108,10 @@ export function EmployeeSelect({
       >
         {selectedId && !open ? (
           <span
+            ref={labelRef}
+            tabIndex={0}
             title={displayLabel}
-            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate"
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate outline-none"
           >
             {displayLabel}
           </span>
