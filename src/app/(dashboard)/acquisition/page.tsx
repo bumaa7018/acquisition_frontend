@@ -32,6 +32,7 @@ import Link from "next/link";
 import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { ProgressBadge } from "@/components/ui/progress-badge";
+import { ProgressMultiSelect } from "@/components/ui/progress-multi-select";
 
 const STATUS_CFG: Record<number, { color: string; bg: string }> = {
   1: { color: "#02c0ce", bg: "#02c0ce18" },
@@ -480,6 +481,8 @@ const EMPTY_DRAFT = {
   // Сум/дүүргийн код — чөлөөлөлтийн хилээр тодорхойлогдож
   // land_acquisition_au-д хадгалагдсан утга.
   au2Code: "",
+  // Гүйцэтгэлийн хувийн хүрээнүүд (PROGRESS_RANGES-ийн түлхүүр, олныг сонгоно).
+  progress: [] as string[],
 };
 type AcqDraft = typeof EMPTY_DRAFT;
 
@@ -578,7 +581,7 @@ export default function LandPage() {
   }
 
   const hasFilter = !!(
-    draft.planCode || draft.acqName || draft.parcelId || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.years.length > 0 || draft.au2Code
+    draft.planCode || draft.acqName || draft.parcelId || draft.status || draft.genCat || draft.subCat || draft.employeeId || draft.years.length > 0 || draft.au2Code || draft.progress.length > 0
   );
 
   const { data: rawData, isLoading } = useQuery({
@@ -598,6 +601,7 @@ export default function LandPage() {
         assigned_user_id: filter.employeeId || undefined,
         au2_code: filter.au2Code || undefined,
         years: filter.years.length ? filter.years : undefined,
+        progress: filter.progress.length ? filter.progress : undefined,
       }),
     enabled: !isProfOrg && deptDefaultApplied,
   });
@@ -621,6 +625,7 @@ export default function LandPage() {
   const HEADERS: SortColumn[] = [
     { label: "Төлөвлөгөө", key: "plan_code" },
     { label: "Чөлөөлөлтийн нэр", key: "acquisition_name" },
+    { label: "Гүйцэтгэл", key: "progress" },
     // Ерөнхий ба дэд ангилал НЭГ баганад (дээр ерөнхий, доор дэд) — эрэмбэ ерөнхийгөөр.
     { label: "Ангилал", key: "general_category" },
     { label: "Статус", key: "status" },
@@ -725,6 +730,11 @@ export default function LandPage() {
             <option value="">Бүх сум/дүүрэг</option>
             {districts.map(d => <option key={d.code} value={d.code}>{d.name || d.code}</option>)}
           </select>
+          <ProgressMultiSelect
+            value={draft.progress}
+            onChange={(progress) => setDraft(d => ({ ...d, progress }))}
+            className="w-36 shrink-0"
+          />
           <YearMultiSelect
             value={draft.years}
             onChange={(years) => setDraft(d => ({ ...d, years }))}
@@ -829,13 +839,7 @@ export default function LandPage() {
                         </div>
                       </td>
                       <td className="px-5 py-3.5 align-top">
-                        {/* Явцын хувь — нэрийн ӨМНӨ (дашбоардтай ижил тоо) */}
-                        <div className="flex min-w-[230px] max-w-[380px] items-start gap-2">
-                          <ProgressBadge
-                            percent={land.progress_percent}
-                            parcelCount={land.parcel_count}
-                            finalCount={land.final_parcel_count}
-                          />
+                        <div className="min-w-[200px] max-w-[380px]">
                           {land.acquisition_name ? (
                             <span
                               title={land.acquisition_name}
@@ -847,6 +851,14 @@ export default function LandPage() {
                             <span className="text-[13px] text-slate-400 dark:text-slate-500">—</span>
                           )}
                         </div>
+                      </td>
+                      {/* Явцын хувь — дашбоардтай ижил тоо; толгойгоор эрэмбэлэгдэнэ */}
+                      <td className="px-5 py-3.5 align-top">
+                        <ProgressBadge
+                          percent={land.progress_percent}
+                          parcelCount={land.parcel_count}
+                          finalCount={land.final_parcel_count}
+                        />
                       </td>
                       <td className="px-5 py-3.5 align-top">
                         <div className="min-w-[140px] max-w-[220px]">

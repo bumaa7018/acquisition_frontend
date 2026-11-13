@@ -8,7 +8,6 @@ import type Polygon from "ol/geom/Polygon";
 import type MultiPolygon from "ol/geom/MultiPolygon";
 import { ChevronDown, Download, ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
 import { landApi, departmentApi } from "@/lib/api";
-import { STATUS_LABELS } from "@/types";
 import type { DroneImage, LandAcquisition } from "@/types";
 import { GS_WFS, gsAuthHeaders, droneTileUrl, GS_GWC_MAX_ZOOM } from "@/lib/geoserver";
 import {
@@ -123,6 +122,11 @@ export const PRINT_MAX_ACQUISITIONS = 3;
 /** GeoServer-ийн CQL-д өгөх тэмдэгт мөр — дан хашилтыг давхарлана. */
 const cqlStr = (v: string) => `'${v.replace(/'/g, "''")}'`;
 
+/** Хэвлэлд нэгж талбарын төлөвийн дараалал (parcel_status.id):
+ *  Чөлөөлсөн → Зөвшилцөх шатанд → Үнэлгээ хийгдсэн → Татгалзсан →
+ *  Нөлөөлөлд өртсөн. */
+const PRINT_STATUS_ORDER = [109, 105, 104, 106, 101];
+
 export default function PrintMapDialog({
   acquisitionId,
   acquisitionIds,
@@ -153,6 +157,16 @@ export default function PrintMapDialog({
   // Нэгж талбарын ТӨЛӨВҮҮД — бүртгэлээс. Тайлбар, явцын задаргаа болон
   // хэвлэх давхаргууд бүгд эндээс бүрдэнэ.
   const { defs: statusLayerDefs } = useParcelStatusLayers();
+  // Хэвлэлийн таних тэмдэг / явцын задаргаа / давхаргын чагтанд төлөвүүд
+  // PRINT_STATUS_ORDER-ийн дарааллаар; жагсаалтад үгүй төлөв араас нь
+  // бүртгэлийн sort_order-оор.
+  const printStatusDefs = useMemo(() => {
+    const rank = (id: string) => {
+      const i = PRINT_STATUS_ORDER.indexOf(parcelStatusIdFromLayer(id) ?? -1);
+      return i < 0 ? PRINT_STATUS_ORDER.length : i;
+    };
+    return [...statusLayerDefs].sort((a, b) => rank(a.id) - rank(b.id));
+  }, [statusLayerDefs]);
   const statusRules = useParcelStatusRules();
   const [extent, setExtent] = useState<[number, number, number, number] | null>(null);
 
@@ -343,7 +357,7 @@ export default function PrintMapDialog({
       : []),
     // Төлөвүүд БҮРТГЭЛЭЭС ирнэ (хатуу жагсаалт биш) бөгөөд хэрэглэгчийн
     // ХАССАН давхарга таних тэмдэгт гарахгүй.
-    ...statusLayerDefs
+    ...printStatusDefs
       .filter((d) => {
         const sid = parcelStatusIdFromLayer(d.id) ?? -1;
         return (statusCounts[sid] ?? 0) > 0 && !hidden.has(d.id);
@@ -378,7 +392,7 @@ export default function PrintMapDialog({
     const counted = Object.keys(statusCounts).length > 0;
     return [
       // Төлөвүүд БҮРТГЭЛЭЭС — шинэ төлөв нэмэхэд чагтлах жагсаалтад өөрөө орно.
-      ...statusLayerDefs
+      ...printStatusDefs
         .filter((d) => !counted || (statusCounts[parcelStatusIdFromLayer(d.id) ?? -1] ?? 0) > 0)
         .map((d) => ({ id: d.id as string, color: d.color, label: d.label })),
       ...BOUNDARY_IDS.map((id) => {
@@ -386,7 +400,7 @@ export default function PrintMapDialog({
         return { id: id as string, color: def.color, label: def.label };
       }),
     ];
-  }, [statusCounts, statusLayerDefs]);
+  }, [statusCounts, printStatusDefs]);
 
   const toggleGus = (ids: readonly string[], on: boolean) =>
     setGusLayers((prev) => {
@@ -467,21 +481,20 @@ export default function PrintMapDialog({
       logo: logoRef.current,
       departmentName: uniq(depts.map((d) => d.name)),
       departmentCode: uniq(depts.map((d) => d.code)),
-      statusName: uniq(acqs.map((a) => STATUS_LABELS[a.status])),
+      // Хилд хамаарах дүүрэг / хороо — олон чөлөөлөлтийнхийг давхардалгүй нэгтгэнэ.
+      districtName: uniq(acqs.flatMap((a) => (a.aus ?? []).map((u) => u.au2_name))),
+      khorooName: uniq(acqs.flatMap((a) => (a.aus ?? []).map((u) => u.au3_name))),
       progressPercent: Math.round(progress),
-      progressBreakdown: statusLayerDefs
+      progressBreakdown: printStatusDefs
         .map((d) => ({
           color: d.color,
           label: d.label,
           count: statusCounts[parcelStatusIdFromLayer(d.id) ?? -1] ?? 0,
         }))
         .filter((sl) => sl.count > 0),
-      specialists: Array.from(
-        new Set(acqs.flatMap((a) => (a.assigned_users ?? []).map((u) => u.user_name)).filter(Boolean)),
-      ),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acqsKey, categories, departments, parcelsAreaM2, statusCounts, statusLayerDefs]);
+  }, [acqsKey, categories, departments, parcelsAreaM2, statusCounts, printStatusDefs]);
 
   /* ӨМЧЛӨГЧИЙН ШОШГО — ЭЦСИЙН БУС төлөвтэй нэгж талбарууд дээр.
      Нэр нь GeoServer-ийн view-д байхгүй тул backend-ийн жагсаалтаас

@@ -50,6 +50,7 @@ import {
   Calendar,
   FileSpreadsheet,
   Printer,
+  Briefcase,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProgressBadge } from "@/components/ui/progress-badge";
@@ -1658,15 +1659,7 @@ export default function DashboardPage() {
             )}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
-              {filteredAcqs.length} чөлөөлөлт
-            </p>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-              {isLoading ? "…" : `${totalParcels} нэгж талбар`}
-            </p>
-          </div>
+        <div className="shrink-0 flex items-center gap-4">
           {/* ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил (хэрэглэсэн) шүүлтээр татна.
               Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
           {isSenior && (
@@ -1684,11 +1677,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Stat cards — xl: 12 багана (хил 2, нэгж талбар 2, захирамж 3,
+      {/* ── Stat cards — xl: 14 багана (нийт ажил 2, хил 2, нэгж талбар 2, захирамж 3,
              олговор 5). Задаргаатай картууд задаргааг БАРУУН талд харуулна
              (карт доош сунгахгүй). ─────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-12 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-[repeat(14,minmax(0,1fr))] gap-4">
         {([
+          {
+            label: "НИЙТ АЖИЛ",
+            sub: isLoading ? "чөлөөлөлт" : <>чөлөөлөлт · <span className="font-semibold text-slate-600 dark:text-slate-300">{totalParcels}</span> нэгж талбар</>,
+            value: isLoading ? null : filteredAcqs.length,
+            color: "#f1556c",
+            icon: Briefcase,
+            bg: "#f1556c18",
+            span: "xl:col-span-2",
+          },
           {
             label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
             sub: "нийт талбай",
@@ -1705,7 +1707,7 @@ export default function DashboardPage() {
             color: "#777edd",
             icon: Layers,
             bg: "#777edd18",
-            span: "xl:col-span-2",
+            span: "col-span-2 xl:col-span-2",
           },
           {
             label: "ЗАХИРАМЖ",

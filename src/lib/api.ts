@@ -835,6 +835,7 @@ export const landApi = {
     if (filter?.general_category_id) p.set('general_category_id', String(filter.general_category_id))
     if (filter?.sub_category_id)     p.set('sub_category_id', String(filter.sub_category_id))
     if (filter?.assigned_user_id)    p.set('assigned_user_id', filter.assigned_user_id)
+    filter?.progress?.forEach(r => p.append('progress', r))
     if (filter?.sort)                p.set('sort', filter.sort)
     if (filter?.order)               p.set('order', filter.order)
     if (filter?.page)                p.set('page', String(filter.page))
