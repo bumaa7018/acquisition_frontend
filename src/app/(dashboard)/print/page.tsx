@@ -4,7 +4,8 @@ import dynamic from "next/dynamic";
 import { Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { GS_WFS, gsAuthHeaders } from "@/lib/geoserver";
-import { useAcquisitionOptions } from "@/hooks/use-acquisition-options";
+import { useQuery } from "@tanstack/react-query";
+import { landApi } from "@/lib/api";
 import { PRINT_MAX_ACQUISITIONS } from "@/components/map/print-map-dialog";
 
 // OpenLayers/canvas — зөвхөн хөтөч дээр.
@@ -21,6 +22,9 @@ const PrintMapDialog = dynamic(() => import("@/components/map/print-map-dialog")
 const MAX_SPAN_KM = 10;
 
 type BBox = [number, number, number, number]; // EPSG:4326 — minLon, minLat, maxLon, maxLat
+
+/** Хайлтын үр дүн / сонгосон чөлөөлөлтийн товч мэдээлэл. */
+type AcqOption = { id: string; acquisition_name: string; plan_code: string };
 
 /** Чөлөөлөлтийн хилийн хүрээ (WFS). Хилгүй бол null. */
 async function fetchAcqBBox(id: string): Promise<BBox | null> {
@@ -68,9 +72,24 @@ function spanKm(boxes: BBox[]): number {
  * цонхтой (print-map-dialog) ЯГ ИЖИЛ — энд зөвхөн чөлөөлөлт сонгогч нэмэгдэнэ.
  */
 export default function PrintPage() {
-  const { acquisitions, isLoading } = useAcquisitionOptions();
   const [selected, setSelected] = useState<string[]>([]);
+  // Сонгосон чөлөөлөлтийн нэр/код — жагсаалтад харуулахад (хайлтын үр дүн солигдсон ч).
+  const [picked, setPicked] = useState<Map<string, AcqOption>>(new Map());
   const [query, setQuery] = useState("");
+  // Бичиж дуустал (300мс) хүлээгээд хайна — үсэг бүрд хүсэлт явуулахгүй.
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+  /* Хайх үг бичээгүй бол СЕРВЕР рүү огт хандахгүй (бүх чөлөөлөлтийг урьдчилан
+     татахгүй). Бичсэн үед л нэр/кодоор хайна (backend 20-оор хязгаарлана). */
+  const { data: results = [], isFetching: searching } = useQuery({
+    queryKey: ["acq-suggest", debounced],
+    queryFn: () => landApi.suggest(debounced),
+    enabled: debounced.length > 0,
+    staleTime: 60_000,
+  });
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   // Сонгосон чөлөөлөлтүүдийн хүрээ — зайны шалгалтад.
@@ -85,26 +104,21 @@ export default function PrintPage() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  const byId = useMemo(() => new Map(acquisitions.map((a) => [a.id, a])), [acquisitions]);
   const full = selected.length >= PRINT_MAX_ACQUISITIONS;
+  const hasQuery = query.trim().length > 0;
+  // Бичиж байх үед (debounce дуусаагүй) өмнөх үр дүнг харуулахгүй.
+  const pending = hasQuery && (debounced !== query.trim() || searching);
 
-  const options = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return acquisitions
-      .filter((a) => !selected.includes(a.id))
-      .filter(
-        (a) =>
-          !q ||
-          (a.acquisition_name ?? "").toLowerCase().includes(q) ||
-          (a.plan_code ?? "").toLowerCase().includes(q),
-      )
-      .slice(0, 100);
-  }, [acquisitions, selected, query]);
+  const options = useMemo(
+    () => results.filter((a) => !selected.includes(a.id)),
+    [results, selected],
+  );
 
   /* Нэмэхийн ӨМНӨ зайг шалгана: шинэ чөлөөлөлтийг сонгосонтой нийлүүлэхэд
      хүрээ нь MAX_SPAN_KM-ээс хэтэрвэл нэмэхгүй. Хилгүй чөлөөлөлт зураг дээр
      гардаггүй тул шалгалтад оролцохгүй. */
-  const add = async (id: string) => {
+  const add = async (opt: AcqOption) => {
+    const id = opt.id;
     if (checking || selected.includes(id) || selected.length >= PRINT_MAX_ACQUISITIONS) return;
     setOpen(false);
     setChecking(true);
@@ -124,6 +138,7 @@ export default function PrintPage() {
           return;
         }
       }
+      setPicked((prev) => new Map(prev).set(id, opt));
       setSelected((prev) => (prev.includes(id) || prev.length >= PRINT_MAX_ACQUISITIONS ? prev : [...prev, id]));
       setQuery("");
     } catch (e) {
@@ -142,7 +157,7 @@ export default function PrintPage() {
 
       <div ref={wrapRef} className="relative w-full">
         <div className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 focus-within:border-[#02c0ce] dark:border-[#37394d] dark:bg-[#1e1f27]">
-          {checking ? (
+          {checking || pending ? (
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" />
           ) : (
             <Search className="h-3.5 w-3.5 shrink-0 text-slate-400" />
@@ -158,17 +173,17 @@ export default function PrintPage() {
             placeholder={
               full
                 ? `Хамгийн ихдээ ${PRINT_MAX_ACQUISITIONS} чөлөөлөлт сонгоно`
-                : isLoading
-                  ? "Ачаалж байна..."
-                  : "Чөлөөлөлт хайх (нэр, код)"
+                : "Чөлөөлөлт хайх (нэр, код)"
             }
             className="min-w-0 flex-1 bg-transparent text-[12px] text-slate-700 outline-none disabled:cursor-not-allowed dark:text-slate-200"
           />
         </div>
-        {open && !full && (
+        {open && !full && hasQuery && (
           <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-white/[0.08] dark:bg-[#1e1f27]">
             <div className="max-h-64 overflow-y-auto">
-              {options.length === 0 ? (
+              {pending ? (
+                <div className="px-3 py-3 text-[12px] text-slate-400">Хайж байна...</div>
+              ) : options.length === 0 ? (
                 <div className="px-3 py-3 text-[12px] text-slate-400">Олдсонгүй</div>
               ) : (
                 options.map((a) => (
@@ -177,7 +192,7 @@ export default function PrintPage() {
                     type="button"
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      void add(a.id);
+                      void add(a);
                     }}
                     className="block w-full border-b border-slate-50 px-3 py-2 text-left last:border-0 hover:bg-slate-50 dark:border-[#252630] dark:hover:bg-[#252630]"
                   >
@@ -197,7 +212,7 @@ export default function PrintPage() {
       {selected.length > 0 && (
         <ul className="mt-2 w-full divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 dark:divide-[#37394d] dark:border-[#37394d]">
           {selected.map((id, i) => {
-            const a = byId.get(id);
+            const a = picked.get(id);
             return (
               <li key={id} className="flex items-center gap-2.5 px-2.5 py-1.5 text-[12px]">
                 <span className="w-4 shrink-0 text-right tabular-nums text-slate-400">{i + 1}</span>

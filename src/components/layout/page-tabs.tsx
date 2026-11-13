@@ -25,7 +25,7 @@ const APP_TITLE = "Газрын Мэдээллийн Систем";
  * URL нь ҮНЭНИЙ ЭХ СУРВАЛЖ: хаяг өөрчлөгдөх бүрд харгалзах таб нээгдэж/
  * шинэчлэгдэнэ (цэс, холбоос, browser-ийн back/forward аль нь ч хамаагүй),
  * таб дарахад тухайн табын сүүлийн зам руу шилжинэ. Хяналтын самбар (`/`)
- * үргэлж эхэнд, хаагдахгүй.
+ * үргэлж эхэнд, хаагдахгүй; шинээр нээсэн таб түүний яг ард гарна.
  *
  * Цэс/таб дарахад таб ШУУД нээгдэж идэвхжинэ (`getNavTarget`), хуудас
  * ачаалагдах хооронд контентын хэсэгт loader гарна (`ContentLoader`).
@@ -64,11 +64,14 @@ export function PageTabs() {
               ? { ...t, path: fullPath, lastActiveAt: switched ? now : t.lastActiveAt }
               : t,
           )
-        : [...next, { key: currentKey, path: fullPath, label, lastActiveAt: now }];
+        : // Шинэ таб хяналтын самбарын ард (эхэнд) нээгдэнэ.
+          [{ key: currentKey, path: fullPath, label, lastActiveAt: now }, ...next];
     }
     next = pruneExpiredTabs(next, currentKey, now);
     while (next.length > PAGE_TABS_MAX) {
-      const oldest = next.findIndex((t) => t.key !== currentKey);
+      // Хамгийн эрт нээсэн нь сүүлд байрлана.
+      let oldest = next.length - 1;
+      while (oldest >= 0 && next[oldest].key === currentKey) oldest--;
       next = next.filter((_, i) => i !== oldest);
     }
     savePageTabs(next);
@@ -157,7 +160,7 @@ export function PageTabs() {
     ...tabs,
   ];
   if (pendingKey && navTarget && !items.some((t) => t.key === pendingKey)) {
-    items.push({ key: pendingKey, path: navTarget, label: pendingNav?.label ?? "Хуудас" });
+    items.splice(1, 0, { key: pendingKey, path: navTarget, label: pendingNav?.label ?? "Хуудас" });
   }
 
   const menuTab = menu ? items.find((t) => t.key === menu.key) : undefined;

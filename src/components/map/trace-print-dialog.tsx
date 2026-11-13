@@ -571,7 +571,7 @@ export default function TracePrintDialog({
             kind: "wms",
             layer: `land:${geoServerName(id as MapLayerId)}`,
             styles: isStatus ? PARCEL_STATUS_PRINT_STYLE : PRINT_STYLES[id],
-            cql: id.startsWith("au") ? undefined : combineCql(def.cql, acqFilter) || undefined,
+            cql: (id.startsWith("au") ? def.cql : combineCql(def.cql, acqFilter)) || undefined,
             // Нэгж талбарууд 20% дүүргэлттэй — суурь зураг харагдана
             opacity: isStatus ? STATUS_WMS_OPACITY : def.opacity ?? 0.9,
             required: id === "v_acquisition_plan" || isStatus,

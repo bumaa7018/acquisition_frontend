@@ -200,14 +200,14 @@ export interface PrintInfo {
   /** Ерөнхий ангилалд холбогдсон хэлтэс */
   departmentName?: string;
   departmentCode?: string;
-  /** Чөлөөлөлтийн ЯВЦ — төлөвийн нэр (Шинэ / Хээрийн судалгаа / ...) */
-  statusName?: string;
+  /** Чөлөөлөлтийн хилд хамаарах дүүрэг(үүд) — au2_name */
+  districtName?: string;
+  /** Чөлөөлөлтийн хилд хамаарах хороо(д) — au3_name */
+  khorooName?: string;
   /** Гүйцэтгэлийн хувь (0-100) */
   progressPercent?: number;
   /** Гүйцэтгэлийн pie — нэгж талбарын төлөв тус бүрээр */
   progressBreakdown?: { color: string; label: string; count: number }[];
-  /** Хариуцсан мэргэжилтнүүдийн овог нэр */
-  specialists?: string[];
 }
 
 // Хэвлэсэн огноо — "2026.09.01" (тэгээр гүйцээсэн, монгол бичиглэл).
@@ -1030,7 +1030,12 @@ export function composePrintPage(
     const titleTextWidth = ctx.measureText("Таних тэмдэг").width;
     ctx.font = "7px sans-serif";
     const maxRowTextWidth = Math.max(...legend.map((item) => ctx.measureText(item.label).width));
-    const colW = Math.min(150, Math.max(92, maxRowTextWidth + 21));
+    /* Баганын өргөн — ХАМГИЙН УРТ нэр БҮТНЭЭРЭЭ багтах хэмжээтэй
+       (ж: «НӨЛӨӨЛӨЛД ӨРТСӨН НЭГЖ ТАЛБАР (123)»). Өмнө нь 150px-ээр
+       хязгаарлагдаж урт нэр «…» болж тасардаг байв. Зөвхөн нэг багана ч
+       багтахгүй өргөнөөс давахгүй. */
+    const maxColW = stacked ? fullCardW - 6 : Math.max(92, mapAreaW - CARD_INSET * 3 - 300 - 6);
+    const colW = Math.min(maxColW, Math.max(92, maxRowTextWidth + 21));
     /* Баганын тоо — мэдээллийн картад ~300px үлдээх хэмжээгээр (ГУС-ийн дэд
        давхаргууд олноор сонгогдоход 3 багана хүрэлцдэггүй). Тэр ч багтахгүй
        бол картыг ДЭЭШ өндөрсгөнө ("… бусад N" гэвэл зураг дээр нэр байхгүй
@@ -1038,7 +1043,7 @@ export function composePrintPage(
        хэтэрвэл л сүүлийн мөрийг "… бусад N" болгоно. */
     const maxCols = stacked
       ? Math.max(1, Math.floor((fullCardW - 6) / colW))
-      : Math.max(3, Math.floor((mapAreaW - CARD_INSET * 3 - 300 - 6) / colW));
+      : Math.max(1, Math.floor((mapAreaW - CARD_INSET * 3 - 300 - 6) / colW));
     const cols = Math.max(1, Math.min(maxCols, Math.ceil(legend.length / maxRows)));
     if (legend.length > cols * maxRows) {
       const rowsLimit = Math.max(maxRows, Math.floor((mapAreaH / 2 - headerH - 4) / rowH));
@@ -1171,8 +1176,8 @@ export function composePrintPage(
     y = infoY + 21;
     const dept = [info.departmentCode, info.departmentName].filter(Boolean).join(" · ");
     drawRow(col2X, y, "Хэлтэс:", dept || "—", colW - 8); y += rowH;
-    drawRow(col2X, y, "Явц:", info.statusName || "—", colW - 8); y += rowH;
-    drawRow(col2X, y, "Хариуцсан:", (info.specialists ?? []).join(", ") || "—", colW - 8); y += rowH;
+    drawRow(col2X, y, "Дүүрэг:", info.districtName || "—", colW - 8); y += rowH;
+    drawRow(col2X, y, "Хороо:", info.khorooName || "—", colW - 8); y += rowH;
     drawRow(col2X, y, "Огноо:", formatDateDots(new Date()), colW - 8);
 
     const pieCy = infoY + 18 + (INFO_CARD_H - 18) / 2 - 4;
