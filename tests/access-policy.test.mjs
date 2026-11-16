@@ -19,6 +19,7 @@ import {
   canCreateUser,
   canDeactivateUser,
   canDeleteRole,
+  isProtectedRoleName,
   canDeleteUserRow,
   canGrantPermissionForActor,
   canGrantRoleForActor,
@@ -904,6 +905,20 @@ test("зөвхөн харах эрхтэй non-admin хэрэглэгч удир
   assert.equal(canUpdateRole(readOnlyAdmin), false);
   assert.equal(canDeleteRole(readOnlyAdmin), false);
   assert.equal(canManageRolePermissions(readOnlyAdmin), false);
+});
+
+test("роль устгах зөвхөн системийн админд, админы роль хамгаалагдсан", () => {
+  const actorOf = (roles, permissions) => ({ userId: "1", orgId: null, valuationOrg: false, roles, permissions });
+  assert.equal(canDeleteRole(actorOf(["admin"], ["roles:delete"])), true);
+  assert.equal(canDeleteRole(actorOf(["Админ"], ["roles:delete"])), true);
+  // Эрх нь байсан ч админ биш бол устгахгүй
+  assert.equal(canDeleteRole(actorOf(["department_head"], ["roles:read", "roles:delete"])), false);
+  assert.equal(canDeleteRole(actorOf(["senior_specialist"], ["roles:delete"])), false);
+  // Админ ч roles:delete эрхгүй бол устгахгүй
+  assert.equal(canDeleteRole(actorOf(["admin"], ["roles:read"])), false);
+  assert.equal(isProtectedRoleName("admin"), true);
+  assert.equal(isProtectedRoleName("Админ"), true);
+  assert.equal(isProtectedRoleName("employee"), false);
 });
 
 test("өөрийгөө устгах / идэвхгүй болгох / роль өөрчлөх хаалттай", () => {

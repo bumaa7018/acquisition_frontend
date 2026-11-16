@@ -18,6 +18,7 @@ import {
   canGrantPermissionForActor,
   canGrantRoleForActor,
   canManageRolePermissions,
+  canDeleteRole,
   canManageUserRoles,
   canUpdateUser,
   canUpdateHrRecord,
@@ -32,6 +33,7 @@ import {
   hasAccessRole,
   isAdminActor,
   canImportLegacyDataForActor,
+  canSeeAllLegacyImportsForActor,
   isExternalSpecialActor,
   isFinanceSpecialistActor,
   isMikaActor,
@@ -129,6 +131,11 @@ export function canPrintParcelTrace(acquisition?: AccessAcquisition | null): boo
 // Хуучин мэдээллийн импорт
 export function canImportLegacyData(): boolean {
   return canImportLegacyDataForActor(getCurrentActor());
+}
+
+/** Бусад хэрэглэгчийн импортыг ч харах эсэх (зөвхөн системийн админ). */
+export function canSeeAllLegacyImports(): boolean {
+  return canSeeAllLegacyImportsForActor(getCurrentActor());
 }
 
 // Any of the special external roles that can only access acquisition menu
@@ -313,9 +320,14 @@ export function canViewRoles(): boolean {
   return canViewRolesPage(getCurrentActor());
 }
 
-// Роль нэмэх/устгах/нэр засах нь UI-д байхгүй — Эрх & Роль хуудас нь зөвхөн
-// бүртгэлтэй ролиудын эрхийг тохируулна. (Backend-ийн roles:create/delete
-// маршрутууд хэвээр байгаа тул access-policy-д нь дүрэм үлдсэн.)
+/**
+ * Роль устгах товч — зөвхөн системийн админд. Хэрэглэгчтэй холбогдсон ролийг
+ * backend татгалзана (409, хэдэн хэрэглэгч ашиглаж байгааг мессежээр).
+ */
+export function canRemoveRole(): boolean {
+  return canDeleteRole(getCurrentActor());
+}
+
 export function canEditRolePermissions(): boolean {
   return canManageRolePermissions(getCurrentActor());
 }

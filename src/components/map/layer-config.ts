@@ -380,6 +380,13 @@ const SEC_SUB_STYLES = Object.fromEntries(
 // түлхүүр нь TypeScript-д ИНДЕКС ГАРЫН ҮСЭГ болж хувирдаг тул хасаагүй бол
 // `MAP_LAYER_STYLES['v_parcel_s0']` нь төрлөөр зөв атлаа ажиллах үед
 // `undefined` буцаах ба алдаа чимээгүй өнгөрнө.
+/**
+ * Засаг захиргааны хилийн давхаргуудад (au1/au2/au3) харуулах аймаг, нийслэлийн
+ * код. Систем зөвхөн Улаанбаатар (011)-т ажилладаг тул бусад аймгийн хил
+ * зурагдахгүй. au2, au3 хүснэгтүүд `au1_code` баганатай.
+ */
+export const ADMIN_AU1_CODE = '011'
+
 export const MAP_LAYER_STYLES: Record<
   Exclude<MapLayerId, `v_parcel_s${number}`>,
   Omit<MapLayerDef, 'id'>
@@ -389,9 +396,11 @@ export const MAP_LAYER_STYLES: Record<
   // Өмнө нь энд ягаан бичигдсэн байсан тул давхаргын самбарын өнгөт
   // дөрвөлжин зурагтай зөрж, хэрэглэгчийг төөрөгдүүлж байв.
   // Улс даяарын лавлах — асаахад ЗУМЛАХГҮЙ (fitOnEnable-ийн тайлбарыг үз).
-  au1: { label: 'Аймаг/Нийслэл', color: '#334155', zIndex: 1, fitOnEnable: false },
-  au2: { label: 'Сум/Дүүрэг', color: '#64748b', zIndex: 2, fitOnEnable: false },
-  au3: { label: 'Баг/Хороо', color: '#94a3b8', zIndex: 3, fitOnEnable: false },
+  // Зөвхөн Улаанбаатарын (ADMIN_AU1_CODE) аймаг, сум, баг харагдана. Шүүлт нь
+  // ТОГТМОЛ `cql` тул дуудагч талын (дүүрэг, чөлөөлөлт) шүүлттэй AND-ээр нэгтгэгдэнэ.
+  au1: { label: 'Аймаг/Нийслэл', color: '#334155', zIndex: 1, fitOnEnable: false, cql: `code='${ADMIN_AU1_CODE}'` },
+  au2: { label: 'Сум/Дүүрэг', color: '#64748b', zIndex: 2, fitOnEnable: false, cql: `au1_code='${ADMIN_AU1_CODE}'` },
+  au3: { label: 'Баг/Хороо', color: '#94a3b8', zIndex: 3, fitOnEnable: false, cql: `au1_code='${ADMIN_AU1_CODE}'` },
   // Чөлөөлөлтийн хил нь ТӨЛӨВЛӨГӨӨНИЙ хилийн хуулбар болсон тул давхаргын
   // жагсаалтад зөвхөн НЭГ хил үлдэнэ: 'v_acquisition_boundary' (Чөлөөлөх
   // бүсийн хил) нь энэ давхаргатай яг давхцах тул хасагдсан.

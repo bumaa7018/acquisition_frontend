@@ -16,9 +16,10 @@ import {
 import { canAddHr, canEditHr, canRemoveHr, canViewHr } from "@/lib/role-utils";
 import { getApiError } from "@/lib/utils";
 import type { Department, Employee, Organization, Person, Position } from "@/types";
-import { BadgeCheck, Building2, IdCard, Network, Pencil, Plus, Search, Trash2, UserCog, X } from "lucide-react";
+import { BadgeCheck, Building2, IdCard, Network, Pencil, Plus, Search, Trash2, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { SortButton, ariaSort, useClientSort } from "@/components/ui/sortable-table-head";
 
 type Mode = "organization" | "department" | "position" | "person" | "employee";
@@ -26,6 +27,19 @@ type Row = Organization | Department | Position | Person | Employee;
 type FormState = Record<string, string | boolean | undefined>;
 
 const inputCls = "h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
+// Попап доторх талбар — бүтэн өргөнтэй, дээр нь шошготой (утга оруулсны
+// дараа ч ямар талбар болох нь харагдана).
+const fieldCls = `${inputCls} w-full`;
+
+function Field({ label, full = false, children }: { label: string; full?: boolean; children: React.ReactNode }) {
+  return (
+    <label className={`flex min-w-0 flex-col gap-1.5 ${full ? "md:col-span-2" : ""}`}>
+      <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">{label}</span>
+      {children}
+    </label>
+  );
+}
+
 const primaryBtn = "inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#02a3af] disabled:opacity-60";
 const iconBtn = "flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-500 transition-colors hover:bg-[#02c0ce]/10 hover:text-[#02c0ce] dark:bg-[#252630] dark:text-slate-400";
 
@@ -252,7 +266,7 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
             <h1 className="text-xl font-bold text-slate-800 dark:text-white">{m.title}</h1>
             <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">{m.desc}</p>
           </div>
-          {perms.create && <button onClick={() => { setFormOpen((v) => !v); setEdit(null); setForm(emptyForm(mode)); }} className={primaryBtn}>{formOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}{formOpen ? "Болих" : "Нэмэх"}</button>}
+          {perms.create && <button onClick={() => { setEdit(null); setForm(emptyForm(mode)); setFormOpen(true); }} className={primaryBtn}><Plus className="h-4 w-4" />Нэмэх</button>}
         </div>
 
         <div className="ap-card flex flex-wrap items-center gap-2 p-4">
@@ -268,69 +282,104 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
           )}
         </div>
 
-        {formOpen && (perms.create || (edit && perms.update)) && (
-          <div className="ap-card p-5">
-            <p className="mb-4 text-[13px] font-semibold text-slate-700 dark:text-white">{edit ? "Засварлах" : "Шинэ бүртгэл"}</p>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {mode === "department" || mode === "employee" ? (
-                <select value={String(form.organization_id || "")} onChange={(e) => setForm((f) => ({ ...f, organization_id: e.target.value, department_id: "" }))} className={inputCls}>
-                  <option value="">Байгууллага *</option>
-                  {(organizations.data?.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
-              ) : null}
+        <FormDialog
+          open={formOpen && (perms.create || (!!edit && perms.update))}
+          title={edit ? "Засварлах" : "Шинэ бүртгэл"}
+          subtitle={m.title}
+          onClose={closeForm}
+          busy={saveMutation.isPending}
+          size={mode === "employee" ? "lg" : "md"}
+        >
+            <div className="grid grid-cols-1 gap-x-3 gap-y-4 md:grid-cols-2">
+              {(mode === "department" || mode === "employee") && (
+                <Field label="Байгууллага *" full>
+                  <select value={String(form.organization_id || "")} onChange={(e) => setForm((f) => ({ ...f, organization_id: e.target.value, department_id: "" }))} className={fieldCls}>
+                    <option value="">Сонгоно уу</option>
+                    {(organizations.data?.data ?? []).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </Field>
+              )}
 
               {mode === "employee" && (
                 <>
-                  <select value={String(form.department_id || "")} onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value }))} className={inputCls}>
-                    <option value="">Алба, хэлтэс</option>
-                    {(departments.data?.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                  <select value={String(form.position_id || "")} onChange={(e) => setForm((f) => ({ ...f, position_id: e.target.value }))} className={inputCls}>
-                    <option value="">Албан тушаал *</option>
-                    {(positions.data?.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <input value={String(form.work_email || "")} onChange={(e) => setForm((f) => ({ ...f, work_email: e.target.value }))} placeholder="Ажлын имэйл" className={inputCls} />
-                  <input value={String(form.work_phone || "")} onChange={(e) => setForm((f) => ({ ...f, work_phone: e.target.value }))} placeholder="Ажлын утас" className={inputCls} />
+                  <Field label="Алба, хэлтэс" full>
+                    <select value={String(form.department_id || "")} onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value }))} className={fieldCls}>
+                      <option value="">Сонгоно уу</option>
+                      {(departments.data?.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Албан тушаал *" full>
+                    <select value={String(form.position_id || "")} onChange={(e) => setForm((f) => ({ ...f, position_id: e.target.value }))} className={fieldCls}>
+                      <option value="">Сонгоно уу</option>
+                      {(positions.data?.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Ажлын имэйл">
+                    <input value={String(form.work_email || "")} onChange={(e) => setForm((f) => ({ ...f, work_email: e.target.value }))} className={fieldCls} />
+                  </Field>
+                  <Field label="Ажлын утас">
+                    <input value={String(form.work_phone || "")} onChange={(e) => setForm((f) => ({ ...f, work_phone: e.target.value }))} className={fieldCls} />
+                  </Field>
                   <label className="col-span-full flex w-fit items-center gap-2 text-[12px] text-slate-600 dark:text-slate-300">
                     <input type="checkbox" checked={!!form.new_person} onChange={(e) => setForm((f) => ({ ...f, new_person: e.target.checked, person_id: "", person_label: "" }))} />
                     Шинэ иргэн бүртгэх
                   </label>
                   {!form.new_person && (
-                    <div className="col-span-full grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <input value={personSearch} onChange={(e) => setPersonSearch(e.target.value)} placeholder="Иргэн хайх" className={inputCls} />
-                      <select value={String(form.person_id || "")} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} className={inputCls}>
-                        <option value="">Иргэн сонгох *</option>
-                        {(people.data?.data ?? []).map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.person_type === "legal" ? p.legal_name : `${p.last_name ?? ""} ${p.first_name ?? ""}`} · {p.register_no}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <>
+                      <Field label="Иргэн хайх" full>
+                        <input value={personSearch} onChange={(e) => setPersonSearch(e.target.value)} placeholder="Нэр эсвэл регистрээр" className={fieldCls} />
+                      </Field>
+                      <Field label="Иргэн сонгох *" full>
+                        <select value={String(form.person_id || "")} onChange={(e) => setForm((f) => ({ ...f, person_id: e.target.value }))} className={fieldCls}>
+                          <option value="">Сонгоно уу</option>
+                          {(people.data?.data ?? []).map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.person_type === "legal" ? p.legal_name : `${p.last_name ?? ""} ${p.first_name ?? ""}`} · {p.register_no}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </>
                   )}
                 </>
               )}
 
               {(mode === "organization" || mode === "department" || mode === "position") && (
                 <>
-                  <input value={String(form.name || "")} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Нэр *" className={inputCls} />
-                  {mode !== "organization" && <input value={String(form.code || "")} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="Код" className={inputCls} />}
+                  <Field label="Нэр *" full>
+                    <input value={String(form.name || "")} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={fieldCls} />
+                  </Field>
+                  {mode !== "organization" && (
+                    <Field label="Код" full>
+                      <input value={String(form.code || "")} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} className={fieldCls} />
+                    </Field>
+                  )}
                 </>
               )}
 
               {(mode === "person" || (mode === "employee" && form.new_person)) && (
                 <>
-                  <select value={String(form.person_type || "citizen")} onChange={(e) => setForm((f) => ({ ...f, person_type: e.target.value }))} className={inputCls}>
-                    <option value="citizen">Иргэн</option>
-                    <option value="legal">Хуулийн этгээд</option>
-                  </select>
-                  <input value={String(form.register_no || "")} onChange={(e) => setForm((f) => ({ ...f, register_no: e.target.value }))} placeholder="Регистр / ТТД *" className={inputCls} />
+                  <Field label="Төрөл">
+                    <select value={String(form.person_type || "citizen")} onChange={(e) => setForm((f) => ({ ...f, person_type: e.target.value }))} className={fieldCls}>
+                      <option value="citizen">Иргэн</option>
+                      <option value="legal">Хуулийн этгээд</option>
+                    </select>
+                  </Field>
+                  <Field label="Регистр / ТТД *">
+                    <input value={String(form.register_no || "")} onChange={(e) => setForm((f) => ({ ...f, register_no: e.target.value }))} className={fieldCls} />
+                  </Field>
                   {form.person_type === "legal" ? (
-                    <input value={String(form.legal_name || "")} onChange={(e) => setForm((f) => ({ ...f, legal_name: e.target.value }))} placeholder="Хуулийн этгээдийн нэр *" className={inputCls} />
+                    <Field label="Хуулийн этгээдийн нэр *" full>
+                      <input value={String(form.legal_name || "")} onChange={(e) => setForm((f) => ({ ...f, legal_name: e.target.value }))} className={fieldCls} />
+                    </Field>
                   ) : (
                     <>
-                      <input value={String(form.last_name || "")} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} placeholder="Овог *" className={inputCls} />
-                      <input value={String(form.first_name || "")} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} placeholder="Нэр *" className={inputCls} />
+                      <Field label="Овог *">
+                        <input value={String(form.last_name || "")} onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))} className={fieldCls} />
+                      </Field>
+                      <Field label="Нэр *">
+                        <input value={String(form.first_name || "")} onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))} className={fieldCls} />
+                      </Field>
                     </>
                   )}
                 </>
@@ -341,8 +390,7 @@ export function HRRegistryPage({ mode }: { mode: Mode }) {
                 <button onClick={closeForm} className="h-9 rounded-lg border border-slate-200 px-4 text-[13px] font-medium text-slate-600 dark:border-[#37394d] dark:text-slate-300">Болих</button>
               </div>
             </div>
-          </div>
-        )}
+        </FormDialog>
 
         <div className="ap-card overflow-hidden">
           <div className="overflow-x-auto">

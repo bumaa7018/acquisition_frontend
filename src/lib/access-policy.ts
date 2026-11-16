@@ -131,13 +131,25 @@ export function isAdminActor(actor: AccessActor): boolean {
 }
 
 /**
- * Хуучин мэдээллийн импорт (`/legacy_import`). Системийн хүснэгтүүдэд
- * (чөлөөлөлт, нэгж талбар, нөхөх олговор) бөөнөөр бичдэг тул ЗӨВХӨН админ.
- * Server талд `/api/legacy-import` proxy нь ижил ролийг backend-ээр шалгана.
+ * Хуучин мэдээллийн импорт (`/legacy_import`) — системийн админ ба ахлах
+ * мэргэжилтэн. Админ бүх импортыг харж, устгана. Ахлах мэргэжилтэн зөвхөн
+ * ӨӨРИЙН үүсгэсэн импортыг харж, устгана — үүнийг backend (`/legacy-import`)
+ * жагсаалтыг үүсгэгчээр хумих ба импорт бүр дээр эзэмшлийг шалгах замаар
+ * хангадаг.
  */
-export const LEGACY_IMPORT_ROLES = [ACCESS_ROLE_CODES.ADMIN, "Админ"];
+export const LEGACY_IMPORT_ROLES = [
+  ACCESS_ROLE_CODES.ADMIN,
+  "Админ",
+  ACCESS_ROLE_CODES.SENIOR_SPECIALIST,
+  ACCESS_ROLE_NAMES.SENIOR_SPECIALIST,
+];
 
 export function canImportLegacyDataForActor(actor: AccessActor): boolean {
+  return hasAccessRole(actor, ...LEGACY_IMPORT_ROLES);
+}
+
+/** Бүх хэрэглэгчийн импортыг харах эсэх (зөвхөн системийн админ). */
+export function canSeeAllLegacyImportsForActor(actor: AccessActor): boolean {
   return isAdminActor(actor);
 }
 
@@ -465,8 +477,18 @@ export function canUpdateRole(actor: AccessActor): boolean {
   return canDo(actor, ADMIN_PERMISSIONS.ROLES_UPDATE);
 }
 
+/**
+ * Роль устгах — ЗӨВХӨН системийн админ (roles:delete эрх дээр нэмж). Backend
+ * мөн адил шалгаж, хэрэглэгчтэй холбогдсон эсвэл системийн админы ролийг
+ * устгахаас татгалзана.
+ */
 export function canDeleteRole(actor: AccessActor): boolean {
-  return canDo(actor, ADMIN_PERMISSIONS.ROLES_DELETE);
+  return isAdminActor(actor) && canDo(actor, ADMIN_PERMISSIONS.ROLES_DELETE);
+}
+
+/** Системийн админы ролийг хэзээ ч устгахгүй (backend-тэй ижил). */
+export function isProtectedRoleName(name: string | null | undefined): boolean {
+  return name === ACCESS_ROLE_CODES.ADMIN || name === "Админ";
 }
 
 /** Роль-д эрх нэмэх/хасах — roles:update эсвэл 10-р системийн admin. */
