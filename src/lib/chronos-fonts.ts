@@ -1,12 +1,12 @@
-import { IBM_Plex_Mono, IBM_Plex_Sans, Unbounded } from "next/font/google";
-
 /**
- * «Он цагийн зураг»-ын фонтууд. Root layout-аас (статик) импортлогдоно — газрын зургийн
- * динамик chunk дотор next/font зарлавал Next 14 тусдаа CSS chunk үүсгэж,
- * «Loading CSS chunk failed» алдаа гардаг. preload: false — зөвхөн Он цагийн зураг
- * нээгдэхэд файл татагдана.
+ * «Он цагийн зураг»-ын фонтууд. @font-face болон классууд нь src/app/fonts.css-д
+ * (root layout-аас импортлогдоно), файлууд public/fonts/-д байна. Браузер зөвхөн
+ * тухайн фонтыг ашигласан үед (Он цагийн зураг нээгдэхэд) файлыг татна.
+ *
+ * Өмнө нь next/font/google байсан — dev compile бүрт Google руу сүлжээгээр хандаж
+ * гацдаг байсан тул self-hosted болгов (дэлгэрэнгүйг fonts.css-ийн толгойд).
  */
-// Unbounded нь variable font — тогтмол жин (700) сонговол Google-ийн static subset зарим хөтөчид OTS-д унадаг.
-export const chronosDisplay = Unbounded({ subsets: ["latin", "cyrillic"], display: "swap", preload: false });
-export const chronosBody = IBM_Plex_Sans({ subsets: ["latin", "cyrillic"], weight: ["400", "500", "600"], display: "swap", preload: false });
-export const chronosMono = IBM_Plex_Mono({ subsets: ["latin", "cyrillic"], weight: ["400", "600"], display: "swap", preload: false });
+// Unbounded нь variable font (200–900) — Google-ийн static subset зарим хөтөчид OTS-д унадаг.
+export const chronosDisplay = { className: "font-chronos-display" } as const;
+export const chronosBody = { className: "font-chronos-body" } as const;
+export const chronosMono = { className: "font-chronos-mono" } as const;
