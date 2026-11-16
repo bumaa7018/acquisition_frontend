@@ -272,7 +272,8 @@ function EmployeeSelect({
   const { data, isFetching } = useQuery({
     queryKey: ["employee-suggest", debounced],
     queryFn: () => usersApi.list({ search: debounced.trim(), page_size: 30 }),
-    enabled: open,
+    // Үг бичээгүй үед БҮХ ажилтныг татахгүй — хайх үг бичсэн үед л.
+    enabled: open && debounced.trim().length > 0,
   });
 
   const results = data?.data ?? [];
@@ -344,7 +345,11 @@ function EmployeeSelect({
       {open && (
         <div className="absolute z-50 mt-1 w-full sm:w-72 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
-            {isFetching ? (
+            {!debounced.trim() ? (
+              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+                Хайх үгээ бичнэ үү…
+              </div>
+            ) : isFetching ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
                 Хайж байна…
               </div>
@@ -1658,18 +1663,11 @@ export default function DashboardPage() {
             )}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
-              {filteredAcqs.length} чөлөөлөлт
-            </p>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-              {isLoading ? "…" : `${totalParcels} нэгж талбар`}
-            </p>
-          </div>
-          {/* ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил (хэрэглэсэн) шүүлтээр татна.
-              Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
-          {isSenior && (
+        {/* Чөлөөлөлт / нэгж талбарын тоо — доорх «ЧӨЛӨӨЛӨЛТ», «НЭГЖ ТАЛБАР»
+            картуудад харагдана. ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил
+            (хэрэглэсэн) шүүлтээр татна. Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
+        {isSenior && (
+          <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
             <button
               onClick={handleDownloadGchh2}
               disabled={dlBusy}
@@ -1680,23 +1678,25 @@ export default function DashboardPage() {
               <FileSpreadsheet className="h-3.5 w-3.5" />
               {dlBusy ? "Татаж байна…" : "Мэдээ татах"}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Stat cards — xl: 12 багана (хил 2, нэгж талбар 2, захирамж 3,
-             олговор 5). Задаргаатай картууд задаргааг БАРУУН талд харуулна
-             (карт доош сунгахгүй). ─────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-12 gap-4">
+      {/* ── Stat cards — xl: 14 багана (чөлөөлөлт 2, нэгж талбар 2, хил 2,
+             захирамж 3, олговор 5). Задаргаатай картууд задаргааг БАРУУН
+             талд харуулна (карт доош сунгахгүй). ────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-[repeat(14,minmax(0,1fr))] gap-4">
         {([
           {
-            label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
-            sub: "нийт талбай",
-            value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
-            color: "#02c0ce",
-            icon: MapIcon,
-            bg: "#02c0ce18",
-            span: "xl:col-span-2",
+            label: "ЧӨЛӨӨЛӨЛТ",
+            sub: "нийт тоо",
+            // Шүүлтэд таарсан чөлөөлөлтүүд (dashData.acquisitions).
+            value: isLoading ? null : filteredAcqs.length,
+            color: "#e83e8c",
+            icon: FileText,
+            bg: "#e83e8c18",
+            // Жижиг дэлгэцэд 3 жижиг карт 2 баганад тэгш бус үлдэхгүйн тулд бүтэн мөр.
+            span: "col-span-2 xl:col-span-2",
           },
           {
             label: "НЭГЖ ТАЛБАР",
@@ -1705,6 +1705,15 @@ export default function DashboardPage() {
             color: "#777edd",
             icon: Layers,
             bg: "#777edd18",
+            span: "xl:col-span-2",
+          },
+          {
+            label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
+            sub: "нийт талбай",
+            value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
+            color: "#02c0ce",
+            icon: MapIcon,
+            bg: "#02c0ce18",
             span: "xl:col-span-2",
           },
           {
@@ -1751,7 +1760,15 @@ export default function DashboardPage() {
               <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: s.color }} />
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 shrink-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
+                    {/* Нарийн карт (утас, xl-д ~1920px хүртэл): icon-ыг шошгын
+                        ХАЖУУД жижгээр — баруун талын том icon тэнд тоотой
+                        багтахгүй, `overflow-hidden`-д хагас тасардаг байв. */}
+                    {Icon && (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md sm:hidden xl:flex min-[1920px]:hidden" style={{ background: s.bg }}>
+                        <Icon className="h-3 w-3" style={{ color: s.color }} />
+                      </span>
+                    )}
                     {s.label}
                   </p>
                   <div className="flex items-end gap-1.5 mt-2">
@@ -1761,8 +1778,9 @@ export default function DashboardPage() {
                   </div>
                   <p className={`mt-1 whitespace-nowrap ${s.subClass ?? "text-[10px] text-slate-400 dark:text-slate-500"}`}>{s.sub}</p>
                 </div>
+                {/* Том icon — зөвхөн карт ӨРГӨН үед (нарийн үед шошгын хажууд, дээрхийг үз). */}
                 {Icon && (
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: s.bg }}>
+                  <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex xl:hidden min-[1920px]:flex" style={{ background: s.bg }}>
                     <Icon className="h-5 w-5" style={{ color: s.color }} />
                   </div>
                 )}

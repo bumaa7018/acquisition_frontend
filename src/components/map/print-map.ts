@@ -1016,29 +1016,73 @@ export function composePrintPage(
   const infoY = cardBottom - INFO_CARD_H;
   const legendBottom = stacked ? infoY - CARD_INSET : cardBottom;
   const fullCardW = mapAreaW - CARD_INSET * 2;
+
+  /* ── МЭДЭЭЛЛИЙН КАРТЫН АГУУЛГА — урьдчилан бэлдэнэ ───────────────────
+     Хэвтээ хуудсанд картын өргөнийг ТЕКСТЭЭР нь тооцно (өмнө нь үлдсэн бүх
+     зайг эзэлж, дунд нь хоосон байсан). Ингэж хэмнэсэн зайг таних тэмдэг
+     авна. */
+  const INFO_LABEL_FONT = "6.8px sans-serif";
+  const INFO_VALUE_FONT = "bold 7.6px sans-serif";
+  const INFO_PAD_X = 8;
+  const INFO_PIE_W = 62;
+  const INFO_COL_GAP = 12;
+  const denominator = viewInfo ? computeScaleDenominator(viewInfo, coverScale) : 0;
+  const dept = [info.departmentCode, info.departmentName].filter(Boolean).join(" · ");
+  const infoCol1: [string, string][] = [
+    ["Төлөвлөлтийн дугаар:", info.planCode || "—"],
+    ["Төлөвлөлтийн нэр:", info.planName || "—"],
+    ["НИТХ тогтоолын дугаар:", info.nithDecreeNumber || "—"],
+    ["Чөлөөлөх талбай:", areaText(info.acquisitionAreaM2)],
+    ["Нэгж талбаруудын нийт талбай:", areaText(info.parcelsAreaM2)],
+    ...(denominator > 0 ? [["Масштаб:", `1:${denominator.toLocaleString("en-US")}`] as [string, string]] : []),
+  ];
+  const infoCol2: [string, string][] = [
+    ["Хэлтэс:", dept || "—"],
+    ["Явц:", info.statusName || "—"],
+    ["Хариуцсан:", (info.specialists ?? []).join(", ") || "—"],
+    ["Огноо:", formatDateDots(new Date())],
+  ];
+  const infoRowW = ([label, value]: [string, string]) => {
+    ctx.font = INFO_LABEL_FONT;
+    const w = ctx.measureText(label).width + 3;
+    ctx.font = INFO_VALUE_FONT;
+    return w + ctx.measureText(value || "—").width;
+  };
+  const infoCol1Need = Math.max(...infoCol1.map(infoRowW)) + INFO_COL_GAP;
+  const infoCol2Need = Math.max(...infoCol2.map(infoRowW)) + INFO_COL_GAP;
+  const infoNeededW = Math.max(260, INFO_PAD_X * 2 + infoCol1Need + infoCol2Need + INFO_PIE_W);
+
   let legendRight = mapAreaX + CARD_INSET;
   if (legend.length) {
     /* ӨНДӨР нь мэдээллийн карттай ЯГ ИЖИЛ (INFO_CARD_H) — хоёр карт нэг
        шугамд эгнэнэ. Элемент олон бол мөрийг ЖИЖИГРҮҮЛЭХГҮЙ, оронд нь
        ХОЁР БАГАНА болгоно (жижиг үсэг цаасан дээр уншигдахгүй). */
     let legendH = INFO_CARD_H;
-    const headerH = 16;
-    const rowH = 10;
+    // Үсэг/мөрийн хэмжээ — цаасан дээр уншигдахуйц (өмнө 7px/10px байсан нь хэт жижиг).
+    const LEGEND_FONT = "8.5px sans-serif";
+    const LEGEND_BOLD_FONT = "bold 8.5px sans-serif";
+    const headerH = 19;
+    const rowH = 12;
     let maxRows = Math.max(1, Math.floor((legendH - headerH - 4) / rowH));
 
-    ctx.font = "bold 8px sans-serif";
+    ctx.font = "bold 10px sans-serif";
     const titleTextWidth = ctx.measureText("Таних тэмдэг").width;
-    ctx.font = "7px sans-serif";
+    ctx.font = LEGEND_FONT;
     const maxRowTextWidth = Math.max(...legend.map((item) => ctx.measureText(item.label).width));
-    const colW = Math.min(150, Math.max(92, maxRowTextWidth + 21));
-    /* Баганын тоо — мэдээллийн картад ~300px үлдээх хэмжээгээр (ГУС-ийн дэд
-       давхаргууд олноор сонгогдоход 3 багана хүрэлцдэггүй). Тэр ч багтахгүй
-       бол картыг ДЭЭШ өндөрсгөнө ("… бусад N" гэвэл зураг дээр нэр байхгүй
+    /* Баганын өргөн — ХАМГИЙН УРТ шошго бүтэн багтах хэмжээгээр (өмнө нь
+       150px-ээр хязгаарлаж «НӨЛӨӨЛӨЛД ӨРТСӨН НЭГЖ ТАЛБАР (N)» шиг урт нэр
+       «…»-ээр тасардаг байв). Хэвтээ үед мэдээллийн картын ТООЦООЛСОН
+       өргөнийг үлдээгээд, багтахгүй бол л нарийсгана (тэр үед л «…»). */
+    const legendAvailW = stacked
+      ? fullCardW - 6
+      : Math.max(200, mapAreaW - CARD_INSET * 3 - infoNeededW - 6);
+    const colsNeeded = Math.max(1, Math.ceil(legend.length / maxRows));
+    const colW = Math.min(Math.max(100, maxRowTextWidth + 25), Math.max(100, legendAvailW / colsNeeded));
+    /* Баганын тоо — дээрх зайд багтах хэмжээгээр. Тэр ч багтахгүй бол
+       картыг ДЭЭШ өндөрсгөнө ("… бусад N" гэвэл зураг дээр нэр байхгүй
        тул юу болох нь мэдэгдэхгүй) — газрын зургийн талбайн хагасаас
        хэтэрвэл л сүүлийн мөрийг "… бусад N" болгоно. */
-    const maxCols = stacked
-      ? Math.max(1, Math.floor((fullCardW - 6) / colW))
-      : Math.max(3, Math.floor((mapAreaW - CARD_INSET * 3 - 300 - 6) / colW));
+    const maxCols = Math.max(1, Math.floor(legendAvailW / colW));
     const cols = Math.max(1, Math.min(maxCols, Math.ceil(legend.length / maxRows)));
     if (legend.length > cols * maxRows) {
       const rowsLimit = Math.max(maxRows, Math.floor((mapAreaH / 2 - headerH - 4) / rowH));
@@ -1065,23 +1109,23 @@ export function composePrintPage(
     ctx.stroke();
 
     ctx.fillStyle = "#334155";
-    ctx.font = "bold 8px sans-serif";
+    ctx.font = "bold 10px sans-serif";
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillText("Таних тэмдэг", legendX + 6, legendY + 5);
+    ctx.fillText("Таних тэмдэг", legendX + 7, legendY + 6);
 
-    ctx.font = "7px sans-serif";
+    ctx.font = LEGEND_FONT;
     legend.forEach((item, i) => {
       const col = Math.floor(i / perCol);
       const row = i % perCol;
-      const x = legendX + 6 + col * colW;
+      const x = legendX + 7 + col * colW;
       const swatchY = legendY + headerH + row * rowH + rowH / 2;
       if (item.total) {
         ctx.fillStyle = "#1e293b";
-        ctx.font = "bold 7px sans-serif";
+        ctx.font = LEGEND_BOLD_FONT;
         ctx.textBaseline = "middle";
         ctx.fillText(ellipsize(ctx, item.label, colW - 4), x, swatchY);
-        ctx.font = "7px sans-serif";
+        ctx.font = LEGEND_FONT;
         ctx.textBaseline = "top";
         return;
       }
@@ -1089,20 +1133,20 @@ export function composePrintPage(
         // Хилийн давхарга — ШУГАМААР (хэвлэхэд дүүргэлт байхгүй тул
         // дөрвөлжин тэмдэг нь бодит харагдацтай таарахгүй).
         ctx.strokeStyle = item.color;
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(x, swatchY);
-        ctx.lineTo(x + 9, swatchY);
+        ctx.lineTo(x + 11, swatchY);
         ctx.stroke();
       } else if (item.hatch) {
-        drawHatchSwatch(ctx, x, swatchY - 3, 9, 6, item.color, item.hatch);
+        drawHatchSwatch(ctx, x, swatchY - 3.5, 11, 7, item.color, item.hatch);
       } else {
         ctx.fillStyle = item.color;
-        ctx.fillRect(x, swatchY - 3, 9, 6);
+        ctx.fillRect(x, swatchY - 3.5, 11, 7);
       }
       ctx.fillStyle = "#334155";
       ctx.textBaseline = "middle";
-      ctx.fillText(ellipsize(ctx, item.label, colW - 16), x + 12, swatchY);
+      ctx.fillText(ellipsize(ctx, item.label, colW - 19), x + 15, swatchY);
       ctx.textBaseline = "top";
     });
   }
@@ -1114,6 +1158,9 @@ export function composePrintPage(
      Таних тэмдэгтэй ЯГ ИЖИЛ хэлбэр (цагаан дэвсгэр, ижил хүрээ) —
      газрын зургийн ДЭЭР хөвнө. Чөлөөлөлтийн хилийг дуудагч тал нь
      доод зурваст оруулахгүй байрлуулдаг тул энэ карт хилийг халхлахгүй. */
+  /* Таних тэмдгийн ЯГ ХАЖУУГААС баруун зах хүртэл БҮТЭН өргөнтэй. infoNeededW
+     нь зөвхөн таних тэмдэгт хэр зай үлдээхийг тооцоход хэрэглэгдэнэ; баганууд
+     агуулгынхаа харьцаагаар сунана. */
   const infoX = legendRight;
   const infoW = mapAreaX + mapAreaW - CARD_INSET - infoX;
 
@@ -1132,48 +1179,35 @@ export function composePrintPage(
     ctx.textBaseline = "top";
     ctx.fillText("Дэлгэрэнгүй мэдээлэл", infoX + 8, infoY + 5);
 
-    const padX = 8;
     const rowH = 10.5;
-    const pieBoxW = 62;
-    const colW = (infoW - padX * 2 - pieBoxW) / 2;
-    const col1X = infoX + padX;
-    const col2X = col1X + colW;
-    const pieCx = col2X + colW + pieBoxW / 2;
+    // Хоёр баганыг агуулгынх нь өргөнөөр ПРОПОРЦООР хуваана (тэнцүү хагас биш).
+    const colScale = (infoW - INFO_PAD_X * 2 - INFO_PIE_W) / (infoCol1Need + infoCol2Need);
+    const col1W = infoCol1Need * colScale;
+    const col2W = infoCol2Need * colScale;
+    const col1X = infoX + INFO_PAD_X;
+    const col2X = col1X + col1W;
+    const pieCx = col2X + col2W + INFO_PIE_W / 2;
 
     const drawRow = (x: number, y: number, label: string, value: string, maxW: number) => {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.font = "6.8px sans-serif";
+      ctx.font = INFO_LABEL_FONT;
       ctx.fillStyle = "#64748b";
-      /* ШОШГЫГ ЗААВАЛ тайрна. Өмнө нь шошгыг бүтнээр нь зураад утгыг
-         maxW*0.6 дээр эхлүүлдэг байсан тул урт шошготой мөр дээр хоёул
-         ДАВХАРЛАДАГ байв (босоо хэвлэхэд илт харагдана). */
-      const labelText = ellipsize(ctx, label, maxW * 0.62);
+      /* Мөр бүтэн багтвал шошгыг тайрахгүй. Багтахгүй үед л шошгыг ЗААВАЛ
+         тайрна — өмнө нь шошгыг бүтнээр нь зураад утгыг maxW*0.6 дээр
+         эхлүүлдэг байсан тул урт шошготой мөр дээр хоёул ДАВХАРЛАДАГ байв. */
+      const labelText = infoRowW([label, value]) <= maxW ? label : ellipsize(ctx, label, maxW * 0.62);
+      ctx.font = INFO_LABEL_FONT;
       ctx.fillText(labelText, x, y);
       const labelW = ctx.measureText(labelText).width + 3;
-      ctx.font = "bold 7.6px sans-serif";
+      ctx.font = INFO_VALUE_FONT;
       ctx.fillStyle = "#1e293b";
       // fillText-ийн maxWidth нь текстийг ШАХДАГ тул оронд нь тайрч "…" залгана.
       ctx.fillText(ellipsize(ctx, value || "—", maxW - labelW), x + labelW, y);
     };
 
-    let y = infoY + 21;
-    drawRow(col1X, y, "Төлөвлөлтийн дугаар:", info.planCode || "—", colW - 8); y += rowH;
-    drawRow(col1X, y, "Төлөвлөлтийн нэр:", info.planName || "—", colW - 8); y += rowH;
-    drawRow(col1X, y, "НИТХ тогтоолын дугаар:", info.nithDecreeNumber || "—", colW - 8); y += rowH;
-    drawRow(col1X, y, "Чөлөөлөх талбай:", areaText(info.acquisitionAreaM2), colW - 8); y += rowH;
-    drawRow(col1X, y, "Нэгж талбаруудын нийт талбай:", areaText(info.parcelsAreaM2), colW - 8); y += rowH;
-    if (viewInfo) {
-      const denominator = computeScaleDenominator(viewInfo, coverScale);
-      if (denominator > 0) drawRow(col1X, y, "Масштаб:", `1:${denominator.toLocaleString("en-US")}`, colW - 8);
-    }
-
-    y = infoY + 21;
-    const dept = [info.departmentCode, info.departmentName].filter(Boolean).join(" · ");
-    drawRow(col2X, y, "Хэлтэс:", dept || "—", colW - 8); y += rowH;
-    drawRow(col2X, y, "Явц:", info.statusName || "—", colW - 8); y += rowH;
-    drawRow(col2X, y, "Хариуцсан:", (info.specialists ?? []).join(", ") || "—", colW - 8); y += rowH;
-    drawRow(col2X, y, "Огноо:", formatDateDots(new Date()), colW - 8);
+    infoCol1.forEach(([label, value], i) => drawRow(col1X, infoY + 21 + i * rowH, label, value, col1W - INFO_COL_GAP + 4));
+    infoCol2.forEach(([label, value], i) => drawRow(col2X, infoY + 21 + i * rowH, label, value, col2W - INFO_COL_GAP + 4));
 
     const pieCy = infoY + 18 + (INFO_CARD_H - 18) / 2 - 4;
     const pieR = Math.min(19, INFO_CARD_H / 2 - 11);
