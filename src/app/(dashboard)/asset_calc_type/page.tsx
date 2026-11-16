@@ -3,7 +3,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { assetCalcTypeApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
-import { Calculator, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { Calculator, Plus, Pencil, Trash2 } from "lucide-react";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { toast } from "sonner";
 import type { AssetCalcType } from "@/types";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
@@ -103,20 +104,21 @@ export default function AssetCalcTypePage() {
           </p>
         </div>
         <button
-          onClick={isFormOpen ? closeForm : openCreate}
+          onClick={openCreate}
           className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-[#02a3af] transition-colors"
         >
-          {isFormOpen ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {isFormOpen ? "Болих" : "Нэмэх"}
+          <Plus className="h-4 w-4" />
+          Нэмэх
         </button>
       </div>
 
-      {isFormOpen && (
-        <div className="ap-card p-5">
-          <p className="text-[13px] font-semibold text-slate-700 dark:text-white mb-4">
-            {editItem ? "Засварлах" : "Шинэ төрөл"}
-          </p>
-          <div className="flex flex-col gap-3 max-w-md">
+      <FormDialog
+        open={isFormOpen}
+        title={editItem ? "Засварлах" : "Шинэ төрөл"}
+        onClose={closeForm}
+        busy={createMutation.isPending || updateMutation.isPending}
+      >
+          <div className="flex flex-col gap-3">
             <input
               placeholder="Код * (жишээ: unit_cost)"
               value={form.code}
@@ -162,8 +164,7 @@ export default function AssetCalcTypePage() {
               </button>
             </div>
           </div>
-        </div>
-      )}
+      </FormDialog>
 
       <div className="ap-card overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 dark:border-[#37394d]">

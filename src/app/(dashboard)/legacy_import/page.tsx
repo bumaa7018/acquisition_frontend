@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Eye, FileSpreadsheet, Loader2, Paperclip, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { canImportLegacyData } from "@/lib/role-utils";
+import { canImportLegacyData, canSeeAllLegacyImports } from "@/lib/role-utils";
 import { legacyImportApi, type ImportMode, type ImportState } from "@/lib/legacy-import/api";
 import { BoundaryStep } from "./_components/boundary-step";
 import { ParcelStep } from "./_components/parcel-step";
@@ -129,7 +129,13 @@ function LegacyImportPage() {
     return () => clearTimeout(t);
   }, [nameQuery]);
 
-  useEffect(() => setAllowed(canImportLegacyData()), []);
+  // Админ бүх хэрэглэгчийн импортыг, ахлах мэргэжилтэн зөвхөн өөрийнхийг
+  // (backend жагсаалтыг хумина) харна.
+  const [seeAll, setSeeAll] = useState(false);
+  useEffect(() => {
+    setAllowed(canImportLegacyData());
+    setSeeAll(canSeeAllLegacyImports());
+  }, []);
 
   const sessions = useQuery({
     queryKey: ["legacy-import", "sessions", page, debouncedQuery],
@@ -287,7 +293,14 @@ function LegacyImportPage() {
       {!sessionID && (
         <div className="ap-card space-y-3 p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Импортууд</h2>
+            <div>
+              <h2 className="text-[15px] font-semibold text-slate-800 dark:text-white">Импортууд</h2>
+              {!seeAll && (
+                <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+                  Зөвхөн таны оруулсан импортууд харагдана. Өөрийн импортоо л устгах боломжтой.
+                </p>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button className={secondaryButton} onClick={() => setShowAttachments(true)} disabled={showAttachments}
                 title="Хавтасны PDF-ийг нэрээр нь (= нэгж талбарын дугаар) нэгж талбарт «Нөхөх олговор олгосон баримт» болгон хавсаргана">

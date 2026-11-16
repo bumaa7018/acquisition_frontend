@@ -34,6 +34,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { EmployeeSelect } from "@/components/ui/employee-select";
+import { FormDialog } from "@/components/ui/form-dialog";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { SearchButton } from "@/components/ui/search-button";
@@ -527,18 +528,13 @@ export default function UsersPage() {
           {perms.create && (
             <button
               onClick={() => {
-                setShowCreate((v) => !v);
-                setEditingUser(null);
-                setPwUser(null);
+                resetForms();
+                setShowCreate(true);
               }}
               className="inline-flex items-center gap-2 rounded-xl bg-[#02c0ce] px-4 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#02a3af]"
             >
-              {showCreate ? (
-                <X className="h-4 w-4" />
-              ) : (
-                <UserPlus className="h-4 w-4" />
-              )}
-              {showCreate ? "Болих" : "Нэмэх"}
+              <UserPlus className="h-4 w-4" />
+              Нэмэх
             </button>
           )}
         </div>
@@ -604,12 +600,14 @@ export default function UsersPage() {
           </div>
         </div>
 
-        {/* Create form */}
-        {showCreate && perms.create && (
-          <div className="ap-card p-5">
-            <p className="mb-4 text-[13px] font-semibold text-slate-700 dark:text-white">
-              Шинэ хэрэглэгч
-            </p>
+        {/* Create form — попап */}
+        <FormDialog
+          open={showCreate && perms.create}
+          title="Шинэ хэрэглэгч"
+          onClose={resetForms}
+          busy={createMutation.isPending}
+          size="lg"
+        >
             <form
               onSubmit={handleSubmit((d) => createMutation.mutate(d))}
               className="grid grid-cols-2 gap-4"
@@ -732,15 +730,18 @@ export default function UsersPage() {
                 </button>
               </div>
             </form>
-          </div>
-        )}
+        </FormDialog>
 
-        {/* Edit form */}
-        {editingUser && perms.update && (
-          <div className="ap-card p-5">
-            <p className="mb-4 text-[13px] font-semibold text-slate-700 dark:text-white">
-              Хэрэглэгч засах — {editingUser.last_name} {editingUser.first_name}
-            </p>
+        {/* Edit form — попап */}
+        <FormDialog
+          open={!!editingUser && perms.update}
+          title="Хэрэглэгч засах"
+          subtitle={editingUser ? `${editingUser.last_name ?? ""} ${editingUser.first_name ?? ""}`.trim() : undefined}
+          onClose={resetForms}
+          busy={updateMutation.isPending}
+          size="lg"
+        >
+          {editingUser && (
             <form
               onSubmit={editHandleSubmit((d) => updateMutation.mutate(d))}
               className="grid grid-cols-2 gap-4"
@@ -836,28 +837,22 @@ export default function UsersPage() {
                 >
                   {updateMutation.isPending ? "Хадгалж байна…" : "Хадгалах"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingUser(null);
-                    setEditRoles([]);
-                    editReset();
-                  }}
-                  className={secondaryBtn}
-                >
+                <button type="button" onClick={resetForms} className={secondaryBtn}>
                   Болих
                 </button>
               </div>
             </form>
-          </div>
-        )}
+          )}
+        </FormDialog>
 
-        {/* Change password form */}
-        {pwUser && perms.update && (
-          <div className="ap-card p-5">
-            <p className="mb-1 text-[13px] font-semibold text-slate-700 dark:text-white">
-              Нууц үг сэргээх — {pwUser.last_name} {pwUser.first_name}
-            </p>
+        {/* Change password form — попап */}
+        <FormDialog
+          open={!!pwUser && perms.update}
+          title="Нууц үг сэргээх"
+          subtitle={pwUser ? `${pwUser.last_name ?? ""} ${pwUser.first_name ?? ""}`.trim() : undefined}
+          onClose={resetForms}
+          busy={pwMutation.isPending}
+        >
             <p className="mb-4 text-[11px] text-slate-500 dark:text-slate-400">
               Нууц үг солигдсоны дараа тухайн хэрэглэгчийн нэвтэрсэн бүх сесс
               хүчингүй болно.
@@ -913,20 +908,12 @@ export default function UsersPage() {
                 >
                   {pwMutation.isPending ? "Хадгалж байна…" : "Хадгалах"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPwUser(null);
-                    pwReset();
-                  }}
-                  className={secondaryBtn}
-                >
+                <button type="button" onClick={resetForms} className={secondaryBtn}>
                   Болих
                 </button>
               </div>
             </form>
-          </div>
-        )}
+        </FormDialog>
 
         {/* Table card */}
         <div className="ap-card overflow-hidden">

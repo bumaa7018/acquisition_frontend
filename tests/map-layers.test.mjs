@@ -5,6 +5,7 @@ import {
   BASE_Z_INDEX,
   DRONE_Z_INDEX,
   MAP_LAYER_STYLES,
+  ADMIN_AU1_CODE,
   GUS_REFERENCE_LAYERS,
   isGusReferenceLayer,
   shouldFitOnEnable,
@@ -92,6 +93,23 @@ test("улс даяарын давхаргууд асаахад зумлахгү
     );
     assert.equal(shouldFitOnEnable(id), false, `${id}: shouldFitOnEnable false байх ёстой`);
   }
+});
+
+test("захиргааны хил зөвхөн Улаанбаатарын (011) аймаг, сум, багийг харуулна", () => {
+  assert.equal(ADMIN_AU1_CODE, "011");
+  assert.equal(MAP_LAYER_STYLES.au1.cql, "code='011'");
+  assert.equal(MAP_LAYER_STYLES.au2.cql, "au1_code='011'");
+  assert.equal(MAP_LAYER_STYLES.au3.cql, "au1_code='011'");
+  // Дуудагчийн шүүлт (дүүргийн код) тогтмол шүүлтийг дарахгүй, AND-ээр нэмэгдэнэ.
+  assert.equal(
+    combineCql(MAP_LAYER_STYLES.au2.cql, "code IN ('01110')"),
+    "(au1_code='011') AND (code IN ('01110'))",
+  );
+});
+
+test("трас зургийн тойм захиргааны хилийн тогтмол шүүлтийг хадгална", () => {
+  const src = readFileSync(new URL("../src/components/map/trace-print-dialog.tsx", import.meta.url), "utf8");
+  assert.match(src, /id\.startsWith\("au"\) \? def\.cql \|\| undefined/);
 });
 
 test("бусад давхарга асаахад зумлана (өмнөх зан төлөв)", () => {

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { menusApi, rolesApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
-import { canEditRolePermissions, canListPermissions, canViewRoles, hasPermission, hasRole } from "@/lib/role-utils";
+import { canEditRolePermissions, canListPermissions, canRemoveRole, canViewRoles, hasPermission, hasRole } from "@/lib/role-utils";
+import { isProtectedRoleName } from "@/lib/access-policy";
 import type { Menu } from "@/types";
 import { Check, Lock, Menu as MenuIcon, Plus, Save, Shield, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -42,6 +43,7 @@ export default function RolesPage() {
     listPermissions: false,
     createRole: false,
     updateRole: false,
+    deleteRole: false,
   });
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export default function RolesPage() {
       listPermissions: canListPermissions(),
       createRole: hasPermission("roles:create") || hasRole("admin"),
       updateRole: hasPermission("roles:update") || hasRole("admin"),
+      deleteRole: canRemoveRole(),
     });
     setReady(true);
   }, []);
@@ -145,6 +148,35 @@ export default function RolesPage() {
     },
     onError: (err) => toast.error(getApiError(err, "Menu хасахад алдаа гарлаа")),
   });
+
+  // Хэрэглэгчтэй холбогдсон ролийг backend 409-оор татгалзаж, хэдэн хэрэглэгч
+  // ашиглаж байгааг мессежээр буцаана — тэр мессежийг шууд харуулна.
+  const deleteRoleMutation = useMutation({
+    mutationFn: (id: string) => rolesApi.delete(id),
+    onSuccess: () => {
+      toast.success("Роль устгагдлаа");
+      setSelectedRole(null);
+      setSelectedMenu(null);
+      invalidate();
+    },
+    onError: (err) => toast.error(getApiError(err, "Роль устгахад алдаа гарлаа"), { duration: 8000 }),
+  });
+
+  const canDeleteSelected = cap.deleteRole && !!roleDetail && !isProtectedRoleName(roleDetail.name);
+
+  function confirmDeleteRole() {
+    if (!roleDetail || !canDeleteSelected) return;
+    const id = roleDetail.id;
+    guardUnsaved(() =>
+      setPendingConfirm({
+        title: "Ролийг устгах уу?",
+        description: `«${roleDetail.name}» роль болон түүний цэс, эрхийн тохиргоо бүрмөсөн устна. Хэрэглэгчтэй холбогдсон роль устгагдахгүй.`,
+        confirmLabel: "Устгах",
+        confirmColor: "#f1556c",
+        onConfirm: () => deleteRoleMutation.mutate(id),
+      }),
+    );
+  }
 
   function guardUnsaved(next: () => void) {
     if (!dirty) {
@@ -335,7 +367,7 @@ export default function RolesPage() {
           <div className="ap-card overflow-hidden">
             <div className="border-b border-slate-100 p-4 dark:border-[#37394d]">
               {selectedRole && cap.updateRole ? (
-                <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                <div className={`grid gap-2 ${canDeleteSelected ? "md:grid-cols-[1fr_1fr_auto_auto]" : "md:grid-cols-[1fr_1fr_auto]"}`}>
                   <input
                     value={editRole.name}
                     onChange={(e) => setEditRole((v) => ({ ...v, name: e.target.value }))}
@@ -355,6 +387,18 @@ export default function RolesPage() {
                     <Save className="h-4 w-4" />
                     Role засах
                   </button>
+                  {canDeleteSelected && (
+                    <button
+                      type="button"
+                      disabled={deleteRoleMutation.isPending}
+                      onClick={confirmDeleteRole}
+                      title="Хэрэглэгчтэй холбогдоогүй ролийг л устгана"
+                      className="flex items-center justify-center gap-1.5 rounded-lg border border-[#f1556c]/30 px-4 py-2 text-[13px] font-semibold text-[#f1556c] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Роль устгах
+                    </button>
+                  )}
                 </div>
               ) : (
                 <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-100">{roleDetail?.name ?? "Permission тохиргоо"}</p>
