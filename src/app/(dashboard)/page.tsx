@@ -56,6 +56,7 @@ import { ProgressBadge } from "@/components/ui/progress-badge";
 import { authStorage } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { sortByStatusOrder } from "@/lib/status-order";
 
 // "Ажлын зураг" цонх — дотроо OpenLayers газрын зураг үүсгэдэг тул
 // зөвхөн хэрэглэгч товч дархад л ачаална (ssr: false).
@@ -740,7 +741,8 @@ function ExternalDashboard() {
   });
 
   const acquisitions = data?.acquisitions ?? [];
-  const statuses = data?.status_breakdown ?? [];
+  // Дараалал — `parcel_status`-ийн sort_order (backend задаргаа id-аар ирдэг; status-order.ts).
+  const statuses = sortByStatusOrder(data?.status_breakdown ?? [], data?.parcel_statuses ?? []);
   const statusColors = useParcelStatusColors();
   const valuationStatuses = data?.valuation_statuses ?? [];
   const valuationTypes = data?.valuation_types ?? [];
@@ -1269,14 +1271,16 @@ export default function DashboardPage() {
     return m;
   }, [parcelStatusList]);
 
-  const STATUSES = useMemo(() => (dashData?.status_breakdown ?? []).map((s) => ({
-    key:   `ps-${s.status_id}`,
-    label: s.name,
-    // Өнгө нь зөвхөн бүртгэлээс; өнгөгүй төлөв — саарал.
-    color: getParcelStatusStyle(statusColorById.get(s.status_id)).color,
-    count: s.count,
-    area:  Math.round(s.area_m2),
-  })), [dashData?.status_breakdown, statusColorById]);
+  // Дараалал — `parcel_status`-ийн sort_order (backend задаргаа id-аар ирдэг; status-order.ts).
+  const STATUSES = useMemo(() => sortByStatusOrder(dashData?.status_breakdown ?? [], parcelStatusList)
+    .map((s) => ({
+      key:   `ps-${s.status_id}`,
+      label: s.name,
+      // Өнгө нь зөвхөн бүртгэлээс; өнгөгүй төлөв — саарал.
+      color: getParcelStatusStyle(statusColorById.get(s.status_id)).color,
+      count: s.count,
+      area:  Math.round(s.area_m2),
+    })), [dashData?.status_breakdown, statusColorById, parcelStatusList]);
 
   /* Цагийн график — сонгосон оны БҮХ сарыг гаргана (лог: timeline-months.ts).
      Тооцоо нь цэвэр функцэд байгаа тул тестээр хамгаалагдсан. */
