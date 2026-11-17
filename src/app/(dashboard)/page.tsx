@@ -273,8 +273,7 @@ function EmployeeSelect({
   const { data, isFetching } = useQuery({
     queryKey: ["employee-suggest", debounced],
     queryFn: () => usersApi.list({ search: debounced.trim(), page_size: 30 }),
-    // Үг бичээгүй үед БҮХ ажилтныг татахгүй — хайх үг бичсэн үед л.
-    enabled: open && debounced.trim().length > 0,
+    enabled: open,
   });
 
   const results = data?.data ?? [];
@@ -346,11 +345,7 @@ function EmployeeSelect({
       {open && (
         <div className="absolute z-50 mt-1 w-full sm:w-72 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] shadow-lg overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
-            {!debounced.trim() ? (
-              <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
-                Хайх үгээ бичнэ үү…
-              </div>
-            ) : isFetching ? (
+            {isFetching ? (
               <div className="px-3 py-3 text-[12px] text-slate-400 dark:text-slate-500">
                 Хайж байна…
               </div>

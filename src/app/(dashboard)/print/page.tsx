@@ -68,9 +68,11 @@ function spanKm(boxes: BBox[]): number {
  * цонхтой (print-map-dialog) ЯГ ИЖИЛ — энд зөвхөн чөлөөлөлт сонгогч нэмэгдэнэ.
  */
 export default function PrintPage() {
-  const { acquisitions, isLoading } = useAcquisitionOptions();
   const [selected, setSelected] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const hasQuery = query.trim().length > 0;
+  // Хайх үг бичигдэх хүртэл чөлөөлөлтийн жагсаалтыг API-аас татахгүй.
+  const { acquisitions, isLoading } = useAcquisitionOptions({ enabled: hasQuery });
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   // Сонгосон чөлөөлөлтүүдийн хүрээ — зайны шалгалтад.
@@ -158,9 +160,7 @@ export default function PrintPage() {
             placeholder={
               full
                 ? `Хамгийн ихдээ ${PRINT_MAX_ACQUISITIONS} чөлөөлөлт сонгоно`
-                : isLoading
-                  ? "Ачаалж байна..."
-                  : "Чөлөөлөлт хайх (нэр, код)"
+                : "Чөлөөлөлт хайх (нэр, код)"
             }
             className="min-w-0 flex-1 bg-transparent text-[12px] text-slate-700 outline-none disabled:cursor-not-allowed dark:text-slate-200"
           />
@@ -168,7 +168,11 @@ export default function PrintPage() {
         {open && !full && (
           <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-white/[0.08] dark:bg-[#1e1f27]">
             <div className="max-h-64 overflow-y-auto">
-              {options.length === 0 ? (
+              {!hasQuery ? (
+                <div className="px-3 py-3 text-[12px] text-slate-400">Хайх үгээ бичнэ үү…</div>
+              ) : isLoading ? (
+                <div className="px-3 py-3 text-[12px] text-slate-400">Хайж байна…</div>
+              ) : options.length === 0 ? (
                 <div className="px-3 py-3 text-[12px] text-slate-400">Олдсонгүй</div>
               ) : (
                 options.map((a) => (
