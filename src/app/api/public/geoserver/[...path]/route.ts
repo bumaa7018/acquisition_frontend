@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hasDuplicateControlParam, stripForbiddenParams } from "@/lib/server/geoserver-guard";
 
 /**
  * НЭЭЛТТЭЙ (эрх шалгахгүй) GeoServer гарц — ЗӨВХӨН нэг давхаргад
@@ -107,6 +108,17 @@ function forcePublicLayer(params: URLSearchParams) {
   }
   // WMS дээр давхарга заагаагүй GetMap хүсэлтэд ч нээлттэй давхаргыг тавина.
   const request = getParam(params, "request").toLowerCase();
+  // WFS — давхарга заагаагүй хүсэлтэд ч нээлттэй давхаргыг ЗААВАЛ тавина.
+  // Эс бөгөөс GeoServer давхаргыг `featureID`-ээс (parcel.<uuid>) эсвэл
+  // бүх давхаргаас (DescribeFeatureType) авдаг байв.
+  if (
+    (request === "getfeature" || request === "describefeaturetype") &&
+    !hasParam(params, "typename") &&
+    !hasParam(params, "typenames")
+  ) {
+    const v1 = getParam(params, "version").startsWith("1.");
+    params.set(v1 ? "typeName" : "typeNames", PUBLIC_LAYER_QUALIFIED);
+  }
   if (request === "getmap" && !hasParam(params, "layers")) {
     params.set("LAYERS", PUBLIC_LAYER_QUALIFIED);
   }
@@ -207,6 +219,15 @@ async function proxy(
   const request = getParam(search, "request").toLowerCase();
   if (!request || !ALLOWED_REQUESTS.has(request)) {
     return deny("Зөвшөөрөгдөөгүй үйлдэл");
+  }
+
+  // Давхаргын нэргүйгээр объект руу хүрэх (featureID/resourceId), XML шүүлт,
+  // өөр давхаргыг SLD-ээр нэмэх параметрүүдийг ХАСНА — нээлттэй давхаргын
+  // хязгаарыг тойрох замууд. Шалгасан: `featureID=parcel.<uuid>` нь (typeNames-гүй)
+  // нэвтрэлтгүйгээр дотоод `parcel` давхаргын бүрэн мөрийг буцаадаг байв.
+  stripForbiddenParams(search);
+  if (hasDuplicateControlParam(search)) {
+    return deny("Давхардсан параметр");
   }
 
   // Хүсэлтийг нээлттэй давхаргаар хумина (GetCapabilities-д давхарга байхгүй).

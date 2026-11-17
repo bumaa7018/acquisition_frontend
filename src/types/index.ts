@@ -1659,14 +1659,6 @@ export interface Compensation {
   updated_at: string;
 }
 
-export interface GlobalCompensation extends Compensation {
-  acquisition_name: string;
-  holder_name: string;
-  holder_last_name: string;
-  holder_register_no: string;
-  holder_phone: string;
-}
-
 export interface CompensationHistory {
   id: string;
   compensation_id: string;

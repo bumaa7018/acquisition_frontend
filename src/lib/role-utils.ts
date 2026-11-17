@@ -312,8 +312,9 @@ export function canEditUserRoles(
 /** Тухайн ролийг олгох/хураах эрх дуудагчид байгаа эсэх (escalation хамгаалалт). */
 export function canGrantRole(
   rolePermissionNames: string[] | null | undefined,
+  roleName?: string | null,
 ): boolean {
-  return canGrantRoleForActor(getCurrentActor(), rolePermissionNames);
+  return canGrantRoleForActor(getCurrentActor(), rolePermissionNames, roleName);
 }
 
 export function canViewRoles(): boolean {

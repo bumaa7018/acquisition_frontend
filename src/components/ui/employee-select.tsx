@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { employeeApi } from "@/lib/api";
+import type { Employee } from "@/types";
 import { ChevronDown, X } from "lucide-react";
 
 function Highlight({ text, query }: { text: string; query: string }) {
@@ -22,7 +23,8 @@ function Highlight({ text, query }: { text: string; query: string }) {
 interface EmployeeSelectProps {
   selectedId: string;
   selectedLabel?: string;
-  onSelect: (id: string, label: string) => void;
+  /** employee — сонгосон ажилтны бүтэн мөр (овог, нэр, имэйл, албан тушаал г.м. бөглөхөд). */
+  onSelect: (id: string, label: string, employee: Employee) => void;
   onClear: () => void;
   placeholder?: string;
   className?: string;
@@ -70,11 +72,11 @@ export function EmployeeSelect({
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  function select(employee: { id: string; person_name?: string; position_name?: string }) {
+  function select(employee: Employee) {
     const label = employee.person_name || employee.id;
     setQuery("");
     setDisplayLabel(label);
-    onSelect(employee.id, label);
+    onSelect(employee.id, label, employee);
     setOpen(false);
   }
 

@@ -20,6 +20,10 @@ import {
   canDeactivateUser,
   canDeleteRole,
   isProtectedRoleName,
+  isAdminRoleName,
+  roleNameError,
+  roleCodeError,
+  isReservedRoleName,
   canDeleteUserRow,
   canGrantPermissionForActor,
   canGrantRoleForActor,
@@ -425,14 +429,15 @@ test("захирамжийн төсөл зөвхөн decision:* эрхээр у�
 });
 
 test("нөхөх олговорын дэд tab харах эрхүүд зөв байна", () => {
-  // "asset" — acquisition ирээгүй үед graceful fallback (үндсэн мэргэжлийн байгуулга)
+  // "asset" — acquisition ирээгүй үед ХААЛТТАЙ (backend ValuationOrgScope-той
+  // ижил: үндсэн байгууллага эсэхийг мэдэхгүй бол урсгалыг нээхгүй)
   assert.equal(
     canViewValuationSubTabForActor(primaryProfessional, "asset"),
-    true,
+    false,
   );
   assert.equal(
     canViewValuationSubTabForActor(primaryProfessionalByClaim, "asset"),
-    true,
+    false,
   );
   // "asset" — acquisition тулгавал зөвхөн үндсэн мэргэжлийн байгуулга харна
   assert.equal(
@@ -1042,4 +1047,75 @@ test("трас зургийг зөвхөн админ ба чөлөөлөлти�
     ),
     false,
   );
+});
+
+// ── Админ ролийн нэрийн хамгаалалт (backend domain.IsAdminRoleName-тэй ижил) ──
+test("админы нэрийг том/жижиг үсэг, угтвараас үл хамааран танина", () => {
+  for (const n of ["admin", "ADMIN", " Admin ", "Админ", "АДМИН", "land_admin", "x_Админ"]) {
+    assert.equal(isAdminRoleName(n), true, n);
+    assert.equal(isProtectedRoleName(n), true, n);
+  }
+  for (const n of ["administrator", "senior_specialist", "admins", "МИКА", "admin_renamed", "", null, undefined]) {
+    assert.equal(isAdminRoleName(n), false, String(n));
+  }
+});
+
+test("ролийг админ гэж нэрлэх, админ ролийн нэрийг солихыг хориглоно", () => {
+  assert.match(roleNameError("Админ") ?? "", /админы ролийнх/);
+  assert.match(roleNameError("ADMIN") ?? "", /админы ролийнх/);
+  assert.equal(roleNameError("Шинэ роль"), null);
+  // Засах: бусад ролийг админ болгож нэрлэхгүй
+  assert.match(roleNameError("admin", "e2e_role") ?? "", /админы ролийнх/);
+  // Засах: админ ролийн нэрийг солихгүй, харин нэрээ хэвээр үлдээж тайлбар засна
+  assert.match(roleNameError("admin_renamed", "admin") ?? "", /нэрийг солих боломжгүй/);
+  assert.equal(roleNameError("admin", "admin"), null);
+});
+
+test("админ ролийг зөвхөн админ олгоно, хоосон админ роль хэнд ч олгогдохгүй", () => {
+  // Бүх эрхийг эзэмшдэг ч админ биш (хэлтсийн дарга) — нэрээр хориглоно.
+  const headWithAllPerms = { userId: "head", roles: ["department_head"], permissions: ["users:read", "users:update"] };
+  assert.equal(canGrantRoleForActor(headWithAllPerms, ["users:read"], "admin"), false);
+  assert.equal(canGrantRoleForActor(admin, ["users:read"], "admin"), true);
+  // Эрхгүй (хоосон) админ роль — админд ч олгогдохгүй.
+  assert.equal(canGrantRoleForActor(admin, [], "admin"), false);
+  assert.equal(canGrantRoleForActor(admin, null, "Админ"), false);
+  // Энгийн нэртэй роль — урьдын эрхийн дүрмээр.
+  assert.equal(canGrantRoleForActor(headWithAllPerms, ["users:read"], "employee"), true);
+});
+
+test("санхүү / МИКА ролийг зөвхөн системийн админ олгоно", () => {
+  const perms = ["users:update", "compensation:read", "compensation:create", "compensation:update"];
+  const head = { userId: "1", roles: ["department_head"], permissions: perms };
+  const admin = { userId: "2", roles: ["admin"], permissions: perms };
+  const rolePerms = ["compensation:read", "compensation:update"];
+  // Хэлтсийн дарга ролийн бүх эрхийг эзэмшдэг ч олгож чадахгүй.
+  assert.equal(canGrantRoleForActor(head, rolePerms, "compensation_finance_specialist"), false);
+  assert.equal(canGrantRoleForActor(head, rolePerms, "compensation_mika"), false);
+  assert.equal(canGrantRoleForActor(head, rolePerms, "Санхүү"), false);
+  assert.equal(canGrantRoleForActor(admin, rolePerms, "compensation_finance_specialist"), true);
+  // Бусад роль өмнөх дүрмээрээ.
+  assert.equal(canGrantRoleForActor(head, rolePerms, "employee"), true);
+});
+
+test("ролийн нэр/код давхардахгүй, системийн ролийн нэрийг ашиглахгүй", () => {
+  const roles = [
+    { name: "senior_specialist", resource: "system", code: "A101" },
+    { name: "compensation_mika", resource: "compensation" },
+    { name: "Газрын шинжээч", code: "GS01" },
+  ];
+  for (const n of ["Ахлах мэргэжилтэн", " санхүү ", "МИКА", "Захирамж бүртгэл", "department_head"]) {
+    assert.equal(isReservedRoleName(n), true, n);
+    assert.notEqual(roleNameError(n, null, roles), null, n);
+  }
+  // Байгаа нэр (том/жижиг үсэг, зай) ба өөр ролийн ТҮВШИН.
+  assert.notEqual(roleNameError("газрын  ШИНЖЭЭЧ", null, roles), null);
+  assert.notEqual(roleNameError("Mika", null, roles), null);
+  assert.equal(roleNameError("Шинэ роль", null, roles), null);
+  // Нэр солиход өөрийн нэр давхцал биш.
+  assert.equal(roleNameError("Газрын  шинжээч", "Газрын шинжээч", roles), null);
+  // Код.
+  assert.notEqual(roleCodeError("a101", roles), null);
+  assert.notEqual(roleCodeError("TOOLONGCODE1", roles), null);
+  assert.equal(roleCodeError("NR01", roles), null);
+  assert.equal(roleCodeError("", roles), null);
 });

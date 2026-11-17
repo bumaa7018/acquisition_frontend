@@ -5,6 +5,7 @@ import {
   isExternalRoleSet,
   externalAcquisitionScope,
 } from '@/lib/server/session-guard'
+import { collectLayers, hasDuplicateControlParam, hasForbiddenParam, isSafeCqlFragment } from '@/lib/server/geoserver-guard'
 
 const GS_URL = process.env.NEXT_GS_URL ?? 'http://localhost:8600'
 
@@ -112,22 +113,6 @@ function isAllowedOperation(path: string[], search: string, body?: string): bool
   return false
 }
 
-/** `land:v_parcel_status` эсвэл `v_parcel_status` → `v_parcel_status`. */
-function bareLayerName(value: string): string {
-  const trimmed = value.trim()
-  const colon = trimmed.indexOf(':')
-  return colon === -1 ? trimmed : trimmed.slice(colon + 1)
-}
-
-/** Хүсэлтийн зорилтот давхаргууд (WMS `LAYERS`, WFS `typeName(s)`). */
-function requestedLayers(params: URLSearchParams): string[] {
-  const raw =
-    getParamCaseInsensitive(params, 'layers') ||
-    getParamCaseInsensitive(params, 'typename') ||
-    getParamCaseInsensitive(params, 'typenames')
-  if (!raw) return []
-  return raw.split(',').map(bareLayerName).filter(Boolean)
-}
 
 /**
  * Гадаад ролийн хүсэлтэд чөлөөлөлтийн хумилтыг CQL_FILTER дээр НЭМНЭ.
@@ -147,11 +132,16 @@ function applyScope(
 ): boolean {
   const scoped = layers.filter((l) => ACQUISITION_SCOPED_LAYERS.has(l))
   if (scoped.length === 0) return true // зөвхөн лавлах давхарга — хумих зүйлгүй
-  if (layers.length !== 1) return false
+  // GetFeatureInfo нь LAYERS ба QUERY_LAYERS-д ижил давхаргыг давтдаг тул
+  // ДАВХАРДАЛГҮЙ тоогоор шалгана.
+  if (new Set(layers).size !== 1) return false
   if (allowedAcquisitionIds.length === 0) return false
 
   const scope = `acquisition_id IN (${allowedAcquisitionIds.map((id) => `'${id}'`).join(',')})`
   const existing = getParamCaseInsensitive(params, 'cql_filter').trim()
+  // Хаалт тэнцвэргүй (`1=1) OR (1=1`) эсвэл `;`-тэй шүүлт хумилтыг OR-ын нэг
+  // талд гаргаж хүчингүй болгодог — татгалзана.
+  if (existing && !isSafeCqlFragment(existing)) return false
   setParamCaseInsensitive(params, 'CQL_FILTER', existing ? `(${existing}) AND ${scope}` : scope)
   return true
 }
@@ -177,29 +167,44 @@ async function proxy(
       ? undefined
       : await req.text()
 
+  // WMS-GetMap болон WFS-ийг frontend POST-оор (form-urlencoded) илгээдэг;
+  // WFS-ийн зарим дуудлага GET-ээр ирдэг тул хоёуланг нь дэмжинэ.
+  //
+  // ЖИЧ: бүх шалгалт GeoServer-т ЯГ ДАМЖИХ параметрүүд (`qs`) дээр хийгдэнэ.
+  // Өмнө нь үйлдлийг URL query-оос уншдаг ч body-тэй хүсэлтэд GeoServer руу
+  // зөвхөн body явдаг тул `?request=GetMap` + body `request=GetCapabilities`
+  // нь хоригийг тойрдог байв.
+  const isBodyParams = body !== undefined && body.length > 0
+  const qs = new URLSearchParams(isBodyParams ? body : req.nextUrl.search)
+  const forwarded = qs.toString()
+
   // Гадаргуу хумих: зөвшөөрөгдсөн workspace/tile зам + GetCapabilities хориг.
   const root = path[0] ?? ''
   if (
     !ALLOWED_ROOTS.has(root) ||
-    isBlockedOperation(req.nextUrl.search) ||
-    !isAllowedOperation(path, req.nextUrl.search, body)
+    isBlockedOperation(forwarded) ||
+    !isAllowedOperation(path, forwarded)
   ) {
     return NextResponse.json({ error: 'Хориотой' }, { status: 403 })
   }
 
-  // WMS-GetMap болон WFS-ийг frontend POST-оор (form-urlencoded) илгээдэг;
-  // WFS-ийн зарим дуудлага GET-ээр ирдэг тул хоёуланг нь дэмжинэ.
-  const isBodyParams = body !== undefined && body.length > 0
-  const qs = new URLSearchParams(isBodyParams ? body : req.nextUrl.search)
+  // Давхаргын нэргүйгээр объект руу хүрэх (featureID/resourceId), өөр
+  // давхаргыг SLD-ээр нэмэх зэрэг параметрүүд — цагаан жагсаалтыг тойрно.
+  if (hasForbiddenParam(qs) || hasDuplicateControlParam(qs)) {
+    return NextResponse.json({ error: 'Хориотой параметр' }, { status: 403 })
+  }
 
-  const layers = requestedLayers(qs)
+  // Давхаргыг заадаг БҮХ параметр (LAYERS, QUERY_LAYERS, typeName(s), LAYER)
+  // шалгагдана — өмнө нь эхнийх нь л шалгагдаж, WFS-ийн typeNames-ээр
+  // цагаан жагсаалтгүй давхарга (parcel) уншигддаг байв.
+  const layers = collectLayers(qs)
   if (layers.length === 0 || !layers.every((l) => ALLOWED_LAYERS.has(l))) {
     return NextResponse.json({ error: 'Хориотой давхарга' }, { status: 403 })
   }
 
   // Бөөнөөр татахаас сэргийлж мөрийн тоог хатуу хязгаарлана (бүх ролид).
   // WFS 2.0 нь `count`, 1.x нь `maxFeatures` гэсэн өөр нэр ашигладаг.
-  const reqName = requestName(req.nextUrl.search, body)
+  const reqName = requestName(forwarded)
   // GetFeatureInfo — нэг дарахад олон объект дуудахаас сэргийлж хязгаарлана
   // (frontend 1 гуйдаг; илүү өгвөл дарж бичнэ).
   if (reqName === 'getfeatureinfo') {

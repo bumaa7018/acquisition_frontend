@@ -201,8 +201,10 @@ export function notificationLink(n: AppNotification): string | null {
       return n.acquisition_id
         ? `/parcel/${n.resource_id}?acq=${n.acquisition_id}`
         : null;
+    // Нөхөн төлбөрийн нийт жагсаалт/дэлгэрэнгүй хуудас хасагдсан — олговрыг
+    // чөлөөлөлтийн хуудсанд (хандах эрхийн хаалттай) үзнэ.
     case "compensation":
-      return `/compensation/${n.resource_id}`;
+      return n.acquisition_id ? `/acquisition/${n.acquisition_id}` : null;
     default:
       return n.acquisition_id ? `/acquisition/${n.acquisition_id}` : null;
   }
