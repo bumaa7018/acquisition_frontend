@@ -15,6 +15,7 @@ import { monthlyTimeline } from "@/lib/timeline-months";
 import { cn, formatBillion } from "@/lib/utils";
 import { AbbrevAmount } from "@/components/ui/amount-hint";
 import { YearMultiSelect } from "@/components/ui/year-multi-select";
+import { sortByStatusOrder } from "@/lib/status-order";
 
 const ACQ_STATUS_LABEL: Record<number, string> = {
   1: "Шинэ",
@@ -179,7 +180,8 @@ export function AcquisitionOverviewPanel({
 
   const statuses = useMemo(() => {
     const colors = new Map((data?.parcel_statuses ?? []).map((s) => [s.id, s.color]));
-    return (data?.status_breakdown ?? [])
+    // Дараалал — `parcel_status`-ийн sort_order (backend задаргаа id-аар ирдэг; status-order.ts).
+    return sortByStatusOrder(data?.status_breakdown ?? [], data?.parcel_statuses ?? [])
       .filter((s) => s.count > 0)
       .map((s) => ({
         id: s.status_id,

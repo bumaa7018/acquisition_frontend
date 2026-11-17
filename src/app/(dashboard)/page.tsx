@@ -56,6 +56,7 @@ import { ProgressBadge } from "@/components/ui/progress-badge";
 import { authStorage } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { sortByStatusOrder } from "@/lib/status-order";
 
 // "Ажлын зураг" цонх — дотроо OpenLayers газрын зураг үүсгэдэг тул
 // зөвхөн хэрэглэгч товч дархад л ачаална (ssr: false).
@@ -735,7 +736,8 @@ function ExternalDashboard() {
   });
 
   const acquisitions = data?.acquisitions ?? [];
-  const statuses = data?.status_breakdown ?? [];
+  // Дараалал — `parcel_status`-ийн sort_order (backend задаргаа id-аар ирдэг; status-order.ts).
+  const statuses = sortByStatusOrder(data?.status_breakdown ?? [], data?.parcel_statuses ?? []);
   const statusColors = useParcelStatusColors();
   const valuationStatuses = data?.valuation_statuses ?? [];
   const valuationTypes = data?.valuation_types ?? [];
@@ -1264,14 +1266,16 @@ export default function DashboardPage() {
     return m;
   }, [parcelStatusList]);
 
-  const STATUSES = useMemo(() => (dashData?.status_breakdown ?? []).map((s) => ({
-    key:   `ps-${s.status_id}`,
-    label: s.name,
-    // Өнгө нь зөвхөн бүртгэлээс; өнгөгүй төлөв — саарал.
-    color: getParcelStatusStyle(statusColorById.get(s.status_id)).color,
-    count: s.count,
-    area:  Math.round(s.area_m2),
-  })), [dashData?.status_breakdown, statusColorById]);
+  // Дараалал — `parcel_status`-ийн sort_order (backend задаргаа id-аар ирдэг; status-order.ts).
+  const STATUSES = useMemo(() => sortByStatusOrder(dashData?.status_breakdown ?? [], parcelStatusList)
+    .map((s) => ({
+      key:   `ps-${s.status_id}`,
+      label: s.name,
+      // Өнгө нь зөвхөн бүртгэлээс; өнгөгүй төлөв — саарал.
+      color: getParcelStatusStyle(statusColorById.get(s.status_id)).color,
+      count: s.count,
+      area:  Math.round(s.area_m2),
+    })), [dashData?.status_breakdown, statusColorById, parcelStatusList]);
 
   /* Цагийн график — сонгосон оны БҮХ сарыг гаргана (лог: timeline-months.ts).
      Тооцоо нь цэвэр функцэд байгаа тул тестээр хамгаалагдсан. */
@@ -1658,18 +1662,11 @@ export default function DashboardPage() {
             )}
           </p>
         </div>
-        <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#02c0ce" }}>
-              {filteredAcqs.length} чөлөөлөлт
-            </p>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
-              {isLoading ? "…" : `${totalParcels} нэгж талбар`}
-            </p>
-          </div>
-          {/* ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил (хэрэглэсэн) шүүлтээр татна.
-              Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
-          {isSenior && (
+        {/* Чөлөөлөлт / нэгж талбарын тоо — доорх «ЧӨЛӨӨЛӨЛТ», «НЭГЖ ТАЛБАР»
+            картуудад харагдана. ГЧХ АЖЛЫН МЭДЭЭ — дээрх тоонуудтай ижил
+            (хэрэглэсэн) шүүлтээр татна. Зөвхөн АХЛАХ МЭРГЭЖИЛТЭНД харагдана. */}
+        {isSenior && (
+          <div className="shrink-0 flex items-center gap-4 border-l border-slate-100 dark:border-[#37394d] pl-4">
             <button
               onClick={handleDownloadGchh2}
               disabled={dlBusy}
@@ -1680,23 +1677,25 @@ export default function DashboardPage() {
               <FileSpreadsheet className="h-3.5 w-3.5" />
               {dlBusy ? "Татаж байна…" : "Мэдээ татах"}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Stat cards — xl: 12 багана (хил 2, нэгж талбар 2, захирамж 3,
-             олговор 5). Задаргаатай картууд задаргааг БАРУУН талд харуулна
-             (карт доош сунгахгүй). ─────────────────────────────── */}
-      <div className="grid grid-cols-2 xl:grid-cols-12 gap-4">
+      {/* ── Stat cards — xl: 14 багана (чөлөөлөлт 2, нэгж талбар 2, хил 2,
+             захирамж 3, олговор 5). Задаргаатай картууд задаргааг БАРУУН
+             талд харуулна (карт доош сунгахгүй). ────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-[repeat(14,minmax(0,1fr))] gap-4">
         {([
           {
-            label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
-            sub: "нийт талбай",
-            value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
-            color: "#02c0ce",
-            icon: MapIcon,
-            bg: "#02c0ce18",
-            span: "xl:col-span-2",
+            label: "ЧӨЛӨӨЛӨЛТ",
+            sub: "нийт тоо",
+            // Шүүлтэд таарсан чөлөөлөлтүүд (dashData.acquisitions).
+            value: isLoading ? null : filteredAcqs.length,
+            color: "#e83e8c",
+            icon: FileText,
+            bg: "#e83e8c18",
+            // Жижиг дэлгэцэд 3 жижиг карт 2 баганад тэгш бус үлдэхгүйн тулд бүтэн мөр.
+            span: "col-span-2 xl:col-span-2",
           },
           {
             label: "НЭГЖ ТАЛБАР",
@@ -1705,6 +1704,15 @@ export default function DashboardPage() {
             color: "#777edd",
             icon: Layers,
             bg: "#777edd18",
+            span: "xl:col-span-2",
+          },
+          {
+            label: "ТӨЛӨВЛӨЛТИЙН ХИЛ",
+            sub: "нийт талбай",
+            value: isLoading ? null : `${planAreaHa.toFixed(1)} га`,
+            color: "#02c0ce",
+            icon: MapIcon,
+            bg: "#02c0ce18",
             span: "xl:col-span-2",
           },
           {
@@ -1751,7 +1759,15 @@ export default function DashboardPage() {
               <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: s.color }} />
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 shrink-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
+                  <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500 leading-tight">
+                    {/* Нарийн карт (утас, xl-д ~1920px хүртэл): icon-ыг шошгын
+                        ХАЖУУД жижгээр — баруун талын том icon тэнд тоотой
+                        багтахгүй, `overflow-hidden`-д хагас тасардаг байв. */}
+                    {Icon && (
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md sm:hidden xl:flex min-[1920px]:hidden" style={{ background: s.bg }}>
+                        <Icon className="h-3 w-3" style={{ color: s.color }} />
+                      </span>
+                    )}
                     {s.label}
                   </p>
                   <div className="flex items-end gap-1.5 mt-2">
@@ -1761,8 +1777,9 @@ export default function DashboardPage() {
                   </div>
                   <p className={`mt-1 whitespace-nowrap ${s.subClass ?? "text-[10px] text-slate-400 dark:text-slate-500"}`}>{s.sub}</p>
                 </div>
+                {/* Том icon — зөвхөн карт ӨРГӨН үед (нарийн үед шошгын хажууд, дээрхийг үз). */}
                 {Icon && (
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: s.bg }}>
+                  <div className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:flex xl:hidden min-[1920px]:flex" style={{ background: s.bg }}>
                     <Icon className="h-5 w-5" style={{ color: s.color }} />
                   </div>
                 )}

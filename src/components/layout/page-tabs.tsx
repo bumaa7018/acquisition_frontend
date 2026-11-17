@@ -64,11 +64,14 @@ export function PageTabs() {
               ? { ...t, path: fullPath, lastActiveAt: switched ? now : t.lastActiveAt }
               : t,
           )
-        : [...next, { key: currentKey, path: fullPath, label, lastActiveAt: now }];
+        : // Шинэ таб хяналтын самбарын дараа, хамгийн эхэнд нэмэгдэнэ.
+          [{ key: currentKey, path: fullPath, label, lastActiveAt: now }, ...next];
     }
     next = pruneExpiredTabs(next, currentKey, now);
     while (next.length > PAGE_TABS_MAX) {
-      const oldest = next.findIndex((t) => t.key !== currentKey);
+      // Шинэ таб эхэнд нэмэгддэг тул хамгийн хуучин нь төгсгөлд байна.
+      let oldest = next.length - 1;
+      while (oldest >= 0 && next[oldest].key === currentKey) oldest--;
       next = next.filter((_, i) => i !== oldest);
     }
     savePageTabs(next);
@@ -157,7 +160,7 @@ export function PageTabs() {
     ...tabs,
   ];
   if (pendingKey && navTarget && !items.some((t) => t.key === pendingKey)) {
-    items.push({ key: pendingKey, path: navTarget, label: pendingNav?.label ?? "Хуудас" });
+    items.splice(1, 0, { key: pendingKey, path: navTarget, label: pendingNav?.label ?? "Хуудас" });
   }
 
   const menuTab = menu ? items.find((t) => t.key === menu.key) : undefined;

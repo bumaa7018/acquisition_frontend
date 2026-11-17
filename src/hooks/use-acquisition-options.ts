@@ -16,10 +16,13 @@ import type { LandAcquisitionOption } from "@/types";
 // илгээгдэх шалтгаан болж байв.
 export const ACQ_OPTIONS_KEY = ["acq-filter-options"] as const;
 
-export function useAcquisitionOptions() {
+// `enabled: false` — хүсэлт илгээхгүй (жишээ нь «Хэвлэх» хуудас хайх үг
+// бичигдэх хүртэл). Өмнө нь татсан бол кэшээс буцаана.
+export function useAcquisitionOptions({ enabled = true }: { enabled?: boolean } = {}) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ACQ_OPTIONS_KEY,
     queryFn: () => landApi.filterOptions(),
+    enabled,
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
   });
