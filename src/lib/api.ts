@@ -69,7 +69,7 @@ import type {
   Plan, LandAcquisition, LandAcquisitionUpdateResult, LandAcquisitionFilter, LandAcquisitionOption, AU2Option, Parcel, ParcelFull, ParcelDiscoveryResult,
   AcquisitionProgress, AcquisitionSocioSurvey, ParcelSurvey, ParcelSurveyInput, ParcelSurveyRow, ParcelSurveySummary, Document, StatusOption, ParcelNoticeEmail, ParcelEMongoliaNotice,
   ParcelEstimatedValueHistory,
-  GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant, GlobalCompensation,
+  GlobalParcel, ParcelPayment, Asset, Compensation, CompensationGrant,
   ConstructionType, AcquisitionCategory, ReportParcelRow, ReportSummary, ParcelStatus, DocumentType,
   AcquisitionAssignee, ParcelWorkflow, ParcelStatusHistory, ParcelStatusRequirement, ParcelStatusRules, BoundaryHistory, BoundaryPreview, BoundaryOutsideParcel, FundingSource,
   CompensationHistory, ParcelHolder, RepresentativeInput, ParcelDocumentSyncResult, ParcelHolderSyncResult, ParcelBasePrice, ParcelInvoiceSyncResult, ParcelFeeSyncResult, ParcelSyncCountResult, LandValuation, LandValuationUpsert, ValuationImportPayload, ValuationImportResult, ValuationSectionNote, ValuationNotesPayload, AssetSpec, AssetCalculation,
@@ -758,7 +758,7 @@ export const rolesApi = {
     })),
   getById: (id: string) =>
     api.get<ApiResponse<Role>>(`/roles/${id}`).then(r => normalizeRole(r.data.data)),
-  create: (body: { name: string; description?: string }) =>
+  create: (body: { name: string; code?: string; description?: string }) =>
     api.post<ApiResponse<Role>>('/roles', body).then(r => normalizeRole(r.data.data)),
   update: (id: string, body: { name?: string; description?: string }) =>
     api.put<ApiResponse<Role>>(`/roles/${id}`, body).then(r => normalizeRole(r.data.data)),
@@ -1035,10 +1035,6 @@ export const landApi = {
     api.delete(`/land-acquisitions/${acqId}/compensations/${compId}/grant`),
   setParcelCompensation: (acqId: string, parcelId: string, paid: boolean) =>
     api.put(`/land-acquisitions/${acqId}/parcels/${parcelId}/compensation`, { paid }).then(r => r.data),
-  listAllCompensations: (params?: { status?: string; search?: string; acquisition_id?: string; page?: number; page_size?: number; sort?: string; order?: 'asc' | 'desc' }) =>
-    api.get<PaginatedResponse<GlobalCompensation>>('/compensations', { params }).then(r => r.data),
-  getGlobalCompensation: (id: string) =>
-    api.get<ApiResponse<GlobalCompensation>>(`/compensations/${id}`).then(r => r.data.data),
   getParcel: (acqId: string, parcelId: string) =>
     api.get<ApiResponse<ParcelFull>>(`/land-acquisitions/${acqId}/parcels/${parcelId}`).then(r => r.data.data),
   // Чөлөөлөх хилээр ГУС-аас нэгж талбарыг татаж бүртгэнэ: дугаар + бүртгэлийн

@@ -27,7 +27,7 @@ import {
   ShieldCheck,
   Lock,
 } from "lucide-react";
-import type { Role, User } from "@/types";
+import type { Employee, Role, User } from "@/types";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -177,7 +177,7 @@ function RolePicker({
       {roles.map((role) => {
         const permNames = role.permissions?.map((p) => p.name) ?? [];
         // Өөрт байхгүй эрх агуулсан роль — backend 403 буцаах тул сонгуулахгүй.
-        const grantable = canGrantRole(permNames);
+        const grantable = canGrantRole(permNames, role.name);
         const checked = selected.includes(role.id);
         const blocked = disabled || !grantable;
         return (
@@ -185,8 +185,8 @@ function RolePicker({
             key={role.id}
             title={
               !grantable
-                ? "Энэ рольд танд байхгүй эрх агуулагдсан тул олгох боломжгүй"
-                : role.description || role.name
+                ? "Энэ ролийг олгох эрх танд байхгүй (танд байхгүй эрх агуулсан, эсвэл админ роль)"
+                : role.name
             }
             className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-[12px] transition-all ${
               blocked
@@ -210,8 +210,18 @@ function RolePicker({
             >
               {checked ? "✓" : ""}
             </span>
-            <span className="min-w-0 flex-1 whitespace-normal break-words font-medium leading-snug text-slate-700 dark:text-slate-200">
-              {role.name}
+            {/* Тайлбар нь ойлгомжтой (жишээ нь «Ахлах мэргэжилтэн») тул дээр нь,
+                системийн нэр (senior_specialist) доор нь жижгээр. Тайлбаргүй
+                роль зөвхөн нэрээ харуулна. */}
+            <span className="min-w-0 flex-1 leading-snug">
+              <span className="block whitespace-normal break-words font-medium text-slate-700 dark:text-slate-200">
+                {role.description?.trim() || role.name}
+              </span>
+              {role.description?.trim() && (
+                <span className="block whitespace-normal break-all text-[10.5px] text-slate-400 dark:text-slate-500">
+                  {role.name}
+                </span>
+              )}
             </span>
             {!grantable && (
               <Lock className="h-3 w-3 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -424,11 +434,30 @@ export default function UsersPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
     defaultValues: { is_active: true },
   });
+
+  // Ажилтан сонгоход ажилтны бүртгэлд аль хэдийн байгаа мэдээллээр (овог, нэр,
+  // албан тушаал, имэйл) маягтыг бөглөнө. Хоосон утга дээр бичсэнийг дарахгүй;
+  // бөглөсний дараа хэрэглэгч засаж болно. Нэвтрэх нэр, нууц үг ажилтны
+  // бүртгэлд байхгүй тул гараар оруулна.
+  function fillFromEmployee(employee: Employee) {
+    const person = employee.person;
+    const values: Partial<Record<keyof CreateForm, string | undefined>> = {
+      last_name: person?.last_name,
+      first_name: person?.first_name,
+      position: employee.position_name,
+      email: employee.work_email || person?.email,
+    };
+    for (const [field, value] of Object.entries(values) as [keyof CreateForm, string | undefined][]) {
+      const v = value?.trim();
+      if (v) setValue(field, v, { shouldDirty: true, shouldValidate: true });
+    }
+  }
 
   const {
     register: editRegister,
@@ -620,7 +649,10 @@ export default function UsersPage() {
                 <EmployeeSelect
                   selectedId={selectedEmployee.id}
                   selectedLabel={selectedEmployee.label}
-                  onSelect={(id, label) => setSelectedEmployee({ id, label })}
+                  onSelect={(id, label, employee) => {
+                    setSelectedEmployee({ id, label });
+                    fillFromEmployee(employee);
+                  }}
                   onClear={() => setSelectedEmployee({ id: "", label: "" })}
                   placeholder="Ажилтан хайх…"
                 />

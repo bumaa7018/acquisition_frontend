@@ -670,6 +670,10 @@ export function RealEstateTab({
       ? subTab
       : (orderedSubTabs[0]?.key ?? "asset");
   const activeType: ValuationType = activeSubTab as ValuationType;
+  // Гадаад дуудагчид харах урсгал тодорхой болоогүй (чөлөөлөлт/нэгж талбар
+  // ачаалж байгаа) үед үнэлгээний өгөгдлийг татахгүй — backend зөвхөн өөрийн
+  // урсгалыг нээдэг тул "asset" руу таамгаар дуудвал 403 болно.
+  const streamVisible = isInternalActor || orderedSubTabs.length > 0;
 
   // Хараат бус үнэлгээчнээр томилох БАЙГУУЛЛАГУУД (өмнө нь хэрэглэгчид байв).
   const { data: valuationOrgs = [] } = useQuery({
@@ -727,20 +731,20 @@ export function RealEstateTab({
         parcel_id: effectiveParcelCode,
         valuation_type: activeType,
       }),
-    enabled: !!acqId && !!effectiveParcelCode,
+    enabled: !!acqId && !!effectiveParcelCode && streamVisible,
   });
 
   const { data: allComps = [] } = useQuery({
     queryKey: ["compensations", acqId, effectiveParcelCode, activeType],
     queryFn: () =>
       svc.listCompensations(acqId, effectiveParcelCode, activeType),
-    enabled: !!acqId && !!effectiveParcelCode,
+    enabled: !!acqId && !!effectiveParcelCode && streamVisible,
   });
 
   const { data: landValuation } = useQuery<LandValuation | null>({
     queryKey: ["land-valuation", acqId, effectiveParcelCode, activeType],
     queryFn: () => svc.getLandValuation(acqId, effectiveParcelCode, activeType),
-    enabled: !!acqId && !!effectiveParcelCode,
+    enabled: !!acqId && !!effectiveParcelCode && streamVisible,
   });
 
   // Хүснэгт бүрийн ТАЙЛБАР (Excel-ийн "ТАЙЛБАР:" мөр эсвэл гараас бичсэн).
@@ -753,7 +757,7 @@ export function RealEstateTab({
       svc
         .listValuationNotes(acqId, effectiveParcelCode, activeType)
         .catch(() => [] as ValuationSectionNote[]),
-    enabled: !!acqId && !!effectiveParcelCode,
+    enabled: !!acqId && !!effectiveParcelCode && streamVisible,
     retry: false,
   });
   const noteOf = (key: ValuationSectionKey) =>
@@ -821,7 +825,7 @@ export function RealEstateTab({
       svc
         .getValuationSubmission(acqId, parcelId, activeType)
         .then((s) => s ?? null),
-    enabled: !!acqId && !!parcelId,
+    enabled: !!acqId && !!parcelId && streamVisible,
   });
   const fallbackValStatus = getParcelValuationStatus(
     parcelData?.valuation_statuses,
@@ -853,7 +857,9 @@ export function RealEstateTab({
         if (report) {
           await svc.uploadDocument(parcelId, report, reportDocType?.id, reportDocType?.name);
           // Хуучин тайланг СОЛИНО — нэгж талбарт ганц баталгаажсан тайлан байна.
-          if (reportDoc) await svc.deleteDocument(parcelId, reportDoc.id);
+          if (reportDoc && isReplaceableReport(reportDoc)) {
+            await svc.deleteDocument(parcelId, reportDoc.id);
+          }
         }
         for (const photo of photos ?? []) {
           await svc.uploadDocument(parcelId, photo, workPhotoDocType?.id, workPhotoDocType?.name);
@@ -953,9 +959,22 @@ export function RealEstateTab({
     queryFn: () => svc.listDocuments(parcelId),
     enabled: !!parcelId,
   });
-  const reportDoc = parcelDocs.find(
+  const reportDocs = parcelDocs.filter(
     (d) => !!reportDocType && d.document_type_id === reportDocType.id,
   );
+  // Үнэлгээний байгууллага ЗӨВХӨН өөрийн оруулсан тайлангаа сольж/устгана
+  // (backend: uploaded_by = "valuation_org:<id>"; тэмдэггүй хуучин тайланг ч
+  // зөвшөөрнө). Өөр байгууллагын тайланг дарахгүй — backend 403 буцаана.
+  const ownUploader = (() => {
+    const orgId = useProfApi ? getCurrentActor().orgId : null;
+    return orgId ? `valuation_org:${orgId}` : null;
+  })();
+  const isReplaceableReport = (d: { uploaded_by?: string }) =>
+    !useProfApi ||
+    (!!ownUploader && d.uploaded_by === ownUploader) ||
+    /^\d+$/.test(d.uploaded_by ?? "");
+  const reportDoc =
+    (useProfApi ? reportDocs.find(isReplaceableReport) : undefined) ?? reportDocs[0];
   // Үнэлгээг оруулсан эх Excel — хамгийн сүүлд орсныг нь авна.
   const sourceDoc = sourceDocType
     ? [...parcelDocs]
@@ -1582,7 +1601,8 @@ export function RealEstateTab({
                     className="h-9 min-w-64 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all disabled:opacity-50"
                   >
                     <option value="">— Сонгоно уу —</option>
-                    {valuationOrgs.map((org) => (
+                    {/* Үндсэн үнэлгээний байгууллага хөндлөнгийнх болж болохгүй (backend мөн хориглоно). */}
+                    {valuationOrgs.filter((org) => org.id !== acquisition?.professional_org_id).map((org) => (
                       <option key={org.id} value={org.id}>
                         {valuationOrgLabel(org)}
                         {org.register_no ? ` · ${org.register_no}` : ""}

@@ -298,13 +298,13 @@ export function canViewValuationSubTabForActor(
   // "asset" — MIKA / санхүү эсвэл үндсэн мэргэжлийн байгуулга (professional_org_id) л харна
   if (isMikaActor(actor) || isFinanceSpecialistActor(actor)) return true;
   if (isProfessionalOrgActor(actor)) {
-    if (!actor.orgId) return false;
-    // Acquisition мэдээлэл байвал professional_org_id-тэй тулгана
-    if (acquisition !== undefined && acquisition !== null) {
-      return acquisition.professional_org_id === actor.orgId;
-    }
-    // Мэдээлэл байхгүй бол зөвшөөрнө (graceful fallback)
-    return true;
+    // Backend (ValuationOrgScope) нь чөлөөлөлтийн үндсэн байгууллагад л үндсэн
+    // урсгалыг нээдэг — мэдээлэл ирээгүй үед таамгаар нээвэл 403 болно.
+    return (
+      !!actor.orgId &&
+      !!acquisition &&
+      acquisition.professional_org_id === actor.orgId
+    );
   }
   return false;
 }
@@ -486,9 +486,121 @@ export function canDeleteRole(actor: AccessActor): boolean {
   return isAdminActor(actor) && canDo(actor, ADMIN_PERMISSIONS.ROLES_DELETE);
 }
 
-/** Системийн админы ролийг хэзээ ч устгахгүй (backend-тэй ижил). */
+/**
+ * Нэр нь системийн админы нэртэй давхцаж буй эсэх — backend-ийн
+ * domain.IsAdminRoleName-тэй ижил: том/жижиг үсэг, илүү зай, "<нөөц>_"
+ * угтвараас үл хамааран ("ADMIN", " Админ ", "land_admin").
+ */
+export function isAdminRoleName(name: string | null | undefined): boolean {
+  const n = (name ?? "").trim().split(/\s+/).join(" ").toLowerCase();
+  if (n === "admin" || n === "админ") return true;
+  const i = n.lastIndexOf("_");
+  if (i < 0) return false;
+  const suffix = n.slice(i + 1);
+  return suffix === "admin" || suffix === "админ";
+}
+
+/**
+ * Ролийн нэр нь санхүү / МИКА түвшнийх эсэх — backend-ийн
+ * domain.IsSeparatedDutyLevel-тэй ижил. Ролийн нэр "<нөөц>_<түвшин>"
+ * хэлбэртэй ("compensation_finance_specialist") тул төгсгөлөөр нь танина.
+ */
+export function isSeparatedDutyRoleName(
+  name: string | null | undefined,
+): boolean {
+  const n = (name ?? "").trim();
+  const levels: string[] = [
+    ACCESS_ROLE_CODES.FINANCE_SPECIALIST,
+    ACCESS_ROLE_NAMES.FINANCE_SPECIALIST,
+    ACCESS_ROLE_NAMES.FINANCE,
+    ACCESS_ROLE_CODES.MIKA,
+    ACCESS_ROLE_NAMES.MIKA,
+  ];
+  return levels.some((level) => n === level || n.endsWith(`_${level}`));
+}
+
+/** Системийн админы ролийг хэзээ ч устгахгүй, нэрийг нь солихгүй (backend-тэй ижил). */
 export function isProtectedRoleName(name: string | null | undefined): boolean {
-  return name === ACCESS_ROLE_CODES.ADMIN || name === "Админ";
+  return isAdminRoleName(name);
+}
+
+/**
+ * Ролийн нэрийг хадгалахаас өмнө шалгана — алдааны тайлбар эсвэл null.
+ * currentName нь засаж буй ролийн одоогийн нэр (шинээр үүсгэхэд undefined).
+ */
+export function roleNameError(
+  name: string,
+  currentName?: string | null,
+  others?: RoleNameEntry[] | null,
+): string | null {
+  const next = name.trim();
+  if (currentName != null && next === currentName.trim()) return null;
+  if (currentName != null && isAdminRoleName(currentName)) {
+    return "Системийн админы ролийн нэрийг солих боломжгүй.";
+  }
+  if (isAdminRoleName(next)) {
+    return "«admin» / «Админ» нэр нь системийн админы ролийнх тул өөр ролийг ингэж нэрлэх боломжгүй.";
+  }
+  if (isReservedRoleName(next)) {
+    return `«${next}» нь системийн ролийн нэр тул өөр ролийг ингэж нэрлэх боломжгүй.`;
+  }
+  const want = normalizeRoleName(next);
+  const clash = (others ?? []).some(
+    (r) =>
+      (currentName == null || r.name !== currentName) &&
+      (normalizeRoleName(r.name) === want || normalizeRoleName(roleLevelName(r)) === want),
+  );
+  if (clash) return `«${next}» нэртэй роль аль хэдийн бүртгэлтэй байна.`;
+  return null;
+}
+
+/** Ролийн жагсаалтын мөр (нэр, код давхардал шалгахад). */
+export type RoleNameEntry = { name: string; resource?: string | null; code?: string | null };
+
+/** Том/жижиг үсэг, илүү зай үл хамаарсан нэр — backend domain.NormalizeRoleName-тэй ижил. */
+export function normalizeRoleName(name: string | null | undefined): string {
+  return (name ?? "").trim().split(/\s+/).join(" ").toLowerCase();
+}
+
+/** Токенд орох ролийн түвшин — backend domain.Role.Level()-тэй ижил. */
+export function roleLevelName(role: RoleNameEntry): string {
+  const prefix = role.resource ? `${role.resource}_` : "";
+  if (prefix && role.name.startsWith(prefix) && role.name.length > prefix.length) {
+    return role.name.slice(prefix.length);
+  }
+  return role.name;
+}
+
+// Backend domain.reservedRoleNames-тэй ижил: хаалтууд ролийг НЭРЭЭР нь
+// таньдаг тул эдгээр нэртэй роль тухайн системийн ролийн эрхийг авна.
+const RESERVED_ROLE_NAMES = new Set([
+  "admin", "админ",
+  "senior_specialist", "ахлах мэргэжилтэн",
+  "department_head", "хэлтсийн дарга",
+  "employee",
+  "decision_registration", "захирамж бүртгэл",
+  "finance_specialist", "санхүүгийн мэргэжилтэн", "санхүү",
+  "mika", "мика",
+  "professional_org", "мэргэжлийн байгууллага", "мэргэжлийн байгуулл...",
+]);
+
+export function isReservedRoleName(name: string | null | undefined): boolean {
+  return RESERVED_ROLE_NAMES.has(normalizeRoleName(name));
+}
+
+/**
+ * Ролийн кодыг шалгана (заавал биш). Энд зөвхөн харагдаж буй (систем 10-ийн)
+ * ролиудтай тулгана — бүх системийн давхардлыг backend шалгана.
+ */
+export function roleCodeError(code: string, others?: RoleNameEntry[] | null): string | null {
+  const next = code.trim();
+  if (!next) return null;
+  if (Array.from(next).length > 10) return "Ролийн код 10 тэмдэгтээс хэтрэхгүй.";
+  const want = next.toLowerCase();
+  if ((others ?? []).some((r) => (r.code ?? "").trim().toLowerCase() === want)) {
+    return `«${next}» кодтой роль аль хэдийн бүртгэлтэй байна.`;
+  }
+  return null;
 }
 
 /** Роль-д эрх нэмэх/хасах — roles:update эсвэл 10-р системийн admin. */
@@ -545,8 +657,17 @@ export function canGrantPermissionForActor(
 export function canGrantRoleForActor(
   actor: AccessActor,
   rolePermissionNames: string[] | null | undefined,
+  roleName?: string | null,
 ): boolean {
   const names = rolePermissionNames ?? [];
+  // Админ эсэх НЭРЭЭР шийдэгддэг тул админ ролийг зөвхөн админ олгоно, хоосон
+  // (эрхгүй) админ роль хэнд ч олгогдохгүй — backend callerCanGrantRole-тэй ижил.
+  if (isAdminRoleName(roleName)) {
+    return isAdminActor(actor) && names.length > 0;
+  }
+  // Санхүү / МИКА — үнэлгээг хянах, батлах ТУСДАА үүрэг тул зөвхөн системийн
+  // админ олгоно (backend domain.Role.RequiresAdminGrantor-тэй ижил).
+  if (isSeparatedDutyRoleName(roleName) && !isAdminActor(actor)) return false;
   if (
     names.length > 0 &&
     isAdminActor(actor) &&

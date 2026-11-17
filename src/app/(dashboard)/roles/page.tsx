@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { menusApi, rolesApi } from "@/lib/api";
 import { getApiError } from "@/lib/utils";
 import { canEditRolePermissions, canListPermissions, canRemoveRole, canViewRoles, hasPermission, hasRole } from "@/lib/role-utils";
-import { isProtectedRoleName } from "@/lib/access-policy";
+import { isProtectedRoleName, roleCodeError, roleNameError } from "@/lib/access-policy";
 import type { Menu } from "@/types";
 import { Check, Lock, Menu as MenuIcon, Plus, Save, Shield, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +35,7 @@ export default function RolesPage() {
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
   const [draftPermissionIds, setDraftPermissionIds] = useState<string[]>([]);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm>(null);
-  const [newRole, setNewRole] = useState({ name: "", description: "" });
+  const [newRole, setNewRole] = useState({ name: "", code: "", description: "" });
   const [editRole, setEditRole] = useState({ name: "", description: "" });
   const [cap, setCap] = useState({
     view: false,
@@ -108,10 +108,11 @@ export default function RolesPage() {
   };
 
   const createRoleMutation = useMutation({
-    mutationFn: () => rolesApi.create(newRole),
+    mutationFn: () =>
+      rolesApi.create({ ...newRole, code: newRole.code.trim() || undefined }),
     onSuccess: (role) => {
       toast.success("Роль үүслээ");
-      setNewRole({ name: "", description: "" });
+      setNewRole({ name: "", code: "", description: "" });
       setSelectedRole(role.id);
       invalidate();
     },
@@ -163,6 +164,14 @@ export default function RolesPage() {
   });
 
   const canDeleteSelected = cap.deleteRole && !!roleDetail && !isProtectedRoleName(roleDetail.name);
+  // Админы нэр давхардуулах, админ ролийн нэр солихыг backend хориглодог — товчийг эндээс хааж шалтгааныг харуулна.
+  // Нэр/код давхардал, системийн ролийн нэрийг backend мөн хориглодог (код нь
+  // бүх системийн хүрээнд — энд зөвхөн харагдаж буй ролиудтай тулгана).
+  const newRoleNameError =
+    (newRole.name.trim() ? roleNameError(newRole.name, null, roles) : null) ??
+    roleCodeError(newRole.code, roles);
+  const editRoleNameError =
+    roleDetail && editRole.name.trim() ? roleNameError(editRole.name, roleDetail.name, roles) : null;
 
   function confirmDeleteRole() {
     if (!roleDetail || !canDeleteSelected) return;
@@ -251,11 +260,18 @@ export default function RolesPage() {
         </div>
 
         {cap.createRole && (
-          <div className="ap-card grid gap-3 p-4 md:grid-cols-[1fr_1fr_auto]">
+          <div className="ap-card grid gap-3 p-4 md:grid-cols-[1fr_140px_1fr_auto]">
             <input
               value={newRole.name}
               onChange={(e) => setNewRole((v) => ({ ...v, name: e.target.value }))}
               placeholder="Шинэ role нэр"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] outline-none focus:border-[#02c0ce] dark:border-[#37394d] dark:bg-[#1e1f27] dark:text-slate-100"
+            />
+            <input
+              value={newRole.code}
+              onChange={(e) => setNewRole((v) => ({ ...v, code: e.target.value }))}
+              placeholder="Код (заавал биш)"
+              maxLength={10}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] outline-none focus:border-[#02c0ce] dark:border-[#37394d] dark:bg-[#1e1f27] dark:text-slate-100"
             />
             <input
@@ -266,13 +282,17 @@ export default function RolesPage() {
             />
             <button
               type="button"
-              disabled={!newRole.name.trim() || createRoleMutation.isPending}
+              disabled={!newRole.name.trim() || !!newRoleNameError || createRoleMutation.isPending}
+              title={newRoleNameError ?? undefined}
               onClick={() => createRoleMutation.mutate()}
               className="flex items-center justify-center gap-1.5 rounded-lg bg-[#02c0ce] px-4 py-2 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Үүсгэх
             </button>
+            {newRoleNameError && (
+              <p className="text-[12px] text-[#f1556c] md:col-span-4">{newRoleNameError}</p>
+            )}
           </div>
         )}
 
@@ -380,7 +400,8 @@ export default function RolesPage() {
                   />
                   <button
                     type="button"
-                    disabled={!editRole.name.trim() || updateRoleMutation.isPending}
+                    disabled={!editRole.name.trim() || !!editRoleNameError || updateRoleMutation.isPending}
+                    title={editRoleNameError ?? undefined}
                     onClick={() => updateRoleMutation.mutate()}
                     className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-4 py-2 text-[13px] font-semibold text-slate-700 disabled:opacity-50 dark:border-[#37394d] dark:text-slate-100"
                   >
@@ -398,6 +419,9 @@ export default function RolesPage() {
                       <Trash2 className="h-4 w-4" />
                       Роль устгах
                     </button>
+                  )}
+                  {editRoleNameError && (
+                    <p className="text-[12px] text-[#f1556c] md:col-span-full">{editRoleNameError}</p>
                   )}
                 </div>
               ) : (

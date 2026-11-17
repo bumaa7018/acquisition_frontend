@@ -179,12 +179,27 @@ export async function sessionRoles(token: string): Promise<string[] | null> {
   });
 }
 
+/**
+ * `/users/me` ролийн БҮТЭН нэрийг ("compensation_finance_specialist") буцаадаг,
+ * токен харин ТҮВШНИЙГ ("finance_specialist"). Хоёуланг нь танихгүй бол
+ * санхүү/МИКА гадаад роль гэж танигдахгүй, газрын зураг нь чөлөөлөлтөөр
+ * хумигдахгүй үлддэг байв.
+ */
+function matchesRole(role: string, set: Set<string>): boolean {
+  if (set.has(role)) return true;
+  let found = false;
+  set.forEach((level) => {
+    if (!found && role.endsWith(`_${level}`)) found = true;
+  });
+  return found;
+}
+
 export function isExternalRoleSet(roles: string[]): boolean {
-  return roles.some((r) => EXTERNAL_ROLES.has(r));
+  return roles.some((r) => matchesRole(r, EXTERNAL_ROLES));
 }
 
 export function isProfOrgRoleSet(roles: string[]): boolean {
-  return roles.some((r) => PROF_ORG_ROLES.has(r));
+  return roles.some((r) => matchesRole(r, PROF_ORG_ROLES));
 }
 
 // ── Файлын объектын эрх ─────────────────────────────────────────────────────
