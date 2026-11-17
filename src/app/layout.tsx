@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
+import { Nunito_Sans } from "next/font/google";
 import { Providers } from "@/components/layout/providers";
+// «Он цагийн зураг»-ын фонтууд — статикаар (динамик chunk-д CSS chunk үүсгэхгүйн тулд).
+import "@/lib/chronos-fonts";
 
-// Self-hosted фонтууд (Nunito Sans + «Он цагийн зураг»-ын фонтууд) — fonts.css-ийн толгойг үз.
-import "./fonts.css";
 import "./globals.css";
 import "@/components/ui/status-label.css";
+
+const nunitoSans = Nunito_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "600", "700", "800"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Газрын Мэдээллийн Систем",
@@ -18,7 +25,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="mn" suppressHydrationWarning>
-      <body className="font-nunito-sans">
+      <body className={nunitoSans.className}>
         <Providers>{children}</Providers>
       </body>
     </html>
