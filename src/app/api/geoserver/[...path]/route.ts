@@ -5,7 +5,7 @@ import {
   isExternalRoleSet,
   externalAcquisitionScope,
 } from '@/lib/server/session-guard'
-import { collectLayers, hasDuplicateControlParam, hasForbiddenParam, isSafeCqlFragment } from '@/lib/server/geoserver-guard'
+import { collectLayers, hasDuplicateControlParam, hasForbiddenParam, isAllowedViewParams, isSafeCqlFragment } from '@/lib/server/geoserver-guard'
 
 const GS_URL = process.env.NEXT_GS_URL ?? 'http://localhost:8600'
 
@@ -190,7 +190,7 @@ async function proxy(
 
   // Давхаргын нэргүйгээр объект руу хүрэх (featureID/resourceId), өөр
   // давхаргыг SLD-ээр нэмэх зэрэг параметрүүд — цагаан жагсаалтыг тойрно.
-  if (hasForbiddenParam(qs) || hasDuplicateControlParam(qs)) {
+  if (hasForbiddenParam(qs) || hasDuplicateControlParam(qs) || !isAllowedViewParams(qs)) {
     return NextResponse.json({ error: 'Хориотой параметр' }, { status: 403 })
   }
 

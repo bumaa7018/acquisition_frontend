@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasDuplicateControlParam, stripForbiddenParams } from "@/lib/server/geoserver-guard";
+import { hasDuplicateControlParam, stripForbiddenParams, stripViewParams } from "@/lib/server/geoserver-guard";
 
 /**
  * НЭЭЛТТЭЙ (эрх шалгахгүй) GeoServer гарц — ЗӨВХӨН нэг давхаргад
@@ -226,6 +226,7 @@ async function proxy(
   // хязгаарыг тойрох замууд. Шалгасан: `featureID=parcel.<uuid>` нь (typeNames-гүй)
   // нэвтрэлтгүйгээр дотоод `parcel` давхаргын бүрэн мөрийг буцаадаг байв.
   stripForbiddenParams(search);
+  stripViewParams(search);
   if (hasDuplicateControlParam(search)) {
     return deny("Давхардсан параметр");
   }

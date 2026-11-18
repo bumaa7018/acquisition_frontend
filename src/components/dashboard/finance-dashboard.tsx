@@ -6,9 +6,17 @@
 // үзүүлэлт. Бүх өгөгдөл НЭГ хөнгөн endpoint-оос (`/dashboard/finance`) ирнэ:
 // backend талд нэг асуулгаар нэгтгэгддэг тул жагсаалт татаж client дээр
 // нэгтгэх шаардлагагүй (том өгөгдөлд ачаалал өгөхгүй).
+//
+// Байршил (хоосон зайгүй):
+//   1. 4 гол үзүүлэлт
+//   2. 3 донат нэг мөрөнд — чөлөөлөлт төлөвөөр · нэгж талбарын гүйцэтгэл ·
+//      санхүүжилтийн төрөл (дүн нь тайлбар мөрөнд — давхардсан карт байхгүй)
+//   3. Оноор (шугаман, 2/3) · Үнэлгээний бүтэц + захирамжийн төсөв (1/3)
+//   4. Дүүрэг/сумаар (дарж шүүнэ) · Явж буй чөлөөлөлтүүд
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import {
   Bar,
   BarChart,
@@ -16,6 +24,8 @@ import {
   Cell,
   LabelList,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -50,9 +60,12 @@ const ACQ_STATUS_COLORS: Record<string, string> = {
   "4": "#94a3b8",
 };
 
+// Батлагдсан / Олгосон / Хүлээгдэж буй — самбар даяар ИЖИЛ өнгө (өнгө нь
+// утгыг дагана). Олгосон нь #16a34a: өмнөх #10b981 нь цэнхэр-ногоон (#02c0ce)-той
+// хэвийн хараатай хүнд ч ялгагдахгүй байсан (ΔE 10.8 < 15) — validate_palette.
 const COLORS = {
   amount: "#02c0ce",
-  granted: "#10b981",
+  granted: "#16a34a",
   pending: "#f59e0b",
   parcels: "#6366f1",
   property: "#f59e0b",
@@ -71,137 +84,98 @@ function billions(value: number): string {
 /** Чартын өнгөний дараалал (төсөв, эх үүсвэр г.м. олон утгатай задаргаанд). */
 const PALETTE = ["#02c0ce", "#6366f1", "#10b981", "#f59e0b", "#f43f5e", "#0ea5e9"];
 
+/** Гарчигтай карт — бүх хэсгийн нэг загвар. */
+function Card({
+  title,
+  right,
+  className = "",
+  align = "center",
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  className?: string;
+  /** Жагсаалт дээд талаасаа эхэлнэ (start); чарт/донат дундаа (center). */
+  align?: "center" | "start";
+  children: React.ReactNode;
+}) {
+  // Мөрний өндрөөр сунах үед агуулга нь ДУНДАА байрлана — хөрш картууд ижил
+  // өндөртэй, доор нь хоосон зурвас үлдэхгүй.
+  return (
+    <div className={`ap-card flex flex-col px-4 py-3 ${className}`}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{title}</p>
+        {right}
+      </div>
+      <div className={`flex min-h-0 flex-1 flex-col ${align === "start" ? "justify-start" : "justify-center"}`}>{children}</div>
+    </div>
+  );
+}
+
 /**
  * Дугуй (donut) чарт + баруун талдаа задаргаа.
  *
- * Карт өрөх оронд НЭГ зурагт: төвд нийт тоо, тойрогт хувь хэмжээ, хажууд нь
- * мөр бүрийн тоо/дүн. Ингэснээр аль төлөв давамгайлж байгаа нь шууд харагдана.
+ * Тайлбарын мөр бүр: нэр, тоо, доор нь жижгээр дүн/хувь — тусдаа карт
+ * давхардуулахгүйгээр нэг зурагт бүх тоо багтана.
  */
 function DonutCard({
-  title,
   rows,
   centerValue,
   centerLabel,
   emptyText,
 }: {
-  /** Section дотор хэрэглэхэд гарчиг нь дээр нь байдаг тул заавал биш. */
-  title?: string;
-  rows: { name: string; value: number; color: string; hint?: string }[];
+  rows: { name: string; value: number; color: string; hint?: React.ReactNode; title?: string; display?: string; inlineHint?: string }[];
   centerValue: string;
   centerLabel: string;
   emptyText: string;
 }) {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const shown = rows.filter((row) => row.value > 0);
+  if (total === 0) {
+    return <p className="py-10 text-center text-[12px] text-slate-400">{emptyText}</p>;
+  }
   return (
-    <div className={title ? "ap-card px-4 py-3" : ""}>
-      {title && (
-        <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-          {title}
-        </p>
-      )}
-      {total === 0 ? (
-        <p className="py-14 text-center text-[12px] text-slate-400">{emptyText}</p>
-      ) : (
-        <div className="flex items-center gap-3">
-          <div className="relative h-[168px] w-[168px] shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={shown} dataKey="value" nameKey="name" innerRadius={52} outerRadius={76} paddingAngle={2}>
-                  {shown.map((row) => (
-                    <Cell key={row.name} fill={row.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={TOOLTIP_STYLE}
-                  formatter={(value, name) =>
-                    `${Number(value ?? 0).toLocaleString()} (${((Number(value ?? 0) / total) * 100).toFixed(1)}%) · ${name}`
-                  }
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Төвийн НИЙТ утга — чартын гол мессеж. */}
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-[17px] font-bold tabular-nums text-slate-800 dark:text-white">
-                {centerValue}
-              </span>
-              <span className="text-[10px] text-slate-400">{centerLabel}</span>
-            </div>
-          </div>
-          <div className="min-w-0 flex-1 space-y-1.5">
-            {rows.map((row) => (
-              <div key={row.name} className="flex items-center gap-2.5">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
-                <span className="min-w-0 flex-1 whitespace-normal break-words text-[11px] text-slate-600 dark:text-slate-300">
-                  {row.name}
-                </span>
-                <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: row.color }}>
-                  {row.value.toLocaleString()}
-                </span>
-                {row.hint && (
-                  <span className="w-20 shrink-0 text-right text-[10px] tabular-nums text-slate-400">
-                    {row.hint}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
+    <div className="flex items-center gap-3">
+      <div className="relative h-[136px] w-[136px] shrink-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={shown} dataKey="value" nameKey="name" innerRadius={44} outerRadius={64} paddingAngle={2} stroke="none">
+              {shown.map((row) => (
+                <Cell key={row.name} fill={row.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value, name) =>
+                `${Number(value ?? 0).toLocaleString()} (${((Number(value ?? 0) / total) * 100).toFixed(1)}%) · ${name}`
+              }
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Төвийн НИЙТ утга — чартын гол мессеж. */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[16px] font-bold tabular-nums text-slate-800 dark:text-white">{centerValue}</span>
+          <span className="text-[10px] text-slate-400">{centerLabel}</span>
         </div>
-      )}
-    </div>
-  );
-}
-
-/** Өнгөөр ялгасан жижиг карт: гарчиг · том утга · дэд мөр. */
-function MiniCard({
-  label,
-  value,
-  sub,
-  color,
-  title,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
-  color: string;
-  title?: string;
-}) {
-  return (
-    <div
-      className="flex min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-100 bg-slate-50/40 px-3.5 py-3 dark:border-[#37394d] dark:bg-white/[0.02]"
-      style={{ borderLeft: `3px solid ${color}` }}
-    >
-      <p className="whitespace-normal break-words text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="break-words text-[20px] font-bold leading-none tabular-nums" style={{ color }} title={title}>
-        {value}
-      </p>
-      {sub && <p className="whitespace-normal break-words text-[11px] tabular-nums text-slate-400">{sub}</p>}
-    </div>
-  );
-}
-
-/**
- * БҮЛЭГ — зүүн талд өнгөөр ялгасан картууд, баруун талд харгалзах чарт.
- * Карт нь ТОО, чарт нь ХАРЬЦААГ хэлнэ: хоёулаа нэг хайрцагт байх тул ямар
- * тоо ямар зурагт хамаарах нь эргэлзээгүй.
- */
-function Section({
-  title,
-  right,
-  children,
-}: {
-  title: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="ap-card px-5 py-4">
-      <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">{title}</p>
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* auto-rows-min — карт нь чартын өндрөөр СУНАХГҮЙ (текст дээд буланд
-            наалдаж, доор нь хоосон зай үлдэхээс сэргийлнэ). */}
-        <div className="grid auto-rows-min grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
-        {right}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.name} className="min-w-0" title={row.title}>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: row.color }} />
+              <span className="min-w-0 flex-1 truncate text-[11.5px] text-slate-600 dark:text-slate-300">{row.name}</span>
+              {row.inlineHint && (
+                <span className="shrink-0 text-[10.5px] tabular-nums text-slate-400">{row.inlineHint}</span>
+              )}
+              <span className="shrink-0 text-[12px] font-bold tabular-nums text-slate-800 dark:text-white">
+                {row.display ?? row.value.toLocaleString()}
+              </span>
+            </div>
+            {row.hint && (
+              <p className="pl-[18px] text-[10.5px] tabular-nums text-slate-400">{row.hint}</p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -221,20 +195,16 @@ function Tile({
   tone: string;
 }) {
   return (
-    <div
-      className="ap-card flex items-center gap-3.5 border-l-4 px-5 py-4"
-      style={{ borderLeftColor: tone }}
-    >
+    <div className="ap-card flex items-center gap-3 border-l-4 px-4 py-3" style={{ borderLeftColor: tone }}>
       <span
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
         style={{ background: `${tone}1a`, color: tone }}
       >
         <Icon className="h-5 w-5" />
       </span>
       <div className="min-w-0">
         <p className="whitespace-normal break-words text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
-        {/* Утгыг ӨӨРИЙН өнгөөр — бүх карт ижил харагдахаас сэргийлнэ. */}
-        <p className="break-words text-[22px] font-bold leading-tight tabular-nums" style={{ color: tone }}>
+        <p className="break-words text-[21px] font-bold leading-tight tabular-nums text-slate-800 dark:text-white">
           {value}
         </p>
         {hint && <p className="whitespace-normal break-words text-[11px] tabular-nums text-slate-400">{hint}</p>}
@@ -243,7 +213,10 @@ function Tile({
   );
 }
 
-/** Дүн + тоог нэг мөрөнд харуулах задаргааны жагсаалт. */
+/**
+ * Дүн + тоог нэг мөрөнд харуулах задаргааны жагсаалт. Мөр бүрийн доор нийтэд
+ * эзлэх хувийн нимгэн зурвас — тусдаа баганан чарт давхардуулахгүй.
+ */
 function BucketList({
   rows,
   total,
@@ -260,6 +233,7 @@ function BucketList({
   if (rows.length === 0) {
     return <p className="py-6 text-center text-[12px] text-slate-400">{emptyText}</p>;
   }
+  const max = Math.max(...rows.map((row) => row.amount), 1);
   return (
     <div className="divide-y divide-slate-100 dark:divide-[#37394d]">
       {rows.map((row) => {
@@ -285,24 +259,295 @@ function BucketList({
               onPick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-[#252630]" : "cursor-default"
             } ${active ? "bg-[#02c0ce]/8" : ""}`}
           >
-            <span className="min-w-0 flex-1 whitespace-normal break-words text-[12px] text-slate-600 dark:text-slate-300">
-              {row.name}
-            </span>
-            <span className="w-16 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] text-slate-600 dark:text-slate-300">{row.name}</span>
+              <div className="mt-1 h-1 rounded-full bg-slate-100 dark:bg-white/[0.06]">
+                <div
+                  className="h-1 rounded-full"
+                  style={{ width: `${(row.amount / max) * 100}%`, background: COLORS.amount }}
+                />
+              </div>
+            </div>
+            <span className="w-14 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
               {row.parcels.toLocaleString()} т.
             </span>
             <span
-              className="w-28 shrink-0 whitespace-nowrap text-right text-[12px] font-bold tabular-nums text-slate-800 dark:text-white"
+              className="w-24 shrink-0 whitespace-nowrap text-right text-[12px] font-bold tabular-nums text-slate-800 dark:text-white"
               title={money(row.amount)}
             >
               <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
             </span>
-            <span className="w-12 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
-              {share.toFixed(1)}%
-            </span>
+            <span className="w-11 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{share.toFixed(1)}%</span>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Оноор: шугаман график ───────────────────────────────────────────────────
+
+/**
+ * Он дараалсан байх ёстой: тэнхлэг ангиллын (category) тул дутуу он (жишээ
+ * нь 2023) алгасагдвал 2022→2024 нэг жилийн алхам мэт харагдаж өсөлт/бууралтыг
+ * гуйвуулна. Хамгийн бага-их оны хооронд дутуу оныг 0-ээр нөхнө.
+ */
+function fillYears(rows: FinanceBucket[]): { year: string; amount: number; granted: number; pending: number }[] {
+  if (rows.length === 0) return [];
+  const byYear = new Map(rows.map((row) => [Number(row.name), row]));
+  const years = Array.from(byYear.keys());
+  const out = [];
+  for (let y = Math.min(...years); y <= Math.max(...years); y++) {
+    const row = byYear.get(y);
+    out.push({ year: String(y), amount: row?.amount ?? 0, granted: row?.granted ?? 0, pending: row?.pending ?? 0 });
+  }
+  return out;
+}
+
+type SeriesKey = "amount" | "granted" | "pending";
+type MarkerShape = "circle" | "square" | "diamond";
+
+// Өнгө ганцаараа ялгах хэрэгсэл биш: Олгосон↔Хүлээгдэж буй хос нь
+// протанопид ΔE 6–7 (validate_palette WARN) тул ХЭЛБЭР (дугуй/дөрвөлжин/
+// ромб) ба Хүлээгдэж буйн тасархай шугам хоёрдогч кодчлол болно.
+const SERIES: { key: SeriesKey; label: string; shape: MarkerShape; dash?: string }[] = [
+  { key: "amount", label: "Батлагдсан", shape: "circle" },
+  { key: "granted", label: "Олгосон", shape: "square" },
+  { key: "pending", label: "Хүлээгдэж буй", shape: "diamond", dash: "6 4" },
+];
+
+// Харанхуй горимын алхмууд нь ижил өнгөний бараан хувилбар (OKLCH L 0.48–0.67),
+// харанхуй гадаргуу дээр validate_palette --mode dark-аар шалгагдсан.
+const SERIES_COLORS: Record<"light" | "dark", Record<SeriesKey, string>> = {
+  light: { amount: COLORS.amount, granted: COLORS.granted, pending: COLORS.pending },
+  dark: { amount: "#0891b2", granted: "#16a34a", pending: "#d97706" },
+};
+
+type YearRow = { year: string } & Record<SeriesKey, number>;
+
+/** Цэгийн тэмдэг — 2px гадаргуун хүрээтэй (шугам дээр давхцахад ялгарна). */
+function Marker({
+  cx,
+  cy,
+  shape,
+  color,
+  surface,
+  r = 4,
+}: {
+  cx?: number;
+  cy?: number;
+  shape: MarkerShape;
+  color: string;
+  surface: string;
+  r?: number;
+}) {
+  if (cx == null || cy == null) return null;
+  const common = { fill: color, stroke: surface, strokeWidth: 2 };
+  if (shape === "square") {
+    return <rect x={cx - r} y={cy - r} width={r * 2} height={r * 2} rx={1} {...common} />;
+  }
+  if (shape === "diamond") {
+    const d = r + 1;
+    return <path d={`M${cx} ${cy - d}L${cx + d} ${cy}L${cx} ${cy + d}L${cx - d} ${cy}Z`} {...common} />;
+  }
+  return <circle cx={cx} cy={cy} r={r} {...common} />;
+}
+
+/** Тайлбарын тэмдэг — шугамын хэв (тасархай эсэх) + цэгийн хэлбэр. */
+function SeriesSwatch({ color, shape, dash, surface }: { color: string; shape: MarkerShape; dash?: string; surface: string }) {
+  return (
+    <svg width="26" height="12" aria-hidden className="shrink-0">
+      <line x1="1" y1="6" x2="25" y2="6" stroke={color} strokeWidth="2" strokeDasharray={dash} />
+      <Marker cx={13} cy={6} shape={shape} color={color} surface={surface} r={3.5} />
+    </svg>
+  );
+}
+
+/** Өмнөх онтой харьцуулсан өөрчлөлт: ▲/▼ хувь (текстийн өнгөөр — цуврал өнгөөр биш). */
+function Change({ current, previous }: { current: number; previous?: number }) {
+  if (previous == null) return null;
+  if (previous === 0) {
+    return current > 0 ? <span className="text-slate-500 dark:text-slate-400">▲ шинэ</span> : null;
+  }
+  const pct = ((current - previous) / previous) * 100;
+  if (Math.abs(pct) < 0.05) return <span className="text-slate-400">— 0%</span>;
+  return (
+    <span className="text-slate-500 dark:text-slate-400">
+      {pct > 0 ? "▲" : "▼"} {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
+function YearTrendChart({ rows, undated }: { rows: YearRow[]; undated?: FinanceBucket }) {
+  const { resolvedTheme } = useTheme();
+  const dark = resolvedTheme === "dark";
+  const colors = SERIES_COLORS[dark ? "dark" : "light"];
+  const surface = dark ? "#1e1f27" : "#ffffff";
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+
+  return (
+    <Card
+      title="Оноор"
+      className="xl:col-span-2"
+      right={
+        undated && undated.amount > 0 ? (
+          <span className="text-[11px] text-slate-400" title={money(undated.amount)}>
+            Огноогүй: {billions(undated.amount)}
+          </span>
+        ) : undefined
+      }
+    >
+      {rows.length === 0 ? (
+        <p className="py-10 text-center text-[12px] text-slate-400">Өгөгдөл алга</p>
+      ) : (
+        <>
+          {/* Тайлбар: хэлбэр + тасархай хэв + СҮҮЛИЙН оны дүн ба өмнөх онтой харьцуулсан өөрчлөлт. */}
+          <div className="mb-1 flex flex-wrap gap-x-5 gap-y-1.5">
+            {SERIES.map((s) => (
+              <div key={s.key} className="flex items-center gap-2 text-[11.5px]">
+                <SeriesSwatch color={colors[s.key]} shape={s.shape} dash={s.dash} surface={surface} />
+                <span className="text-slate-600 dark:text-slate-300">{s.label}</span>
+                {last && (
+                  <span className="font-semibold tabular-nums text-slate-800 dark:text-white" title={money(last[s.key])}>
+                    {billions(last[s.key])}
+                  </span>
+                )}
+                {last && <span className="text-[10.5px] tabular-nums"><Change current={last[s.key]} previous={prev?.[s.key]} /></span>}
+              </div>
+            ))}
+          </div>
+          <div className="h-[230px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={rows} margin={{ top: 10, right: 12, bottom: 0, left: 0 }}>
+                <CartesianGrid stroke="rgba(148,163,184,0.18)" vertical={false} />
+                <XAxis
+                  dataKey="year"
+                  tick={{ fontSize: 11, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  padding={{ left: 16, right: 16 }}
+                />
+                <YAxis
+                  tickFormatter={(v) => `${(Number(v) / 1_000_000_000).toFixed(0)}`}
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={40}
+                  label={{ value: "тэрбум₮", angle: -90, position: "insideLeft", fontSize: 10, fill: "#94a3b8" }}
+                />
+                <Tooltip
+                  cursor={{ stroke: dark ? "#4a4d63" : "#cbd5e1", strokeWidth: 1 }}
+                  content={({ active, label }) => {
+                    if (!active || label == null) return null;
+                    const i = rows.findIndex((r) => r.year === String(label));
+                    if (i < 0) return null;
+                    return (
+                      <div style={TOOLTIP_STYLE} className="px-3 py-2 shadow-lg">
+                        <p className="mb-1 font-semibold">{label} он</p>
+                        {SERIES.map((s) => (
+                          <div key={s.key} className="flex items-center gap-2 py-0.5">
+                            <SeriesSwatch color={colors[s.key]} shape={s.shape} dash={s.dash} surface="#1e1f27" />
+                            <span className="min-w-[96px]">{s.label}</span>
+                            <span className="font-semibold tabular-nums">{money(rows[i][s.key])}</span>
+                            <span className="text-[10.5px] tabular-nums">
+                              <Change current={rows[i][s.key]} previous={rows[i - 1]?.[s.key]} />
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }}
+                />
+                {SERIES.map((s) => (
+                  <Line
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.label}
+                    stroke={colors[s.key]}
+                    strokeWidth={2}
+                    strokeDasharray={s.dash}
+                    isAnimationActive={false}
+                    dot={(p: { cx?: number; cy?: number; index?: number }) => (
+                      <Marker key={`${s.key}-${p.index}`} cx={p.cx} cy={p.cy} shape={s.shape} color={colors[s.key]} surface={surface} />
+                    )}
+                    activeDot={(p: { cx?: number; cy?: number; index?: number }) => (
+                      <Marker key={`${s.key}-a-${p.index}`} cx={p.cx} cy={p.cy} shape={s.shape} color={colors[s.key]} surface={surface} r={5.5} />
+                    )}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Хэвтээ баганан задаргаа (үнэлгээний бүтэц, захирамжийн төсөв). */
+function HBarList({
+  rows,
+  colorOf,
+  tooltip,
+}: {
+  rows: { key: string; name: string; value: number }[];
+  colorOf: (index: number, key: string) => string;
+  tooltip?: (key: string) => string;
+}) {
+  return (
+    <div style={{ height: Math.max(40, rows.length * 30 + 8) }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} layout="vertical" margin={{ top: 0, bottom: 0, left: 0, right: 88 }} barCategoryGap="22%">
+          <XAxis type="number" hide domain={[0, "dataMax"]} />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={124}
+            axisLine={false}
+            tickLine={false}
+            // Нэг мөрөнд (recharts-ийн автомат таслалт нэрийг хоёр мөр болгодог байв).
+            tick={({ x, y, payload }) => {
+              const v = String(payload?.value ?? "");
+              return (
+                <text x={Number(x) - 6} y={Number(y)} dy={4} textAnchor="end" fontSize={10.5} fill="#94a3b8">
+                  {v.length > 20 ? `${v.slice(0, 19)}…` : v}
+                </text>
+              );
+            }}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(148,163,184,0.08)" }}
+            contentStyle={TOOLTIP_STYLE}
+            formatter={(value, _name, item) => {
+              const key = (item?.payload as { key?: string } | undefined)?.key ?? "";
+              const extra = tooltip?.(key);
+              return [extra ? `${money(Number(value ?? 0))} · ${extra}` : money(Number(value ?? 0)), "Дүн"];
+            }}
+          />
+          <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} isAnimationActive={false}>
+            {rows.map((row, i) => (
+              <Cell key={row.key} fill={colorOf(i, row.key)} />
+            ))}
+            <LabelList
+              dataKey="value"
+              content={({ x, y, width, height, value }) => (
+                <text
+                  x={Number(x ?? 0) + Number(width ?? 0) + 6}
+                  y={Number(y ?? 0) + Number(height ?? 0) / 2}
+                  dy={3.5}
+                  fontSize={10}
+                  fontWeight={600}
+                  fill="#64748b"
+                >
+                  {billions(Number(value ?? 0))}
+                </text>
+              )}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -322,7 +567,6 @@ export function FinanceDashboard() {
       }),
   });
 
-  const byYear = useMemo(() => data?.by_year ?? [], [data]);
   const byDistrict = data?.by_district ?? [];
   const topAcquisitions = data?.top_acquisitions ?? [];
   const statusCards = data?.acquisition_status ?? [];
@@ -330,13 +574,12 @@ export function FinanceDashboard() {
   // ЯВЖ БУЙ (баталгаажаагүй) чөлөөлөлтүүд — үнэлгээний дүнгээр буурахаар,
   // хажууд нь олгосон дүн. Нэр урт байдаг тул тэнхлэгт богиносгоно.
   const acquisitionChart = topAcquisitions.map((row) => ({
-    name: row.name.length > 26 ? `${row.name.slice(0, 25)}…` : row.name,
+    name: row.name.length > 30 ? `${row.name.slice(0, 29)}…` : row.name,
     "Үнэлгээний дүн": row.amount,
     Олгосон: row.granted,
   }));
   const totalAmount = data?.total_amount ?? 0;
-  const districtName =
-    byDistrict.find((row) => row.key === district)?.name || district;
+  const pct = (part: number) => (totalAmount > 0 ? `${((part / totalAmount) * 100).toFixed(1)}%` : "0%");
 
   // Чөлөөлөлтийн "Санхүүжилт" табтай ИЖИЛ задаргаа.
   const stageRows = [
@@ -347,41 +590,45 @@ export function FinanceDashboard() {
   ];
   const stageTotal = stageRows.reduce((sum, row) => sum + row.count, 0);
   const structureRows = [
-    { name: "Газрын үнэлгээ", value: data?.land_amount ?? 0, color: COLORS.amount },
-    { name: "Үл хөдлөх", value: data?.real_state_amount ?? 0, color: COLORS.parcels },
-    { name: "Эд хөрөнгө, зардал", value: data?.property_amount ?? 0, color: COLORS.property },
+    { key: "land", name: "Газрын үнэлгээ", value: data?.land_amount ?? 0, color: COLORS.amount },
+    { key: "real_state", name: "Үл хөдлөх хөрөнгө", value: data?.real_state_amount ?? 0, color: COLORS.parcels },
+    { key: "property", name: "Эд хөрөнгө, зардал", value: data?.property_amount ?? 0, color: COLORS.property },
   ].filter((row) => row.value > 0);
-  const fundingTypes = data?.funding_by_type ?? [];
+  // Санхүүжилтийн төрөл — дүнгээр эхний 4 + «Бусад» (олон жижиг зүсэм
+  // донатыг уншигдахгүй болгож, картыг хэт өндөр болгодог байв).
+  const fundingTypes = useMemo(() => {
+    const rows = [...(data?.funding_by_type ?? [])]
+      .filter((row) => row.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+    if (rows.length <= 5) return rows.map((row) => ({ key: row.key, name: row.name, amount: row.amount }));
+    const rest = rows.slice(4).reduce((sum, row) => sum + row.amount, 0);
+    return [
+      ...rows.slice(0, 4).map((row) => ({ key: row.key, name: row.name, amount: row.amount })),
+      { key: "__other", name: `Бусад (${rows.length - 4})`, amount: rest },
+    ];
+  }, [data]);
+  const fundingTotal = fundingTypes.reduce((sum, row) => sum + row.amount, 0);
 
-  const yearChart = byYear.map((row) => ({
-    name: row.name,
-    Батлагдсан: row.amount,
-    Олгосон: row.granted,
-    "Хүлээгдэж буй": row.pending,
-  }));
-  // БҮХ дүүрэг/сумыг харуулна — өндрийг мөрийн тоогоор тохируулж гүйлгэнэ.
-  const districtChart = byDistrict.map((row) => ({ name: row.name, value: row.amount }));
-  const districtChartHeight = Math.max(200, districtChart.length * 28 + 24);
+  // Оноор — өсөх дарааллаар; огноогүй мөрийг шугамд оруулахгүй (тусад нь харуулна).
+  const { yearRows, undated } = useMemo(() => {
+    const all = data?.by_year ?? [];
+    return {
+      yearRows: fillYears(all.filter((row) => /^\d{4}$/.test(row.name.trim()))),
+      undated: all.find((row) => row.name.trim() === ""),
+    };
+  }, [data]);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[18px] font-bold text-slate-800 dark:text-white">
-            Санхүүгийн хяналтын самбар
-          </h1>
-          <p className="text-[12px] text-slate-400">
-            Нөхөх олговрын дүн, олголтын явц — он, дүүрэг, хороогоор
-          </p>
+          <h1 className="text-[18px] font-bold text-slate-800 dark:text-white">Санхүүгийн хяналтын самбар</h1>
+          <p className="text-[12px] text-slate-400">Нөхөх олговрын дүн, олголтын явц — он, дүүрэг, хороогоор</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <YearMultiSelect value={years} onChange={setYears} className="w-36" />
           {/* ДҮҮРЭГ — бүрэн жагсаалт (шүүлтээс хамаарахгүй). */}
-          <select
-            value={district}
-            onChange={(e) => setDistrict(e.target.value)}
-            className={SELECT_CLS}
-          >
+          <select value={district} onChange={(e) => setDistrict(e.target.value)} className={SELECT_CLS}>
             <option value="">Бүх дүүрэг / сум</option>
             {(data?.district_options ?? []).map((o) => (
               <option key={o.code} value={o.code}>
@@ -418,6 +665,7 @@ export function FinanceDashboard() {
         </div>
       ) : (
         <>
+          {/* 1. Гол үзүүлэлт */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Tile
               label="Нийт үнэлгээний дүн"
@@ -429,11 +677,7 @@ export function FinanceDashboard() {
             <Tile
               label="Олгосон дүн"
               value={<AbbrevAmount value={data?.granted_amount ?? 0}>{billions(data?.granted_amount ?? 0)}</AbbrevAmount>}
-              hint={
-                totalAmount > 0
-                  ? `${Math.round(((data?.granted_amount ?? 0) / totalAmount) * 100)}% гүйцэтгэл`
-                  : undefined
-              }
+              hint={totalAmount > 0 ? `${pct(data?.granted_amount ?? 0)} гүйцэтгэл` : undefined}
               Icon={Banknote}
               tone={COLORS.granted}
             />
@@ -453,358 +697,156 @@ export function FinanceDashboard() {
             />
           </div>
 
-          {/* ЧӨЛӨӨЛӨЛТ — төлөв бүрийн КАРТ + харьцааны ДОНАТ нэг хайрцагт. */}
-          <Section
-            title="Чөлөөлөлт төлөвөөр"
-            right={
+          {/* 2. Гурван донат нэг мөрөнд */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            <Card
+              title="Чөлөөлөлт төлөвөөр"
+              right={
+                <span className="text-[11px] font-semibold tabular-nums text-slate-500" title={money(totalAmount)}>
+                  {billions(totalAmount)}
+                </span>
+              }
+            >
               <DonutCard
                 rows={statusCards.map((row) => ({
                   name: row.name,
                   value: row.count,
                   color: ACQ_STATUS_COLORS[row.key] ?? COLORS.muted,
+                  hint: `${row.parcels.toLocaleString()} талбар · ${billions(row.amount)}`,
+                  title: money(row.amount),
                 }))}
                 centerValue={(data?.total_acquisitions ?? 0).toLocaleString()}
                 centerLabel="чөлөөлөлт"
                 emptyText="Чөлөөлөлт алга"
               />
-            }
-          >
-            <MiniCard
-              label="Нийт чөлөөлөлт"
-              value={(data?.total_acquisitions ?? 0).toLocaleString()}
-              sub={<AbbrevAmount value={totalAmount}>{billions(totalAmount)}</AbbrevAmount>}
-              color={COLORS.amount}
-              title={money(totalAmount)}
-            />
-            {statusCards.map((row) => (
-              <MiniCard
-                key={row.key}
-                label={row.name}
-                value={row.count.toLocaleString()}
-                sub={
-                  <>
-                    {row.parcels.toLocaleString()} талбар ·{" "}
-                    <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
-                  </>
-                }
-                color={ACQ_STATUS_COLORS[row.key] ?? COLORS.muted}
-                title={money(row.amount)}
-              />
-            ))}
-          </Section>
-
-          {/* НЭГЖ ТАЛБАРЫН ГҮЙЦЭТГЭЛ — шат бүрийн карт + донат. */}
-          <Section
-            title="Нэгж талбарын гүйцэтгэл"
-            right={
+            </Card>
+            <Card title="Нэгж талбарын гүйцэтгэл">
               <DonutCard
                 rows={stageRows.map((row) => ({
                   name: row.name,
                   value: row.count,
                   color: row.color,
+                  hint: `${stageTotal > 0 ? ((row.count / stageTotal) * 100).toFixed(1) : "0.0"}% · ${billions(row.amount)}`,
+                  title: money(row.amount),
                 }))}
                 centerValue={stageTotal.toLocaleString()}
                 centerLabel="нэгж талбар"
                 emptyText="Нэгж талбар алга"
               />
-            }
-          >
-            {stageRows.map((row) => (
-              <MiniCard
-                key={row.name}
-                label={row.name}
-                value={row.count.toLocaleString()}
-                sub={
-                  <>
-                    {stageTotal > 0 ? ((row.count / stageTotal) * 100).toFixed(1) : "0.0"}% ·{" "}
-                    <AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>
-                  </>
-                }
-                color={row.color}
-                title={money(row.amount)}
-              />
-            ))}
-          </Section>
-
-          {/* ЗАХИРАМЖИЙН ТӨСӨВ — карт + хэвтээ багана. */}
-          {budgetCards.length > 0 && (
-            <Section
-              title="Захирамжийн төсвөөр"
+            </Card>
+            <Card
+              title="Санхүүжилтийн төрлөөр"
+              className="lg:col-span-2 xl:col-span-1"
               right={
-                <div style={{ height: Math.max(180, budgetCards.length * 32 + 24) }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={budgetCards.map((row) => ({ name: row.name, value: row.amount }))}
-                      layout="vertical"
-                      margin={{ left: 4, right: 72 }}
-                    >
-                      <XAxis type="number" hide />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={92}
-                        tick={{ fontSize: 10, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                        contentStyle={TOOLTIP_STYLE}
-                        formatter={(value) => money(Number(value ?? 0))}
-                      />
-                      <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={14}>
-                        {budgetCards.map((row, i) => (
-                          <Cell key={row.key} fill={PALETTE[i % PALETTE.length]} />
-                        ))}
-                        <LabelList
-                          dataKey="value"
-                          position="right"
-                          formatter={(value: unknown) => billions(Number(value ?? 0))}
-                          style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+                <span className="text-[11px] font-semibold tabular-nums text-slate-500" title={money(data?.funding_total ?? 0)}>
+                  {billions(data?.funding_total ?? 0)}
+                </span>
               }
             >
-              {budgetCards.map((row, i) => (
-                <MiniCard
-                  key={row.key}
-                  label={row.name}
-                  value={<AbbrevAmount value={row.amount}>{billions(row.amount)}</AbbrevAmount>}
-                  sub={
-                    <>
-                      {row.count.toLocaleString()} чөлөөлөлт · олгосон{" "}
-                      <AbbrevAmount value={row.granted}>{billions(row.granted)}</AbbrevAmount>
-                    </>
-                  }
-                  color={PALETTE[i % PALETTE.length]}
-                  title={money(row.amount)}
-                />
-              ))}
-            </Section>
-          )}
-
-          {/* ҮНЭЛГЭЭНИЙ АНГИЛАЛ — карт + хэвтээ багана (нэг хайрцагт). */}
-          <Section
-            title="Үнэлгээний бүтэц"
-            right={
-              structureRows.length === 0 ? undefined : (
-                <div style={{ height: 180 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={structureRows}
-                      layout="vertical"
-                      margin={{ top: 4, bottom: 4, left: 4, right: 72 }}
-                      barCategoryGap="14%"
-                    >
-                      <XAxis type="number" hide domain={[0, "dataMax"]} />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={96}
-                        tick={{ fontSize: 10, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                        contentStyle={TOOLTIP_STYLE}
-                        formatter={(value) => money(Number(value ?? 0))}
-                      />
-                      <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={22}>
-                        {structureRows.map((row) => (
-                          <Cell key={row.name} fill={row.color} />
-                        ))}
-                        <LabelList
-                          dataKey="value"
-                          position="right"
-                          formatter={(value: unknown) => billions(Number(value ?? 0))}
-                          style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )
-            }
-          >
-            <MiniCard
-              label="Газрын үнэлгээ"
-              value={<AbbrevAmount value={data?.land_amount ?? 0}>{billions(data?.land_amount ?? 0)}</AbbrevAmount>}
-              sub={totalAmount > 0 ? `${Math.round(((data?.land_amount ?? 0) / totalAmount) * 100)}%` : undefined}
-              color={COLORS.amount}
-              title={money(data?.land_amount ?? 0)}
-            />
-            <MiniCard
-              label="Үл хөдлөх хөрөнгө"
-              value={<AbbrevAmount value={data?.real_state_amount ?? 0}>{billions(data?.real_state_amount ?? 0)}</AbbrevAmount>}
-              sub={totalAmount > 0 ? `${Math.round(((data?.real_state_amount ?? 0) / totalAmount) * 100)}%` : undefined}
-              color={COLORS.parcels}
-              title={money(data?.real_state_amount ?? 0)}
-            />
-            <MiniCard
-              label="Эд хөрөнгө, зардал"
-              value={<AbbrevAmount value={data?.property_amount ?? 0}>{billions(data?.property_amount ?? 0)}</AbbrevAmount>}
-              sub={totalAmount > 0 ? `${Math.round(((data?.property_amount ?? 0) / totalAmount) * 100)}%` : undefined}
-              color={COLORS.property}
-              title={money(data?.property_amount ?? 0)}
-            />
-          </Section>
-
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* САНХҮҮЖИЛТИЙН ТӨРЛӨӨР */}
-            <div className="ap-card px-5 py-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                  Санхүүжилтийн төрлөөр
-                </p>
-                <p className="text-[12px] font-bold tabular-nums text-slate-700 dark:text-slate-200" title={money(data?.funding_total ?? 0)}>
-                  <AbbrevAmount value={data?.funding_total ?? 0}>{billions(data?.funding_total ?? 0)}</AbbrevAmount>
-                </p>
-              </div>
               {fundingTypes.length === 0 ? (
-                <p className="py-10 text-center text-[12px] text-slate-400">
-                  Санхүүжилтийн эх үүсвэр бүртгэгдээгүй
-                </p>
+                <p className="py-10 text-center text-[12px] text-slate-400">Санхүүжилтийн эх үүсвэр бүртгэгдээгүй</p>
               ) : (
-                <div className="h-[180px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={fundingTypes} dataKey="amount" nameKey="name" innerRadius={38} outerRadius={62} paddingAngle={3}>
-                        {fundingTypes.map((row, i) => (
-                          <Cell key={row.key} fill={Object.values(COLORS)[i % Object.values(COLORS).length]} />
-                        ))}
-                      </Pie>
-                      <Legend verticalAlign="bottom" height={24} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => money(Number(value ?? 0))} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                <DonutCard
+                  rows={fundingTypes.map((row, i) => ({
+                    name: row.name,
+                    value: row.amount,
+                    color: row.key === "__other" ? COLORS.muted : PALETTE[i % PALETTE.length],
+                    display: billions(row.amount),
+                    hint: `${fundingTotal > 0 ? ((row.amount / fundingTotal) * 100).toFixed(1) : "0.0"}%`,
+                    title: `${row.name} · ${money(row.amount)}`,
+                  }))}
+                  centerValue={(fundingTotal / 1_000_000_000).toFixed(1)}
+                  centerLabel="тэрбум₮"
+                  emptyText="Санхүүжилтийн эх үүсвэр бүртгэгдээгүй"
+                />
+              )}
+            </Card>
+          </div>
+
+          {/* 3. Оноор (шугаман) · бүтэц + төсөв */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <YearTrendChart rows={yearRows} undated={undated} />
+            <div className="flex flex-col gap-4">
+              <Card title="Үнэлгээний бүтэц" className="flex-1">
+                {structureRows.length === 0 ? (
+                  <p className="py-6 text-center text-[12px] text-slate-400">Өгөгдөл алга</p>
+                ) : (
+                  <HBarList
+                    rows={structureRows}
+                    colorOf={(i) => structureRows[i].color}
+                    tooltip={(key) => pct(structureRows.find((row) => row.key === key)?.value ?? 0)}
+                  />
+                )}
+              </Card>
+              {budgetCards.length > 0 && (
+                <Card title="Захирамжийн төсвөөр" className="flex-1">
+                  <HBarList
+                    rows={budgetCards.map((row) => ({ key: row.key, name: row.name, value: row.amount }))}
+                    colorOf={(i) => PALETTE[i % PALETTE.length]}
+                    tooltip={(key) => {
+                      const row = budgetCards.find((b) => b.key === key);
+                      return row ? `${row.count.toLocaleString()} чөлөөлөлт · олгосон ${billions(row.granted)}` : "";
+                    }}
+                  />
+                </Card>
               )}
             </div>
           </div>
 
-          {/* ОНООР — дүнгийн явц (баталгаажсан / олгосон / хүлээгдэж буй). */}
-          <div className="ap-card px-5 py-4">
-            <p className="mb-3 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-              Оноор
-            </p>
-            {yearChart.length === 0 ? (
-              <p className="py-10 text-center text-[12px] text-slate-400">Өгөгдөл алга</p>
-            ) : (
-              <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={yearChart} margin={{ top: 8, right: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.2)" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis
-                      tickFormatter={(v) => `${(Number(v) / 1_000_000_000).toFixed(1)}`}
-                      tick={{ fontSize: 10, fill: "#94a3b8" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={44}
-                      label={{ value: "тэрбум₮", angle: -90, position: "insideLeft", fontSize: 10, fill: "#94a3b8" }}
-                    />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => money(Number(value ?? 0))} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Батлагдсан" fill={COLORS.amount} radius={[4, 4, 0, 0]} barSize={18} />
-                    <Bar dataKey="Олгосон" fill={COLORS.granted} radius={[4, 4, 0, 0]} barSize={18} />
-                    <Bar dataKey="Хүлээгдэж буй" fill={COLORS.pending} radius={[4, 4, 0, 0]} barSize={18} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-
+          {/* 4. Дүүрэг/сумаар (дарж шүүнэ) · явж буй чөлөөлөлтүүд */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {/* ДҮҮРЭГ/СУМААР — дарж шүүлт болгоно. */}
-            <div className="ap-card px-5 py-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                  Дүүрэг / сумаар
-                </p>
-                <p className="text-[11px] text-slate-400">{byDistrict.length} нэгж</p>
+            <Card
+              title="Дүүрэг / сумаар"
+              align="start"
+              right={<span className="text-[11px] text-slate-400">{byDistrict.length} нэгж · дарж шүүнэ</span>}
+            >
+              <div className="max-h-[360px] overflow-y-auto">
+                <BucketList
+                  rows={byDistrict}
+                  total={totalAmount}
+                  emptyText="Дүүргийн мэдээлэл алга"
+                  onPick={(key) => setDistrict(key)}
+                  activeKey={district}
+                />
               </div>
-              {/* Бүх дүүрэг багтахаар өндөр нь мөрийн тоогоор; хэт урт бол гүйлгэнэ. */}
-              {districtChart.length > 0 && (
-                <div className="overflow-y-auto" style={{ maxHeight: 420 }}>
-                  <div style={{ height: districtChartHeight }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={districtChart} layout="vertical" margin={{ left: 4, right: 76 }}>
-                      <XAxis type="number" hide />
-                      <YAxis
-                        type="category"
-                        dataKey="name"
-                        width={110}
-                        tick={{ fontSize: 11, fill: "#94a3b8" }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <Tooltip
-                        cursor={{ fill: "rgba(148,163,184,0.08)" }}
-                        contentStyle={TOOLTIP_STYLE}
-                        formatter={(value) => money(Number(value ?? 0))}
-                      />
-                      <Bar dataKey="value" radius={[0, 5, 5, 0]} barSize={16}>
-                        {districtChart.map((row) => (
-                          <Cell key={row.name} fill={COLORS.amount} />
-                        ))}
-                        <LabelList
-                          dataKey="value"
-                          position="right"
-                          formatter={(value: unknown) => billions(Number(value ?? 0))}
-                          style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
-                        />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-              <BucketList
-                rows={byDistrict}
-                total={totalAmount}
-                emptyText="Дүүргийн мэдээлэл алга"
-                onPick={(key) => setDistrict(key)}
-                activeKey={district}
-              />
-            </div>
+            </Card>
 
-            {/* ЧӨЛӨӨЛӨЛТӨӨР — хамгийн их дүнтэй 10 чөлөөлөлт. */}
-            <div className="ap-card px-5 py-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                  Явж буй чөлөөлөлтүүд
-                </p>
-                <p className="text-[11px] text-slate-400">
+            <Card
+              title="Явж буй чөлөөлөлтүүд"
+              align="start"
+              right={
+                <span className="text-[11px] text-slate-400">
                   Нийт {(data?.total_acquisitions ?? 0).toLocaleString()} чөлөөлөлт
-                </p>
-              </div>
+                </span>
+              }
+            >
               {topAcquisitions.length === 0 ? (
                 <p className="py-10 text-center text-[12px] text-slate-400">Өгөгдөл алга</p>
               ) : (
-                <div className="overflow-y-auto" style={{ maxHeight: 420 }}>
-                  <div style={{ height: Math.max(200, topAcquisitions.length * 30 + 24) }}>
+                <div className="max-h-[360px] overflow-y-auto">
+                  <div style={{ height: Math.max(160, topAcquisitions.length * 30 + 32) }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={acquisitionChart} layout="vertical" margin={{ left: 4, right: 76 }}>
+                      <BarChart data={acquisitionChart} layout="vertical" margin={{ left: 0, right: 76 }}>
                         <XAxis type="number" hide />
                         <YAxis
                           type="category"
                           dataKey="name"
-                          width={150}
-                          tick={{ fontSize: 10, fill: "#94a3b8" }}
+                          width={205}
                           axisLine={false}
                           tickLine={false}
+                          tick={({ x, y, payload }) => (
+                            <text x={Number(x) - 6} y={Number(y)} dy={4} textAnchor="end" fontSize={10.5} fill="#94a3b8">
+                              {String(payload?.value ?? "")}
+                            </text>
+                          )}
                         />
                         <Tooltip
                           cursor={{ fill: "rgba(148,163,184,0.08)" }}
                           contentStyle={TOOLTIP_STYLE}
                           formatter={(value) => money(Number(value ?? 0))}
                         />
-                        <Legend wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="Үнэлгээний дүн" radius={[0, 5, 5, 0]} barSize={11} fill={COLORS.amount}>
+                        <Legend verticalAlign="top" align="right" height={22} wrapperStyle={{ fontSize: 11 }} />
+                        <Bar dataKey="Үнэлгээний дүн" radius={[0, 4, 4, 0]} barSize={10} fill={COLORS.amount} isAnimationActive={false}>
                           <LabelList
                             dataKey="Үнэлгээний дүн"
                             position="right"
@@ -812,15 +854,14 @@ export function FinanceDashboard() {
                             style={{ fill: "#64748b", fontSize: 10, fontWeight: 600 }}
                           />
                         </Bar>
-                        <Bar dataKey="Олгосон" radius={[0, 5, 5, 0]} barSize={11} fill={COLORS.granted} />
+                        <Bar dataKey="Олгосон" radius={[0, 4, 4, 0]} barSize={10} fill={COLORS.granted} isAnimationActive={false} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
-
         </>
       )}
     </div>
