@@ -18,7 +18,11 @@ export const LAYER_PARAMS = ["layers", "query_layers", "layer", "typename", "typ
  *  - storedquery_id — серверт тодорхойлсон асуулга
  *  - filter — XML шүүлт (<ResourceId> агуулж болно)
  *  - sld / sld_body — өөр давхаргыг (NamedLayer) зурагт нэмэх, гадаад хаяг татуулах
- *  - viewparams — SQL view-ийн параметр
+ *
+ * `viewparams` ЭНД БАЙХГҮЙ: нэгж талбарын төлөвийн давхарга (v_parcel_status
+ * SQL view) газрын зургийг сараар харуулахдаа `VIEWPARAMS=month:YYYY-MM`-ийг
+ * ҮРГЭЛЖ илгээдэг — хориглоход бүх нэгж талбар газрын зургаас алга болсон.
+ * Оронд нь утгыг isAllowedViewParams-аар нарийн шалгана.
  */
 export const FORBIDDEN_PARAMS = [
   "featureid",
@@ -27,8 +31,30 @@ export const FORBIDDEN_PARAMS = [
   "filter",
   "sld",
   "sld_body",
-  "viewparams",
 ] as const;
+
+/**
+ * SQL view-ийн параметр (`VIEWPARAMS`) — ЗӨВХӨН `month:current` эсвэл
+ * `month:YYYY-MM` (v_parcel_status-ийн цорын ганц параметр; GeoServer дээрх
+ * regexp-тэй ижил). Өөр түлхүүр, олон утга (`;`/`,`), бусад тэмдэгт хориотой.
+ * Параметр байхгүй бол зөвшөөрнө.
+ */
+const VIEWPARAMS_RE = /^month:(current|\d{4}-(0[1-9]|1[0-2]))$/;
+
+export function isAllowedViewParams(params: URLSearchParams): boolean {
+  let ok = true;
+  params.forEach((value, key) => {
+    if (key.toLowerCase() === "viewparams" && !VIEWPARAMS_RE.test(value)) ok = false;
+  });
+  return ok;
+}
+
+/** Нээлттэй гарцад SQL view-ийн параметр огт хэрэггүй — хасна. */
+export function stripViewParams(params: URLSearchParams): void {
+  for (const k of keysOf(params)) {
+    if (k.toLowerCase() === "viewparams") params.delete(k);
+  }
+}
 
 function keysOf(params: URLSearchParams): string[] {
   const keys: string[] = [];
@@ -118,7 +144,7 @@ export function isSafeCqlFragment(cql: string): boolean {
  * НӨГӨӨГ нь хэрэглэвэл (жишээ нь `CQL_FILTER=…&cql_filter=1=1`) хумилт
  * тойрогдоно — ийм хүсэлтийг бүхэлд нь татгалзана.
  */
-export const SINGLE_VALUE_PARAMS = ["request", "service", "version", "cql_filter", "count", "maxfeatures", "feature_count", "env"] as const;
+export const SINGLE_VALUE_PARAMS = ["request", "service", "version", "cql_filter", "count", "maxfeatures", "feature_count", "env", "viewparams"] as const;
 
 export function hasDuplicateControlParam(params: URLSearchParams): boolean {
   const seen = new Set<string>();
