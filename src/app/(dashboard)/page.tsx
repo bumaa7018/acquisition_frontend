@@ -108,6 +108,10 @@ function AcquisitionSelect({
   const [debounced, setDebounced] = useState("");
   const [displayLabel, setDisplayLabel] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Сонголт хийсний дараа input алга болж focus алдагддаг — тэгвэл Enter
+  // шүүлтийн мөрөнд хүрэхгүй. Сонгосон утгын шошго руу focus шилжүүлнэ.
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const refocusLabel = useRef(false);
   const isProfOrg = isProfessionalOrg();
 
   useEffect(() => {
@@ -150,6 +154,7 @@ function AcquisitionSelect({
     setQuery("");
     setDisplayLabel(acq.acquisition_name);
     onSelect(acq.id, acq.acquisition_name);
+    refocusLabel.current = true;
     setOpen(false);
   }
 
@@ -161,6 +166,13 @@ function AcquisitionSelect({
     setOpen(false);
   }
 
+  useEffect(() => {
+    if (!open && refocusLabel.current) {
+      refocusLabel.current = false;
+      labelRef.current?.focus();
+    }
+  }, [open]);
+
   return (
     <div ref={wrapRef} className={`relative ${className ?? ""}`}>
       <div
@@ -169,8 +181,10 @@ function AcquisitionSelect({
       >
         {selectedId && !open ? (
           <span
+            ref={labelRef}
+            tabIndex={0}
             title={displayLabel}
-            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate"
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate outline-none"
           >
             {displayLabel}
           </span>
@@ -264,6 +278,10 @@ function EmployeeSelect({
   const [debounced, setDebounced] = useState("");
   const [displayLabel, setDisplayLabel] = useState("");
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Сонголт хийсний дараа input алга болж focus алдагддаг — тэгвэл Enter
+  // шүүлтийн мөрөнд хүрэхгүй. Сонгосон утгын шошго руу focus шилжүүлнэ.
+  const labelRef = useRef<HTMLSpanElement>(null);
+  const refocusLabel = useRef(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query), 300);
@@ -292,6 +310,7 @@ function EmployeeSelect({
     setQuery("");
     setDisplayLabel(label);
     onSelect(user.id, label);
+    refocusLabel.current = true;
     setOpen(false);
   }
 
@@ -303,6 +322,13 @@ function EmployeeSelect({
     setOpen(false);
   }
 
+  useEffect(() => {
+    if (!open && refocusLabel.current) {
+      refocusLabel.current = false;
+      labelRef.current?.focus();
+    }
+  }, [open]);
+
   return (
     <div ref={wrapRef} className={`relative ${className ?? ""}`}>
       <div
@@ -311,8 +337,10 @@ function EmployeeSelect({
       >
         {selectedId && !open ? (
           <span
+            ref={labelRef}
+            tabIndex={0}
             title={displayLabel}
-            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate"
+            className="flex-1 min-w-0 text-[13px] text-slate-800 dark:text-slate-200 truncate outline-none"
           >
             {displayLabel}
           </span>
