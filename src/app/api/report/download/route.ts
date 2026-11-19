@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
   const rightType = searchParams.get("right_type") ?? "";
   const landuse = searchParams.get("landuse") ?? "";
   const compType = searchParams.get("compensation_type") ?? "";
+  const genCatId = searchParams.get("general_category_id") ?? "";
+  const subCatId = searchParams.get("sub_category_id") ?? "";
 
   const encoder = new TextEncoder();
   const stream = new TransformStream<string, Uint8Array>({
@@ -87,6 +89,8 @@ export async function GET(request: NextRequest) {
         if (landuse) q.set("landuse", landuse);
         if (yr) q.set("year", yr);
         if (compType) q.set("compensation_type", compType);
+        if (genCatId) q.set("general_category_id", genCatId);
+        if (subCatId) q.set("sub_category_id", subCatId);
         return `/api/v1/report/download?${q.toString()}`;
       };
 
