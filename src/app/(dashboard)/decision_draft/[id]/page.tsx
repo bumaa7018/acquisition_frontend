@@ -43,6 +43,7 @@ import { LinkParcelDialog } from "./_components/link_parcel_dialog";
 import { ConfirmDecisionDialog } from "./_components/confirm_decision_dialog";
 import { FundingSourcesCard } from "./_components/funding_sources_card";
 import { useParcelStatusStyle } from "@/lib/use-parcel-status-style";
+import { fundingLinkLabel } from "@/lib/funding-year";
 
 export default function DecisionDraftDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -455,6 +456,7 @@ export default function DecisionDraftDetailPage() {
         draftId={id}
         items={fundingSources}
         editable={editable}
+        defaultYear={item.duration_year ?? null}
         onChanged={refresh}
       />
 
@@ -578,7 +580,7 @@ export default function DecisionDraftDetailPage() {
                             <option value="">— Сонгох —</option>
                             {fundingSources.map((f) => (
                               <option key={f.id} value={f.id}>
-                                {f.organization_name} — {f.source_type}
+                                {fundingLinkLabel(f)}
                               </option>
                             ))}
                           </select>
@@ -586,7 +588,11 @@ export default function DecisionDraftDetailPage() {
                           <div className="flex min-w-[180px] max-w-[280px] items-start gap-1.5">
                             <span className="min-w-0 whitespace-normal break-words text-slate-600 dark:text-slate-300">
                               {p.funding_organization
-                                ? `${p.funding_organization} — ${p.funding_source_type}`
+                                ? fundingLinkLabel({
+                                    organization_name: p.funding_organization,
+                                    source_type: p.funding_source_type,
+                                    year: p.funding_year,
+                                  })
                                 : "—"}
                             </span>
                             {editable && !isRemoved && (

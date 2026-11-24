@@ -8,6 +8,7 @@ import { formatBillion, formatMoneyExact, getApiError } from "@/lib/utils";
 import { AmountHint } from "@/components/ui/amount-hint";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { DecisionDraftFundingLink, FundingSourceOption } from "@/types";
+import { currentFundingYear, fundingYearOptions, isValidFundingYear } from "@/lib/funding-year";
 
 function normalizeFundingText(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
@@ -40,23 +41,32 @@ function parseFundingSourceInput(value: string): { organization_name: string; so
 
 /**
  * Захирамжийн санхүүгийн эх үүсвэр — төслийг үүсгэсний ДАРАА энд олноор нэмнэ.
+ * Эх үүсвэр бүр ОНООР нэмэгдэнэ: нэг эх үүсвэр он бүрт өөр дүнтэй (тусдаа
+ * мөр) байж болно; (эх үүсвэр, он) давхардахгүй.
  * Баталгаажсан захирамжид нэмэх/хасах боломжгүй (backend мөн шалгана).
  */
 export function FundingSourcesCard({
   draftId,
   items,
   editable,
+  defaultYear,
   onChanged,
 }: {
   draftId: string;
   items: DecisionDraftFundingLink[];
   editable: boolean;
+  /** Анхдагч санхүүжилтийн он — төслийн «Хугацаа (он)». */
+  defaultYear?: number | null;
   onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [amountText, setAmountText] = useState("");
+  const [yearChoice, setYearChoice] = useState<number | null>(null);
+  const year =
+    yearChoice ?? (defaultYear != null && isValidFundingYear(defaultYear) ? defaultYear : currentFundingYear());
+  const yearOptions = fundingYearOptions([year, ...items.map((i) => i.year)]);
   const [showOptions, setShowOptions] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<DecisionDraftFundingLink | null>(null);
 
@@ -91,11 +101,11 @@ export function FundingSourcesCard({
         fundingSourceId = created.id;
       }
 
-      if (items.some((i) => i.funding_source_id === fundingSourceId)) {
+      if (items.some((i) => i.funding_source_id === fundingSourceId && i.year === year)) {
         throw new Error("already added");
       }
 
-      const links = await decisionDraftApi.addFundingSource(draftId, fundingSourceId, amount);
+      const links = await decisionDraftApi.addFundingSource(draftId, fundingSourceId, amount, year);
       return { links, createdSource };
     },
     onSuccess: ({ createdSource }) => {
@@ -108,6 +118,7 @@ export function FundingSourcesCard({
       }
       setSourceText("");
       setAmountText("");
+      setYearChoice(null);
       setShowOptions(false);
       setAdding(false);
       queryClient.invalidateQueries({ queryKey: ["funding-source-options"] });
@@ -116,7 +127,7 @@ export function FundingSourcesCard({
     },
     onError: (err) => {
       if (err instanceof Error && err.message === "already added") {
-        toast.error("Энэ санхүүгийн эх үүсвэр аль хэдийн нэмэгдсэн байна");
+        toast.error(`Энэ эх үүсвэрийн ${year} оны санхүүжилт аль хэдийн нэмэгдсэн байна`);
         return;
       }
       if (err instanceof Error && err.message === "invalid amount") {
@@ -141,9 +152,10 @@ export function FundingSourcesCard({
   const inp =
     "h-9 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#1e1f27] px-3 text-[13px] text-slate-800 dark:text-slate-200 outline-none focus:border-[#02c0ce] focus:ring-2 focus:ring-[#02c0ce]/15 transition-all";
 
-  // funding_source хүснэгтийн бүх мөрийг сонголтод харуулна. Аль хэдийн энэ
-  // захирамжид нэмэгдсэн мөрийг нуухгүй, зөвхөн дахин холбохоос хамгаална.
-  const added = new Set(items.map((i) => i.funding_source_id));
+  // funding_source хүснэгтийн бүх мөрийг сонголтод харуулна. СОНГОСОН ОНД аль
+  // хэдийн нэмэгдсэн мөрийг нуухгүй, зөвхөн дахин холбохоос хамгаална (өөр
+  // онд нэмж болно).
+  const added = new Set(items.filter((i) => i.year === year).map((i) => i.funding_source_id));
   const sourceTextTrimmed = sourceText.trim();
   const amount = Number(amountText.replace(/,/g, ""));
   const amountValid = amountText.trim() !== "" && Number.isFinite(amount) && amount >= 0;
@@ -286,7 +298,7 @@ export function FundingSourcesCard({
                                     </span>
                                     {isAdded && (
                                       <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 dark:bg-[#252630] dark:text-slate-400">
-                                        Нэмэгдсэн
+                                        {year} онд нэмэгдсэн
                                       </span>
                                     )}
                                   </span>
@@ -301,7 +313,7 @@ export function FundingSourcesCard({
                           })
                         ) : alreadyAddedOption ? (
                           <div className="px-3 py-3 text-[12px] text-slate-500 dark:text-slate-400">
-                            Энэ эх үүсвэр аль хэдийн нэмэгдсэн байна.
+                            Энэ эх үүсвэрийн {year} оны санхүүжилт аль хэдийн нэмэгдсэн байна.
                           </div>
                         ) : !canCreateFromText ? (
                           <div className="px-3 py-3 text-[12px] text-slate-500 dark:text-slate-400">
@@ -316,12 +328,29 @@ export function FundingSourcesCard({
               <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">
                 {sourceTextTrimmed
                   ? alreadyAddedOption
-                    ? "Энэ эх үүсвэр аль хэдийн нэмэгдсэн байна."
+                    ? `Энэ эх үүсвэрийн ${year} оны санхүүжилт аль хэдийн нэмэгдсэн — өөр он сонгоно уу.`
                     : selectedOption
                     ? "Сонгосон мөрийг захирамжийн төсөлтэй холбоно."
                     : "Сонголтоос гадуур утга тул funding_source-д шинээр бүртгээд холбоно."
                   : "Жагсаалтаас сонгох эсвэл талбар дээр шууд бичнэ."}
               </p>
+            </div>
+
+            <div className="w-full min-w-0 xl:w-32">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                Он
+              </p>
+              <select
+                value={year}
+                onChange={(e) => setYearChoice(Number(e.target.value))}
+                className={`${inp} w-full tabular-nums`}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y} он
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="w-full min-w-0 xl:w-52">
@@ -374,6 +403,7 @@ export function FundingSourcesCard({
                   setAdding(false);
                   setSourceText("");
                   setAmountText("");
+                  setYearChoice(null);
                   setShowOptions(false);
                 }}
                 className="h-9 px-4 rounded-lg border border-slate-200 dark:border-[#37394d] text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-[#252630] transition-colors"
@@ -395,7 +425,7 @@ export function FundingSourcesCard({
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 dark:border-[#37394d] bg-slate-50/80 dark:bg-[#1a1d20]">
-                {["Байгууллага", "Төрөл", "Дүн", "Чөлөөлөлт", "Тайлбар", ""].map((h) => (
+                {["Он", "Байгууллага", "Төрөл", "Дүн", "Чөлөөлөлт", "Тайлбар", ""].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap"
@@ -415,6 +445,9 @@ export function FundingSourcesCard({
                     key={f.id}
                     className="hover:bg-slate-50/60 dark:hover:bg-[#252630] transition-colors"
                   >
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums font-semibold text-slate-700 dark:text-slate-200">
+                      {f.year ?? "—"}
+                    </td>
                     <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">
                       <p className="min-w-[160px] max-w-[300px] whitespace-normal break-words">{f.organization_name}</p>
                     </td>
@@ -467,7 +500,11 @@ export function FundingSourcesCard({
       <ConfirmDialog
         open={!!removeTarget}
         title="Санхүүгийн эх үүсвэрийг хасах уу?"
-        description={removeTarget?.organization_name}
+        description={
+          removeTarget
+            ? `${removeTarget.organization_name}${removeTarget.year ? ` · ${removeTarget.year} он` : ""}`
+            : undefined
+        }
         confirmLabel="Хасах"
         onConfirm={() => removeTarget && removeMutation.mutate(removeTarget.id)}
         onClose={() => setRemoveTarget(null)}

@@ -55,23 +55,27 @@ export function billions(value: number): string {
 export interface FinancingStats {
   /** Чөлөөлөлтийн нийт нэгж талбар. */
   parcelTotal: number;
-  /** Нөхөх олговор ОЛГОГДСОН нэгж талбар. */
+  /** Захирамж гарсан нэгж талбар. */
   parcelPaid: number;
   /** Үнэлгээ баталгаажсан (олговор зөвшөөрөгдсөн) нэгж талбар. */
   parcelApproved: number;
   /** Нийт үнэлгээний дүн — бүх олговрын мөрийн нийлбэр. */
   totalAmount: number;
   /**
-   * Нэгж талбарын гүйцэтгэлийн ТАСАРХАЙ шатууд — тоо ба мөнгөн дүн.
-   * Тооны нийлбэр нь `parcelTotal` (хувь нь 100% болно). Нэгж талбар бүр
-   * хамгийн ахисан шатандаа л тоологдоно.
+   * Нэгж талбарын гүйцэтгэлийн ТАСАРХАЙ шатууд — тоо ба мөнгөн дүн. Нэгж
+   * талбар бүр нэг л шатанд тоологдоно.
    */
   stages: {
-    /** Олговор олгосон бичилттэй (дүн = ОЛГОСОН дүн). */
-    granted: { count: number; amount: number };
-    /** Үнэлгээ баталгаажсан (гэхдээ олговор олгоогүй). */
+    /**
+     * Захирамж гарсан — хяналтын самбартай ИЖИЛ (санхүүжилтийн оноор).
+     * granted — олгогдсон, pending — хүлээгдэж буй хэсэг.
+     */
+    issued: { count: number; amount: number; granted: number; pending: number };
+    /** Захирамжийн төсөлд холбогдсон (санхүүжилтийн оноор). */
+    draft: { count: number; amount: number };
+    /** Санхүү шалгаж буй — үнэлгээ баталгаажсан, захирамжид холбогдоогүй. */
     approved: { count: number; amount: number };
-    /** Санхүүд илгээсэн — хянагдаж буй. */
+    /** Санхүү шалгаж буй — санхүүд илгээсэн, шалгагдаж буй. */
     submitted: { count: number; amount: number };
     /** Үнэлгээ хийгээгүй / илгээгээгүй. */
     pending: { count: number; amount: number };
@@ -95,16 +99,24 @@ function StageTile({
   amount,
   share,
   tone,
+  rows,
+  className,
+  inline,
 }: {
   label: string;
+  className?: string;
+  /** Дүнг тооны ард НЭГ мөрөнд харуулна (зай хэмнэнэ). */
+  inline?: boolean;
   count: number;
   amount: number;
   /** Нийтэд эзлэх хувь — "Нийт" картад харуулахгүй. */
   share?: number;
   tone: string;
+  /** Дотоод задаргаа (ж: Олгогдсон / Хүлээгдэж буй). */
+  rows?: { label: string; amount: number; count?: number; color: string }[];
 }) {
   return (
-    <div className="ap-card flex items-start gap-3 px-4 py-3">
+    <div className={`ap-card flex items-start gap-3 px-4 py-3 ${className ?? ""}`}>
       <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tone }} />
       <div className="min-w-0 flex-1">
         <p className="break-words text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -119,41 +131,154 @@ function StageTile({
               {share.toFixed(1)}%
             </span>
           )}
+          {inline && (
+            <span className="ml-1 text-[12px] font-semibold tabular-nums text-slate-500 dark:text-slate-400" title={money(amount)}>
+              · {billions(amount)}
+              <AmountHint value={amount} className="ml-1" />
+            </span>
+          )}
         </p>
-        <p className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400" title={money(amount)}>
-          {billions(amount)}
-          <AmountHint value={amount} className="ml-1" />
-        </p>
+        {!inline && (
+          <p className="text-[11px] tabular-nums text-slate-500 dark:text-slate-400" title={money(amount)}>
+            {billions(amount)}
+            <AmountHint value={amount} className="ml-1" />
+          </p>
+        )}
+        {rows && rows.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5 border-t border-slate-100 pt-1.5 dark:border-white/[0.06]">
+            {rows.map((r) => (
+              <li key={r.label} className="text-[11px] leading-4">
+                <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.color }} />
+                  <span>
+                    {r.label}
+                    {r.count != null && <span className="tabular-nums text-slate-400"> · {r.count.toLocaleString()}</span>}
+                  </span>
+                </span>
+                <span className="block pl-3 font-semibold tabular-nums text-slate-700 dark:text-slate-200" title={money(r.amount)}>
+                  {billions(r.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
 }
 
-export function FinancingSummary({ stats, loading }: { stats: FinancingStats; loading?: boolean }) {
+/**
+ * Хоёр хуваагдсан шатны карт — ЗҮҮН: үндсэн мэдээлэл (нэгж талбарын тоо,
+ * хувь, дүн), БАРУУН: дэд мэдээлэл (мөр мөрөөр).
+ */
+function SplitStageTile({
+  label,
+  count,
+  amount,
+  share,
+  tone,
+  rows,
+  note,
+}: {
+  label: string;
+  count: number;
+  amount: number;
+  share: number;
+  tone: string;
+  rows: { label: string; amount: number; count?: number; color: string }[];
+  note?: string;
+}) {
+  return (
+    <div className="ap-card grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden">
+      {/* ЗҮҮН — үндсэн мэдээлэл */}
+      <div className="flex min-w-0 items-start gap-2.5 px-3 py-3">
+        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: tone }} />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-start justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="min-w-0 break-words">{label}</span>
+            {note && <span className="shrink-0 normal-case tracking-normal">{note}</span>}
+          </p>
+          <p className="flex items-baseline gap-1.5">
+            <span className="text-[20px] font-bold tabular-nums text-slate-800 dark:text-white">
+              {count.toLocaleString()}
+            </span>
+            <span className="text-[11px] font-semibold tabular-nums" style={{ color: tone }}>
+              {share.toFixed(1)}%
+            </span>
+          </p>
+          <p className="text-[12px] font-semibold tabular-nums text-slate-600 dark:text-slate-300" title={money(amount)}>
+            {billions(amount)}
+            <AmountHint value={amount} className="ml-1" />
+          </p>
+        </div>
+      </div>
+      {/* БАРУУН — дэд мэдээлэл */}
+      <ul className="flex min-w-0 flex-col justify-center gap-2 border-l border-slate-100 bg-slate-50/70 px-3 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+        {rows.map((r) => (
+          <li key={r.label} className="min-w-0 text-[11px] leading-4">
+            <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.color }} />
+              <span className="min-w-0">
+                {r.label}
+                {r.count != null && <span className="tabular-nums text-slate-400"> · {r.count.toLocaleString()}</span>}
+              </span>
+            </span>
+            <span
+              className="mt-0.5 block pl-3.5 text-[13px] font-bold tabular-nums text-slate-700 dark:text-slate-200"
+              title={money(r.amount)}
+            >
+              {billions(r.amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function FinancingSummary({
+  stats,
+  loading,
+  fundingYear = 0,
+}: {
+  stats: FinancingStats;
+  loading?: boolean;
+  /** Табын дээд талд сонгосон санхүүжилтийн он (0 = бүх он) — шошгонд. */
+  fundingYear?: number;
+}) {
   const approvedTotal = stats.landAmount + stats.realStateAmount + stats.propertyAmount;
+  const st = stats.stages;
   const stageRows = [
     {
-      name: "Олгогдсон",
-      value: stats.stages.granted.count,
-      amount: stats.stages.granted.amount,
+      name: "Захирамж гарсан",
+      value: st.issued.count,
+      amount: st.issued.amount,
       color: CHART_COLORS.funding,
+      rows: [
+        { label: "Олгогдсон", amount: st.issued.granted, color: "#16a34a" },
+        { label: "Хүлээгдэж буй", amount: st.issued.pending, color: CHART_COLORS.property },
+      ],
     },
     {
-      name: "Баталгаажсан",
-      value: stats.stages.approved.count,
-      amount: stats.stages.approved.amount,
+      name: "Захирамжийн төсөлд",
+      value: st.draft.count,
+      amount: st.draft.amount,
+      color: CHART_COLORS.realState,
+    },
+    {
+      name: "Санхүү шалгаж буй",
+      value: st.approved.count + st.submitted.count,
+      amount: st.approved.amount + st.submitted.amount,
       color: CHART_COLORS.land,
-    },
-    {
-      name: "Хүлээгдэж буй",
-      value: stats.stages.submitted.count,
-      amount: stats.stages.submitted.amount,
-      color: CHART_COLORS.property,
+      rows: [
+        { label: "Үнэлгээ баталгаажсан", count: st.approved.count, amount: st.approved.amount, color: CHART_COLORS.land },
+        { label: "Шалгагдаж буй", count: st.submitted.count, amount: st.submitted.amount, color: CHART_COLORS.property },
+      ],
     },
     {
       name: "Үнэлгээгүй",
-      value: stats.stages.pending.count,
-      amount: stats.stages.pending.amount,
+      value: st.pending.count,
+      amount: st.pending.amount,
       color: CHART_COLORS.pending,
     },
   ];
@@ -206,16 +331,33 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
         ))}
       </div>
 
-      {/* НЭГЖ ТАЛБАРЫН ТОО — нийт ба чарттай ИЖИЛ дөрвөн шат. Карт бүр дээр
-          нэгж талбарын тоо, эзлэх хувь ба харгалзах мөнгөн дүн. */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-3 2xl:grid-cols-5">
+      {/* НЭГЖ ТАЛБАРЫН ТОО — нийт ба чарттай ИЖИЛ шатууд. Карт бүр дээр
+          нэгж талбарын тоо, эзлэх хувь ба харгалзах мөнгөн дүн.
+          «Захирамж гарсан», «Захирамжийн төсөлд» нь санхүүжилтийн оноор
+          (хяналтын самбартай ижил). */}
+      {/* Нийт (зүүн, хоёр мөр) · дээд мөр: Захирамж гарсан, Санхүү шалгаж буй
+          (үндсэн мэдээлэл зүүн, дэд баруун) · доод мөр: Захирамжийн төсөлд,
+          Үнэлгээгүй (дүн нь тооны ард). */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,2fr)_minmax(0,2fr)]">
         <StageTile
           label="Нийт"
           count={stats.parcelTotal}
           amount={stats.totalAmount}
           tone={CHART_COLORS.realState}
+          className="sm:col-span-2 lg:col-span-1 lg:row-span-2"
         />
-        {stageRows.map((row) => (
+        {[stageRows[0], stageRows[2]].map((row) => (
+          <SplitStageTile
+            key={row.name}
+            label={row.name}
+            count={row.value}
+            amount={row.amount}
+            share={pct(row.value)}
+            tone={row.color}
+            rows={row.rows ?? []}
+          />
+        ))}
+        {[stageRows[1], stageRows[3]].map((row) => (
           <StageTile
             key={row.name}
             label={row.name}
@@ -223,6 +365,7 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
             amount={row.amount}
             share={pct(row.value)}
             tone={row.color}
+            inline
           />
         ))}
       </div>
@@ -245,7 +388,9 @@ export function FinancingSummary({ stats, loading }: { stats: FinancingStats; lo
           <>
             <div className="h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                {/* key — он солигдож шатны тоо өөрчлөгдөхөд дахин зурна
+                    (өгөгдлийн мөр солигдоход Pie хоосон үлддэг байсан). */}
+                <PieChart key={parcelChart.map((x) => `${x.name}:${x.value}`).join("|")}>
                   <Pie
                     data={parcelChart}
                     dataKey="value"

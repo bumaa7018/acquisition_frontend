@@ -24,6 +24,7 @@ import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { CreateDecisionDraftDialog } from "./create_decision_draft_dialog";
 import { AcquisitionSelect } from "../../parcel/_components/acquisition_select";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
+import { fundingYearOptions } from "@/lib/funding-year";
 import { AmountHint } from "@/components/ui/amount-hint";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { SearchButton } from "@/components/ui/search-button";
@@ -41,6 +42,8 @@ const EMPTY_FILTER = {
   location: "",
   parcel_id: "",
   duration_year: "",
+  /** Санхүүжилтийн он — жагсаалт ба санхүүжилтийн нэгтгэл тэр оных. */
+  funding_year: "",
 };
 
 const PAGE_SIZE = 20;
@@ -224,6 +227,7 @@ export function DecisionListView({
     if (filter.location) q.set("location", filter.location);
     if (filter.parcel_id) q.set("parcel_id", filter.parcel_id);
     if (filter.duration_year) q.set("duration_year", filter.duration_year);
+    if (filter.funding_year) q.set("funding_year", filter.funding_year);
     q.set("status", String(status));
 
     setIsDownloading(true);
@@ -262,6 +266,7 @@ export function DecisionListView({
         location: filter.location || undefined,
         parcel_id: filter.parcel_id || undefined,
         duration_year: filter.duration_year ? Number(filter.duration_year) : undefined,
+        funding_year: filter.funding_year ? Number(filter.funding_year) : undefined,
         status,
         sort: sort?.by,
         order: sort?.dir,
@@ -282,6 +287,9 @@ export function DecisionListView({
         location: filter.location || undefined,
         parcel_id: filter.parcel_id || undefined,
         duration_year: filter.duration_year ? Number(filter.duration_year) : undefined,
+        // Санхүүжилтийн он — эх үүсвэрийн дүн ба холбогдсон нэгж талбарын
+        // олговор ЗӨВХӨН тэр оных (backend нэгтгэнэ).
+        funding_year: filter.funding_year ? Number(filter.funding_year) : undefined,
         // Нэгтгэл нь Төсөл + Баталгаажсан хоёуланг шаарддаг тул төлөвөөр шүүхгүй.
       };
       const first = await decisionDraftApi.list(params);
@@ -387,7 +395,8 @@ export function DecisionListView({
     draft.acquisition_id ||
     draft.location ||
     draft.parcel_id ||
-    draft.duration_year;
+    draft.duration_year ||
+    draft.funding_year;
 
   const canCreate = allowCreate && perms.create;
 
@@ -465,6 +474,7 @@ export function DecisionListView({
                 </p>
                 <p className="mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
                   Хайлтын үр дүнд гарсан {summaryRows.length.toLocaleString("mn-MN")} захирамж
+                  {filter.funding_year ? ` · ${filter.funding_year} оны санхүүжилт` : ""}
                 </p>
               </div>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-500 dark:bg-white/[0.06] dark:text-slate-300">
@@ -699,7 +709,7 @@ export function DecisionListView({
 
       {/* Filters */}
       <div className="ap-card w-full min-w-0 p-4">
-        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_auto_auto] items-center gap-2" {...searchOnEnter(applySearch)}>
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,1.35fr)_minmax(0,0.8fr)_minmax(0,0.62fr)_minmax(0,0.8fr)_auto_auto_auto] items-center gap-2" {...searchOnEnter(applySearch)}>
           <div className="relative min-w-0">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
@@ -752,6 +762,26 @@ export function DecisionListView({
             onKeyDown={(e) => e.key === "Enter" && applySearch()}
             className={inp}
           />
+          {/* Санхүүжилтийн он — сонгоход шууд хайна (жагсаалт + нэгтгэл). */}
+          <select
+            value={draft.funding_year}
+            onChange={(e) => {
+              const next = { ...draft, funding_year: e.target.value };
+              setDraft(next);
+              setFilter(next);
+              setPage(1);
+              setSearchTick((t) => t + 1);
+            }}
+            title="Санхүүжилтийн он"
+            className={`${inp} tabular-nums`}
+          >
+            <option value="">Санхүүжилтийн он</option>
+            {fundingYearOptions(draft.funding_year ? [Number(draft.funding_year)] : [], undefined, 10).map((y) => (
+              <option key={y} value={y}>
+                {y} он
+              </option>
+            ))}
+          </select>
           <SearchButton onClick={applySearch} />
           <RefreshButton />
 
