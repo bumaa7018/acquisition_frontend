@@ -1914,6 +1914,8 @@ export interface DecisionDraftFundingLink {
   id: string;
   decision_draft_id: string;
   funding_source_id: string;
+  /** Санхүүжилтийн он — нэг эх үүсвэр он бүрт өөр дүнтэй (тусдаа холбоос). */
+  year?: number | null;
   created_at: string;
   created_by: string;
   // funding_sources-оос JOIN-оор ирэх мэдээлэл
@@ -1963,6 +1965,7 @@ export interface DecisionDraftParcel {
   funding_source_id?: string;
   funding_organization?: string;
   funding_source_type?: string;
+  funding_year?: number | null;
   // Нэгж талбарын мэдээлэл
   parcel_id: string;
   acquisition_id: string;

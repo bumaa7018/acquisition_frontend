@@ -7,6 +7,7 @@ import { decisionDraftApi, parcelApi } from "@/lib/api";
 import { getApiError, formatArea } from "@/lib/utils";
 import { useParcelStatusNamesWithRule } from "@/lib/use-parcel-status-rules";
 import type { DecisionDraftFundingLink } from "@/types";
+import { fundingLinkLabel } from "@/lib/funding-year";
 
 
 /**
@@ -104,7 +105,7 @@ export function LinkParcelDialog({
             <option value="">— Сонгох —</option>
             {fundingSources.map((f) => (
               <option key={f.id} value={f.id}>
-                {f.organization_name} — {f.source_type}
+                {fundingLinkLabel(f)}
               </option>
             ))}
           </select>

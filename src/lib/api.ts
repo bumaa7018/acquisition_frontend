@@ -1613,6 +1613,31 @@ export interface DashboardData {
   locations?:           { district: string; khoroos: string[] }[]
 }
 
+/** Захирамжийн шатны нөхөх олговор — олгогдсон ба хүлээгдэж буй хэсэгтэй. */
+export interface DecisionFundingBucket {
+  amount:  number
+  /** Олголтын гүйцэтгэлээр (60 / 40 / бүрэн) олгогдсон. */
+  granted: number
+  pending: number
+  parcels: number
+}
+
+/** Захирамж ба санхүүжилтийн нэгтгэл — САНХҮҮЖИЛТИЙН оноор. */
+export interface DecisionFundingSummary {
+  /** Хүрээнд байгаа санхүүжилтийн бүх он (шүүлтийн сонголт). */
+  years:           number[]
+  /** Төлөвлөсөн санхүүжилтийн нийт дүн. */
+  planned:         number
+  /** Тэр санхүүжилтээр холбогдсон нэгж талбарын олгосон дүн. */
+  planned_granted: number
+  /** Захирамж гарсан (Баталгаажсан / Баталгаажуулах). */
+  issued:          DecisionFundingBucket
+  /** Захирамжийн төсөлд (Төсөл / Хянагдаж буй). */
+  draft:           DecisionFundingBucket
+  /** Төлөвлөсөн санхүүжилт эх үүсвэр × оноор. */
+  by_source?:      { funding_source_id: string; year: number | null; amount: number }[]
+}
+
 export type DashboardFilter = {
   acquisition_id?:      string
   plan_code?:           string
@@ -1649,6 +1674,24 @@ export const dashboardApi = {
     return api
       // Он цагийн зураг өөрийн loader-тэй — бүтэн дэлгэцийн блоклогч loader асаахгүй.
       .get<ApiResponse<import('@/lib/chronos').ChronosData>>(`/dashboard/chronos${suffix ? `?${suffix}` : ''}`, { _silent: true })
+      .then(r => r.data.data)
+  },
+  /**
+   * Захирамж ба санхүүжилт — `years` нь САНХҮҮЖИЛТИЙН он (холбоосын он).
+   * Бусад шүүлт нь хяналтын самбартай ижил (чөлөөлөлтийн хүрээ).
+   */
+  decisionFunding: (filter?: Omit<DashboardFilter, 'status'>, opts?: { silent?: boolean }): Promise<DecisionFundingSummary> => {
+    const params = new URLSearchParams()
+    if (filter?.acquisition_id)      params.set('acquisition_id', filter.acquisition_id)
+    if (filter?.plan_code)           params.set('plan_code', filter.plan_code)
+    if (filter?.general_category_id) params.set('general_category_id', String(filter.general_category_id))
+    if (filter?.sub_category_id)     params.set('sub_category_id', String(filter.sub_category_id))
+    if (filter?.assigned_user_id)    params.set('assigned_user_id', filter.assigned_user_id)
+    if (filter?.au2_code)            params.set('au2_code', filter.au2_code)
+    filter?.years?.forEach(y => params.append('year', String(y)))
+    const suffix = params.toString()
+    return api
+      .get<ApiResponse<DecisionFundingSummary>>(`/dashboard/decision-funding${suffix ? `?${suffix}` : ''}`, { _silent: opts?.silent })
       .then(r => r.data.data)
   },
   // САНХҮҮГИЙН самбар — зөвхөн мөнгөн дүн/тоо (он, дүүрэг, хороогоор).
@@ -1725,6 +1768,8 @@ export type DecisionDraftListParams = {
   date_from?: string
   date_to?: string
   duration_year?: number
+  /** Санхүүжилтийн он — нэгтгэлийн дүн мөн зөвхөн тэр оных. */
+  funding_year?: number
   status?: number
   acquisition_id?: string
   funding_source_id?: string
@@ -1747,6 +1792,7 @@ function decisionDraftSearchParams(params?: DecisionDraftListParams): URLSearchP
   if (params.date_from) q.set('date_from', params.date_from)
   if (params.date_to) q.set('date_to', params.date_to)
   if (params.duration_year) q.set('duration_year', String(params.duration_year))
+  if (params.funding_year) q.set('funding_year', String(params.funding_year))
   if (params.status) q.set('status', String(params.status))
   if (params.acquisition_id) q.set('acquisition_id', params.acquisition_id)
   if (params.funding_source_id) q.set('funding_source_id', params.funding_source_id)
@@ -1821,10 +1867,12 @@ export const decisionDraftApi = {
   listFundingSources: (id: string) =>
     api.get<ApiResponse<DecisionDraftFundingLink[]>>(`/decision-drafts/${id}/funding-sources`)
       .then(r => r.data.data ?? []),
-  addFundingSource: (id: string, fundingSourceId: string, amount: number) =>
+  // year — санхүүжилтийн он (заавал); нэг эх үүсвэр он бүрт өөр дүнтэй нэмэгдэнэ.
+  addFundingSource: (id: string, fundingSourceId: string, amount: number, year: number) =>
     api.post<ApiResponse<DecisionDraftFundingLink[]>>(`/decision-drafts/${id}/funding-sources`, {
       funding_source_id: fundingSourceId,
       amount,
+      year,
     })
       .then(r => r.data.data ?? []),
   removeFundingSource: (id: string, linkId: string) =>

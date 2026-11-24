@@ -29,6 +29,7 @@ import { FinanceDashboard } from "@/components/dashboard/finance-dashboard";
 import Link from "next/link";
 import { cn, formatMoneyExact } from "@/lib/utils";
 import { AbbrevAmount } from "@/components/ui/amount-hint";
+import { DecisionFundingCard, fundingYearsLabel } from "@/components/dashboard/decision-funding-cards";
 import { YEAR_OPTIONS as SHARED_YEAR_OPTIONS } from "@/components/ui/year-multi-select";
 import { getParcelStatusStyle } from "@/types";
 import { StatusDot, StatusLabel } from "@/components/ui/status-label";
@@ -1371,6 +1372,24 @@ export default function DashboardPage() {
     const base = financeFilter ? overviewFinance ?? null : null;
     return asOfKey && chronos.data && dashDataRaw ? overviewAt(dashDataRaw, base, chronos.data, asOfKey).finance : base;
   }, [asOfKey, chronos.data, dashDataRaw, financeFilter, overviewFinance]);
+  /* Захирамж ба санхүүжилт — САНХҮҮЖИЛТИЙН оноор (сонгосон он = санхүүжилтийн
+     он). Бусад шүүлт нь дашбоардтай ижил чөлөөлөлтийн хүрээ. */
+  const decisionFundingFilter = useMemo(() => ({
+    acquisition_id:      appliedFilter.acqId || undefined,
+    plan_code:           appliedFilter.planCode || undefined,
+    years:               appliedFilter.years.map(Number).filter(Boolean),
+    general_category_id: appliedFilter.genCatId || undefined,
+    sub_category_id:     appliedFilter.subCatId || undefined,
+    assigned_user_id:    appliedFilter.employeeId || undefined,
+    au2_code:            appliedFilter.au2Code || undefined,
+  }), [appliedFilter]);
+  const { data: decisionFunding, isLoading: decisionFundingLoading } = useQuery({
+    queryKey: ["dashboard", "decision-funding", decisionFundingFilter],
+    queryFn: () => dashboardApi.decisionFunding(decisionFundingFilter, { silent: true }),
+    enabled: chronosAllowed && roleReady && !isProfOrg && !isOtherExternal && deptDefaultApplied,
+    retry: false,
+  });
+  const fundingYearLabel = fundingYearsLabel(decisionFundingFilter.years);
   const chronosTimeline = (variant: "card" | "overlay") => (
     <ChronosTimeline months={chronos.months} counts={chronos.counts} value={asOfIdx} onChange={setAsOfIdx}
       loading={chronos.isLoading} variant={variant} />
@@ -1710,8 +1729,8 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Stat cards — xl: 14 багана (чөлөөлөлт 2, нэгж талбар 2, хил 2,
-             захирамж 3, олговор 5). Задаргаатай картууд задаргааг БАРУУН
-             талд харуулна (карт доош сунгахгүй). ────────────────── */}
+             захирамжийн тоо 3, захирамж ба санхүүжилт 5 — САНХҮҮЖИЛТИЙН
+             оноор (decision-funding-cards.tsx). ──── */}
       <div className="grid grid-cols-2 xl:grid-cols-[repeat(14,minmax(0,1fr))] gap-4">
         {([
           {
@@ -1755,25 +1774,6 @@ export default function DashboardPage() {
               { label: "Баталгаажуулах", value: String(decisions.confirming), color: "#f9bc0b" },
               { label: "Хянагдаж буй", value: String(decisions.reviewing), color: "#777edd" },
               { label: "Төсөл", value: String(decisions.draft), color: "#94a3b8" },
-            ] : undefined,
-          },
-          {
-            label: "НИЙТ НӨХӨХ ОЛГОВОР",
-            sub: "тэрбум ₮",
-            value: isLoading ? null : (
-              <AbbrevAmount value={compensation?.total ?? dashData?.total_compensation}>
-                {`${totalCompensation.toFixed(2)} тэр`}
-              </AbbrevAmount>
-            ),
-            color: "#0acf97",
-            span: "col-span-2 xl:col-span-5",
-            details: compensation ? [
-              { label: "Захирамж гарсан", value: <AbbrevAmount value={compensation.issued}>{`${billion(compensation.issued).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0acf97",
-                pct: compensation.total ? (compensation.issued / compensation.total) * 100 : 0 },
-              { label: "Төсөлд байгаа · үнэлгээ баталгаажсан", value: <AbbrevAmount value={compensation.approved}>{`${billion(compensation.approved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#0f9ed5",
-                pct: compensation.total ? (compensation.approved / compensation.total) * 100 : 0 },
-              { label: "Үнэлгээ баталгаажаагүй", value: <AbbrevAmount value={compensation.unapproved}>{`${billion(compensation.unapproved).toFixed(2)} тэр`}</AbbrevAmount>, color: "#f9bc0b",
-                pct: compensation.total ? (compensation.unapproved / compensation.total) * 100 : 0 },
             ] : undefined,
           },
         ] as {
@@ -1835,6 +1835,15 @@ export default function DashboardPage() {
             </div>
           );
         })}
+        {/* Захирамж ба санхүүжилт — зүүн нь төсөв, баруун нь захирамж гарсан
+            (олгогдсон / хүлээгдэж байгаа), доор нь захирамжийн төсөлд.
+            САНХҮҮЖИЛТИЙН оноор. */}
+        <DecisionFundingCard
+          data={decisionFunding}
+          loading={decisionFundingLoading}
+          yearLabel={fundingYearLabel}
+          className="col-span-2 xl:col-span-5"
+        />
       </div>
 
       {/* ── Freed parcels row + гүйцэтгэлийн карт ─────────── */}

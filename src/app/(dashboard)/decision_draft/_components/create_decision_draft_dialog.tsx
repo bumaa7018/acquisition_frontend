@@ -8,6 +8,7 @@ import { formatArea, getApiError } from "@/lib/utils";
 import { useDepartmentGeneralCategory } from "@/hooks/use-department-category";
 import { useParcelStatusNamesWithRule } from "@/lib/use-parcel-status-rules";
 import type { DecisionDraft, DecisionOption, FundingSourceOption, GlobalParcel } from "@/types";
+import { currentFundingYear, fundingYearOptions, isValidFundingYear } from "@/lib/funding-year";
 import {
   DecisionDraftFields,
   emptyDecisionDraftForm,
@@ -78,6 +79,9 @@ export function CreateDecisionDraftDialog({
   const [form, setForm] = useState<DecisionDraftFormValue>(emptyDecisionDraftForm);
   const [fundingSourceId, setFundingSourceId] = useState("");
   const [amountText, setAmountText] = useState("");
+  // Санхүүжилтийн ОН — эх үүсвэр он бүрт өөр дүнтэй. Анхдагч: төслийн
+  // «Хугацаа (он)», эс бөгөөс одоогийн он.
+  const [fundingYear, setFundingYear] = useState<number | null>(null);
   const [genCat, setGenCat] = useState(0);
   const [term, setTerm] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -149,6 +153,10 @@ export function CreateDecisionDraftDialog({
       return next;
     });
 
+  const durationYear = Number(form.duration_year);
+  const effectiveFundingYear =
+    fundingYear ?? (isValidFundingYear(durationYear) ? durationYear : currentFundingYear());
+  const yearOptions = fundingYearOptions([effectiveFundingYear]);
   const amount = Number(amountText.replace(/,/g, ""));
   const amountValid = amountText.trim() !== "" && Number.isFinite(amount) && amount >= 0;
   const needsFunding = selected.size > 0;
@@ -183,8 +191,10 @@ export function CreateDecisionDraftDialog({
     const failed: string[] = [];
     if (chosen.length > 0) {
       try {
-        const links = await decisionDraftApi.addFundingSource(draft.id, fundingSourceId, amount);
-        const link = (links ?? []).find((l) => l.funding_source_id === fundingSourceId);
+        const links = await decisionDraftApi.addFundingSource(draft.id, fundingSourceId, amount, effectiveFundingYear);
+        const link = (links ?? []).find(
+          (l) => l.funding_source_id === fundingSourceId && l.year === effectiveFundingYear,
+        );
         if (!link) throw new Error("funding link missing");
         // Дараалан — нэг алдаа бусдыг зогсоохгүй.
         for (const p of chosen) {
@@ -255,10 +265,11 @@ export function CreateDecisionDraftDialog({
           <div>
             <p className={section}>Санхүүгийн эх үүсвэр{needsFunding ? " *" : ""}</p>
             <p className="mb-3 mt-0.5 text-[12px] text-slate-400 dark:text-slate-500">
-              Сонгосон нэгж талбарууд энэ эх үүсвэрээр холбогдоно. Бусад эх үүсвэрийг
-              дараа нь дэлгэрэнгүйгээс нэмнэ.
+              Сонгосон нэгж талбарууд энэ эх үүсвэрийн тухайн оны санхүүжилтээр
+              холбогдоно. Нэг эх үүсвэр он бүрт өөр дүнтэй байж болно — бусад он, эх
+              үүсвэрийг дараа нь дэлгэрэнгүйгээс нэмнэ.
             </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,0.7fr)_minmax(0,1fr)]">
               <div>
                 <label className={lbl}>Эх үүсвэр</label>
                 <select
@@ -272,6 +283,20 @@ export function CreateDecisionDraftDialog({
                     <option key={fs.id} value={fs.id}>
                       {fundingSourceLabel(fs)}
                       {fs.acquisition_name ? ` (${fs.acquisition_name})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={lbl}>Санхүүжилтийн он</label>
+                <select
+                  value={effectiveFundingYear}
+                  onChange={(e) => setFundingYear(Number(e.target.value))}
+                  className={`${inp} tabular-nums`}
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>
+                      {y} он
                     </option>
                   ))}
                 </select>
