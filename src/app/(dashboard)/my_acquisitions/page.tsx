@@ -1,10 +1,12 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { profApi } from "@/lib/prof-api";
 import { STATUS_LABELS, ACQ_STATUS } from "@/types";
 import type { LandAcquisition } from "@/types";
-import { formatDate, formatArea } from "@/lib/utils";
+import { formatDate, formatArea, cn } from "@/lib/utils";
+import { notifyNavStart } from "@/lib/blocking-loader-state";
 import { Search, MapPin, ChevronLeft, ChevronRight, X, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
@@ -39,6 +41,7 @@ const HEADERS: SortColumn[] = [
 ];
 
 export default function MyAcquisitionsPage() {
+  const router = useRouter();
   const [nameFilter, setNameFilter] = useState("");
   const [appliedName, setAppliedName] = useState("");
   const [page, setPage] = useState(1);
@@ -147,10 +150,30 @@ export default function MyAcquisitionsPage() {
               ) : (
                 acquisitions.map((land) => {
                   const sc = STATUS_CFG[land.status] ?? { color: "#8391a2", bg: "#8391a218" };
+                  // Баталгаажсан чөлөөлөлтийн дэлгэрэнгүй хаалттай — мөр дарахад ч шилжихгүй.
+                  const locked = land.status === ACQ_STATUS.CONFIRMED;
+                  const detailHref = `/acquisition/${land.id}`;
                   return (
                     <tr
                       key={land.id}
-                      className="border-b border-slate-50 dark:border-[#2a2c38] hover:bg-slate-50/60 dark:hover:bg-white/[0.03] transition-colors"
+                      onClick={(e) => {
+                        if (locked) return;
+                        // Дотор нь байгаа холбоос/товч өөрөө ажиллана; текст сонгож байвал шилжихгүй.
+                        if ((e.target as HTMLElement).closest("a, button")) return;
+                        if (window.getSelection()?.toString()) return;
+                        if (e.metaKey || e.ctrlKey) {
+                          window.open(detailHref, "_blank");
+                          return;
+                        }
+                        notifyNavStart(undefined, detailHref);
+                        router.push(detailHref);
+                      }}
+                      className={cn(
+                        "border-b border-slate-50 dark:border-[#2a2c38] transition-colors",
+                        locked
+                          ? "hover:bg-slate-50/60 dark:hover:bg-white/[0.03]"
+                          : "cursor-pointer hover:bg-[#02c0ce]/[0.07] dark:hover:bg-[#02c0ce]/[0.12]",
+                      )}
                     >
                       {/* Нэр, ангиллын баганууд ТАСРАХГҮЙ — урт нэрийг
                           жагсаалтаас шууд уншиж чадах ёстой. */}
@@ -233,7 +256,8 @@ export default function MyAcquisitionsPage() {
                         ) : (
                           <Link
                             prefetch={false}
-                            href={`/acquisition/${land.id}`}
+                            href={detailHref}
+                            onClick={notifyNavStart}
                             className="inline-flex items-center gap-1 rounded-lg bg-[#02c0ce]/10 text-[#02c0ce] hover:bg-[#02c0ce]/20 px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap"
                           >
                             Дэлгэрэнгүй

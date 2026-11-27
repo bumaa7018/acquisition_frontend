@@ -169,6 +169,16 @@ const NAV_ALL: NavEntry[] = [
  */
 export function resolveNavItem(pathname: string): NavEntry | null {
   if (pathname === "/") return NAV_MAIN[0];
+  // Мэргэжлийн байгууллагын цэсэнд "/acquisition" байхгүй — чөлөөлөлтийн
+  // дэлгэрэнгүйг "/my_acquisitions" табд харьяалуулна. Үгүй бол жагсаалтаас
+  // мөр дарахад ИЖИЛ нэртэй ("Газар чөлөөлөлт") хоёр дахь таб нээгддэг байв.
+  if (
+    (pathname === "/acquisition" || pathname.startsWith("/acquisition/")) &&
+    isExternalSpecialRole() &&
+    isProfessionalOrg()
+  ) {
+    return NAV_EXTRA[0];
+  }
   return (
     NAV_ALL.find(
       (item) =>
