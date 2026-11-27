@@ -35,6 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { ConfirmDialog, type PendingConfirm } from "@/components/ui/confirm-dialog";
 import { EmployeeSelect } from "@/components/ui/employee-select";
 import { FormDialog } from "@/components/ui/form-dialog";
+import { PasswordInput } from "@/components/ui/password-input";
 import { searchOnEnter } from "@/components/ui/search-on-enter";
 import { RefreshButton } from "@/components/ui/refresh-button";
 import { SearchButton } from "@/components/ui/search-button";
@@ -687,8 +688,7 @@ export default function UsersPage() {
                 <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
                   Нууц үг
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   // Админ өөрийн хадгалсан нууц үгээ санамсаргүй бөглөхөөс сэргийлнэ.
                   autoComplete="new-password"
                   {...register("password")}
@@ -708,8 +708,7 @@ export default function UsersPage() {
                 <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
                   Нууц үг давтах
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   {...register("confirm_password")}
                   className={inputCls}
@@ -900,8 +899,7 @@ export default function UsersPage() {
                 <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
                   Шинэ нууц үг
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   {...pwRegister("new_password")}
                   className={inputCls}
@@ -920,8 +918,7 @@ export default function UsersPage() {
                 <label className="mb-1.5 block text-[12px] font-medium text-slate-600 dark:text-slate-300">
                   Нууц үг давтах
                 </label>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete="new-password"
                   {...pwRegister("confirm_password")}
                   className={inputCls}

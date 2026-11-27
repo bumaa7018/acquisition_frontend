@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Building2, Briefcase, Loader2 } from "lucide-react";
+import { Building2, Briefcase, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authApi } from "@/lib/api";
 import { authStorage } from "@/lib/auth";
@@ -65,7 +65,12 @@ export default function LoginPage() {
   // самбарын layout мөн адил loader-ыг эхний уншилт дуустал үргэлжлүүлнэ.
   const booting = useSyncExternalStore(subscribe, getBooting, () => false);
   const [tab, setTab] = useState<TabKey>("internal");
-  const active = TABS.find((t) => t.key === tab) ?? TABS[0];
+  const activeIndex = Math.max(
+    0,
+    TABS.findIndex((t) => t.key === tab),
+  );
+  const active = TABS[activeIndex];
+  const [showPassword, setShowPassword] = useState(false);
   const {
     register,
     handleSubmit,
@@ -81,6 +86,7 @@ export default function LoginPage() {
     if (key === tab) return;
     setTab(key);
     reset();
+    setShowPassword(false);
   };
 
   const onSubmit = async (data: FormData) => {
@@ -115,7 +121,7 @@ export default function LoginPage() {
       {booting && <FullPageLoader />}
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="w-full max-w-md space-y-6">
-          <div className="flex flex-col items-center gap-3">
+          <div className="login-enter flex flex-col items-center gap-3">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-lg">
               <Building2 className="h-8 w-8 text-primary-foreground" />
             </div>
@@ -127,15 +133,24 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <Card className="border-slate-700 bg-slate-800/50 backdrop-blur shadow-2xl">
+          <Card className="login-enter login-enter-delay border-slate-700 bg-slate-800/50 backdrop-blur shadow-2xl">
             <CardHeader className="space-y-4">
               {/* Таб — role="tablist" нь дэлгэц уншигчид хоёр сонголт болохыг
                 хэлнэ. Гар (сумтай товчлуур) шаардлагагүй: зөвхөн хоёр товч. */}
               <div
                 role="tablist"
                 aria-label="Нэвтрэх төрөл"
-                className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/60 p-1"
+                className="relative grid grid-cols-2 gap-1 rounded-lg bg-slate-900/60 p-1"
               >
+                {/* Идэвхтэй табын ард гулсдаг тэмдэглэгээ. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-1 left-1 rounded-md bg-primary shadow transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+                  style={{
+                    width: "calc((100% - 0.5rem - 0.25rem) / 2)",
+                    transform: `translateX(calc(${activeIndex} * (100% + 0.25rem)))`,
+                  }}
+                />
                 {TABS.map((t) => {
                   const Icon = t.icon;
                   const selected = t.key === tab;
@@ -148,9 +163,9 @@ export default function LoginPage() {
                       onClick={() => switchTab(t.key)}
                       disabled={loading}
                       className={cn(
-                        "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "relative z-10 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-300",
                         selected
-                          ? "bg-primary text-primary-foreground shadow"
+                          ? "text-primary-foreground"
                           : "text-slate-400 hover:text-slate-200",
                       )}
                     >
@@ -160,7 +175,7 @@ export default function LoginPage() {
                   );
                 })}
               </div>
-              <div>
+              <div key={tab} className="login-tab-content">
                 <CardTitle className="text-white">{active.label}</CardTitle>
                 <CardDescription className="text-slate-400">
                   {active.description}
@@ -170,7 +185,11 @@ export default function LoginPage() {
             <CardContent>
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 {/* Хүсэлт явж байхад талбар, таб өөрчлөгдөхгүй. */}
-                <fieldset disabled={loading} className="space-y-4">
+                <fieldset
+                  key={tab}
+                  disabled={loading}
+                  className="login-tab-content space-y-4"
+                >
                   <div className="space-y-2">
                     <Label htmlFor="login" className="text-slate-300">
                       {active.loginLabel}
@@ -196,13 +215,31 @@ export default function LoginPage() {
                     <Label htmlFor="password" className="text-slate-300">
                       Нууц үг
                     </Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="••••••••"
-                      className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
-                      {...register("password")}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        className="bg-slate-700 border-slate-600 pr-10 text-white placeholder:text-slate-500"
+                        {...register("password")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={
+                          showPassword ? "Нууц үгийг нуух" : "Нууц үгийг харуулах"
+                        }
+                        title={showPassword ? "Нуух" : "Харуулах"}
+                        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-slate-400 transition-colors hover:text-slate-200 focus-visible:outline-none focus-visible:text-white"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                     {errors.password && (
                       <p className="text-xs text-red-400">
                         {errors.password.message}

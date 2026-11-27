@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { toLonLat, transformExtent } from "ol/proj";
 import GeoJSON from "ol/format/GeoJSON";
+import { getArea as geodesicArea } from "ol/sphere";
 import type Polygon from "ol/geom/Polygon";
 import type MultiPolygon from "ol/geom/MultiPolygon";
 import { ChevronDown, Download, ImageIcon, Loader2, RefreshCw, X } from "lucide-react";
@@ -307,18 +308,29 @@ export default function PrintMapDialog({
     const pp = new URLSearchParams({
       service: "WFS", version: "1.1.0", request: "GetFeature",
       typeName: "land:v_parcel_acquisition", CQL_FILTER: acqFilter,
-      outputFormat: "application/json", propertyName: "parcel_id,status,acquisition_area_m2",
+      outputFormat: "application/json", propertyName: "parcel_id,status,geometry",
     });
+    // Нэгж талбарын талбайг ГЕОМЕТРООС (WGS84 → геодезийн талбай) тооцно.
+    // `acquisition_area_m2` гараар оруулсан утга тул алдаатай (аравтын таслал
+    // алдагдсан гэх мэт) байж болох бөгөөд нийлбэр нь чөлөөлөх талбайгаас
+    // хэтэрч байсан.
+    const gj = new GeoJSON();
     void fetch(`${GS_WFS}?${pp.toString()}`, { headers: gsAuthHeaders() })
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
         const counts: Record<number, number> = {};
         let sum = 0;
-        (json?.features ?? []).forEach((f: { properties?: { status?: number; acquisition_area_m2?: number } }) => {
+        (json?.features ?? []).forEach((f: { geometry?: object | null; properties?: { status?: number } }) => {
           const st = f.properties?.status ?? 0;
           counts[st] = (counts[st] ?? 0) + 1;
-          sum += Number(f.properties?.acquisition_area_m2 ?? 0) || 0;
+          if (f.geometry) {
+            try {
+              sum += geodesicArea(gj.readGeometry(f.geometry), { projection: "EPSG:4326" });
+            } catch {
+              /* эвдэрсэн геометр — алгасна */
+            }
+          }
         });
         setStatusCounts(counts);
         setParcelsAreaM2(sum);

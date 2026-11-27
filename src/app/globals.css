@@ -286,3 +286,38 @@ select option {
 .page-tabs-scroll::-webkit-scrollbar-thumb:hover {
   background: rgb(100 116 139 / 0.8);
 }
+
+/* Нэвтрэх хуудас — эхний ачаалалт болон таб солих анимэйшн. */
+@media (prefers-reduced-motion: no-preference) {
+  .login-enter {
+    animation: login-enter-kf 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .login-enter-delay {
+    animation-delay: 120ms;
+  }
+  .login-tab-content {
+    animation: login-tab-kf 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes login-enter-kf {
+  from {
+    transform: translateY(18px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes login-tab-kf {
+  from {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
