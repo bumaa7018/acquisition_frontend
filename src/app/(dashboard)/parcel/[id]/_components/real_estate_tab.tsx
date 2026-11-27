@@ -46,7 +46,6 @@ import {
   ReceiptText,
   Calculator,
   CircleDollarSign,
-  Camera,
   ImagePlus,
   CheckCircle,
   XCircle,
@@ -87,6 +86,7 @@ import {
   type ValuationSectionKey,
 } from "@/lib/valuation-import";
 import { ValuationExcelImport } from "./valuation_excel_import";
+import { WorkPhotoGallery } from "./work_photo_gallery";
 import {
   BuildingCostEditModal,
   BuildingSpecEditModal,
@@ -2103,49 +2103,22 @@ export function RealEstateTab({
                 `/api/files/...` гарцаар (cookie-гоор эрх шалгагдана) тарагддаг
                 тул <img> шууд ажиллана; дарвал бүтэн хэмжээгээр нээнэ. */}
             {workPhotoDocs.length > 0 && (
-              <div className="ap-card overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-[#37394d]">
-                  <Camera className="h-4 w-4 text-slate-400" />
-                  <p className="text-[12px] font-semibold text-slate-700 dark:text-white">
-                    Ажлын зураг
-                  </p>
-                  <span className="ml-auto text-[11px] tabular-nums text-slate-400">
-                    {workPhotoDocs.length}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 px-4 py-3">
-                  {workPhotoDocs.map((doc) => {
-                    const isImage =
-                      (doc.file_type ?? "").startsWith("image/") ||
-                      /\.(jpe?g|png)$/i.test(doc.name ?? "");
-                    return (
-                      <a
-                        key={doc.id}
-                        href={doc.file_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title={doc.name}
-                        className="group relative block h-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-white/[0.08] dark:bg-[#252630]"
-                      >
-                        {isImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={doc.file_url}
-                            alt={doc.name}
-                            loading="lazy"
-                            className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                          />
-                        ) : (
-                          <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
-                            <FileText className="h-5 w-5" />
-                            <span className="px-1 text-[10px]">PDF</span>
-                          </span>
-                        )}
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
+              <WorkPhotoGallery
+                docs={workPhotoDocs}
+                // Засах боломжтой (илгээгээгүй/буцаагдсан) үед л устгана —
+                // илгээсэн/баталгаажсан үнэлгээний нотлох зургийг хамгаална.
+                canRemove={canEditCurrent}
+                onRemove={async (docId) => {
+                  try {
+                    await svc.deleteDocument(parcelId, docId);
+                    toast.success("Ажлын зураг устгагдлаа");
+                    await queryClient.invalidateQueries({ queryKey: ["parcel-documents", parcelId] });
+                  } catch (err) {
+                    toast.error(getApiError(err, "Зураг устгаж чадсангүй"));
+                    throw err;
+                  }
+                }}
+              />
             )}
 
             {/* Үйлдэл — Excel импорт, хөрөнгө нэмэх (баруун баганад, босоо байрлалтай) */}

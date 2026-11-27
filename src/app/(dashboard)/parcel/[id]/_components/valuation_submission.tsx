@@ -280,6 +280,41 @@ const ACTION_META: Record<
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 export const MAX_UPLOAD_LABEL = "20MB";
 
+/** Сонгосон (хараахан илгээгээгүй) файлын жижиг зураг + хасах товч. */
+function PickedThumb({ file, disabled, onRemove }: { file: File; disabled: boolean; onRemove: () => void }) {
+  const isImage = file.type.startsWith("image/");
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isImage) return;
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file, isImage]);
+  return (
+    <div className="group relative h-16 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 dark:border-white/[0.08] dark:bg-[#252630]" title={file.name}>
+      {isImage && url ? (
+        // eslint-disable-next-line @next/next/no-img-element -- blob: URL
+        <img src={url} alt={file.name} className="h-full w-full object-cover" />
+      ) : (
+        <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 text-slate-400">
+          <FileText className="h-4 w-4" />
+          <span className="max-w-full truncate px-1 text-[9px]">{file.name}</span>
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        aria-label="Хасах"
+        title="Хасах"
+        className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white hover:bg-rose-600 disabled:opacity-50"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  );
+}
+
 /** Илгээх цонхны нэг файлын мөр (тайлан / ажлын зураг). */
 function SubmitFilePicker({
   label,
@@ -315,7 +350,19 @@ function SubmitFilePicker({
           <span className="text-rose-500">*</span>
         )}
       </label>
-      {files.length > 0 && (
+      {files.length > 0 && multiple ? (
+        // Олон файл (ажлын зураг) — жижиг зургаар, тус бүрийг хасах боломжтой.
+        <div className="mb-1.5 grid grid-cols-4 gap-2">
+          {files.map((f, i) => (
+            <PickedThumb
+              key={`${f.name}-${f.size}-${i}`}
+              file={f}
+              disabled={pending}
+              onRemove={() => onPick(files.filter((_, j) => j !== i))}
+            />
+          ))}
+        </div>
+      ) : files.length > 0 ? (
         <ul className="mb-1.5 space-y-1">
           {files.map((f, i) => (
             <li
@@ -329,13 +376,28 @@ function SubmitFilePicker({
               <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
                 {(f.size / 1024).toFixed(0)} KB
               </span>
+              <button
+                type="button"
+                onClick={() => onPick(files.filter((_, j) => j !== i))}
+                disabled={pending}
+                aria-label="Хасах"
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-rose-500 disabled:opacity-50 dark:hover:bg-[#37394d]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
       <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[12px] text-slate-500 transition-colors hover:border-[#02c0ce] hover:text-[#02c0ce] dark:border-white/[0.12] dark:text-slate-400">
         <Paperclip className="h-3.5 w-3.5" />
-        {files.length > 0 ? "Дахин сонгох" : attached ? "Солих файл сонгох" : "Файл сонгох"}
+        {files.length > 0
+          ? multiple
+            ? "Зураг нэмэх"
+            : "Дахин сонгох"
+          : attached
+            ? "Солих файл сонгох"
+            : "Файл сонгох"}
         <input
           type="file"
           accept={accept}
@@ -351,7 +413,15 @@ function SubmitFilePicker({
               return;
             }
             setError("");
-            onPick(list);
+            // Олон файлд шинээр сонгосныг НЭМНЭ (давхардлыг алгасна) — өмнөх нь
+            // бүгдийг солидог тул нэг нэгээр нэмэх боломжгүй байв.
+            if (multiple) {
+              const key = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
+              const seen = new Set(files.map(key));
+              onPick([...files, ...list.filter((f) => !seen.has(key(f)))]);
+            } else {
+              onPick(list);
+            }
           }}
         />
       </label>
